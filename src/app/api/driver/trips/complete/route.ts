@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getDriverIdForUser, getUserFromBearer } from "@/app/api/driver/_utils";
+import { getDriverIdForUser, getUserFromBearer } from "@/app/api/driver/utils";
 
 export async function POST(req: Request) {
   try {
