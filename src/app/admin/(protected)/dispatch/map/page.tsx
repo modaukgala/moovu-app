@@ -88,7 +88,6 @@ export default function DispatchMapPage() {
       infoWindowRef.current = new window.google.maps.InfoWindow();
     }
 
-    // Driver markers
     for (const d of drivers) {
       const marker = new window.google.maps.Marker({
         map,
@@ -119,7 +118,6 @@ export default function DispatchMapPage() {
       driverMarkersRef.current.push(marker);
     }
 
-    // Trip pickup markers
     for (const t of trips) {
       const marker = new window.google.maps.Marker({
         map,
@@ -231,60 +229,90 @@ export default function DispatchMapPage() {
   }, [drivers, trips]);
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="space-y-6 text-black">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Live Driver Map</h1>
-          <p className="opacity-70 mt-1">
-            Track online drivers and active trip pickups live.
+          <div className="text-sm text-gray-500">Dispatch Visibility</div>
+          <h1 className="text-3xl font-semibold text-black mt-1">Live Driver Map</h1>
+          <p className="text-gray-700 mt-2">
+            Track online drivers and active trip pickups in real time.
           </p>
         </div>
 
-        <button className="border rounded-xl px-4 py-2" onClick={loadBoardMap}>
+        <button
+          className="rounded-xl px-4 py-2 text-white"
+          style={{ background: "var(--moovu-primary)" }}
+          onClick={loadBoardMap}
+        >
           Refresh
         </button>
       </div>
 
-      {msg && <div className="border rounded-2xl p-4 text-sm">{msg}</div>}
+      {msg && (
+        <div
+          className="border rounded-2xl p-4 text-sm text-black"
+          style={{ background: "var(--moovu-primary-soft)" }}
+        >
+          {msg}
+        </div>
+      )}
 
       <section className="grid md:grid-cols-4 gap-4">
-        <div className="border rounded-2xl p-4">
-          <div className="text-sm opacity-70">Online drivers</div>
-          <div className="text-2xl font-semibold mt-1">{stats.onlineDrivers}</div>
+        <div
+          className="border rounded-[1.5rem] p-5 shadow-sm"
+          style={{ background: "var(--moovu-primary-soft)" }}
+        >
+          <div className="text-sm text-gray-600">Online drivers</div>
+          <div className="text-3xl font-semibold text-black mt-2">{stats.onlineDrivers}</div>
+          <p className="text-sm text-gray-700 mt-2">Drivers currently visible on the board.</p>
         </div>
 
-        <div className="border rounded-2xl p-4">
-          <div className="text-sm opacity-70">Busy drivers</div>
-          <div className="text-2xl font-semibold mt-1">{stats.busyDrivers}</div>
+        <div className="border rounded-[1.5rem] p-5 bg-white shadow-sm">
+          <div className="text-sm text-gray-600">Busy drivers</div>
+          <div className="text-3xl font-semibold text-black mt-2">{stats.busyDrivers}</div>
+          <p className="text-sm text-gray-700 mt-2">Drivers currently busy with active trips.</p>
         </div>
 
-        <div className="border rounded-2xl p-4">
-          <div className="text-sm opacity-70">Active trips</div>
-          <div className="text-2xl font-semibold mt-1">{stats.activeTrips}</div>
+        <div className="border rounded-[1.5rem] p-5 bg-white shadow-sm">
+          <div className="text-sm text-gray-600">Active trips</div>
+          <div className="text-3xl font-semibold text-black mt-2">{stats.activeTrips}</div>
+          <p className="text-sm text-gray-700 mt-2">Trips currently shown on the live board.</p>
         </div>
 
-        <div className="border rounded-2xl p-4">
-          <div className="text-sm opacity-70">Offered trips</div>
-          <div className="text-2xl font-semibold mt-1">{stats.offeredTrips}</div>
+        <div className="border rounded-[1.5rem] p-5 bg-white shadow-sm">
+          <div className="text-sm text-gray-600">Offered trips</div>
+          <div className="text-3xl font-semibold text-black mt-2">{stats.offeredTrips}</div>
+          <p className="text-sm text-gray-700 mt-2">Trips waiting for driver acceptance.</p>
         </div>
       </section>
 
-      <section className="border rounded-2xl p-4">
-        <div ref={mapRef} className="w-full h-[70vh] rounded-2xl" />
+      <section className="border rounded-[2rem] p-5 bg-white shadow-sm">
+        <div className="mb-4">
+          <div className="text-sm text-gray-500">Map Overview</div>
+          <h2 className="text-xl font-semibold text-black mt-1">Dispatch Map</h2>
+        </div>
+        <div ref={mapRef} className="w-full h-[70vh] rounded-[1.5rem]" />
       </section>
 
-      <section className="grid lg:grid-cols-2 gap-4">
-        <div className="border rounded-2xl p-4">
-          <h2 className="font-semibold">Online Drivers</h2>
-          <div className="mt-3 space-y-2 max-h-[320px] overflow-auto">
+      <section className="grid lg:grid-cols-2 gap-6">
+        <div className="border rounded-[2rem] p-6 bg-white shadow-sm">
+          <div className="mb-4">
+            <div className="text-sm text-gray-500">Drivers</div>
+            <h2 className="text-xl font-semibold text-black mt-1">Online Drivers</h2>
+          </div>
+
+          <div className="space-y-3 max-h-[320px] overflow-auto">
             {drivers.length === 0 ? (
-              <div className="text-sm opacity-60">No online drivers</div>
+              <div className="text-sm text-gray-600">No online drivers</div>
             ) : (
               drivers.map((d) => (
-                <div key={d.id} className="border rounded-xl p-3">
-                  <div className="font-medium">{d.name}</div>
-                  <div className="text-xs opacity-60">
+                <div key={d.id} className="border rounded-2xl p-4 bg-white">
+                  <div className="font-semibold text-black">{d.name}</div>
+                  <div className="text-sm text-gray-700 mt-1">
                     {d.phone ?? "—"} • {d.busy ? "busy" : "free"} • {d.subscription_status ?? "—"}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-2">
+                    Last seen: {d.last_seen ? new Date(d.last_seen).toLocaleString() : "—"}
                   </div>
                 </div>
               ))
@@ -292,20 +320,24 @@ export default function DispatchMapPage() {
           </div>
         </div>
 
-        <div className="border rounded-2xl p-4">
-          <h2 className="font-semibold">Active Trips</h2>
-          <div className="mt-3 space-y-2 max-h-[320px] overflow-auto">
+        <div className="border rounded-[2rem] p-6 bg-white shadow-sm">
+          <div className="mb-4">
+            <div className="text-sm text-gray-500">Trips</div>
+            <h2 className="text-xl font-semibold text-black mt-1">Active Trips</h2>
+          </div>
+
+          <div className="space-y-3 max-h-[320px] overflow-auto">
             {trips.length === 0 ? (
-              <div className="text-sm opacity-60">No active trips</div>
+              <div className="text-sm text-gray-600">No active trips</div>
             ) : (
               trips.map((t) => (
-                <div key={t.id} className="border rounded-xl p-3">
-                  <div className="font-medium">Trip {t.id.slice(0, 8)}</div>
-                  <div className="text-xs opacity-60">
+                <div key={t.id} className="border rounded-2xl p-4 bg-white">
+                  <div className="font-semibold text-black">Trip {t.id.slice(0, 8)}</div>
+                  <div className="text-sm text-gray-700 mt-1">
                     {t.status} • {t.offer_status ?? "—"} • R{t.fare_amount ?? "—"}
                   </div>
-                  <div className="text-xs opacity-70 mt-1">{t.pickup_address ?? "—"}</div>
-                  <div className="text-xs opacity-70">{t.dropoff_address ?? "—"}</div>
+                  <div className="text-sm text-gray-700 mt-2">{t.pickup_address ?? "—"}</div>
+                  <div className="text-sm text-gray-600">{t.dropoff_address ?? "—"}</div>
                 </div>
               ))
             )}

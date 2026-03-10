@@ -1,229 +1,44 @@
 @import "tailwindcss";
 
+/* MOOVU Brand Colors */
 :root {
-  --background: #f7f7f7;
-  --foreground: #0a0a0a;
 
-  --moovu-bg: #f7f7f7;
-  --moovu-surface: #ffffff;
-  --moovu-surface-2: #f1f5f9;
-  --moovu-text: #0a0a0a;
-  --moovu-muted: #6b7280;
-  --moovu-border: #dbe1e8;
+  /* Main Brand (changed from orange to blue) */
+  --moovu-primary: #2f80ed;
+  --moovu-primary-soft: #e8f2ff;
 
-  --moovu-primary: #2563c9;
-  --moovu-primary-strong: #1e4fa5;
-  --moovu-primary-soft: #dcebff;
+  /* App Colors (light sky blue background) */
+  --background: #eaf4ff;
+  --foreground: #000000;
 
-  --moovu-mint: #c9e8da;
-  --moovu-sky: #a9d2f2;
+  --card: #ffffff;
+  --border: #e6e6e6;
 
-  --moovu-accent: #e85a2a;
-  --moovu-success: #16a34a;
-  --moovu-warning: #f59e0b;
-  --moovu-danger: #dc2626;
-
-  --radius-card: 1.25rem;
-  --radius-button: 0.9rem;
-  --shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.06);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-/* Keep app bright and premium by default */
-html {
-  scroll-behavior: smooth;
-}
+/* Global page background */
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(201, 232, 218, 0.45), transparent 24%),
-    radial-gradient(circle at top right, rgba(169, 210, 242, 0.45), transparent 28%),
-    var(--moovu-bg);
-  color: var(--moovu-text);
+  background: var(--background);
+  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
-  min-height: 100vh;
 }
 
-/* Base element polish */
-* {
-  box-sizing: border-box;
+/* Card style used across the platform */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
 }
 
-::selection {
+/* Buttons */
+
+.btn-primary {
   background: var(--moovu-primary);
   color: white;
 }
 
-a {
-  transition: 160ms ease;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-/* Clean defaults for form controls */
-input,
-select,
-textarea {
-  background: var(--moovu-surface);
-  color: var(--moovu-text);
-  border: 1px solid var(--moovu-border);
-  outline: none;
-  transition: 160ms ease;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: #8b95a1;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  border-color: var(--moovu-primary);
-  box-shadow: 0 0 0 4px rgba(37, 99, 201, 0.12);
-}
-
-/* Better default button feeling */
-button {
-  transition: 160ms ease;
-}
-
-button:hover {
-  transform: translateY(-1px);
-}
-
-button:active {
-  transform: translateY(0);
-}
-
-button:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Utility-style global polish for your Tailwind-heavy pages */
-.border {
-  border-color: var(--moovu-border) !important;
-}
-
-.rounded-2xl,
-.rounded-\[2rem\],
-.rounded-\[1\.5rem\] {
-  box-shadow: var(--shadow-soft);
-}
-
-/* Nice scrollbar */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: #eef2f7;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #c3cfdd;
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #aab9cb;
-}
-
-/* Optional dark mode only if system requests it */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0b0f14;
-    --foreground: #f3f4f6;
-
-    --moovu-bg: #0b0f14;
-    --moovu-surface: #121821;
-    --moovu-surface-2: #17202b;
-    --moovu-text: #f3f4f6;
-    --moovu-muted: #9aa4b2;
-    --moovu-border: #243041;
-
-    --moovu-primary: #3b82f6;
-    --moovu-primary-strong: #2563eb;
-    --moovu-primary-soft: rgba(59, 130, 246, 0.16);
-
-    --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.34);
-  }
-
-  body {
-    background:
-      radial-gradient(circle at top left, rgba(37, 99, 201, 0.12), transparent 25%),
-      radial-gradient(circle at top right, rgba(201, 232, 218, 0.08), transparent 22%),
-      var(--moovu-bg);
-    color: var(--moovu-text);
-  }
-
-  input,
-  select,
-  textarea {
-    background: var(--moovu-surface);
-    color: var(--moovu-text);
-    border-color: var(--moovu-border);
-  }
-
-  ::-webkit-scrollbar-track {
-    background: #111827;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #334155;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #475569;
-  }
-}
-/* MOOVU readable surface helpers */
-.moovu-panel {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid var(--moovu-border);
-  color: #000;
-}
-
-.moovu-panel-soft {
-  background: var(--moovu-primary-soft);
-  border: 1px solid var(--moovu-border);
-  color: #000;
-}
-
-.moovu-title {
-  color: #000;
-  font-weight: 600;
-}
-
-.moovu-label {
-  color: #4b5563;
-  font-size: 0.875rem;
-}
-
-.moovu-value {
-  color: #000;
-  font-weight: 500;
-}
-
-.moovu-muted {
-  color: #6b7280;
-}
-
-.moovu-status {
-  color: var(--moovu-primary);
-  font-weight: 600;
+.btn-primary:hover {
+  opacity: 0.9;
 }

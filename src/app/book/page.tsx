@@ -16,37 +16,26 @@ function calcFare(distanceKm: number): number {
 export default function RiderBookingPage() {
   const [riderName, setRiderName] = useState("");
   const [riderPhone, setRiderPhone] = useState("");
-
   const [pickupAddress, setPickupAddress] = useState("");
   const [dropoffAddress, setDropoffAddress] = useState("");
-
   const [pickupLat, setPickupLat] = useState<number | null>(null);
   const [pickupLng, setPickupLng] = useState<number | null>(null);
   const [dropoffLat, setDropoffLat] = useState<number | null>(null);
   const [dropoffLng, setDropoffLng] = useState<number | null>(null);
-
   const [paymentMethod, setPaymentMethod] = useState("cash");
-
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [mapsReady, setMapsReady] = useState(false);
-
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [fare, setFare] = useState<number | null>(null);
 
   const pickupInputRef = useRef<HTMLInputElement | null>(null);
   const dropoffInputRef = useRef<HTMLInputElement | null>(null);
-
   const pickupAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const dropoffAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const canCalculate = useMemo(() => {
-    return (
-      pickupLat != null &&
-      pickupLng != null &&
-      dropoffLat != null &&
-      dropoffLng != null
-    );
+    return pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null;
   }, [pickupLat, pickupLng, dropoffLat, dropoffLng]);
 
   async function reverseGeocode(lat: number, lng: number) {
@@ -80,7 +69,6 @@ export default function RiderBookingPage() {
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        const accuracy = pos.coords.accuracy;
 
         setPickupLat(lat);
         setPickupLng(lng);
@@ -91,11 +79,11 @@ export default function RiderBookingPage() {
         if (json.ok) {
           setPickupAddress(json.address ?? "Current location");
           if (pickupInputRef.current) pickupInputRef.current.value = json.address ?? "Current location";
-          setMsg(`Current pickup location detected ✅ (accuracy about ${Math.round(accuracy)}m)`);
+          setMsg("Current pickup location detected ✅");
         } else {
           setPickupAddress("Current location");
           if (pickupInputRef.current) pickupInputRef.current.value = "Current location";
-          setMsg(`Location detected, but address name could not be resolved. Accuracy about ${Math.round(accuracy)}m`);
+          setMsg("Location detected, but address name could not be resolved.");
         }
 
         setBusy(false);
@@ -116,30 +104,19 @@ export default function RiderBookingPage() {
     if (!window.google?.maps?.places) return;
     if (!pickupInputRef.current || !dropoffInputRef.current) return;
 
-    pickupAutocompleteRef.current = new window.google.maps.places.Autocomplete(
-      pickupInputRef.current,
-      {
-        fields: ["formatted_address", "geometry", "name"],
-      }
-    );
+    pickupAutocompleteRef.current = new window.google.maps.places.Autocomplete(pickupInputRef.current, {
+      fields: ["formatted_address", "geometry", "name"],
+    });
 
-    dropoffAutocompleteRef.current = new window.google.maps.places.Autocomplete(
-      dropoffInputRef.current,
-      {
-        fields: ["formatted_address", "geometry", "name"],
-      }
-    );
+    dropoffAutocompleteRef.current = new window.google.maps.places.Autocomplete(dropoffInputRef.current, {
+      fields: ["formatted_address", "geometry", "name"],
+    });
 
     pickupAutocompleteRef.current.addListener("place_changed", () => {
       const place = pickupAutocompleteRef.current?.getPlace();
       const lat = place?.geometry?.location?.lat();
       const lng = place?.geometry?.location?.lng();
-
-      const addr =
-        place?.formatted_address ||
-        place?.name ||
-        pickupInputRef.current?.value ||
-        "";
+      const addr = place?.formatted_address || place?.name || pickupInputRef.current?.value || "";
 
       setPickupAddress(addr);
       setPickupLat(typeof lat === "number" ? lat : null);
@@ -152,12 +129,7 @@ export default function RiderBookingPage() {
       const place = dropoffAutocompleteRef.current?.getPlace();
       const lat = place?.geometry?.location?.lat();
       const lng = place?.geometry?.location?.lng();
-
-      const addr =
-        place?.formatted_address ||
-        place?.name ||
-        dropoffInputRef.current?.value ||
-        "";
+      const addr = place?.formatted_address || place?.name || dropoffInputRef.current?.value || "";
 
       setDropoffAddress(addr);
       setDropoffLat(typeof lat === "number" ? lat : null);
@@ -206,7 +178,10 @@ export default function RiderBookingPage() {
         destinations: [{ lat: dropoffLat!, lng: dropoffLng! }],
         travelMode: google.maps.TravelMode.DRIVING,
       },
-      (response, status) => {
+      (
+        response: google.maps.DistanceMatrixResponse | null,
+        status: google.maps.DistanceMatrixStatus
+      ) => {
         if (status !== "OK" || !response) {
           setMsg("Could not calculate trip distance");
           return;
@@ -281,18 +256,16 @@ export default function RiderBookingPage() {
       return;
     }
 
-    setMsg(`Booking created ✅ Redirecting to tracking page...`);
+    setMsg("Booking created ✅ Redirecting...");
     window.location.href = `/ride-confirm/${json.tripId}`;
   }
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10 text-black">
       <div className="max-w-6xl mx-auto grid lg:grid-cols-[1.1fr_0.9fr] gap-8 items-start">
         <section className="space-y-6">
           <div className="space-y-3">
-            <div
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border bg-white/85"
-            >
+            <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border bg-white shadow-sm">
               <span
                 className="h-2.5 w-2.5 rounded-full"
                 style={{ background: "var(--moovu-primary)" }}
@@ -300,65 +273,42 @@ export default function RiderBookingPage() {
               Book your ride with MOOVU
             </div>
 
-            <h1 className="text-4xl md:text-5xl font-semibold leading-tight">
-              Fast local booking, with live driver tracking
+            <h1 className="text-4xl md:text-5xl font-semibold leading-tight text-black">
+              Request your ride in a few simple steps
             </h1>
 
-            <p className="opacity-75 max-w-2xl">
-              Set your pickup, choose your destination, calculate your fare and
-              request your ride in a few simple steps.
+            <p className="text-gray-700 max-w-2xl">
+              Set your pickup, choose your destination, estimate your fare and request
+              your ride with a cleaner local-first booking flow.
             </p>
           </div>
 
           <div className="grid sm:grid-cols-3 gap-4">
-            <div className="border rounded-2xl p-4 bg-white/85">
-              <div className="font-semibold">Current location</div>
-              <div className="text-sm opacity-70 mt-1">
-                Use your live location as pickup
-              </div>
+            <div className="border rounded-2xl p-4 bg-white shadow-sm">
+              <div className="font-semibold text-black">Current location</div>
+              <div className="text-sm text-gray-600 mt-1">Use your live location as pickup</div>
             </div>
-            <div className="border rounded-2xl p-4 bg-white/85">
-              <div className="font-semibold">Smart fare</div>
-              <div className="text-sm opacity-70 mt-1">
-                Estimate your trip before requesting
-              </div>
+            <div className="border rounded-2xl p-4 bg-white shadow-sm">
+              <div className="font-semibold text-black">Fare estimate</div>
+              <div className="text-sm text-gray-600 mt-1">Know the cost before booking</div>
             </div>
-            <div className="border rounded-2xl p-4 bg-white/85">
-              <div className="font-semibold">Track live</div>
-              <div className="text-sm opacity-70 mt-1">
-                See driver details and ETA after booking
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="border rounded-[2rem] p-6 md:p-8"
-            style={{
-              background:
-                "linear-gradient(145deg, rgba(201,232,218,0.38), rgba(169,210,242,0.32), rgba(255,255,255,0.96))",
-            }}
-          >
-            <div className="space-y-2">
-              <div className="text-sm opacity-60">Why riders choose MOOVU</div>
-              <div className="text-2xl font-semibold">A cleaner kasi ride experience</div>
-              <p className="opacity-75 max-w-xl">
-                Built for convenience, visibility and smoother local operations
-                from booking to drop-off.
-              </p>
+            <div className="border rounded-2xl p-4 bg-white shadow-sm">
+              <div className="font-semibold text-black">Live tracking</div>
+              <div className="text-sm text-gray-600 mt-1">Track the driver after request</div>
             </div>
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-5 md:p-6 bg-white/90 shadow-sm">
+        <section className="border rounded-[2rem] p-5 md:p-6 bg-white shadow-sm">
           <div className="space-y-5">
             <div>
-              <div className="text-sm opacity-60">Ride Request</div>
-              <h2 className="text-2xl font-semibold mt-1">Book a Ride</h2>
+              <div className="text-sm text-gray-500">Ride Request</div>
+              <h2 className="text-2xl font-semibold mt-1 text-black">Book a Ride</h2>
             </div>
 
             {msg && (
               <div
-                className="border rounded-2xl p-4 text-sm"
+                className="border rounded-2xl p-4 text-sm text-black"
                 style={{ background: "var(--moovu-primary-soft)" }}
               >
                 {msg}
@@ -366,7 +316,7 @@ export default function RiderBookingPage() {
             )}
 
             <section className="space-y-4">
-              <div className="text-sm font-semibold">Rider Details</div>
+              <div className="text-sm font-semibold text-black">Rider Details</div>
 
               <input
                 className="rounded-xl p-3 w-full"
@@ -384,10 +334,10 @@ export default function RiderBookingPage() {
             </section>
 
             <section className="space-y-4">
-              <div className="text-sm font-semibold">Trip Details</div>
+              <div className="text-sm font-semibold text-black">Trip Details</div>
 
               <div className="space-y-2">
-                <div className="text-sm opacity-70">Pickup location</div>
+                <div className="text-sm text-gray-600">Pickup location</div>
                 <div className="grid md:grid-cols-[1fr_auto] gap-3">
                   <input
                     ref={pickupInputRef}
@@ -411,7 +361,7 @@ export default function RiderBookingPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="text-sm opacity-70">Destination</div>
+                <div className="text-sm text-gray-600">Destination</div>
                 <input
                   ref={dropoffInputRef}
                   className="rounded-xl p-3 w-full"
@@ -441,19 +391,19 @@ export default function RiderBookingPage() {
               </button>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="border rounded-2xl p-4" style={{ background: "var(--moovu-primary-soft)" }}>
-                  <div className="text-sm opacity-70">Distance</div>
-                  <div className="text-2xl font-semibold mt-1">
+                <div
+                  className="border rounded-2xl p-4"
+                  style={{ background: "var(--moovu-primary-soft)" }}
+                >
+                  <div className="text-sm text-gray-600">Distance</div>
+                  <div className="text-2xl font-semibold mt-1 text-black">
                     {distanceKm != null ? `${distanceKm} km` : "—"}
                   </div>
                 </div>
 
                 <div className="border rounded-2xl p-4 bg-white">
-                  <div className="text-sm opacity-70">Estimated Fare</div>
-                  <div
-                    className="text-2xl font-semibold mt-1"
-                    style={{ color: "var(--moovu-primary)" }}
-                  >
+                  <div className="text-sm text-gray-600">Estimated Fare</div>
+                  <div className="text-2xl font-semibold mt-1" style={{ color: "var(--moovu-primary)" }}>
                     {fare != null ? `R${fare}` : "—"}
                   </div>
                 </div>

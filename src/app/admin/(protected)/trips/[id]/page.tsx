@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import { waLinkZA } from "@/lib/whatsapp";
 
 type Trip = {
   id: string;
@@ -15,7 +14,6 @@ type Trip = {
   status: string;
   cancel_reason: string | null;
   created_at: string;
-
   offer_status: string | null;
   offer_expires_at: string | null;
 };
@@ -48,14 +46,13 @@ export default function TripDetailPage() {
   const [events, setEvents] = useState<TripEvent[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [tick, setTick] = useState(0);
-  const [waBusy, setWaBusy] = useState(false);
 
   async function loadAll() {
     setLoading(true);
 
     const { data: t } = await supabaseClient.from("trips").select("*").eq("id", tripId).single();
+
     const { data: ev } = await supabaseClient
       .from("trip_events")
       .select("*")
@@ -79,7 +76,6 @@ export default function TripDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
-  // live countdown refresh
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 1000);
     return () => clearInterval(t);
@@ -102,7 +98,9 @@ export default function TripDetailPage() {
 
     const res = await fetch("/api/admin/trips/auto-assign", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ tripId: trip.id, excludeDriverIds: exclude }),
     });
 
@@ -111,52 +109,8 @@ export default function TripDetailPage() {
       alert(json.error || "Offer failed");
       return;
     }
+
     await loadAll();
-  }
-
-  async function openWhatsAppOffer() {
-    if (!trip?.id) return;
-
-    setWaBusy(true);
-    try {
-      const res = await fetch(`/api/admin/trips/wa-offer?tripId=${encodeURIComponent(trip.id)}`);
-      const json = await res.json();
-
-      if (!json.ok) {
-        alert(json.error || "Unable to prepare WhatsApp offer");
-        return;
-      }
-
-      const d = json.driver;
-      const t = json.trip;
-
-      const driverName = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Driver";
-      const expires = t.offer_expires_at ? new Date(t.offer_expires_at).toLocaleTimeString() : null;
-      const secondsLeftLocal =
-        t.offer_expires_at ? Math.max(0, Math.ceil((new Date(t.offer_expires_at).getTime() - Date.now()) / 1000)) : null;
-
-      const message =
-        `MOOVU TRIP OFFER\n` +
-        `Hi ${driverName}, you have a new trip offer.\n\n` +
-        `Trip ID: ${t.id}\n` +
-        `Pickup: ${t.pickup_address}\n` +
-        `Dropoff: ${t.dropoff_address}\n` +
-        `Fare: R${t.fare_amount ?? "—"}\n` +
-        `Status: ${t.status} (${t.offer_status ?? "—"})\n` +
-        (expires ? `Expires at: ${expires} (${secondsLeftLocal ?? "—"}s)\n` : "") +
-        `\nTo accept/reject: https://moovurides.co.za/driver\n` +
-        `Login: https://moovurides.co.za/driver/login`;
-
-      const href = waLinkZA(d.phone, message);
-      if (!href) {
-        alert("Driver phone is missing/invalid for WhatsApp.");
-        return;
-      }
-
-      window.open(href, "_blank", "noopener,noreferrer");
-    } finally {
-      setWaBusy(false);
-    }
   }
 
   async function cancelTrip() {
@@ -165,6 +119,7 @@ export default function TripDetailPage() {
     if (!reason) return;
 
     await supabaseClient.from("trips").update({ status: "cancelled", cancel_reason: reason }).eq("id", tripId);
+
     await supabaseClient.from("trip_events").insert({
       trip_id: tripId,
       event_type: "cancel",
@@ -173,7 +128,6 @@ export default function TripDetailPage() {
       new_status: "cancelled",
     });
 
-    // free driver if any
     if (trip.driver_id) {
       await supabaseClient.from("drivers").update({ busy: false }).eq("id", trip.driver_id);
     }
@@ -185,6 +139,7 @@ export default function TripDetailPage() {
     if (!trip) return;
 
     await supabaseClient.from("trips").update({ status: "completed" }).eq("id", tripId);
+
     await supabaseClient.from("trip_events").insert({
       trip_id: tripId,
       event_type: "status_change",
@@ -200,133 +155,181 @@ export default function TripDetailPage() {
     await loadAll();
   }
 
-  if (loading) return <main className="p-6">Loading trip...</main>;
+  if (loading) {
+    return (
+      <main className="space-y-6 text-black">
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
+          <p className="text-gray-700">Loading trip...</p>
+        </section>
+      </main>
+    );
+  }
+
   if (!trip) {
     return (
-      <main className="p-6">
-        <p>Trip not found.</p>
-        <button className="border rounded-xl px-4 py-2 mt-3" onClick={() => router.push("/admin/trips")}>
-          Back
-        </button>
+      <main className="space-y-6 text-black">
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
+          <p className="text-black">Trip not found.</p>
+          <button
+            className="mt-4 rounded-xl px-4 py-2 text-white"
+            style={{ background: "var(--moovu-primary)" }}
+            onClick={() => router.push("/admin/trips")}
+          >
+            Back to Trips
+          </button>
+        </section>
       </main>
     );
   }
 
   const isClosed = trip.status === "completed" || trip.status === "cancelled";
 
-  const canWhatsApp = !!trip.driver_id && (trip.offer_status === "pending" || trip.status === "assigned");
-
   return (
-    <main className="p-6 space-y-6">
+    <main className="space-y-6 text-black">
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-semibold">Trip</h1>
-          <p className="opacity-70 mt-1">
-            Status: <span className="capitalize">{trip.status}</span>
+          <div className="text-sm text-gray-500">Trip Detail</div>
+          <h1 className="text-3xl font-semibold text-black mt-1">Trip</h1>
+          <p className="text-gray-700 mt-2">
+            Status: <span className="capitalize font-medium text-black">{trip.status}</span>
             {trip.cancel_reason ? ` • Reason: ${trip.cancel_reason}` : ""}
           </p>
         </div>
 
-        <button className="border rounded-xl px-4 py-2" onClick={() => router.push("/admin/trips")}>
+        <button
+          className="rounded-xl px-4 py-2 text-white"
+          style={{ background: "var(--moovu-primary)" }}
+          onClick={() => router.push("/admin/trips")}
+        >
           Back to Trips
         </button>
       </div>
 
-      <section className="border rounded-2xl p-5 space-y-3">
+      <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <div className="mb-2">
+          <div className="text-sm text-gray-500">Trip Summary</div>
+          <h2 className="text-xl font-semibold text-black mt-1">Route and Assignment</h2>
+        </div>
+
         <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <div className="text-sm opacity-70">Pickup</div>
-            <div className="font-medium">{trip.pickup_address}</div>
+          <div
+            className="border rounded-2xl p-4"
+            style={{ background: "var(--moovu-primary-soft)" }}
+          >
+            <div className="text-sm text-gray-600">Pickup</div>
+            <div className="font-medium text-black mt-1">{trip.pickup_address}</div>
           </div>
-          <div>
-            <div className="text-sm opacity-70">Dropoff</div>
-            <div className="font-medium">{trip.dropoff_address}</div>
+
+          <div className="border rounded-2xl p-4 bg-white">
+            <div className="text-sm text-gray-600">Dropoff</div>
+            <div className="font-medium text-black mt-1">{trip.dropoff_address}</div>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-4 gap-4 pt-2">
-          <div>
-            <div className="text-sm opacity-70">Driver</div>
-            <div className="font-medium">{driverLabel}</div>
+        <div className="grid md:grid-cols-4 gap-4">
+          <div className="border rounded-2xl p-4 bg-white">
+            <div className="text-sm text-gray-600">Driver</div>
+            <div className="font-semibold text-black mt-1">{driverLabel}</div>
             {trip.offer_status === "pending" && offerSecondsLeft != null && (
-              <div className="text-sm opacity-70 mt-1">Offer pending • {Math.max(0, offerSecondsLeft)}s left</div>
+              <div className="text-sm text-gray-700 mt-2">
+                Offer pending • {Math.max(0, offerSecondsLeft)}s left
+              </div>
             )}
           </div>
 
-          <div>
-            <div className="text-sm opacity-70">Payment</div>
-            <div className="font-medium capitalize">{trip.payment_method}</div>
+          <div className="border rounded-2xl p-4 bg-white">
+            <div className="text-sm text-gray-600">Payment</div>
+            <div className="font-semibold text-black mt-1 capitalize">{trip.payment_method}</div>
           </div>
 
-          <div>
-            <div className="text-sm opacity-70">Fare</div>
-            <div className="font-medium">{trip.fare_amount ?? "—"}</div>
+          <div className="border rounded-2xl p-4 bg-white">
+            <div className="text-sm text-gray-600">Fare</div>
+            <div className="font-semibold text-black mt-1">
+              {trip.fare_amount != null ? `R${trip.fare_amount}` : "—"}
+            </div>
           </div>
 
-          <div>
-            <div className="text-sm opacity-70">Offer</div>
-            <div className="font-medium">{trip.offer_status ?? "—"}</div>
+          <div className="border rounded-2xl p-4 bg-white">
+            <div className="text-sm text-gray-600">Offer</div>
+            <div className="font-semibold text-black mt-1">{trip.offer_status ?? "—"}</div>
           </div>
         </div>
       </section>
 
-      <section className="border rounded-2xl p-5">
-        <h2 className="font-semibold">Actions</h2>
+      <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
+        <div className="mb-4">
+          <div className="text-sm text-gray-500">Trip Controls</div>
+          <h2 className="text-xl font-semibold text-black mt-1">Actions</h2>
+        </div>
 
-        <div className="flex flex-wrap gap-2 mt-4">
+        <div className="flex flex-wrap gap-2">
           {!isClosed && trip.offer_status !== "pending" && trip.status !== "assigned" && (
-            <button className="border rounded-xl px-4 py-2" onClick={() => offerNearest([])}>
+            <button
+              className="rounded-xl px-4 py-2 text-white"
+              style={{ background: "var(--moovu-primary)" }}
+              onClick={() => offerNearest([])}
+            >
               Offer nearest driver
             </button>
           )}
 
           {!isClosed && trip.offer_status === "pending" && (
-            <button className="border rounded-xl px-4 py-2" onClick={() => loadAll()}>
+            <button
+              className="border rounded-xl px-4 py-2 bg-white text-black"
+              onClick={() => loadAll()}
+            >
               Refresh
             </button>
           )}
 
-          {!isClosed && canWhatsApp && (
-            <button className="border rounded-xl px-4 py-2" disabled={waBusy} onClick={openWhatsAppOffer}>
-              {waBusy ? "Preparing..." : "WhatsApp driver"}
-            </button>
-          )}
-
           {!isClosed && (
-            <button className="border rounded-xl px-4 py-2" onClick={cancelTrip}>
+            <button
+              className="border rounded-xl px-4 py-2 bg-white text-black"
+              onClick={cancelTrip}
+            >
               Cancel
             </button>
           )}
 
           {!isClosed && trip.status === "assigned" && (
-            <button className="border rounded-xl px-4 py-2" onClick={markCompleted}>
+            <button
+              className="rounded-xl px-4 py-2 text-white"
+              style={{ background: "var(--moovu-primary)" }}
+              onClick={markCompleted}
+            >
               Mark Completed
             </button>
           )}
         </div>
 
-        <p className="text-xs opacity-60 mt-3">
-          Note: If an offer expires, it will be cleaned up when the driver/admin polls again. Then you can offer the next
-          driver.
+        <p className="text-sm text-gray-700 mt-4">
+          If an offer expires, it will clear on the next driver or admin refresh. Then you can offer the next driver.
         </p>
       </section>
 
-      <section className="border rounded-2xl p-5">
-        <h2 className="font-semibold">Timeline</h2>
+      <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
+        <div className="mb-4">
+          <div className="text-sm text-gray-500">Trip Timeline</div>
+          <h2 className="text-xl font-semibold text-black mt-1">Events</h2>
+        </div>
 
         {events.length === 0 ? (
-          <p className="opacity-70 mt-3">No events yet.</p>
+          <p className="text-gray-700">No events yet.</p>
         ) : (
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3">
             {events.map((e) => (
-              <div key={e.id} className="border rounded-xl p-4">
+              <div key={e.id} className="border rounded-2xl p-4 bg-white">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium">{e.event_type}</div>
-                  <div className="text-xs opacity-60">{new Date(e.created_at).toLocaleString()}</div>
+                  <div className="font-semibold text-black">{e.event_type}</div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(e.created_at).toLocaleString()}
+                  </div>
                 </div>
-                {e.message && <div className="opacity-80 mt-2">{e.message}</div>}
+
+                {e.message && <div className="text-gray-700 mt-2">{e.message}</div>}
+
                 {(e.old_status || e.new_status) && (
-                  <div className="text-sm opacity-70 mt-2">
+                  <div className="text-sm text-gray-600 mt-2">
                     {e.old_status ?? "—"} → {e.new_status ?? "—"}
                   </div>
                 )}

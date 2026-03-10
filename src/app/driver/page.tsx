@@ -118,7 +118,7 @@ export default function DriverHomePage() {
       .single();
 
     if (mErr || !mapping?.driver_id) {
-      setInfo("Your account is not linked yet. Please wait for admin to approve + link your account.");
+      setInfo("Your account is not linked yet. Please wait for admin approval and linking.");
       setDriver(null);
       return;
     }
@@ -237,9 +237,7 @@ export default function DriverHomePage() {
 
     const res = await fetch("/api/maps/geocode", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ place }),
     });
 
@@ -426,7 +424,6 @@ export default function DriverHomePage() {
         title: "You",
         label: { text: "Y", color: "white", fontWeight: "bold" },
       });
-
       bounds.extend({ lat: driver.lat, lng: driver.lng });
     }
 
@@ -437,7 +434,6 @@ export default function DriverHomePage() {
         title: "Pickup",
         label: { text: "P", color: "white", fontWeight: "bold" },
       });
-
       bounds.extend({ lat: currentTrip.pickup_lat, lng: currentTrip.pickup_lng });
     }
 
@@ -448,7 +444,6 @@ export default function DriverHomePage() {
         title: "Dropoff",
         label: { text: "D", color: "white", fontWeight: "bold" },
       });
-
       bounds.extend({ lat: currentTrip.dropoff_lat, lng: currentTrip.dropoff_lng });
     }
 
@@ -490,7 +485,10 @@ export default function DriverHomePage() {
           destination: { lat: destLat, lng: destLng },
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
-        (result, status) => {
+        (
+          result: google.maps.DirectionsResult | null,
+          status: google.maps.DirectionsStatus
+        ) => {
           if (status === "OK" && result) {
             directionsRenderer.setDirections(result);
           }
@@ -609,16 +607,19 @@ export default function DriverHomePage() {
   const dropoffWaze = wazeLink(currentTrip?.dropoff_lat, currentTrip?.dropoff_lng);
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10 text-black">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border bg-white/85 mb-3">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--moovu-primary)" }} />
+            <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border bg-white shadow-sm mb-3">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: "var(--moovu-primary)" }}
+              />
               Driver operations
             </div>
-            <h1 className="text-3xl md:text-4xl font-semibold">Driver Dashboard</h1>
-            <p className="opacity-70 mt-2">Trip controls, live map and navigation in one place.</p>
+            <h1 className="text-3xl md:text-4xl font-semibold text-black">Driver Dashboard</h1>
+            <p className="text-gray-700 mt-2">Trip controls, navigation and live map in one place.</p>
           </div>
 
           <button
@@ -631,40 +632,43 @@ export default function DriverHomePage() {
         </div>
 
         {info && (
-          <div className="border rounded-2xl p-4 text-sm" style={{ background: "var(--moovu-primary-soft)" }}>
+          <div
+            className="border rounded-2xl p-4 text-sm text-black"
+            style={{ background: "var(--moovu-primary-soft)" }}
+          >
             {info}
           </div>
         )}
 
         {gpsInfo && (
-          <div className="border rounded-2xl p-4 text-sm bg-white/85">
+          <div className="border rounded-2xl p-4 text-sm bg-white text-black shadow-sm">
             {gpsInfo}
           </div>
         )}
 
         {!driver ? (
-          <div className="border rounded-2xl p-5 bg-white/85 opacity-70">Loading driver...</div>
+          <div className="border rounded-2xl p-5 bg-white shadow-sm text-gray-700">Loading driver...</div>
         ) : (
           <>
-            <section className="border rounded-[2rem] p-6 bg-white/90">
+            <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
               <div className="grid lg:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <h2 className="text-xl font-semibold">Profile</h2>
+                  <h2 className="text-xl font-semibold text-black">Profile</h2>
 
-                  <div className="text-sm opacity-75">
+                  <div className="text-sm text-gray-700">
                     {driver.first_name ?? "—"} {driver.last_name ?? ""} • {driver.phone ?? "—"}
                   </div>
 
-                  <div className="text-sm opacity-75">
-                    Approval status: <span className="font-medium">{driver.status ?? "—"}</span>
+                  <div className="text-sm text-gray-700">
+                    Approval status: <span className="font-medium text-black">{driver.status ?? "—"}</span>
                     {" • "}
-                    Subscription: <span className="font-medium">{subscriptionLabel}</span>
+                    Subscription: <span className="font-medium text-black">{subscriptionLabel}</span>
                   </div>
 
-                  <div className="text-sm opacity-75">
-                    Online: <span className="font-medium">{driver.online ? "Yes" : "No"}</span>
+                  <div className="text-sm text-gray-700">
+                    Online: <span className="font-medium text-black">{driver.online ? "Yes" : "No"}</span>
                     {" • "}
-                    Busy: <span className="font-medium">{driver.busy ? "Yes" : "No"}</span>
+                    Busy: <span className="font-medium text-black">{driver.busy ? "Yes" : "No"}</span>
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-2">
@@ -678,7 +682,7 @@ export default function DriverHomePage() {
                     </button>
 
                     <button
-                      className="border rounded-xl px-4 py-2 bg-white"
+                      className="border rounded-xl px-4 py-2 bg-white text-black"
                       disabled={busy}
                       onClick={() => setOnlineServer(false)}
                     >
@@ -686,7 +690,7 @@ export default function DriverHomePage() {
                     </button>
 
                     <button
-                      className="border rounded-xl px-4 py-2 bg-white"
+                      className="border rounded-xl px-4 py-2 bg-white text-black"
                       disabled={busy}
                       onClick={() => {
                         pollOffers();
@@ -700,7 +704,7 @@ export default function DriverHomePage() {
                 </div>
 
                 <div className="space-y-3">
-                  <h2 className="text-xl font-semibold">Location</h2>
+                  <h2 className="text-xl font-semibold text-black">Location</h2>
 
                   <input
                     className="rounded-xl p-3 w-full"
@@ -710,82 +714,85 @@ export default function DriverHomePage() {
                   />
 
                   <button
-                    className="border rounded-xl px-4 py-2 bg-white"
+                    className="border rounded-xl px-4 py-2 bg-white text-black"
                     disabled={busy}
                     onClick={saveLocationFromName}
                   >
                     Save Location Manually
                   </button>
 
-                  <div className="text-xs opacity-60">
+                  <div className="text-xs text-gray-600">
                     Current coords: {driver.lat != null && driver.lng != null ? `${driver.lat}, ${driver.lng}` : "—"}
                   </div>
                 </div>
               </div>
             </section>
 
-            <section className="border rounded-[2rem] p-5 bg-white/90">
-              <h2 className="text-xl font-semibold mb-4">Driver Map</h2>
+            <section className="border rounded-[2rem] p-5 bg-white shadow-sm">
+              <h2 className="text-xl font-semibold text-black mb-4">Driver Map</h2>
               <div ref={mapRef} className="w-full h-[55vh] rounded-[1.5rem]" />
             </section>
 
-            <section className="border rounded-[2rem] p-6 bg-white/90 space-y-4">
-              <h2 className="text-xl font-semibold">Current Trip</h2>
+            <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+              <h2 className="text-xl font-semibold text-black">Current Trip</h2>
 
               {!currentTrip ? (
-                <p className="opacity-70">No active trip.</p>
+                <p className="text-gray-700">No active trip.</p>
               ) : (
                 <div className="space-y-4">
                   <div className="grid md:grid-cols-2 gap-4">
-                    <div className="border rounded-2xl p-4" style={{ background: "var(--moovu-primary-soft)" }}>
-                      <div className="text-sm opacity-60">Pickup</div>
-                      <div className="font-medium mt-1">{currentTrip.pickup_address}</div>
+                    <div
+                      className="border rounded-2xl p-4"
+                      style={{ background: "var(--moovu-primary-soft)" }}
+                    >
+                      <div className="text-sm text-gray-600">Pickup</div>
+                      <div className="font-medium mt-1 text-black">{currentTrip.pickup_address}</div>
                     </div>
 
                     <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm opacity-60">Dropoff</div>
-                      <div className="font-medium mt-1">{currentTrip.dropoff_address}</div>
+                      <div className="text-sm text-gray-600">Dropoff</div>
+                      <div className="font-medium mt-1 text-black">{currentTrip.dropoff_address}</div>
                     </div>
                   </div>
 
                   <div className="grid md:grid-cols-3 gap-4">
                     <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm opacity-60">Status</div>
-                      <div className="font-semibold mt-1">{currentTrip.status}</div>
+                      <div className="text-sm text-gray-600">Status</div>
+                      <div className="font-semibold mt-1 text-black">{currentTrip.status}</div>
                     </div>
 
                     <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm opacity-60">Fare</div>
-                      <div className="font-semibold mt-1">R{currentTrip.fare_amount ?? "—"}</div>
+                      <div className="text-sm text-gray-600">Fare</div>
+                      <div className="font-semibold mt-1 text-black">R{currentTrip.fare_amount ?? "—"}</div>
                     </div>
 
                     <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm opacity-60">Payment</div>
-                      <div className="font-semibold mt-1">{currentTrip.payment_method ?? "—"}</div>
+                      <div className="text-sm text-gray-600">Payment</div>
+                      <div className="font-semibold mt-1 text-black">{currentTrip.payment_method ?? "—"}</div>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
                     {pickupGoogle && (
-                      <a className="border rounded-xl px-4 py-2 bg-white" href={pickupGoogle} target="_blank" rel="noreferrer">
+                      <a className="border rounded-xl px-4 py-2 bg-white text-black" href={pickupGoogle} target="_blank" rel="noreferrer">
                         Pickup Google Maps
                       </a>
                     )}
 
                     {pickupWaze && (
-                      <a className="border rounded-xl px-4 py-2 bg-white" href={pickupWaze} target="_blank" rel="noreferrer">
+                      <a className="border rounded-xl px-4 py-2 bg-white text-black" href={pickupWaze} target="_blank" rel="noreferrer">
                         Pickup Waze
                       </a>
                     )}
 
                     {dropoffGoogle && (
-                      <a className="border rounded-xl px-4 py-2 bg-white" href={dropoffGoogle} target="_blank" rel="noreferrer">
+                      <a className="border rounded-xl px-4 py-2 bg-white text-black" href={dropoffGoogle} target="_blank" rel="noreferrer">
                         Dropoff Google Maps
                       </a>
                     )}
 
                     {dropoffWaze && (
-                      <a className="border rounded-xl px-4 py-2 bg-white" href={dropoffWaze} target="_blank" rel="noreferrer">
+                      <a className="border rounded-xl px-4 py-2 bg-white text-black" href={dropoffWaze} target="_blank" rel="noreferrer">
                         Dropoff Waze
                       </a>
                     )}
@@ -804,7 +811,7 @@ export default function DriverHomePage() {
                         </button>
 
                         <button
-                          className="border rounded-xl px-4 py-2 bg-white"
+                          className="border rounded-xl px-4 py-2 bg-white text-black"
                           disabled={busy}
                           onClick={() => startTrip(currentTrip.id)}
                         >
@@ -825,7 +832,7 @@ export default function DriverHomePage() {
                         </button>
 
                         <button
-                          className="border rounded-xl px-4 py-2 bg-white"
+                          className="border rounded-xl px-4 py-2 bg-white text-black"
                           disabled={busy}
                           onClick={() => completeTrip(currentTrip.id)}
                         >
@@ -849,39 +856,42 @@ export default function DriverHomePage() {
               )}
             </section>
 
-            <section className="border rounded-[2rem] p-6 bg-white/90 space-y-4">
-              <h2 className="text-xl font-semibold">Current Offer</h2>
+            <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+              <h2 className="text-xl font-semibold text-black">Current Offer</h2>
 
               {!topOffer ? (
-                <p className="opacity-70">No pending offers.</p>
+                <p className="text-gray-700">No pending offers.</p>
               ) : (
                 <div className="space-y-4">
                   <div className="grid md:grid-cols-2 gap-4">
-                    <div className="border rounded-2xl p-4" style={{ background: "var(--moovu-primary-soft)" }}>
-                      <div className="text-sm opacity-60">Pickup</div>
-                      <div className="font-medium mt-1">{topOffer.pickup_address}</div>
+                    <div
+                      className="border rounded-2xl p-4"
+                      style={{ background: "var(--moovu-primary-soft)" }}
+                    >
+                      <div className="text-sm text-gray-600">Pickup</div>
+                      <div className="font-medium mt-1 text-black">{topOffer.pickup_address}</div>
                     </div>
 
                     <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm opacity-60">Dropoff</div>
-                      <div className="font-medium mt-1">{topOffer.dropoff_address}</div>
+                      <div className="text-sm text-gray-600">Dropoff</div>
+                      <div className="font-medium mt-1 text-black">{topOffer.dropoff_address}</div>
                     </div>
                   </div>
 
                   <div className="grid md:grid-cols-3 gap-4">
                     <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm opacity-60">Offer status</div>
-                      <div className="font-semibold mt-1">{topOffer.offer_status}</div>
+                      <div className="text-sm text-gray-600">Offer status</div>
+                      <div className="font-semibold mt-1 text-black">{topOffer.offer_status}</div>
                     </div>
 
                     <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm opacity-60">Fare</div>
-                      <div className="font-semibold mt-1">R{topOffer.fare_amount ?? "—"}</div>
+                      <div className="text-sm text-gray-600">Fare</div>
+                      <div className="font-semibold mt-1 text-black">R{topOffer.fare_amount ?? "—"}</div>
                     </div>
 
                     <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm opacity-60">Time left</div>
-                      <div className="font-semibold mt-1">{secondsLeft != null ? `${secondsLeft}s` : "—"}</div>
+                      <div className="text-sm text-gray-600">Time left</div>
+                      <div className="font-semibold mt-1 text-black">{secondsLeft != null ? `${secondsLeft}s` : "—"}</div>
                     </div>
                   </div>
 
@@ -896,7 +906,7 @@ export default function DriverHomePage() {
                     </button>
 
                     <button
-                      className="border rounded-xl px-4 py-2 bg-white"
+                      className="border rounded-xl px-4 py-2 bg-white text-black"
                       disabled={busy || secondsLeft === 0}
                       onClick={() => respond(topOffer.id, "reject")}
                     >

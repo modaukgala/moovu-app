@@ -5,49 +5,40 @@ export default function HomePage() {
   return (
     <main className="min-h-screen text-black">
       <header
-        className="sticky top-0 z-30 border-b backdrop-blur"
-        style={{ background: "rgba(255,255,255,0.88)" }}
-      >
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="rounded-2xl border shadow-sm bg-white px-3 py-2">
-              <Image
-                src="/logo/Moovu-Black.png"
-                alt="MOOVU Kasi Rides"
-                width={150}
-                height={60}
-                className="h-auto w-auto object-contain"
-                priority
-              />
+        className="container grid2" style={{ paddingTop: 28, paddingBottom: 18 }}>
+
+        <div style={{ padding: "10px 0" }}>
+          {/* LOGO + TITLE (replaces CR block) */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+              marginBottom: 18,
+            }}
+          >
+            <Image
+              src="/Moovu-Black.png"
+              alt="MOOVU"
+              width={320}
+              height={160}
+              priority
+              style={{
+                width: "220px",
+                height: "auto",
+                objectFit: "contain",
+                filter:
+                  "drop-shadow(0 10px 26px rgba(0,0,0,0.55)) drop-shadow(0 0 18px rgba(227,28,61,0.18))",
+              }}
+            />
+
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 40, fontWeight: 950, letterSpacing: 0.6 }}>
+                MOOVU CAMPUS RIDES
+              </div>
+              <div style={{ fontSize: 20, opacity: 0.75 }}>Safe • Fast • Trusted</div>
             </div>
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-2 text-sm">
-            <a href="#how-it-works" className="px-3 py-2 rounded-xl hover:bg-white">
-              How it works
-            </a>
-            <a href="#features" className="px-3 py-2 rounded-xl hover:bg-white">
-              Features
-            </a>
-            <a href="#drivers" className="px-3 py-2 rounded-xl hover:bg-white">
-              Drivers
-            </a>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/driver/login"
-              className="border rounded-xl px-4 py-2 text-sm bg-white text-black hover:bg-black hover:text-white"
-            >
-              Driver Login
-            </Link>
-            <Link
-              href="/book"
-              className="rounded-xl px-4 py-2 text-sm text-white"
-              style={{ background: "var(--moovu-primary)" }}
-            >
-              Book Ride
-            </Link>
           </div>
         </div>
       </header>
@@ -55,23 +46,22 @@ export default function HomePage() {
       <section className="relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 py-16 md:py-24 grid lg:grid-cols-2 gap-10 items-center">
           <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 border rounded-full px-4 py-2 text-sm bg-white shadow-sm">
+            <div className="inline-flex items-center gap-2 border rounded-full px-4 py-2 text-sm bg-white shadow-sm text-black">
               <span
                 className="h-2.5 w-2.5 rounded-full"
                 style={{ background: "var(--moovu-primary)" }}
               />
-              Smart local transport for everyday movement
+              Smarter local transport for everyday movement
             </div>
 
             <div className="space-y-4">
               <h1 className="text-4xl md:text-6xl font-semibold leading-tight text-black">
-                Move smarter with{" "}
+                Safe, simple and smart rides with{" "}
                 <span style={{ color: "var(--moovu-primary)" }}>MOOVU</span>
               </h1>
               <p className="text-base md:text-lg text-gray-700 max-w-xl">
-                A modern kasi ride platform for riders, drivers and operators.
-                Book your ride, track your driver live, and enjoy a cleaner,
-                faster transport experience.
+                Book a ride, track your driver live, and move around your area with
+                confidence. MOOVU brings modern ride-hailing to local communities.
               </p>
             </div>
 
@@ -96,19 +86,19 @@ export default function HomePage() {
               <div className="border rounded-2xl p-4 bg-white shadow-sm">
                 <div className="text-2xl font-semibold text-black">Fast</div>
                 <div className="text-sm text-gray-600 mt-1">
-                  Quick booking and smart dispatch
+                  Quick booking and dispatch
+                </div>
+              </div>
+              <div className="border rounded-2xl p-4 bg-white shadow-sm">
+                <div className="text-2xl font-semibold text-black">Visible</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  Live rider and driver tracking
                 </div>
               </div>
               <div className="border rounded-2xl p-4 bg-white shadow-sm">
                 <div className="text-2xl font-semibold text-black">Local</div>
                 <div className="text-sm text-gray-600 mt-1">
-                  Built for community transport
-                </div>
-              </div>
-              <div className="border rounded-2xl p-4 bg-white shadow-sm">
-                <div className="text-2xl font-semibold text-black">Tracked</div>
-                <div className="text-sm text-gray-600 mt-1">
-                  Live driver visibility and ETA
+                  Designed for kasi transport
                 </div>
               </div>
             </div>
@@ -116,56 +106,35 @@ export default function HomePage() {
 
           <div className="relative">
             <div
-              className="rounded-[2rem] p-5 md:p-6 shadow-sm border"
+              className="rounded-[2rem] p-6 border shadow-sm"
               style={{
                 background:
-                  "linear-gradient(160deg, rgba(255,255,255,0.96), rgba(220,235,255,0.96))",
+                  "linear-gradient(160deg, rgba(255,255,255,0.98), rgba(220,235,255,0.95))",
               }}
             >
-              <div className="border rounded-[1.5rem] p-5 space-y-5 bg-white">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-sm text-gray-500">MOOVU rider experience</div>
-                    <div className="text-xl font-semibold mt-1 text-black">
-                      From booking to drop-off
-                    </div>
-                  </div>
-                  <div
-                    className="rounded-xl px-3 py-2 text-sm text-white"
-                    style={{ background: "var(--moovu-primary)" }}
-                  >
-                    Live
-                  </div>
+              <div className="grid gap-4">
+                <div className="border rounded-2xl p-5 bg-white">
+                  <div className="text-sm text-gray-500">Step 1</div>
+                  <div className="text-xl font-semibold text-black mt-1">Request a ride</div>
+                  <p className="text-sm text-gray-700 mt-2">
+                    Enter pickup, destination and rider details.
+                  </p>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="border rounded-2xl p-4 bg-white">
-                    <div className="text-sm text-gray-500">1. Book</div>
-                    <div className="font-medium mt-1 text-black">
-                      Set pickup, destination and see estimated fare
-                    </div>
-                  </div>
+                <div className="border rounded-2xl p-5 bg-white">
+                  <div className="text-sm text-gray-500">Step 2</div>
+                  <div className="text-xl font-semibold text-black mt-1">Get matched</div>
+                  <p className="text-sm text-gray-700 mt-2">
+                    The nearest eligible driver receives your trip.
+                  </p>
+                </div>
 
-                  <div className="border rounded-2xl p-4 bg-white">
-                    <div className="text-sm text-gray-500">2. Dispatch</div>
-                    <div className="font-medium mt-1 text-black">
-                      Nearby eligible driver receives the trip
-                    </div>
-                  </div>
-
-                  <div className="border rounded-2xl p-4 bg-white">
-                    <div className="text-sm text-gray-500">3. Track live</div>
-                    <div className="font-medium mt-1 text-black">
-                      Watch driver details, route line and ETA
-                    </div>
-                  </div>
-
-                  <div className="border rounded-2xl p-4 bg-white">
-                    <div className="text-sm text-gray-500">4. Complete</div>
-                    <div className="font-medium mt-1 text-black">
-                      Clean trip completion for rider and driver
-                    </div>
-                  </div>
+                <div className="border rounded-2xl p-5 bg-white">
+                  <div className="text-sm text-gray-500">Step 3</div>
+                  <div className="text-xl font-semibold text-black mt-1">Track live</div>
+                  <p className="text-sm text-gray-700 mt-2">
+                    See your driver, car details, route and ETA in real time.
+                  </p>
                 </div>
 
                 <Link
@@ -186,25 +155,24 @@ export default function HomePage() {
           <div className="max-w-2xl">
             <div className="text-sm text-gray-500">How it works</div>
             <h2 className="text-3xl md:text-4xl font-semibold mt-2 text-black">
-              Built for smooth everyday transport
+              A ride flow that feels clean and dependable
             </h2>
             <p className="text-gray-700 mt-3">
-              MOOVU keeps the full ride flow simple, from booking to dispatch,
-              live tracking and completion.
+              MOOVU is built to keep booking, dispatch, driver movement and trip
+              progress clear for everyone involved.
             </p>
           </div>
 
           <div className="grid md:grid-cols-4 gap-4">
             {[
-              ["Step 01", "Request", "Rider enters pickup, destination and details."],
-              ["Step 02", "Assign", "The system offers the ride to nearby eligible drivers."],
-              ["Step 03", "Track", "Rider sees driver details, route and trip progress."],
-              ["Step 04", "Complete", "Trip is completed and recorded cleanly in the system."],
-            ].map(([step, title, text]) => (
-              <div key={step} className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-500">{step}</div>
-                <div className="text-xl font-semibold mt-2 text-black">{title}</div>
-                <p className="text-gray-700 mt-2 text-sm">{text}</p>
+              ["Request", "Enter trip details and calculate fare."],
+              ["Dispatch", "Nearby active drivers receive offers."],
+              ["Track", "Follow the driver live on the map."],
+              ["Complete", "Finish the ride smoothly and clearly."],
+            ].map(([title, text]) => (
+              <div key={title} className="border rounded-2xl p-5 bg-white shadow-sm">
+                <div className="text-xl font-semibold mt-1 text-black">{title}</div>
+                <p className="text-sm text-gray-700 mt-2">{text}</p>
               </div>
             ))}
           </div>
@@ -216,22 +184,22 @@ export default function HomePage() {
           <div className="max-w-2xl">
             <div className="text-sm text-gray-500">Features</div>
             <h2 className="text-3xl md:text-4xl font-semibold mt-2 text-black">
-              Transport technology with local relevance
+              Built for real transport operations
             </h2>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-4">
             {[
-              ["Smart Booking", "Use current location or search places with autocomplete."],
-              ["Live Tracking", "Rider sees driver details, vehicle, route line and ETA."],
-              ["Smart Dispatch", "Nearby drivers get offered trips with re-offer logic built in."],
-              ["Driver Controls", "Accept, navigate, arrive, start and complete trips."],
-              ["Admin Dispatch Board", "Full visibility into requested, active and completed trips."],
-              ["Operational Reporting", "Earnings, subscriptions and trip tracking from one place."],
+              ["Current Location Pickup", "Use live location as pickup for faster requests."],
+              ["Live Tracking", "Riders see the driver, route and ETA in real time."],
+              ["Driver Trip Controls", "Arrive, start and complete trips from one screen."],
+              ["Dispatch Board", "Admins monitor trip states and assignments live."],
+              ["Driver GPS Heartbeat", "Driver location updates continuously while online."],
+              ["Cash-Friendly Flow", "Simple local payment handling while the app grows."],
             ].map(([title, text]) => (
               <div key={title} className="border rounded-2xl p-6 bg-white shadow-sm">
                 <div className="text-xl font-semibold text-black">{title}</div>
-                <p className="text-gray-700 mt-3 text-sm">{text}</p>
+                <p className="text-sm text-gray-700 mt-3">{text}</p>
               </div>
             ))}
           </div>
@@ -253,8 +221,8 @@ export default function HomePage() {
                 Join the platform and start taking trips
               </h2>
               <p className="text-gray-700 max-w-xl">
-                Apply, get approved, go online, receive nearby bookings and
-                manage trips from your driver dashboard.
+                Apply, get approved, go online, receive nearby bookings and manage
+                every trip from your driver dashboard.
               </p>
 
               <div className="flex flex-wrap gap-3">
@@ -276,14 +244,14 @@ export default function HomePage() {
 
             <div className="grid sm:grid-cols-2 gap-4">
               {[
-                ["Online / Offline", "Drivers control availability and live location updates."],
-                ["Trip Controls", "Accept, arrive, start and complete trips easily."],
-                ["Navigation", "Open pickup and destination in Google Maps or Waze."],
-                ["Visibility", "Live rider tracking builds trust and smoother trips."],
+                ["Online / Offline", "Drivers control availability and visibility."],
+                ["Trip Controls", "Accept, arrive, start and complete trips."],
+                ["Navigation", "Open pickup and dropoff in Maps or Waze."],
+                ["Trust", "Riders see driver and vehicle details live."],
               ].map(([title, text]) => (
                 <div key={title} className="border rounded-2xl p-5 bg-white shadow-sm">
                   <div className="text-lg font-semibold text-black">{title}</div>
-                  <p className="text-gray-700 text-sm mt-2">{text}</p>
+                  <p className="text-sm text-gray-700 mt-2">{text}</p>
                 </div>
               ))}
             </div>
@@ -291,44 +259,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="border-t">
-        <div className="max-w-7xl mx-auto px-6 py-16">
-          <div className="border rounded-[2rem] p-8 md:p-10 text-center space-y-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-500">Ready to move?</div>
-            <h2 className="text-3xl md:text-5xl font-semibold text-black">
-              Book your next ride with MOOVU
-            </h2>
-            <p className="text-gray-700 max-w-2xl mx-auto">
-              Fast request flow, local-first dispatch, live tracking and a more
-              organised ride experience.
-            </p>
-
-            <div className="flex justify-center flex-wrap gap-3 pt-2">
-              <Link
-                href="/book"
-                className="rounded-2xl px-5 py-3 text-white"
-                style={{ background: "var(--moovu-primary)" }}
-              >
-                Book a Ride
-              </Link>
-              <Link
-                href="/driver/apply"
-                className="border rounded-2xl px-5 py-3 bg-white text-black hover:bg-black hover:text-white"
-              >
-                Apply to Drive
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t" style={{ background: "rgba(255,255,255,0.75)" }}>
+      <footer className="border-t" style={{ background: "rgba(255,255,255,0.78)" }}>
         <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm">
           <div>
             <div className="font-semibold text-black">MOOVU Kasi Rides</div>
-            <div className="text-gray-600 mt-1">
-              Smarter movement for local communities.
-            </div>
+            <div className="text-gray-600 mt-1">Smarter movement for local communities.</div>
           </div>
 
           <div className="flex flex-wrap gap-3 text-gray-700">

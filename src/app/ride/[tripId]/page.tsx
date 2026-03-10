@@ -160,7 +160,6 @@ export default function RiderTrackingPage() {
         title: "Pickup",
         label: { text: "P", color: "white", fontWeight: "bold" },
       });
-
       bounds.extend({ lat: trip.pickup_lat, lng: trip.pickup_lng });
     }
 
@@ -171,7 +170,6 @@ export default function RiderTrackingPage() {
         title: "Dropoff",
         label: { text: "D", color: "white", fontWeight: "bold" },
       });
-
       bounds.extend({ lat: trip.dropoff_lat, lng: trip.dropoff_lng });
     }
 
@@ -182,7 +180,6 @@ export default function RiderTrackingPage() {
         title: driver.name,
         label: { text: "🚗", color: "white" },
       });
-
       bounds.extend({ lat: driver.lat, lng: driver.lng });
     }
 
@@ -311,7 +308,7 @@ export default function RiderTrackingPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border bg-white mb-3">
+            <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border bg-white shadow-sm mb-3">
               <span
                 className="h-2.5 w-2.5 rounded-full"
                 style={{ background: "var(--moovu-primary)" }}
