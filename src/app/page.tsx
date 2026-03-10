@@ -35,7 +35,7 @@ export default function HomePage() {
 
             <div style={{ marginTop: 10 }}>
               <div style={{ fontSize: 40, fontWeight: 950, letterSpacing: 0.6 }}>
-                MOOVU CAMPUS RIDES
+                MOOVU KASI RIDES
               </div>
               <div style={{ fontSize: 20, opacity: 0.75 }}>Safe • Fast • Trusted</div>
             </div>

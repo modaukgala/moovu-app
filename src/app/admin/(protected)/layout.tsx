@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 
 export default function AdminProtectedLayout({
@@ -10,9 +10,7 @@ export default function AdminProtectedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
-
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -37,11 +35,10 @@ export default function AdminProtectedLayout({
 
         if (isAdminHost) {
           window.location.href = `/login?next=${encodeURIComponent(next)}`;
-          return;
         } else {
-          router.replace(`/admin/login?next=${encodeURIComponent(next)}`);
-          return;
+          window.location.href = `/admin/login?next=${encodeURIComponent(next)}`;
         }
+        return;
       }
 
       setChecking(false);
@@ -52,7 +49,35 @@ export default function AdminProtectedLayout({
     return () => {
       mounted = false;
     };
-  }, [pathname, router]);
+  }, [pathname]);
+
+  async function handleLogout() {
+    await supabaseClient.auth.signOut();
+
+    const host =
+      typeof window !== "undefined" ? window.location.host.toLowerCase() : "";
+    const isAdminHost =
+      host === "admin.moovurides.co.za" ||
+      host.startsWith("admin.localhost") ||
+      host.startsWith("admin.127.0.0.1");
+
+    if (isAdminHost) {
+      window.location.href = "/login";
+    } else {
+      window.location.href = "/admin/login";
+    }
+  }
+
+  function navClass(href: string) {
+    const active =
+      pathname === href || (href !== "/admin" && pathname.startsWith(href));
+
+    return `block border rounded-2xl px-4 py-3 transition ${
+      active
+        ? "text-white"
+        : "bg-white text-black hover:bg-black hover:text-white"
+    }`;
+  }
 
   if (checking) {
     return (
@@ -66,7 +91,7 @@ export default function AdminProtectedLayout({
 
   return (
     <main className="min-h-screen text-black">
-      <div className="min-h-screen grid lg:grid-cols-[280px_1fr]">
+      <div className="min-h-screen grid lg:grid-cols-[300px_1fr]">
         <aside className="border-r bg-white/90 backdrop-blur px-5 py-6">
           <div className="space-y-6">
             <div>
@@ -90,38 +115,106 @@ export default function AdminProtectedLayout({
             <nav className="space-y-2">
               <Link
                 href="/admin"
-                className="block border rounded-2xl px-4 py-3 bg-white hover:bg-black hover:text-white"
+                className={navClass("/admin")}
+                style={
+                  pathname === "/admin"
+                    ? { background: "var(--moovu-primary)" }
+                    : undefined
+                }
               >
                 Dashboard
               </Link>
 
               <Link
+                href="/admin/drivers"
+                className={navClass("/admin/drivers")}
+                style={
+                  pathname.startsWith("/admin/drivers")
+                    ? { background: "var(--moovu-primary)" }
+                    : undefined
+                }
+              >
+                Drivers
+              </Link>
+
+              <Link
                 href="/admin/trips"
-                className="block border rounded-2xl px-4 py-3 bg-white hover:bg-black hover:text-white"
+                className={navClass("/admin/trips")}
+                style={
+                  pathname.startsWith("/admin/trips")
+                    ? { background: "var(--moovu-primary)" }
+                    : undefined
+                }
               >
                 Trips
               </Link>
 
               <Link
                 href="/admin/dispatch/map"
-                className="block border rounded-2xl px-4 py-3 bg-white hover:bg-black hover:text-white"
+                className={navClass("/admin/dispatch/map")}
+                style={
+                  pathname.startsWith("/admin/dispatch/map")
+                    ? { background: "var(--moovu-primary)" }
+                    : undefined
+                }
               >
                 Dispatch Map
               </Link>
 
               <Link
                 href="/admin/applications"
-                className="block border rounded-2xl px-4 py-3 bg-white hover:bg-black hover:text-white"
+                className={navClass("/admin/applications")}
+                style={
+                  pathname.startsWith("/admin/applications")
+                    ? { background: "var(--moovu-primary)" }
+                    : undefined
+                }
               >
                 Driver Applications
               </Link>
 
               <Link
+                href="/admin/link-driver"
+                className={navClass("/admin/link-driver")}
+                style={
+                  pathname.startsWith("/admin/link-driver")
+                    ? { background: "var(--moovu-primary)" }
+                    : undefined
+                }
+              >
+                Link Driver
+              </Link>
+
+              <Link
                 href="/admin/subscriptions"
-                className="block border rounded-2xl px-4 py-3 bg-white hover:bg-black hover:text-white"
+                className={navClass("/admin/subscriptions")}
+                style={
+                  pathname.startsWith("/admin/subscriptions")
+                    ? { background: "var(--moovu-primary)" }
+                    : undefined
+                }
               >
                 Subscriptions
               </Link>
+
+              <Link
+                href="/admin/reports"
+                className={navClass("/admin/reports")}
+                style={
+                  pathname.startsWith("/admin/reports")
+                    ? { background: "var(--moovu-primary)" }
+                    : undefined
+                }
+              >
+                Earnings Report
+              </Link>
+
+              <button
+                onClick={handleLogout}
+                className="w-full text-left border rounded-2xl px-4 py-3 bg-white text-black hover:bg-black hover:text-white transition"
+              >
+                Logout
+              </button>
             </nav>
 
             <div

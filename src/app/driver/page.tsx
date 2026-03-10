@@ -46,6 +46,8 @@ type Driver = {
   lat: number | null;
   lng: number | null;
   last_seen: string | null;
+  profile_completed?: boolean | null;
+  verification_status?: string | null;
 };
 
 declare global {
@@ -75,6 +77,7 @@ export default function DriverHomePage() {
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [gpsInfo, setGpsInfo] = useState<string | null>(null);
+  const [checkingProfile, setCheckingProfile] = useState(true);
 
   const [tick, setTick] = useState(0);
 
@@ -110,7 +113,7 @@ export default function DriverHomePage() {
 
   async function loadDriverFromMapping() {
     const session = await requireSession();
-    if (!session) return;
+    if (!session) return null;
 
     const { data: mapping, error: mErr } = await supabaseClient
       .from("driver_accounts")
@@ -120,7 +123,7 @@ export default function DriverHomePage() {
     if (mErr || !mapping?.driver_id) {
       setInfo("Your account is not linked yet. Please wait for admin approval and linking.");
       setDriver(null);
-      return;
+      return null;
     }
 
     const driverId = mapping.driver_id;
@@ -128,7 +131,7 @@ export default function DriverHomePage() {
     const { data: d, error: dErr } = await supabaseClient
       .from("drivers")
       .select(
-        "id,first_name,last_name,phone,email,status,online,busy,subscription_status,subscription_expires_at,subscription_plan,lat,lng,last_seen"
+        "id,first_name,last_name,phone,email,status,online,busy,subscription_status,subscription_expires_at,subscription_plan,lat,lng,last_seen,profile_completed,verification_status"
       )
       .eq("id", driverId)
       .single();
@@ -136,10 +139,29 @@ export default function DriverHomePage() {
     if (dErr || !d) {
       setInfo("Driver record not found for your account mapping.");
       setDriver(null);
-      return;
+      return null;
     }
 
     setDriver(d as any);
+    return d as Driver;
+  }
+
+  async function ensureProfileCompleted() {
+    setCheckingProfile(true);
+
+    const loadedDriver = await loadDriverFromMapping();
+    if (!loadedDriver) {
+      setCheckingProfile(false);
+      return false;
+    }
+
+    if (!loadedDriver.profile_completed) {
+      router.replace("/driver/complete-profile");
+      return false;
+    }
+
+    setCheckingProfile(false);
+    return true;
   }
 
   async function pollOffers() {
@@ -499,17 +521,20 @@ export default function DriverHomePage() {
 
   useEffect(() => {
     (async () => {
-      await loadDriverFromMapping();
+      const ok = await ensureProfileCompleted();
+      if (!ok) return;
+
       await pollOffers();
       await loadCurrentTrip();
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = null;
 
-    if (!driver?.online) return;
+    if (!driver?.online || checkingProfile) return;
 
     pollTimerRef.current = setInterval(() => {
       pollOffers();
@@ -520,13 +545,13 @@ export default function DriverHomePage() {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
     };
-  }, [driver?.online]);
+  }, [driver?.online, checkingProfile]);
 
   useEffect(() => {
     if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
     gpsTimerRef.current = null;
 
-    if (!driver?.online) {
+    if (!driver?.online || checkingProfile) {
       setGpsInfo(null);
       return;
     }
@@ -541,13 +566,13 @@ export default function DriverHomePage() {
       if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
       gpsTimerRef.current = null;
     };
-  }, [driver?.online]);
+  }, [driver?.online, checkingProfile]);
 
   useEffect(() => {
     let cancelled = false;
 
     function initMap() {
-      if (!mapRef.current || !window.google) return;
+      if (!mapRef.current || !window.google?.maps) return;
 
       mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
         center: { lat: -25.12, lng: 29.05 },
@@ -565,7 +590,18 @@ export default function DriverHomePage() {
       return;
     }
 
+    const existingScript = document.getElementById("google-maps-script") as HTMLScriptElement | null;
+
+    if (existingScript) {
+      existingScript.addEventListener("load", initMap);
+      return () => {
+        cancelled = true;
+        existingScript.removeEventListener("load", initMap);
+      };
+    }
+
     const script = document.createElement("script");
+    script.id = "google-maps-script";
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
     )}`;
@@ -580,9 +616,9 @@ export default function DriverHomePage() {
   }, []);
 
   useEffect(() => {
-    if (!mapReady) return;
+    if (!mapReady || checkingProfile) return;
     renderDriverMap();
-  }, [mapReady, driver, currentTrip]);
+  }, [mapReady, driver, currentTrip, checkingProfile]);
 
   const topOffer = offers[0];
 
@@ -605,6 +641,16 @@ export default function DriverHomePage() {
   const pickupWaze = wazeLink(currentTrip?.pickup_lat, currentTrip?.pickup_lng);
   const dropoffGoogle = googleMapsLink(currentTrip?.dropoff_lat, currentTrip?.dropoff_lng);
   const dropoffWaze = wazeLink(currentTrip?.dropoff_lat, currentTrip?.dropoff_lng);
+
+  if (checkingProfile) {
+    return (
+      <main className="min-h-screen px-6 py-10 text-black">
+        <div className="max-w-4xl mx-auto border rounded-[2rem] p-6 bg-white shadow-sm">
+          Checking driver profile...
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen px-6 py-10 text-black">
@@ -666,6 +712,13 @@ export default function DriverHomePage() {
                   </div>
 
                   <div className="text-sm text-gray-700">
+                    Verification: <span className="font-medium text-black">{driver.verification_status ?? "—"}</span>
+                    {" • "}
+                    Profile completed:{" "}
+                    <span className="font-medium text-black">{driver.profile_completed ? "Yes" : "No"}</span>
+                  </div>
+
+                  <div className="text-sm text-gray-700">
                     Online: <span className="font-medium text-black">{driver.online ? "Yes" : "No"}</span>
                     {" • "}
                     Busy: <span className="font-medium text-black">{driver.busy ? "Yes" : "No"}</span>
@@ -699,6 +752,13 @@ export default function DriverHomePage() {
                       }}
                     >
                       Refresh
+                    </button>
+
+                    <button
+                      className="border rounded-xl px-4 py-2 bg-white text-black"
+                      onClick={() => router.push("/driver/complete-profile")}
+                    >
+                      Edit Profile
                     </button>
                   </div>
                 </div>
