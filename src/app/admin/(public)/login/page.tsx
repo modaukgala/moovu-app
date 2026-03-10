@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
-  const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -40,9 +37,36 @@ export default function AdminLoginPage() {
       return;
     }
 
+    // make sure session is written before redirecting
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    if (!session) {
+      setLoading(false);
+      setErr("Login succeeded, but session was not ready. Please try again.");
+      return;
+    }
+
+    const host = window.location.host.toLowerCase();
+    const isAdminHost =
+      host === "admin.moovurides.co.za" ||
+      host.startsWith("admin.localhost") ||
+      host.startsWith("admin.127.0.0.1");
+
+    let target = nextPath || "/admin";
+
+    // On admin subdomain, use browser path "/" instead of "/admin"
+    if (isAdminHost) {
+      if (target === "/admin") {
+        target = "/";
+      } else if (target.startsWith("/admin/")) {
+        target = target.replace("/admin", "") || "/";
+      }
+    }
+
     setLoading(false);
-    router.push(nextPath);
-    router.refresh();
+    window.location.href = target;
   }
 
   return (
