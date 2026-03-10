@@ -11,11 +11,8 @@ export default function AdminLoginPage() {
   const [nextPath, setNextPath] = useState("/admin");
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
     const params = new URLSearchParams(window.location.search);
     const rawNext = params.get("next");
-
     if (rawNext && rawNext.startsWith("/")) {
       setNextPath(rawNext);
     }
@@ -37,17 +34,6 @@ export default function AdminLoginPage() {
       return;
     }
 
-    // make sure session is written before redirecting
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session) {
-      setLoading(false);
-      setErr("Login succeeded, but session was not ready. Please try again.");
-      return;
-    }
-
     const host = window.location.host.toLowerCase();
     const isAdminHost =
       host === "admin.moovurides.co.za" ||
@@ -56,13 +42,9 @@ export default function AdminLoginPage() {
 
     let target = nextPath || "/admin";
 
-    // On admin subdomain, use browser path "/" instead of "/admin"
     if (isAdminHost) {
-      if (target === "/admin") {
-        target = "/";
-      } else if (target.startsWith("/admin/")) {
-        target = target.replace("/admin", "") || "/";
-      }
+      if (target === "/admin") target = "/";
+      else if (target.startsWith("/admin/")) target = target.replace("/admin", "") || "/";
     }
 
     setLoading(false);

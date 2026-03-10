@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 
 function getHost(req: NextRequest) {
   return (req.headers.get("host") || "").toLowerCase();
@@ -16,7 +15,7 @@ function isPublicAsset(pathname: string) {
   );
 }
 
-export async function middleware(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const host = getHost(req);
   const pathname = req.nextUrl.pathname;
 
@@ -34,71 +33,19 @@ export async function middleware(req: NextRequest) {
     host.startsWith("driver.localhost") ||
     host.startsWith("driver.127.0.0.1");
 
-  // Work out what internal route this subdomain should map to
-  let effectivePath = pathname;
+  const url = req.nextUrl.clone();
 
   if (isAdminHost && !pathname.startsWith("/admin")) {
-    effectivePath = pathname === "/" ? "/admin" : `/admin${pathname}`;
+    url.pathname = pathname === "/" ? "/admin" : `/admin${pathname}`;
+    return NextResponse.rewrite(url);
   }
 
   if (isDriverHost && !pathname.startsWith("/driver")) {
-    effectivePath = pathname === "/" ? "/driver" : `/driver${pathname}`;
+    url.pathname = pathname === "/" ? "/driver" : `/driver${pathname}`;
+    return NextResponse.rewrite(url);
   }
 
-  // Protect admin routes except login
-  const isAdminRoute = effectivePath.startsWith("/admin");
-  const isAdminLoginRoute = effectivePath === "/admin/login";
-
-  const res = NextResponse.next();
-
-  if (isAdminRoute && !isAdminLoginRoute) {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => req.cookies.getAll(),
-          setAll: (cookiesToSet) => {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              res.cookies.set(name, value, options);
-            });
-          },
-        },
-      }
-    );
-
-    const { data, error } = await supabase.auth.getUser();
-
-    if (error || !data.user) {
-      const loginUrl = req.nextUrl.clone();
-
-      // On admin subdomain, send to /login instead of /admin/login in the browser URL
-      if (isAdminHost) {
-        loginUrl.pathname = "/login";
-      } else {
-        loginUrl.pathname = "/admin/login";
-      }
-
-      loginUrl.searchParams.set("next", effectivePath);
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
-  // Rewrite admin subdomain -> /admin/*
-  if (isAdminHost && !pathname.startsWith("/admin")) {
-    const rewriteUrl = req.nextUrl.clone();
-    rewriteUrl.pathname = effectivePath;
-    return NextResponse.rewrite(rewriteUrl, { headers: res.headers });
-  }
-
-  // Rewrite driver subdomain -> /driver/*
-  if (isDriverHost && !pathname.startsWith("/driver")) {
-    const rewriteUrl = req.nextUrl.clone();
-    rewriteUrl.pathname = effectivePath;
-    return NextResponse.rewrite(rewriteUrl, { headers: res.headers });
-  }
-
-  return res;
+  return NextResponse.next();
 }
 
 export const config = {
