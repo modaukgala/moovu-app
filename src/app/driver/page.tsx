@@ -66,6 +66,13 @@ function wazeLink(lat: number | null | undefined, lng: number | null | undefined
   return `https://waze.com/ul?ll=${encodeURIComponent(`${lat},${lng}`)}&navigate=yes`;
 }
 
+function waLinkZA(phone: string, message: string) {
+  const cleaned = phone.replace(/\D/g, "");
+  return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
+}
+
+const ADMIN_WHATSAPP = "27738812739";
+
 export default function DriverHomePage() {
   const router = useRouter();
 
@@ -78,6 +85,7 @@ export default function DriverHomePage() {
   const [info, setInfo] = useState<string | null>(null);
   const [gpsInfo, setGpsInfo] = useState<string | null>(null);
   const [checkingProfile, setCheckingProfile] = useState(true);
+  const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
 
   const [tick, setTick] = useState(0);
 
@@ -637,6 +645,67 @@ export default function DriverHomePage() {
     return `${st}${plan}${exp}`;
   }, [driver]);
 
+  const subscriptionExpiryText = useMemo(() => {
+    if (!driver?.subscription_expires_at) return "No expiry date available";
+    return new Date(driver.subscription_expires_at).toLocaleString();
+  }, [driver?.subscription_expires_at]);
+
+  const subscriptionWarning = useMemo(() => {
+    if (!driver?.subscription_expires_at) {
+      return {
+        type: "warning",
+        text: "Your subscription expiry date is not set. Please contact admin if this looks incorrect.",
+      };
+    }
+
+    const expiry = new Date(driver.subscription_expires_at).getTime();
+    const now = Date.now();
+    const diffMs = expiry - now;
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    if (diffMs <= 0) {
+      return {
+        type: "expired",
+        text: "Your subscription has expired. Renew it as soon as possible to continue receiving trips.",
+      };
+    }
+
+    if (diffDays <= 3) {
+      return {
+        type: "soon",
+        text: `Your subscription is expiring soon. It ends on ${new Date(
+          driver.subscription_expires_at
+        ).toLocaleString()}.`,
+      };
+    }
+
+    return null;
+  }, [driver?.subscription_expires_at]);
+
+  const renewDayHref = useMemo(() => {
+    const name = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
+    return waLinkZA(
+      ADMIN_WHATSAPP,
+      `Hi Admin, this is ${name}. I want to renew my MOOVU subscription for 1 day at R45. Please assist me with payment details so my subscription can be renewed.`
+    );
+  }, [driver?.first_name, driver?.last_name]);
+
+  const renewWeekHref = useMemo(() => {
+    const name = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
+    return waLinkZA(
+      ADMIN_WHATSAPP,
+      `Hi Admin, this is ${name}. I want to renew my MOOVU subscription for 1 week at R90. Please assist me with payment details so my subscription can be renewed.`
+    );
+  }, [driver?.first_name, driver?.last_name]);
+
+  const renewMonthHref = useMemo(() => {
+    const name = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
+    return waLinkZA(
+      ADMIN_WHATSAPP,
+      `Hi Admin, this is ${name}. I want to renew my MOOVU subscription for 1 month at R200. Please assist me with payment details so my subscription can be renewed.`
+    );
+  }, [driver?.first_name, driver?.last_name]);
+
   const pickupGoogle = googleMapsLink(currentTrip?.pickup_lat, currentTrip?.pickup_lng);
   const pickupWaze = wazeLink(currentTrip?.pickup_lat, currentTrip?.pickup_lng);
   const dropoffGoogle = googleMapsLink(currentTrip?.dropoff_lat, currentTrip?.dropoff_lng);
@@ -786,6 +855,126 @@ export default function DriverHomePage() {
                   </div>
                 </div>
               </div>
+            </section>
+
+            {subscriptionWarning && (
+              <section
+                className="border rounded-[2rem] p-5 shadow-sm"
+                style={{
+                  background:
+                    subscriptionWarning.type === "expired"
+                      ? "#fee2e2"
+                      : "#fff7e6",
+                  borderColor:
+                    subscriptionWarning.type === "expired"
+                      ? "#fca5a5"
+                      : "#fcd34d",
+                }}
+              >
+                <h2 className="text-lg font-semibold text-black">
+                  {subscriptionWarning.type === "expired"
+                    ? "Subscription Expired"
+                    : "Subscription Warning"}
+                </h2>
+                <p className="text-sm text-black mt-2">{subscriptionWarning.text}</p>
+              </section>
+            )}
+
+            <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold text-black">Subscription</h2>
+                  <p className="text-sm text-gray-700 mt-1">
+                    View your subscription end date and choose a renewal option.
+                  </p>
+                </div>
+
+                <button
+                  className="rounded-xl px-4 py-2 text-white"
+                  style={{ background: "var(--moovu-primary)" }}
+                  onClick={() => setShowSubscriptionDetails((v) => !v)}
+                >
+                  {showSubscriptionDetails ? "Hide Subscription Details" : "Show Subscription Details"}
+                </button>
+              </div>
+
+              {showSubscriptionDetails && (
+                <div className="space-y-4">
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div
+                      className="border rounded-2xl p-4"
+                      style={{ background: "var(--moovu-primary-soft)" }}
+                    >
+                      <div className="text-sm text-gray-600">Current status</div>
+                      <div className="font-semibold mt-1 text-black">{driver.subscription_status ?? "—"}</div>
+                    </div>
+
+                    <div className="border rounded-2xl p-4 bg-white">
+                      <div className="text-sm text-gray-600">Current plan</div>
+                      <div className="font-semibold mt-1 text-black">{driver.subscription_plan ?? "—"}</div>
+                    </div>
+
+                    <div className="border rounded-2xl p-4 bg-white">
+                      <div className="text-sm text-gray-600">Subscription ends</div>
+                      <div className="font-semibold mt-1 text-black">{subscriptionExpiryText}</div>
+                    </div>
+                  </div>
+
+                  <div className="border rounded-2xl p-4 bg-white">
+                    <div className="font-semibold text-black">Renewal Options</div>
+                    <p className="text-sm text-gray-700 mt-1">
+                      To renew, choose an option below and contact admin on WhatsApp to arrange payment.
+                    </p>
+
+                    <div className="grid md:grid-cols-3 gap-4 mt-4">
+                      <div className="border rounded-2xl p-4">
+                        <div className="text-sm text-gray-600">Daily Subscription</div>
+                        <div className="text-2xl font-semibold mt-1 text-black">R45</div>
+                        <div className="text-sm text-gray-700 mt-2">Valid for 1 day</div>
+                        <a
+                          href={renewDayHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block mt-4 rounded-xl px-4 py-2 text-white"
+                          style={{ background: "var(--moovu-primary)" }}
+                        >
+                          Renew Daily
+                        </a>
+                      </div>
+
+                      <div className="border rounded-2xl p-4">
+                        <div className="text-sm text-gray-600">Weekly Subscription</div>
+                        <div className="text-2xl font-semibold mt-1 text-black">R90</div>
+                        <div className="text-sm text-gray-700 mt-2">Valid for 1 week</div>
+                        <a
+                          href={renewWeekHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block mt-4 rounded-xl px-4 py-2 text-white"
+                          style={{ background: "var(--moovu-primary)" }}
+                        >
+                          Renew Weekly
+                        </a>
+                      </div>
+
+                      <div className="border rounded-2xl p-4">
+                        <div className="text-sm text-gray-600">Monthly Subscription</div>
+                        <div className="text-2xl font-semibold mt-1 text-black">R200</div>
+                        <div className="text-sm text-gray-700 mt-2">Valid for 1 month</div>
+                        <a
+                          href={renewMonthHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block mt-4 rounded-xl px-4 py-2 text-white"
+                          style={{ background: "var(--moovu-primary)" }}
+                        >
+                          Renew Monthly
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="border rounded-[2rem] p-5 bg-white shadow-sm">
