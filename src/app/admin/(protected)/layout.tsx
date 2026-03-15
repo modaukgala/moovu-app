@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import AdminTripNotifications from "@/components/AdminTripNotifications";
 
 export default function AdminProtectedLayout({
   children,
@@ -91,6 +92,8 @@ export default function AdminProtectedLayout({
 
   return (
     <main className="min-h-screen text-black">
+      <AdminTripNotifications />
+
       <div className="min-h-screen grid lg:grid-cols-[300px_1fr]">
         <aside className="border-r bg-white/90 backdrop-blur px-5 py-6">
           <div className="space-y-6">

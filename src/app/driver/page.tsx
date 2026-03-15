@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import DriverAssignmentNotifications from "@/components/DriverAssignmentNotifications";
 
 type Offer = {
   id: string;
@@ -36,7 +37,6 @@ type Driver = {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
-  email?: string | null;
   status: string | null;
   online: boolean | null;
   busy: boolean | null;
@@ -123,35 +123,25 @@ export default function DriverHomePage() {
     const session = await requireSession();
     if (!session) return null;
 
-    const { data: mapping, error: mErr } = await supabaseClient
-      .from("driver_accounts")
-      .select("driver_id")
-      .single();
+    const token = session.access_token;
 
-    if (mErr || !mapping?.driver_id) {
-      setInfo("Your account is not linked yet. Please wait for admin approval and linking.");
+    const res = await fetch("/api/driver/me", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const json = await res.json();
+
+    if (!json.ok || !json.driver) {
+      setInfo(json.error || "Driver record not found for your account mapping.");
       setDriver(null);
       return null;
     }
 
-    const driverId = mapping.driver_id;
-
-    const { data: d, error: dErr } = await supabaseClient
-      .from("drivers")
-      .select(
-        "id,first_name,last_name,phone,email,status,online,busy,subscription_status,subscription_expires_at,subscription_plan,lat,lng,last_seen,profile_completed,verification_status"
-      )
-      .eq("id", driverId)
-      .single();
-
-    if (dErr || !d) {
-      setInfo("Driver record not found for your account mapping.");
-      setDriver(null);
-      return null;
-    }
-
-    setDriver(d as any);
-    return d as Driver;
+    setDriver(json.driver as Driver);
+    return json.driver as Driver;
   }
 
   async function ensureProfileCompleted() {
@@ -515,10 +505,7 @@ export default function DriverHomePage() {
           destination: { lat: destLat, lng: destLng },
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
-        (
-          result: google.maps.DirectionsResult | null,
-          status: google.maps.DirectionsStatus
-        ) => {
+        (result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
           if (status === "OK" && result) {
             directionsRenderer.setDirections(result);
           }
@@ -723,6 +710,8 @@ export default function DriverHomePage() {
 
   return (
     <main className="min-h-screen px-6 py-10 text-black">
+      <DriverAssignmentNotifications driverId={driver?.id} />
+
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>

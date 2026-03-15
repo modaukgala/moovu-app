@@ -78,7 +78,6 @@ export default function DriverCompleteProfilePage() {
 
   const [driver, setDriver] = useState<Driver | null>(null);
 
-  // personal
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -89,14 +88,12 @@ export default function DriverCompleteProfilePage() {
   const [emergencyContactName, setEmergencyContactName] = useState("");
   const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
 
-  // license
   const [licenseNumber, setLicenseNumber] = useState("");
   const [licenseCode, setLicenseCode] = useState("");
   const [licenseExpiry, setLicenseExpiry] = useState("");
   const [pdpNumber, setPdpNumber] = useState("");
   const [pdpExpiry, setPdpExpiry] = useState("");
 
-  // vehicle
   const [vehicleMake, setVehicleMake] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleYear, setVehicleYear] = useState("");
@@ -119,6 +116,7 @@ export default function DriverCompleteProfilePage() {
     roadworthy_certificate: null,
     insurance_document: null,
     car_interior_photo: null,
+    profile_photo: null,
   });
 
   const requiredReady = useMemo(() => {
@@ -611,30 +609,12 @@ export default function DriverCompleteProfilePage() {
             </p>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <UploadField
-                label="ID document"
-                onPick={(file) => setPickedFile("id_document", file)}
-              />
-              <UploadField
-                label="Driver's license"
-                onPick={(file) => setPickedFile("drivers_license", file)}
-              />
-              <UploadField
-                label="Vehicle registration"
-                onPick={(file) => setPickedFile("vehicle_registration", file)}
-              />
-              <UploadField
-                label="Car front photo"
-                onPick={(file) => setPickedFile("car_front_photo", file)}
-              />
-              <UploadField
-                label="Car back photo"
-                onPick={(file) => setPickedFile("car_back_photo", file)}
-              />
-              <UploadField
-                label="Car side photo"
-                onPick={(file) => setPickedFile("car_side_photo", file)}
-              />
+              <UploadField label="ID document" onPick={(file) => setPickedFile("id_document", file)} />
+              <UploadField label="Driver's license" onPick={(file) => setPickedFile("drivers_license", file)} />
+              <UploadField label="Vehicle registration" onPick={(file) => setPickedFile("vehicle_registration", file)} />
+              <UploadField label="Car front photo" onPick={(file) => setPickedFile("car_front_photo", file)} />
+              <UploadField label="Car back photo" onPick={(file) => setPickedFile("car_back_photo", file)} />
+              <UploadField label="Car side photo" onPick={(file) => setPickedFile("car_side_photo", file)} />
             </div>
           </section>
 
@@ -645,22 +625,10 @@ export default function DriverCompleteProfilePage() {
             </p>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <UploadField
-                label="PDP document"
-                onPick={(file) => setPickedFile("pdp_document", file)}
-              />
-              <UploadField
-                label="Roadworthy certificate"
-                onPick={(file) => setPickedFile("roadworthy_certificate", file)}
-              />
-              <UploadField
-                label="Insurance document"
-                onPick={(file) => setPickedFile("insurance_document", file)}
-              />
-              <UploadField
-                label="Car interior photo"
-                onPick={(file) => setPickedFile("car_interior_photo", file)}
-              />
+              <UploadField label="PDP document" onPick={(file) => setPickedFile("pdp_document", file)} />
+              <UploadField label="Roadworthy certificate" onPick={(file) => setPickedFile("roadworthy_certificate", file)} />
+              <UploadField label="Insurance document" onPick={(file) => setPickedFile("insurance_document", file)} />
+              <UploadField label="Car interior photo" onPick={(file) => setPickedFile("car_interior_photo", file)} />
             </div>
           </section>
 
