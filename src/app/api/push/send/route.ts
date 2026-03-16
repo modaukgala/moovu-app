@@ -2,18 +2,30 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import webpush from "web-push";
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+const vapidSubject = process.env.VAPID_SUBJECT;
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+}
 
 export async function POST(req: Request) {
   try {
+    if (!vapidSubject || !vapidPublicKey || !vapidPrivateKey) {
+      return NextResponse.json(
+        { ok: false, error: "Missing VAPID environment variables" },
+        { status: 500 }
+      );
+    }
+
     const { userIds, role, title, body, url } = await req.json();
 
     if ((!Array.isArray(userIds) || userIds.length === 0) && !role) {
-      return NextResponse.json({ ok: false, error: "Provide userIds or role" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Provide userIds or role" },
+        { status: 400 }
+      );
     }
 
     let query = supabaseAdmin.from("push_subscriptions").select("*");
@@ -29,7 +41,10 @@ export async function POST(req: Request) {
     const { data: subs, error } = await query;
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
     }
 
     const results = await Promise.allSettled(
