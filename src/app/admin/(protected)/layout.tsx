@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import AdminTripNotifications from "@/components/AdminTripNotifications";
+import EnablePushButton from "@/components/EnablePushButton";
 
 export default function AdminProtectedLayout({
   children,
@@ -114,6 +115,8 @@ export default function AdminProtectedLayout({
                 Manage trips, dispatch and operations from one place.
               </p>
             </div>
+
+            <EnablePushButton role="admin" />
 
             <nav className="space-y-2">
               <Link

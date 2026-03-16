@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import DriverAssignmentNotifications from "@/components/DriverAssignmentNotifications";
+import EnablePushButton from "@/components/EnablePushButton";
 
 type Offer = {
   id: string;
@@ -89,6 +90,7 @@ export default function DriverHomePage() {
 
   const [tick, setTick] = useState(0);
 
+  const previousTopOfferIdRef = useRef<string | null>(null);
   const pollTimerRef = useRef<any>(null);
   const gpsTimerRef = useRef<any>(null);
 
@@ -117,6 +119,12 @@ export default function DriverHomePage() {
   async function getAccessToken() {
     const { data } = await supabaseClient.auth.getSession();
     return data.session?.access_token ?? null;
+  }
+
+  function vibratePhone(pattern: number | number[]) {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(pattern);
+    }
   }
 
   async function loadDriverFromMapping() {
@@ -184,7 +192,20 @@ export default function DriverHomePage() {
     }
 
     if (json.info) setInfo(String(json.info));
-    setOffers(json.offers ?? []);
+    const nextOffers = json.offers ?? [];
+    setOffers(nextOffers);
+
+    const newTopOfferId = nextOffers[0]?.id ?? null;
+    if (
+      newTopOfferId &&
+      previousTopOfferIdRef.current &&
+      previousTopOfferIdRef.current !== newTopOfferId
+    ) {
+      vibratePhone([200, 120, 200, 120, 300]);
+    } else if (newTopOfferId && !previousTopOfferIdRef.current) {
+      vibratePhone([200, 120, 200, 120, 300]);
+    }
+    previousTopOfferIdRef.current = newTopOfferId;
   }
 
   async function loadCurrentTrip() {
@@ -208,9 +229,67 @@ export default function DriverHomePage() {
     setCurrentTrip(json.trip ?? null);
   }
 
+  async function sendHeartbeat(lat: number, lng: number) {
+    const token = await getAccessToken();
+    if (!token) return false;
+
+    const res = await fetch("/api/driver/heartbeat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ lat, lng }),
+    });
+
+    const json = await res.json();
+    if (!json.ok) {
+      setGpsInfo(json.error || "Heartbeat failed");
+      return false;
+    }
+
+    setGpsInfo(`GPS live • ${new Date().toLocaleTimeString()}`);
+    return true;
+  }
+
+  async function captureCurrentLocationAndSave() {
+    return new Promise<boolean>((resolve) => {
+      if (!navigator.geolocation) {
+        setGpsInfo("GPS not supported");
+        resolve(false);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const ok = await sendHeartbeat(pos.coords.latitude, pos.coords.longitude);
+          await loadDriverFromMapping();
+          resolve(ok);
+        },
+        (err) => {
+          setGpsInfo(`GPS error: ${err.message}`);
+          resolve(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 5000,
+        }
+      );
+    });
+  }
+
+  async function heartbeatNow() {
+    await captureCurrentLocationAndSave();
+  }
+
   async function setOnlineServer(wantOnline: boolean) {
     setBusy(true);
     setInfo(null);
+
+    if (wantOnline) {
+      await captureCurrentLocationAndSave();
+    }
 
     const token = await getAccessToken();
     if (!token) {
@@ -283,50 +362,6 @@ export default function DriverHomePage() {
     await loadDriverFromMapping();
   }
 
-  async function sendHeartbeat(lat: number, lng: number) {
-    const token = await getAccessToken();
-    if (!token) return;
-
-    const res = await fetch("/api/driver/heartbeat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ lat, lng }),
-    });
-
-    const json = await res.json();
-    if (!json.ok) {
-      setGpsInfo(json.error || "Heartbeat failed");
-      return;
-    }
-
-    setGpsInfo(`GPS live • ${new Date().toLocaleTimeString()}`);
-  }
-
-  async function heartbeatNow() {
-    if (!navigator.geolocation) {
-      setGpsInfo("GPS not supported");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        await sendHeartbeat(pos.coords.latitude, pos.coords.longitude);
-        await loadDriverFromMapping();
-      },
-      (err) => {
-        setGpsInfo(`GPS error: ${err.message}`);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 5000,
-      }
-    );
-  }
-
   async function respond(tripId: string, action: "accept" | "reject") {
     setBusy(true);
     setInfo(null);
@@ -357,6 +392,8 @@ export default function DriverHomePage() {
       await loadCurrentTrip();
       return;
     }
+
+    vibratePhone([120, 80, 120]);
 
     setInfo(action === "accept" ? "Offer accepted ✅" : "Offer rejected ✅");
     await pollOffers();
@@ -394,6 +431,8 @@ export default function DriverHomePage() {
       return;
     }
 
+    vibratePhone([100, 60, 100]);
+
     setInfo(successMsg);
     await loadCurrentTrip();
     await loadDriverFromMapping();
@@ -413,8 +452,11 @@ export default function DriverHomePage() {
   }
 
   async function logout() {
-    await supabaseClient.auth.signOut();
-    router.replace("/driver/login");
+    try {
+      await supabaseClient.auth.signOut();
+    } finally {
+      window.location.href = "/driver/login";
+    }
   }
 
   function clearMap() {
@@ -735,6 +777,8 @@ export default function DriverHomePage() {
           </button>
         </div>
 
+        <EnablePushButton role="driver" />
+
         {info && (
           <div
             className="border rounded-2xl p-4 text-sm text-black"
@@ -814,6 +858,14 @@ export default function DriverHomePage() {
 
                     <button
                       className="border rounded-xl px-4 py-2 bg-white text-black"
+                      disabled={busy}
+                      onClick={captureCurrentLocationAndSave}
+                    >
+                      Use Current Location
+                    </button>
+
+                    <button
+                      className="border rounded-xl px-4 py-2 bg-white text-black"
                       onClick={() => router.push("/driver/complete-profile")}
                     >
                       Edit Profile
@@ -831,13 +883,24 @@ export default function DriverHomePage() {
                     onChange={(e) => setLocationName(e.target.value)}
                   />
 
-                  <button
-                    className="border rounded-xl px-4 py-2 bg-white text-black"
-                    disabled={busy}
-                    onClick={saveLocationFromName}
-                  >
-                    Save Location Manually
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="border rounded-xl px-4 py-2 bg-white text-black"
+                      disabled={busy}
+                      onClick={saveLocationFromName}
+                    >
+                      Save Manual Location
+                    </button>
+
+                    <button
+                      className="rounded-xl px-4 py-2 text-white"
+                      style={{ background: "var(--moovu-primary)" }}
+                      disabled={busy}
+                      onClick={captureCurrentLocationAndSave}
+                    >
+                      Save Current GPS
+                    </button>
+                  </div>
 
                   <div className="text-xs text-gray-600">
                     Current coords: {driver.lat != null && driver.lng != null ? `${driver.lat}, ${driver.lng}` : "—"}
