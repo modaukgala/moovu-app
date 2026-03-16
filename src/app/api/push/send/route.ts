@@ -1,23 +1,23 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import webpush from "web-push";
-
-const vapidSubject = process.env.VAPID_SUBJECT;
-const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-
-if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
-  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-}
 
 export async function POST(req: Request) {
   try {
+    const vapidSubject = process.env.VAPID_SUBJECT;
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
     if (!vapidSubject || !vapidPublicKey || !vapidPrivateKey) {
       return NextResponse.json(
         { ok: false, error: "Missing VAPID environment variables" },
         { status: 500 }
       );
     }
+
+    const webpushModule = await import("web-push");
+    const webpush = webpushModule.default;
+
+    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
     const { userIds, role, title, body, url } = await req.json();
 
