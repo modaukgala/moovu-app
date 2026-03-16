@@ -13,10 +13,6 @@ type Driver = {
   verification_status: string | null;
 };
 
-type DriverMapping = {
-  driver_id: string;
-};
-
 type ExistingProfile = {
   first_name: string | null;
   last_name: string | null;
@@ -119,62 +115,76 @@ export default function DriverCompleteProfilePage() {
     profile_photo: null,
   });
 
-  const requiredReady = useMemo(() => {
-    return REQUIRED_DOCS.every((k) => !!files[k]);
-  }, [files]);
+  const requiredReady = useMemo(() => REQUIRED_DOCS.every((k) => !!files[k]), [files]);
 
-  async function getDriverIdFromMapping() {
-    const { data: mapping, error } = await supabaseClient
-      .from("driver_accounts")
-      .select("driver_id")
-      .single<DriverMapping>();
-
-    if (error || !mapping?.driver_id) return null;
-    return mapping.driver_id;
+  function hardResetAuthAndRedirect() {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    window.location.href = "/driver/login";
   }
 
-  async function loadData() {
+  async function safeGetSession() {
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+
+      if (error || !data.session) {
+        try {
+          await supabaseClient.auth.signOut({ scope: "local" });
+        } catch {}
+        hardResetAuthAndRedirect();
+        return null;
+      }
+
+      return data.session;
+    } catch {
+      try {
+        await supabaseClient.auth.signOut({ scope: "local" });
+      } catch {}
+      hardResetAuthAndRedirect();
+      return null;
+    }
+  }
+
+  async function loadLinkedDriver() {
     setLoading(true);
     setMsg(null);
 
-    const { data: sessionData } = await supabaseClient.auth.getSession();
-    if (!sessionData.session) {
-      router.replace("/driver/login");
-      return;
-    }
-
-    const driverId = await getDriverIdFromMapping();
-    if (!driverId) {
-      setMsg("Your account is not linked to a driver yet.");
+    const session = await safeGetSession();
+    if (!session) {
       setLoading(false);
-      return;
+      return null;
     }
 
-    const { data: d, error: dErr } = await supabaseClient
-      .from("drivers")
-      .select("id, first_name, last_name, phone, profile_completed, verification_status")
-      .eq("id", driverId)
-      .single<Driver>();
+    const res = await fetch("/api/driver/me", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
 
-    if (dErr || !d) {
-      setMsg("Driver record not found.");
+    const json = await res.json().catch(() => null);
+
+    if (!json?.ok || !json?.driver) {
+      setDriver(null);
+      setMsg(json?.error || "Driver record missing.");
       setLoading(false);
-      return;
+      return null;
     }
 
-    setDriver(d);
+    const linked = json.driver as Driver;
+    setDriver(linked);
 
     const { data: p } = await supabaseClient
       .from("driver_profiles")
       .select(
         "first_name, last_name, phone, alt_phone, id_number, home_address, area_name, emergency_contact_name, emergency_contact_phone, license_number, license_code, license_expiry, pdp_number, pdp_expiry, profile_photo_url"
       )
-      .eq("driver_id", driverId)
+      .eq("driver_id", linked.id)
       .maybeSingle<ExistingProfile>();
 
-    setFirstName(p?.first_name ?? d.first_name ?? "");
-    setLastName(p?.last_name ?? d.last_name ?? "");
-    setPhone(p?.phone ?? d.phone ?? "");
+    setFirstName(p?.first_name ?? linked.first_name ?? "");
+    setLastName(p?.last_name ?? linked.last_name ?? "");
+    setPhone(p?.phone ?? linked.phone ?? "");
     setAltPhone(p?.alt_phone ?? "");
     setIdNumber(p?.id_number ?? "");
     setHomeAddress(p?.home_address ?? "");
@@ -192,7 +202,7 @@ export default function DriverCompleteProfilePage() {
       .select(
         "vehicle_make, vehicle_model, vehicle_year, vehicle_color, vehicle_registration, vehicle_vin, vehicle_engine_number, seating_capacity"
       )
-      .eq("id", driverId)
+      .eq("id", linked.id)
       .single();
 
     setVehicleMake(vehicleData?.vehicle_make ?? "");
@@ -202,15 +212,14 @@ export default function DriverCompleteProfilePage() {
     setVehicleRegistration(vehicleData?.vehicle_registration ?? "");
     setVehicleVin(vehicleData?.vehicle_vin ?? "");
     setVehicleEngineNumber(vehicleData?.vehicle_engine_number ?? "");
-    setSeatingCapacity(
-      vehicleData?.seating_capacity != null ? String(vehicleData.seating_capacity) : ""
-    );
+    setSeatingCapacity(vehicleData?.seating_capacity != null ? String(vehicleData.seating_capacity) : "");
 
     setLoading(false);
+    return linked;
   }
 
   useEffect(() => {
-    loadData();
+    loadLinkedDriver();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -218,12 +227,29 @@ export default function DriverCompleteProfilePage() {
     setFiles((prev) => ({ ...prev, [key]: file }));
   }
 
-  async function uploadOne(
-    driverId: string,
-    key: UploadKey,
-    file: File,
-    isRequired: boolean
-  ) {
+  async function upsertDriverDocument(row: any) {
+    // Try upsert first (best), fallback to insert if no unique constraint exists
+    const upsertRes = await supabaseClient
+      .from("driver_documents")
+      .upsert(row, { onConflict: "driver_id,document_type" });
+
+    if (!upsertRes.error) return;
+
+    const msg = upsertRes.error.message || "";
+    const noConstraint =
+      msg.toLowerCase().includes("no unique") ||
+      msg.toLowerCase().includes("on conflict");
+
+    if (!noConstraint) {
+      throw new Error(upsertRes.error.message);
+    }
+
+    // Fallback: insert (duplicates might happen, but at least it saves)
+    const ins = await supabaseClient.from("driver_documents").insert(row);
+    if (ins.error) throw new Error(ins.error.message);
+  }
+
+  async function uploadOne(driverId: string, key: UploadKey, file: File, isRequired: boolean) {
     const isPhoto =
       key === "car_front_photo" ||
       key === "car_back_photo" ||
@@ -241,13 +267,10 @@ export default function DriverCompleteProfilePage() {
       throw new Error(`${key}: ${uploadErr.message}`);
     }
 
-    const {
-      data: { publicUrl },
-    } = supabaseClient.storage.from(bucket).getPublicUrl(path);
+    const { data } = supabaseClient.storage.from(bucket).getPublicUrl(path);
+    const fileUrl = data?.publicUrl || path;
 
-    const fileUrl = publicUrl || path;
-
-    const { error: docErr } = await supabaseClient.from("driver_documents").insert({
+    await upsertDriverDocument({
       driver_id: driverId,
       document_type: key,
       file_url: fileUrl,
@@ -257,10 +280,6 @@ export default function DriverCompleteProfilePage() {
       is_required: isRequired,
       review_status: "pending",
     });
-
-    if (docErr) {
-      throw new Error(`${key}: ${docErr.message}`);
-    }
 
     return fileUrl;
   }
@@ -276,21 +295,24 @@ export default function DriverCompleteProfilePage() {
       throw new Error(`profile_photo: ${uploadErr.message}`);
     }
 
-    const {
-      data: { publicUrl },
-    } = supabaseClient.storage.from("driver-documents").getPublicUrl(path);
-
-    return publicUrl || path;
+    const { data } = supabaseClient.storage.from("driver-documents").getPublicUrl(path);
+    return data?.publicUrl || path;
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!driver?.id) {
+    setMsg(null);
+
+    const linkedDriver = driver ?? (await loadLinkedDriver());
+    if (!linkedDriver?.id) {
       setMsg("Driver record missing.");
       return;
     }
 
+    const driverId = linkedDriver.id;
+
+    // required fields
     if (
       !firstName.trim() ||
       !lastName.trim() ||
@@ -325,9 +347,10 @@ export default function DriverCompleteProfilePage() {
       let profilePhotoUrl: string | null = null;
 
       if (profilePhoto) {
-        profilePhotoUrl = await uploadProfilePhoto(driver.id, profilePhoto);
+        profilePhotoUrl = await uploadProfilePhoto(driverId, profilePhoto);
       }
 
+      // Upload required + optional docs selected in the form
       const allUploads: Array<{ key: UploadKey; file: File | null; required: boolean }> = [
         ...REQUIRED_DOCS.map((k) => ({ key: k, file: files[k] ?? null, required: true })),
         ...OPTIONAL_DOCS.map((k) => ({ key: k, file: files[k] ?? null, required: false })),
@@ -335,13 +358,14 @@ export default function DriverCompleteProfilePage() {
 
       for (const item of allUploads) {
         if (item.file) {
-          await uploadOne(driver.id, item.key, item.file, item.required);
+          await uploadOne(driverId, item.key, item.file, item.required);
         }
       }
 
+      // Save driver_profiles
       const { error: profileErr } = await supabaseClient.from("driver_profiles").upsert(
         {
-          driver_id: driver.id,
+          driver_id: driverId,
           first_name: firstName.trim(),
           last_name: lastName.trim(),
           phone: phone.trim(),
@@ -365,6 +389,7 @@ export default function DriverCompleteProfilePage() {
 
       if (profileErr) throw new Error(profileErr.message);
 
+      // Save drivers table (vehicle fields + completion flags)
       const { error: driverErr } = await supabaseClient
         .from("drivers")
         .update({
@@ -382,16 +407,19 @@ export default function DriverCompleteProfilePage() {
           profile_completed: true,
           verification_status: "pending_review",
         })
-        .eq("id", driver.id);
+        .eq("id", driverId);
 
       if (driverErr) throw new Error(driverErr.message);
 
       setMsg("Profile submitted successfully ✅");
       setSaving(false);
 
+      // refresh local state to reflect updated profile_completed
+      await loadLinkedDriver();
+
       setTimeout(() => {
         router.push("/driver");
-      }, 1000);
+      }, 800);
     } catch (error: any) {
       setSaving(false);
       setMsg(error?.message ?? "Failed to submit profile");
@@ -415,17 +443,19 @@ export default function DriverCompleteProfilePage() {
           <div className="text-sm text-gray-500">Driver Onboarding</div>
           <h1 className="text-3xl font-semibold mt-1">Complete Your Driver Profile</h1>
           <p className="text-gray-700 mt-2">
-            Fill in your details and upload the required documents so MOOVU can review
-            your profile.
+            Fill in your details and upload the required documents so MOOVU can review your profile.
           </p>
         </div>
 
         {msg && (
-          <div
-            className="border rounded-2xl p-4 text-sm"
-            style={{ background: "var(--moovu-primary-soft)" }}
-          >
+          <div className="border rounded-2xl p-4 text-sm text-black" style={{ background: "var(--moovu-primary-soft)" }}>
             {msg}
+          </div>
+        )}
+
+        {!driver && (
+          <div className="border rounded-2xl p-4 text-black" style={{ background: "var(--moovu-primary-soft)" }}>
+            Driver record missing.
           </div>
         )}
 
@@ -434,73 +464,24 @@ export default function DriverCompleteProfilePage() {
             <h2 className="text-xl font-semibold">Personal Details</h2>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <input
-                className="rounded-xl p-3"
-                placeholder="First name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Last name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Phone number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Alternative phone number"
-                value={altPhone}
-                onChange={(e) => setAltPhone(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="ID number / passport"
-                value={idNumber}
-                onChange={(e) => setIdNumber(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Area / township"
-                value={areaName}
-                onChange={(e) => setAreaName(e.target.value)}
-              />
+              <input className="rounded-xl p-3 border" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Phone number" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Alternative phone number" value={altPhone} onChange={(e) => setAltPhone(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="ID number / passport" value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Area / township" value={areaName} onChange={(e) => setAreaName(e.target.value)} />
             </div>
 
-            <textarea
-              className="rounded-xl p-3 w-full min-h-[110px]"
-              placeholder="Home address"
-              value={homeAddress}
-              onChange={(e) => setHomeAddress(e.target.value)}
-            />
+            <textarea className="rounded-xl p-3 w-full min-h-[110px] border" placeholder="Home address" value={homeAddress} onChange={(e) => setHomeAddress(e.target.value)} />
 
             <div className="grid md:grid-cols-2 gap-4">
-              <input
-                className="rounded-xl p-3"
-                placeholder="Emergency contact name"
-                value={emergencyContactName}
-                onChange={(e) => setEmergencyContactName(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Emergency contact phone"
-                value={emergencyContactPhone}
-                onChange={(e) => setEmergencyContactPhone(e.target.value)}
-              />
+              <input className="rounded-xl p-3 border" placeholder="Emergency contact name" value={emergencyContactName} onChange={(e) => setEmergencyContactName(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Emergency contact phone" value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} />
             </div>
 
             <div>
               <label className="block text-sm text-gray-600 mb-2">Profile photo (optional)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setProfilePhoto(e.target.files?.[0] ?? null)}
-              />
+              <input type="file" accept="image/*" onChange={(e) => setProfilePhoto(e.target.files?.[0] ?? null)} />
             </div>
           </section>
 
@@ -508,41 +489,16 @@ export default function DriverCompleteProfilePage() {
             <h2 className="text-xl font-semibold">Driver License Details</h2>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <input
-                className="rounded-xl p-3"
-                placeholder="License number"
-                value={licenseNumber}
-                onChange={(e) => setLicenseNumber(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="License code / class"
-                value={licenseCode}
-                onChange={(e) => setLicenseCode(e.target.value)}
-              />
+              <input className="rounded-xl p-3 border" placeholder="License number" value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="License code / class" value={licenseCode} onChange={(e) => setLicenseCode(e.target.value)} />
               <div>
                 <label className="block text-sm text-gray-600 mb-2">License expiry</label>
-                <input
-                  className="rounded-xl p-3"
-                  type="date"
-                  value={licenseExpiry}
-                  onChange={(e) => setLicenseExpiry(e.target.value)}
-                />
+                <input className="rounded-xl p-3 border w-full" type="date" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} />
               </div>
-              <input
-                className="rounded-xl p-3"
-                placeholder="PDP number (optional)"
-                value={pdpNumber}
-                onChange={(e) => setPdpNumber(e.target.value)}
-              />
+              <input className="rounded-xl p-3 border" placeholder="PDP number (optional)" value={pdpNumber} onChange={(e) => setPdpNumber(e.target.value)} />
               <div>
                 <label className="block text-sm text-gray-600 mb-2">PDP expiry (optional)</label>
-                <input
-                  className="rounded-xl p-3"
-                  type="date"
-                  value={pdpExpiry}
-                  onChange={(e) => setPdpExpiry(e.target.value)}
-                />
+                <input className="rounded-xl p-3 border w-full" type="date" value={pdpExpiry} onChange={(e) => setPdpExpiry(e.target.value)} />
               </div>
             </div>
           </section>
@@ -551,62 +507,20 @@ export default function DriverCompleteProfilePage() {
             <h2 className="text-xl font-semibold">Vehicle Details</h2>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <input
-                className="rounded-xl p-3"
-                placeholder="Vehicle make"
-                value={vehicleMake}
-                onChange={(e) => setVehicleMake(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Vehicle model"
-                value={vehicleModel}
-                onChange={(e) => setVehicleModel(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Vehicle year"
-                value={vehicleYear}
-                onChange={(e) => setVehicleYear(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Vehicle color"
-                value={vehicleColor}
-                onChange={(e) => setVehicleColor(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Registration number"
-                value={vehicleRegistration}
-                onChange={(e) => setVehicleRegistration(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="VIN / chassis number (optional)"
-                value={vehicleVin}
-                onChange={(e) => setVehicleVin(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Engine number (optional)"
-                value={vehicleEngineNumber}
-                onChange={(e) => setVehicleEngineNumber(e.target.value)}
-              />
-              <input
-                className="rounded-xl p-3"
-                placeholder="Seating capacity (optional)"
-                value={seatingCapacity}
-                onChange={(e) => setSeatingCapacity(e.target.value)}
-              />
+              <input className="rounded-xl p-3 border" placeholder="Vehicle make" value={vehicleMake} onChange={(e) => setVehicleMake(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Vehicle model" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Vehicle year" value={vehicleYear} onChange={(e) => setVehicleYear(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Vehicle color" value={vehicleColor} onChange={(e) => setVehicleColor(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Registration number" value={vehicleRegistration} onChange={(e) => setVehicleRegistration(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="VIN / chassis number (optional)" value={vehicleVin} onChange={(e) => setVehicleVin(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Engine number (optional)" value={vehicleEngineNumber} onChange={(e) => setVehicleEngineNumber(e.target.value)} />
+              <input className="rounded-xl p-3 border" placeholder="Seating capacity (optional)" value={seatingCapacity} onChange={(e) => setSeatingCapacity(e.target.value)} />
             </div>
           </section>
 
           <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
             <h2 className="text-xl font-semibold">Required Uploads</h2>
-            <p className="text-sm text-gray-700">
-              These are required before MOOVU can review your profile.
-            </p>
+            <p className="text-sm text-gray-700">These are required before MOOVU can review your profile.</p>
 
             <div className="grid md:grid-cols-2 gap-4">
               <UploadField label="ID document" onPick={(file) => setPickedFile("id_document", file)} />
@@ -620,9 +534,7 @@ export default function DriverCompleteProfilePage() {
 
           <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
             <h2 className="text-xl font-semibold">Optional Uploads</h2>
-            <p className="text-sm text-gray-700">
-              These are optional and can be uploaded now or later.
-            </p>
+            <p className="text-sm text-gray-700">Optional documents can be uploaded now or later.</p>
 
             <div className="grid md:grid-cols-2 gap-4">
               <UploadField label="PDP document" onPick={(file) => setPickedFile("pdp_document", file)} />
@@ -642,12 +554,8 @@ export default function DriverCompleteProfilePage() {
               {saving ? "Submitting..." : "Submit Profile"}
             </button>
 
-            <button
-              type="button"
-              className="border rounded-xl px-5 py-3 bg-white"
-              onClick={() => router.push("/driver")}
-            >
-              Cancel
+            <button type="button" className="border rounded-xl px-5 py-3 bg-white" onClick={() => router.push("/driver")}>
+              Back to Dashboard
             </button>
           </div>
         </form>
@@ -656,13 +564,7 @@ export default function DriverCompleteProfilePage() {
   );
 }
 
-function UploadField({
-  label,
-  onPick,
-}: {
-  label: string;
-  onPick: (file: File | null) => void;
-}) {
+function UploadField({ label, onPick }: { label: string; onPick: (file: File | null) => void }) {
   return (
     <div className="border rounded-2xl p-4 bg-white">
       <label className="block text-sm text-gray-600 mb-2">{label}</label>

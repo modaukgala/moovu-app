@@ -72,7 +72,8 @@ function waLinkZA(phone: string, message: string) {
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
 }
 
-const ADMIN_WHATSAPP = "27738812739";
+const ADMIN_WHATSAPP = "27670528161";
+const DEFAULT_CENTER = { lat: -25.12, lng: 29.05 };
 
 export default function DriverHomePage() {
   const router = useRouter();
@@ -85,9 +86,9 @@ export default function DriverHomePage() {
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [gpsInfo, setGpsInfo] = useState<string | null>(null);
-  const [checkingProfile, setCheckingProfile] = useState(true);
+  const [loadingDriver, setLoadingDriver] = useState(true);
   const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
-
+  const [mapError, setMapError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   const previousTopOfferIdRef = useRef<string | null>(null);
@@ -96,85 +97,101 @@ export default function DriverHomePage() {
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const mapInitializedRef = useRef(false);
+  const mapContainerNodeRef = useRef<HTMLDivElement | null>(null);
+
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
-  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 1000);
     return () => clearInterval(t);
   }, []);
 
-  async function requireSession() {
-    const { data } = await supabaseClient.auth.getSession();
-    if (!data.session) {
-      router.replace("/driver/login");
-      return null;
-    }
-    return data.session;
-  }
-
-  async function getAccessToken() {
-    const { data } = await supabaseClient.auth.getSession();
-    return data.session?.access_token ?? null;
-  }
-
   function vibratePhone(pattern: number | number[]) {
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      // @ts-ignore
       navigator.vibrate(pattern);
     }
   }
 
-  async function loadDriverFromMapping() {
-    const session = await requireSession();
-    if (!session) return null;
+  function hardResetAuthAndRedirect() {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    window.location.href = "/driver/login";
+  }
 
-    const token = session.access_token;
+  async function safeGetSession() {
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+
+      if (error || !data.session) {
+        try {
+          await supabaseClient.auth.signOut({ scope: "local" });
+        } catch {}
+        hardResetAuthAndRedirect();
+        return null;
+      }
+
+      return data.session;
+    } catch {
+      try {
+        await supabaseClient.auth.signOut({ scope: "local" });
+      } catch {}
+      hardResetAuthAndRedirect();
+      return null;
+    }
+  }
+
+  async function getAccessToken() {
+    const session = await safeGetSession();
+    return session?.access_token ?? null;
+  }
+
+  async function loadDriverFromMapping() {
+    setLoadingDriver(true);
+    setInfo(null);
+
+    const session = await safeGetSession();
+    if (!session) {
+      setLoadingDriver(false);
+      return null;
+    }
 
     const res = await fetch("/api/driver/me", {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${session.access_token}` },
     });
 
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
 
-    if (!json.ok || !json.driver) {
-      setInfo(json.error || "Driver record not found for your account mapping.");
+    if (!json?.ok || !json?.driver) {
       setDriver(null);
+      setOffers([]);
+      setCurrentTrip(null);
+      setInfo(json?.error || "Driver record not found for your account mapping.");
+      setLoadingDriver(false);
       return null;
     }
 
     setDriver(json.driver as Driver);
+    setLoadingDriver(false);
     return json.driver as Driver;
   }
 
-  async function ensureProfileCompleted() {
-    setCheckingProfile(true);
-
-    const loadedDriver = await loadDriverFromMapping();
-    if (!loadedDriver) {
-      setCheckingProfile(false);
-      return false;
-    }
-
-    if (!loadedDriver.profile_completed) {
-      router.replace("/driver/complete-profile");
-      return false;
-    }
-
-    setCheckingProfile(false);
-    return true;
-  }
-
   async function pollOffers() {
+    if (!driver?.profile_completed) {
+      setOffers([]);
+      return;
+    }
+
     const token = await getAccessToken();
     if (!token) {
       setOffers([]);
-      setInfo("Not logged in");
       return;
     }
 
@@ -183,26 +200,22 @@ export default function DriverHomePage() {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
 
-    if (!json.ok) {
+    if (!json?.ok) {
       setOffers([]);
-      setInfo(json.error || "Failed to poll offers");
       return;
     }
 
-    if (json.info) setInfo(String(json.info));
     const nextOffers = json.offers ?? [];
     setOffers(nextOffers);
 
     const newTopOfferId = nextOffers[0]?.id ?? null;
     if (
       newTopOfferId &&
-      previousTopOfferIdRef.current &&
-      previousTopOfferIdRef.current !== newTopOfferId
+      (previousTopOfferIdRef.current === null ||
+        previousTopOfferIdRef.current !== newTopOfferId)
     ) {
-      vibratePhone([200, 120, 200, 120, 300]);
-    } else if (newTopOfferId && !previousTopOfferIdRef.current) {
       vibratePhone([200, 120, 200, 120, 300]);
     }
     previousTopOfferIdRef.current = newTopOfferId;
@@ -220,8 +233,9 @@ export default function DriverHomePage() {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    const json = await res.json();
-    if (!json.ok) {
+    const json = await res.json().catch(() => null);
+
+    if (!json?.ok) {
       setCurrentTrip(null);
       return;
     }
@@ -242,9 +256,10 @@ export default function DriverHomePage() {
       body: JSON.stringify({ lat, lng }),
     });
 
-    const json = await res.json();
-    if (!json.ok) {
-      setGpsInfo(json.error || "Heartbeat failed");
+    const json = await res.json().catch(() => null);
+
+    if (!json?.ok) {
+      setGpsInfo(json?.error || "Heartbeat failed");
       return false;
     }
 
@@ -279,11 +294,15 @@ export default function DriverHomePage() {
     });
   }
 
-  async function heartbeatNow() {
-    await captureCurrentLocationAndSave();
-  }
-
   async function setOnlineServer(wantOnline: boolean) {
+    if (wantOnline && !driver?.profile_completed) {
+      setInfo(
+        "Complete your application and upload the required documents before going online and receiving trips."
+      );
+      vibratePhone([120, 80, 120]);
+      return;
+    }
+
     setBusy(true);
     setInfo(null);
 
@@ -307,11 +326,11 @@ export default function DriverHomePage() {
       body: JSON.stringify({ online: wantOnline }),
     });
 
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
     setBusy(false);
 
-    if (!json.ok) {
-      setInfo(json.error || "Failed to update online status");
+    if (!json?.ok) {
+      setInfo(json?.error || "Failed to update online status");
       await loadDriverFromMapping();
       return;
     }
@@ -340,11 +359,11 @@ export default function DriverHomePage() {
       body: JSON.stringify({ place }),
     });
 
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
 
-    if (!json.ok) {
+    if (!json?.ok) {
       setBusy(false);
-      setInfo(json.error || "Location not found");
+      setInfo(json?.error || "Location not found");
       return;
     }
 
@@ -382,11 +401,11 @@ export default function DriverHomePage() {
       body: JSON.stringify({ tripId, action }),
     });
 
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
     setBusy(false);
 
-    if (!json.ok) {
-      setInfo(json.error || "Failed to respond");
+    if (!json?.ok) {
+      setInfo(json?.error || "Failed to respond");
       await pollOffers();
       await loadDriverFromMapping();
       await loadCurrentTrip();
@@ -394,7 +413,6 @@ export default function DriverHomePage() {
     }
 
     vibratePhone([120, 80, 120]);
-
     setInfo(action === "accept" ? "Offer accepted ✅" : "Offer rejected ✅");
     await pollOffers();
     await loadDriverFromMapping();
@@ -421,18 +439,17 @@ export default function DriverHomePage() {
       body: JSON.stringify({ tripId }),
     });
 
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
     setBusy(false);
 
-    if (!json.ok) {
-      setInfo(json.error || "Action failed");
+    if (!json?.ok) {
+      setInfo(json?.error || "Action failed");
       await loadCurrentTrip();
       await loadDriverFromMapping();
       return;
     }
 
     vibratePhone([100, 60, 100]);
-
     setInfo(successMsg);
     await loadCurrentTrip();
     await loadDriverFromMapping();
@@ -453,13 +470,19 @@ export default function DriverHomePage() {
 
   async function logout() {
     try {
-      await supabaseClient.auth.signOut();
+      await supabaseClient.auth.signOut({ scope: "local" });
+    } catch {
+      //
     } finally {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch {}
       window.location.href = "/driver/login";
     }
   }
 
-  function clearMap() {
+  function clearMapLayers() {
     if (driverMarkerRef.current) driverMarkerRef.current.setMap(null);
     if (pickupMarkerRef.current) pickupMarkerRef.current.setMap(null);
     if (dropoffMarkerRef.current) dropoffMarkerRef.current.setMap(null);
@@ -471,13 +494,14 @@ export default function DriverHomePage() {
     directionsRendererRef.current = null;
   }
 
-  function renderDriverMap() {
+  function updateMapObjects() {
     const map = mapInstanceRef.current;
-    if (!map || !window.google) return;
+    if (!map || !window.google?.maps) return;
 
-    clearMap();
+    clearMapLayers();
 
     const bounds = new window.google.maps.LatLngBounds();
+    let hasAnyPoint = false;
 
     if (driver && typeof driver.lat === "number" && typeof driver.lng === "number") {
       driverMarkerRef.current = new window.google.maps.Marker({
@@ -487,6 +511,7 @@ export default function DriverHomePage() {
         label: { text: "Y", color: "white", fontWeight: "bold" },
       });
       bounds.extend({ lat: driver.lat, lng: driver.lng });
+      hasAnyPoint = true;
     }
 
     if (currentTrip?.pickup_lat != null && currentTrip?.pickup_lng != null) {
@@ -497,6 +522,7 @@ export default function DriverHomePage() {
         label: { text: "P", color: "white", fontWeight: "bold" },
       });
       bounds.extend({ lat: currentTrip.pickup_lat, lng: currentTrip.pickup_lng });
+      hasAnyPoint = true;
     }
 
     if (currentTrip?.dropoff_lat != null && currentTrip?.dropoff_lng != null) {
@@ -507,18 +533,24 @@ export default function DriverHomePage() {
         label: { text: "D", color: "white", fontWeight: "bold" },
       });
       bounds.extend({ lat: currentTrip.dropoff_lat, lng: currentTrip.dropoff_lng });
+      hasAnyPoint = true;
     }
 
-    if (!bounds.isEmpty()) {
+    if (hasAnyPoint && !bounds.isEmpty()) {
       map.fitBounds(bounds);
       window.setTimeout(() => {
-        if (map.getZoom() && map.getZoom()! > 15) map.setZoom(15);
-      }, 300);
+        const zoom = map.getZoom();
+        if (zoom && zoom > 15) map.setZoom(15);
+      }, 250);
+    } else {
+      map.setCenter(DEFAULT_CENTER);
+      map.setZoom(11);
     }
 
     const hasOrigin = driver?.lat != null && driver?.lng != null;
     const goingToPickup = currentTrip?.status === "assigned";
-    const goingToDropoff = currentTrip?.status === "arrived" || currentTrip?.status === "started";
+    const goingToDropoff =
+      currentTrip?.status === "arrived" || currentTrip?.status === "started";
 
     let destLat: number | null = null;
     let destLng: number | null = null;
@@ -547,7 +579,7 @@ export default function DriverHomePage() {
           destination: { lat: destLat, lng: destLng },
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
-        (result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
+        (result, status) => {
           if (status === "OK" && result) {
             directionsRenderer.setDirections(result);
           }
@@ -556,12 +588,37 @@ export default function DriverHomePage() {
     }
   }
 
+  function tryCreateMap() {
+    if (!mapRef.current) return false;
+    if (!window.google?.maps) return false;
+
+    const currentNode = mapRef.current;
+
+    const containerChanged =
+      !!mapContainerNodeRef.current && mapContainerNodeRef.current !== currentNode;
+
+    const shouldCreateFreshMap =
+      !mapInitializedRef.current || !mapInstanceRef.current || containerChanged;
+
+    if (!shouldCreateFreshMap) return true;
+
+    mapInstanceRef.current = new window.google.maps.Map(currentNode, {
+      center: DEFAULT_CENTER,
+      zoom: 11,
+      mapTypeControl: true,
+      streetViewControl: false,
+      fullscreenControl: true,
+    });
+
+    mapContainerNodeRef.current = currentNode;
+    mapInitializedRef.current = true;
+    setMapError(null);
+    return true;
+  }
+
   useEffect(() => {
     (async () => {
-      const ok = await ensureProfileCompleted();
-      if (!ok) return;
-
-      await pollOffers();
+      await loadDriverFromMapping();
       await loadCurrentTrip();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -571,7 +628,7 @@ export default function DriverHomePage() {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = null;
 
-    if (!driver?.online || checkingProfile) return;
+    if (!driver?.online || !driver?.profile_completed) return;
 
     pollTimerRef.current = setInterval(() => {
       pollOffers();
@@ -582,86 +639,128 @@ export default function DriverHomePage() {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
     };
-  }, [driver?.online, checkingProfile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver?.online, driver?.profile_completed]);
 
   useEffect(() => {
     if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
     gpsTimerRef.current = null;
 
-    if (!driver?.online || checkingProfile) {
+    if (!driver?.online) {
       setGpsInfo(null);
       return;
     }
 
-    heartbeatNow();
+    captureCurrentLocationAndSave();
 
     gpsTimerRef.current = setInterval(() => {
-      heartbeatNow();
+      captureCurrentLocationAndSave();
     }, 20000);
 
     return () => {
       if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
       gpsTimerRef.current = null;
     };
-  }, [driver?.online, checkingProfile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver?.online]);
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: any = null;
 
-    function initMap() {
-      if (!mapRef.current || !window.google?.maps) return;
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+    if (!apiKey) {
+      setMapError("Google Maps API key is missing.");
+      return;
+    }
 
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-        center: { lat: -25.12, lng: 29.05 },
-        zoom: 12,
-        mapTypeControl: true,
-        streetViewControl: false,
-        fullscreenControl: true,
-      });
-
-      if (!cancelled) setMapReady(true);
+    function finishInit() {
+      if (cancelled) return;
+      if (tryCreateMap()) {
+        updateMapObjects();
+        return;
+      }
+      retryTimer = setTimeout(finishInit, 150);
     }
 
     if (window.google?.maps) {
-      initMap();
-      return;
+      finishInit();
+      return () => {
+        cancelled = true;
+        if (retryTimer) clearTimeout(retryTimer);
+      };
     }
 
     const existingScript = document.getElementById("google-maps-script") as HTMLScriptElement | null;
 
     if (existingScript) {
-      existingScript.addEventListener("load", initMap);
+      existingScript.addEventListener("load", finishInit);
+      existingScript.addEventListener("error", () =>
+        setMapError("Failed to load Google Maps script.")
+      );
       return () => {
         cancelled = true;
-        existingScript.removeEventListener("load", initMap);
+        if (retryTimer) clearTimeout(retryTimer);
+        existingScript.removeEventListener("load", finishInit);
       };
     }
 
     const script = document.createElement("script");
     script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
-    )}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
     script.async = true;
     script.defer = true;
-    script.onload = initMap;
+    script.onload = finishInit;
+    script.onerror = () => setMapError("Failed to load Google Maps script.");
     document.body.appendChild(script);
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!mapReady || checkingProfile) return;
-    renderDriverMap();
-  }, [mapReady, driver, currentTrip, checkingProfile]);
+    if (!window.google?.maps) return;
+    if (!mapRef.current) return;
+
+    const currentNode = mapRef.current;
+    const containerChanged =
+      !!mapContainerNodeRef.current && mapContainerNodeRef.current !== currentNode;
+
+    if (containerChanged) {
+      mapInitializedRef.current = false;
+      mapInstanceRef.current = null;
+      tryCreateMap();
+      updateMapObjects();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingDriver]);
+
+  useEffect(() => {
+    if (!mapInitializedRef.current) return;
+    updateMapObjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    driver?.lat,
+    driver?.lng,
+    currentTrip?.id,
+    currentTrip?.status,
+    currentTrip?.pickup_lat,
+    currentTrip?.pickup_lng,
+    currentTrip?.dropoff_lat,
+    currentTrip?.dropoff_lng,
+  ]);
 
   const topOffer = offers[0];
 
   const secondsLeft = useMemo(() => {
     if (!topOffer?.offer_expires_at) return null;
-    return Math.max(0, Math.ceil((new Date(topOffer.offer_expires_at).getTime() - Date.now()) / 1000));
+    return Math.max(
+      0,
+      Math.ceil((new Date(topOffer.offer_expires_at).getTime() - Date.now()) / 1000)
+    );
   }, [topOffer?.offer_expires_at, tick]);
 
   const subscriptionLabel = useMemo(() => {
@@ -712,7 +811,8 @@ export default function DriverHomePage() {
   }, [driver?.subscription_expires_at]);
 
   const renewDayHref = useMemo(() => {
-    const name = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
+    const name =
+      `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
     return waLinkZA(
       ADMIN_WHATSAPP,
       `Hi Admin, this is ${name}. I want to renew my MOOVU subscription for 1 day at R45. Please assist me with payment details so my subscription can be renewed.`
@@ -720,7 +820,8 @@ export default function DriverHomePage() {
   }, [driver?.first_name, driver?.last_name]);
 
   const renewWeekHref = useMemo(() => {
-    const name = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
+    const name =
+      `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
     return waLinkZA(
       ADMIN_WHATSAPP,
       `Hi Admin, this is ${name}. I want to renew my MOOVU subscription for 1 week at R90. Please assist me with payment details so my subscription can be renewed.`
@@ -728,7 +829,8 @@ export default function DriverHomePage() {
   }, [driver?.first_name, driver?.last_name]);
 
   const renewMonthHref = useMemo(() => {
-    const name = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
+    const name =
+      `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
     return waLinkZA(
       ADMIN_WHATSAPP,
       `Hi Admin, this is ${name}. I want to renew my MOOVU subscription for 1 month at R200. Please assist me with payment details so my subscription can be renewed.`
@@ -740,11 +842,11 @@ export default function DriverHomePage() {
   const dropoffGoogle = googleMapsLink(currentTrip?.dropoff_lat, currentTrip?.dropoff_lng);
   const dropoffWaze = wazeLink(currentTrip?.dropoff_lat, currentTrip?.dropoff_lng);
 
-  if (checkingProfile) {
+  if (loadingDriver) {
     return (
       <main className="min-h-screen px-6 py-10 text-black">
         <div className="max-w-4xl mx-auto border rounded-[2rem] p-6 bg-white shadow-sm">
-          Checking driver profile...
+          Loading driver dashboard...
         </div>
       </main>
     );
@@ -779,6 +881,35 @@ export default function DriverHomePage() {
 
         <EnablePushButton role="driver" />
 
+        {!driver?.profile_completed && (
+          <section
+            className="border rounded-[2rem] p-5 shadow-sm"
+            style={{ background: "#fff7e6", borderColor: "#fcd34d" }}
+          >
+            <h2 className="text-lg font-semibold text-black">Complete Your Application</h2>
+            <p className="text-sm text-black mt-2">
+              You can use the dashboard, but you must complete your profile and upload the required documents before going online and receiving trips.
+            </p>
+
+            <div className="flex flex-wrap gap-3 mt-4">
+              <button
+                className="rounded-xl px-4 py-2 text-white"
+                style={{ background: "var(--moovu-primary)" }}
+                onClick={() => router.push("/driver/complete-profile")}
+              >
+                Complete Application
+              </button>
+
+              <button
+                className="border rounded-xl px-4 py-2 bg-white text-black"
+                onClick={loadDriverFromMapping}
+              >
+                Refresh Status
+              </button>
+            </div>
+          </section>
+        )}
+
         {info && (
           <div
             className="border rounded-2xl p-4 text-sm text-black"
@@ -795,7 +926,9 @@ export default function DriverHomePage() {
         )}
 
         {!driver ? (
-          <div className="border rounded-2xl p-5 bg-white shadow-sm text-gray-700">Loading driver...</div>
+          <div className="border rounded-2xl p-5 bg-white shadow-sm text-gray-700">
+            Driver record not found.
+          </div>
         ) : (
           <>
             <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
@@ -809,21 +942,18 @@ export default function DriverHomePage() {
 
                   <div className="text-sm text-gray-700">
                     Approval status: <span className="font-medium text-black">{driver.status ?? "—"}</span>
-                    {" • "}
-                    Subscription: <span className="font-medium text-black">{subscriptionLabel}</span>
+                    {" • "}Subscription: <span className="font-medium text-black">{subscriptionLabel}</span>
                   </div>
 
                   <div className="text-sm text-gray-700">
                     Verification: <span className="font-medium text-black">{driver.verification_status ?? "—"}</span>
-                    {" • "}
-                    Profile completed:{" "}
+                    {" • "}Profile completed:{" "}
                     <span className="font-medium text-black">{driver.profile_completed ? "Yes" : "No"}</span>
                   </div>
 
                   <div className="text-sm text-gray-700">
                     Online: <span className="font-medium text-black">{driver.online ? "Yes" : "No"}</span>
-                    {" • "}
-                    Busy: <span className="font-medium text-black">{driver.busy ? "Yes" : "No"}</span>
+                    {" • "}Busy: <span className="font-medium text-black">{driver.busy ? "Yes" : "No"}</span>
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-2">
@@ -850,7 +980,7 @@ export default function DriverHomePage() {
                       onClick={() => {
                         pollOffers();
                         loadCurrentTrip();
-                        heartbeatNow();
+                        captureCurrentLocationAndSave();
                       }}
                     >
                       Refresh
@@ -868,7 +998,7 @@ export default function DriverHomePage() {
                       className="border rounded-xl px-4 py-2 bg-white text-black"
                       onClick={() => router.push("/driver/complete-profile")}
                     >
-                      Edit Profile
+                      {driver.profile_completed ? "Edit Application" : "Complete Application"}
                     </button>
                   </div>
                 </div>
@@ -877,7 +1007,7 @@ export default function DriverHomePage() {
                   <h2 className="text-xl font-semibold text-black">Location</h2>
 
                   <input
-                    className="rounded-xl p-3 w-full"
+                    className="rounded-xl p-3 w-full border"
                     placeholder="Update location manually"
                     value={locationName}
                     onChange={(e) => setLocationName(e.target.value)}
@@ -903,7 +1033,10 @@ export default function DriverHomePage() {
                   </div>
 
                   <div className="text-xs text-gray-600">
-                    Current coords: {driver.lat != null && driver.lng != null ? `${driver.lat}, ${driver.lng}` : "—"}
+                    Current coords:{" "}
+                    {driver.lat != null && driver.lng != null
+                      ? `${driver.lat}, ${driver.lng}`
+                      : "— (tap Use Current Location)"}
                   </div>
                 </div>
               </div>
@@ -914,13 +1047,9 @@ export default function DriverHomePage() {
                 className="border rounded-[2rem] p-5 shadow-sm"
                 style={{
                   background:
-                    subscriptionWarning.type === "expired"
-                      ? "#fee2e2"
-                      : "#fff7e6",
+                    subscriptionWarning.type === "expired" ? "#fee2e2" : "#fff7e6",
                   borderColor:
-                    subscriptionWarning.type === "expired"
-                      ? "#fca5a5"
-                      : "#fcd34d",
+                    subscriptionWarning.type === "expired" ? "#fca5a5" : "#fcd34d",
                 }}
               >
                 <h2 className="text-lg font-semibold text-black">
@@ -975,14 +1104,13 @@ export default function DriverHomePage() {
                   <div className="border rounded-2xl p-4 bg-white">
                     <div className="font-semibold text-black">Renewal Options</div>
                     <p className="text-sm text-gray-700 mt-1">
-                      To renew, choose an option below and contact admin on WhatsApp to arrange payment.
+                      Choose an option and WhatsApp admin to arrange payment.
                     </p>
 
                     <div className="grid md:grid-cols-3 gap-4 mt-4">
                       <div className="border rounded-2xl p-4">
-                        <div className="text-sm text-gray-600">Daily Subscription</div>
+                        <div className="text-sm text-gray-600">Daily</div>
                         <div className="text-2xl font-semibold mt-1 text-black">R45</div>
-                        <div className="text-sm text-gray-700 mt-2">Valid for 1 day</div>
                         <a
                           href={renewDayHref}
                           target="_blank"
@@ -995,9 +1123,8 @@ export default function DriverHomePage() {
                       </div>
 
                       <div className="border rounded-2xl p-4">
-                        <div className="text-sm text-gray-600">Weekly Subscription</div>
+                        <div className="text-sm text-gray-600">Weekly</div>
                         <div className="text-2xl font-semibold mt-1 text-black">R90</div>
-                        <div className="text-sm text-gray-700 mt-2">Valid for 1 week</div>
                         <a
                           href={renewWeekHref}
                           target="_blank"
@@ -1010,9 +1137,8 @@ export default function DriverHomePage() {
                       </div>
 
                       <div className="border rounded-2xl p-4">
-                        <div className="text-sm text-gray-600">Monthly Subscription</div>
+                        <div className="text-sm text-gray-600">Monthly</div>
                         <div className="text-2xl font-semibold mt-1 text-black">R200</div>
-                        <div className="text-sm text-gray-700 mt-2">Valid for 1 month</div>
                         <a
                           href={renewMonthHref}
                           target="_blank"
@@ -1029,9 +1155,29 @@ export default function DriverHomePage() {
               )}
             </section>
 
-            <section className="border rounded-[2rem] p-5 bg-white shadow-sm">
-              <h2 className="text-xl font-semibold text-black mb-4">Driver Map</h2>
-              <div ref={mapRef} className="w-full h-[55vh] rounded-[1.5rem]" />
+            <section className="border rounded-[2rem] p-5 bg-white shadow-sm space-y-3">
+              <h2 className="text-xl font-semibold text-black">Driver Map</h2>
+
+              {mapError ? (
+                <div
+                  className="border rounded-2xl p-4 text-sm text-black"
+                  style={{ background: "var(--moovu-primary-soft)" }}
+                >
+                  {mapError}
+                </div>
+              ) : (
+                <>
+                  <div
+                    ref={mapRef}
+                    className="w-full h-[55vh] rounded-[1.5rem] border bg-gray-100"
+                  />
+                  {driver.lat == null || driver.lng == null ? (
+                    <div className="text-sm text-gray-700">
+                      Tap <b>Use Current Location</b> to place yourself on the map.
+                    </div>
+                  ) : null}
+                </>
+              )}
             </section>
 
             <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
@@ -1075,25 +1221,45 @@ export default function DriverHomePage() {
 
                   <div className="flex flex-wrap gap-2">
                     {pickupGoogle && (
-                      <a className="border rounded-xl px-4 py-2 bg-white text-black" href={pickupGoogle} target="_blank" rel="noreferrer">
+                      <a
+                        className="border rounded-xl px-4 py-2 bg-white text-black"
+                        href={pickupGoogle}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         Pickup Google Maps
                       </a>
                     )}
 
                     {pickupWaze && (
-                      <a className="border rounded-xl px-4 py-2 bg-white text-black" href={pickupWaze} target="_blank" rel="noreferrer">
+                      <a
+                        className="border rounded-xl px-4 py-2 bg-white text-black"
+                        href={pickupWaze}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         Pickup Waze
                       </a>
                     )}
 
                     {dropoffGoogle && (
-                      <a className="border rounded-xl px-4 py-2 bg-white text-black" href={dropoffGoogle} target="_blank" rel="noreferrer">
+                      <a
+                        className="border rounded-xl px-4 py-2 bg-white text-black"
+                        href={dropoffGoogle}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         Dropoff Google Maps
                       </a>
                     )}
 
                     {dropoffWaze && (
-                      <a className="border rounded-xl px-4 py-2 bg-white text-black" href={dropoffWaze} target="_blank" rel="noreferrer">
+                      <a
+                        className="border rounded-xl px-4 py-2 bg-white text-black"
+                        href={dropoffWaze}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         Dropoff Waze
                       </a>
                     )}
@@ -1160,7 +1326,11 @@ export default function DriverHomePage() {
             <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
               <h2 className="text-xl font-semibold text-black">Current Offer</h2>
 
-              {!topOffer ? (
+              {!driver.profile_completed ? (
+                <p className="text-gray-700">
+                  Complete your application first before receiving offers.
+                </p>
+              ) : !topOffer ? (
                 <p className="text-gray-700">No pending offers.</p>
               ) : (
                 <div className="space-y-4">
@@ -1192,7 +1362,9 @@ export default function DriverHomePage() {
 
                     <div className="border rounded-2xl p-4 bg-white">
                       <div className="text-sm text-gray-600">Time left</div>
-                      <div className="font-semibold mt-1 text-black">{secondsLeft != null ? `${secondsLeft}s` : "—"}</div>
+                      <div className="font-semibold mt-1 text-black">
+                        {secondsLeft != null ? `${secondsLeft}s` : "—"}
+                      </div>
                     </div>
                   </div>
 
