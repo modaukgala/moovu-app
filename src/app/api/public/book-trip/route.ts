@@ -1,116 +1,142 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@supabase/supabase-js";
 
-function toRad(value: number) {
-  return (value * Math.PI) / 180;
+type BookTripBody = {
+  riderName?: string | null;
+  rider_name?: string | null;
+  riderPhone?: string | null;
+  rider_phone?: string | null;
+
+  pickupAddress?: string | null;
+  pickup_address?: string | null;
+  pickup?: string | null;
+
+  dropoffAddress?: string | null;
+  dropoff_address?: string | null;
+  dropoff?: string | null;
+
+  pickupLat?: number | null;
+  pickup_lat?: number | null;
+  pickupLng?: number | null;
+  pickup_lng?: number | null;
+
+  dropoffLat?: number | null;
+  dropoff_lat?: number | null;
+  dropoffLng?: number | null;
+  dropoff_lng?: number | null;
+
+  paymentMethod?: string | null;
+  payment_method?: string | null;
+
+  fareAmount?: number | null;
+  fare_amount?: number | null;
+};
+
+function asNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
-function distanceKm(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number
-) {
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+function pickFirstString(...values: Array<unknown>) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as BookTripBody;
 
-    const rider_name = String(body.rider_name ?? "").trim();
-    const rider_phone = String(body.rider_phone ?? "").trim();
+    const riderName = pickFirstString(body.riderName, body.rider_name) || null;
+    const riderPhone = pickFirstString(body.riderPhone, body.rider_phone) || null;
 
-    const pickup_address = String(body.pickup_address ?? "").trim();
-    const dropoff_address = String(body.dropoff_address ?? "").trim();
+    const pickupAddress = pickFirstString(
+      body.pickupAddress,
+      body.pickup_address,
+      body.pickup
+    );
 
-    const pickup_lat = Number(body.pickup_lat);
-    const pickup_lng = Number(body.pickup_lng);
+    const dropoffAddress = pickFirstString(
+      body.dropoffAddress,
+      body.dropoff_address,
+      body.dropoff
+    );
 
-    const dropoff_lat =
-      body.dropoff_lat == null ? null : Number(body.dropoff_lat);
-    const dropoff_lng =
-      body.dropoff_lng == null ? null : Number(body.dropoff_lng);
+    const pickupLat = asNumber(body.pickupLat ?? body.pickup_lat);
+    const pickupLng = asNumber(body.pickupLng ?? body.pickup_lng);
+    const dropoffLat = asNumber(body.dropoffLat ?? body.dropoff_lat);
+    const dropoffLng = asNumber(body.dropoffLng ?? body.dropoff_lng);
 
-    const fare_amount = body.fare_amount ?? null;
-    const payment_method = body.payment_method ?? "cash";
+    const paymentMethod =
+      pickFirstString(body.paymentMethod, body.payment_method).toLowerCase() || "cash";
 
-    if (!rider_name) {
+    const fareAmount = asNumber(body.fareAmount ?? body.fare_amount);
+
+    if (!pickupAddress || !dropoffAddress) {
       return NextResponse.json(
-        { ok: false, error: "Missing rider name" },
+        {
+          ok: false,
+          error: "Pickup and dropoff addresses are required.",
+          debug: {
+            receivedPickup: body.pickupAddress ?? body.pickup_address ?? body.pickup ?? null,
+            receivedDropoff: body.dropoffAddress ?? body.dropoff_address ?? body.dropoff ?? null,
+          },
+        },
         { status: 400 }
       );
     }
 
-    if (!rider_phone) {
+    if (pickupLat == null || pickupLng == null) {
       return NextResponse.json(
-        { ok: false, error: "Missing rider phone" },
+        { ok: false, error: "Pickup coordinates are required." },
         { status: 400 }
       );
     }
 
-    if (!pickup_address || !dropoff_address) {
-      return NextResponse.json(
-        { ok: false, error: "Pickup and destination required" },
-        { status: 400 }
-      );
-    }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-    if (Number.isNaN(pickup_lat) || Number.isNaN(pickup_lng)) {
-      return NextResponse.json(
-        { ok: false, error: "Pickup coordinates are required" },
-        { status: 400 }
-      );
-    }
+    const insertPayload = {
+      rider_name: riderName,
+      rider_phone: riderPhone,
+      pickup_address: pickupAddress,
+      dropoff_address: dropoffAddress,
+      pickup_lat: pickupLat,
+      pickup_lng: pickupLng,
+      dropoff_lat: dropoffLat,
+      dropoff_lng: dropoffLng,
+      payment_method: paymentMethod,
+      fare_amount: fareAmount,
+      status: "requested",
+      offer_status: null,
+      driver_id: null,
+    };
 
-    const { data: trip, error } = await supabaseAdmin
+    const { data: trip, error: tripErr } = await supabase
       .from("trips")
-      .insert({
-        rider_name,
-        rider_phone,
-        pickup_address,
-        dropoff_address,
-        pickup_lat,
-        pickup_lng,
-        dropoff_lat,
-        dropoff_lng,
-        fare_amount,
-        payment_method,
-        status: "requested",
-        offer_status: null,
-        driver_id: null,
-      })
-      .select()
+      .insert(insertPayload)
+      .select("*")
       .single();
 
-    if (error) {
+    if (tripErr || !trip) {
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { ok: false, error: tripErr?.message || "Failed to create trip." },
         { status: 500 }
       );
     }
 
-    await supabaseAdmin.from("trip_events").insert({
+    await supabase.from("trip_events").insert({
       trip_id: trip.id,
-      event_type: "booking_created",
-      message: "Trip created from rider booking page",
+      event_type: "trip_created",
+      message: "Trip requested by customer",
       old_status: null,
       new_status: "requested",
     });
 
-    // ADMIN PUSH
     await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/push/send`, {
       method: "POST",
       headers: {
@@ -118,95 +144,20 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         role: "admin",
-        title: "🚕 New Ride Request",
-        body: `${pickup_address} → ${dropoff_address}`,
+        title: "New trip request",
+        body: `A new trip was requested from ${pickupAddress} to ${dropoffAddress}.`,
         url: "/admin/trips",
       }),
     }).catch(() => null);
 
-    // FIND NEAREST AVAILABLE DRIVERS
-    const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-
-    const { data: drivers, error: driversErr } = await supabaseAdmin
-      .from("drivers")
-      .select(
-        "id, first_name, last_name, phone, lat, lng, last_seen, online, busy, status, subscription_status"
-      )
-      .eq("online", true)
-      .eq("busy", false)
-      .eq("status", "approved")
-      .eq("subscription_status", "active")
-      .gte("last_seen", cutoff)
-      .not("lat", "is", null)
-      .not("lng", "is", null);
-
-    if (!driversErr && drivers && drivers.length > 0) {
-      const ranked = drivers
-        .map((d: any) => ({
-          ...d,
-          distance_km: distanceKm(pickup_lat, pickup_lng, d.lat, d.lng),
-        }))
-        .filter((d: any) => d.distance_km <= 8)
-        .sort((a: any, b: any) => a.distance_km - b.distance_km)
-        .slice(0, 3);
-
-      if (ranked.length > 0) {
-        const firstDriver = ranked[0];
-
-        await supabaseAdmin
-          .from("trips")
-          .update({
-            status: "offered",
-            offer_status: "pending",
-            driver_id: firstDriver.id,
-            offer_expires_at: new Date(Date.now() + 30 * 1000).toISOString(),
-          })
-          .eq("id", trip.id);
-
-        await supabaseAdmin.from("trip_events").insert({
-          trip_id: trip.id,
-          event_type: "offer_created",
-          message: `Nearby drivers ranked and top driver selected (${firstDriver.id})`,
-          old_status: "requested",
-          new_status: "offered",
-        });
-
-        const driverIds = ranked.map((d: any) => d.id);
-
-        const { data: mappings } = await supabaseAdmin
-          .from("driver_accounts")
-          .select("user_id, driver_id")
-          .in("driver_id", driverIds);
-
-        const userIds =
-          mappings?.map((m: any) => m.user_id).filter(Boolean) ?? [];
-
-        if (userIds.length > 0) {
-          await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/push/send`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userIds,
-              title: "🚖 Nearby Trip Available",
-              body: `${pickup_address} → ${dropoff_address}`,
-              url: "/driver",
-            }),
-          }).catch(() => null);
-        }
-      }
-    }
-
     return NextResponse.json({
       ok: true,
       tripId: trip.id,
-      status: trip.status,
-      fare_amount: trip.fare_amount,
+      trip,
     });
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "Server error" },
+      { ok: false, error: e?.message || "Server error" },
       { status: 500 }
     );
   }

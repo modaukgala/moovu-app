@@ -17,12 +17,14 @@ type RideTrip = {
   driver_id: string | null;
   driver_name?: string | null;
   driver_phone?: string | null;
-  driver_vehicle_make?: string | null;
-  driver_vehicle_model?: string | null;
-  driver_vehicle_color?: string | null;
-  driver_vehicle_registration?: string | null;
   driver_lat?: number | null;
   driver_lng?: number | null;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
+  vehicle_color?: string | null;
+  vehicle_registration?: string | null;
+  created_at?: string | null;
+  cancel_reason?: string | null;
 };
 
 declare global {
@@ -31,356 +33,544 @@ declare global {
   }
 }
 
-export default function RiderTrackingPage() {
+const DEFAULT_CENTER = { lat: -25.12, lng: 29.05 };
+
+const CANCEL_REASONS = [
+  "Driver is taking too long",
+  "Booked by mistake",
+  "Changed my plans",
+  "Found another ride",
+  "Pickup location issue",
+  "Other",
+] as const;
+
+function waLinkZA(phone: string | null | undefined, message: string) {
+  if (!phone) return null;
+  const cleaned = phone.replace(/\D/g, "");
+  if (!cleaned) return null;
+  return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
+}
+
+function telLink(phone: string | null | undefined) {
+  if (!phone) return null;
+  const cleaned = phone.replace(/[^\d+]/g, "");
+  if (!cleaned) return null;
+  return `tel:${cleaned}`;
+}
+
+export default function RideTrackingPage() {
   const params = useParams<{ tripId: string }>();
   const tripId = params.tripId;
 
   const [trip, setTrip] = useState<RideTrip | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mapReady, setMapReady] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+
+  const [cancelReason, setCancelReason] =
+    useState<(typeof CANCEL_REASONS)[number]>("Driver is taking too long");
+  const [cancelBusy, setCancelBusy] = useState(false);
+
+  const [etaText, setEtaText] = useState<string | null>(null);
+  const [distanceText, setDistanceText] = useState<string | null>(null);
+
+  const pollTimerRef = useRef<any>(null);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const mapContainerNodeRef = useRef<HTMLDivElement | null>(null);
+  const mapInitializedRef = useRef(false);
 
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
 
-  const tripRouteRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
-  const approachRouteRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const directionsRendererPreAssignRef =
+    useRef<google.maps.DirectionsRenderer | null>(null);
+  const directionsRendererToPickupRef =
+    useRef<google.maps.DirectionsRenderer | null>(null);
+  const directionsRendererTripRef =
+    useRef<google.maps.DirectionsRenderer | null>(null);
 
   async function loadTrip() {
+    if (!tripId) return;
+
     try {
-      const res = await fetch(`/api/public/trip-status?tripId=${encodeURIComponent(tripId)}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/public/trip-status?tripId=${encodeURIComponent(tripId)}`,
+        { cache: "no-store" }
+      );
 
-      const json = await res.json();
-
-      if (!json.ok) {
-        setInfo(json.error || "Failed to load trip");
-        setTrip(null);
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setMsg("Trip status route is not returning JSON.");
         setLoading(false);
         return;
       }
 
-      setInfo(null);
+      const json = await res.json();
+
+      if (!json?.ok) {
+        setTrip(null);
+        setMsg(json?.error || "Failed to load trip");
+        setLoading(false);
+        return;
+      }
+
       setTrip(json.trip ?? null);
+      setMsg(null);
       setLoading(false);
     } catch (e: any) {
-      setInfo(e?.message ?? "Failed to load trip");
       setTrip(null);
+      setMsg(e?.message || "Failed to load trip");
       setLoading(false);
     }
   }
 
-  function clearMarkers() {
+  function clearMapOverlays() {
     if (pickupMarkerRef.current) pickupMarkerRef.current.setMap(null);
     if (dropoffMarkerRef.current) dropoffMarkerRef.current.setMap(null);
     if (driverMarkerRef.current) driverMarkerRef.current.setMap(null);
 
+    if (directionsRendererPreAssignRef.current) {
+      directionsRendererPreAssignRef.current.setMap(null);
+    }
+    if (directionsRendererToPickupRef.current) {
+      directionsRendererToPickupRef.current.setMap(null);
+    }
+    if (directionsRendererTripRef.current) {
+      directionsRendererTripRef.current.setMap(null);
+    }
+
     pickupMarkerRef.current = null;
     dropoffMarkerRef.current = null;
     driverMarkerRef.current = null;
+    directionsRendererPreAssignRef.current = null;
+    directionsRendererToPickupRef.current = null;
+    directionsRendererTripRef.current = null;
   }
 
-  function clearRouteRenderers() {
-    if (tripRouteRendererRef.current) {
-      tripRouteRendererRef.current.setMap(null);
-      tripRouteRendererRef.current = null;
-    }
+  function ensureMap() {
+    if (!window.google?.maps) return false;
+    if (!mapRef.current) return false;
 
-    if (approachRouteRendererRef.current) {
-      approachRouteRendererRef.current.setMap(null);
-      approachRouteRendererRef.current = null;
-    }
-  }
+    const currentNode = mapRef.current;
+    const containerChanged =
+      !!mapContainerNodeRef.current && mapContainerNodeRef.current !== currentNode;
 
-  function renderTripRoutes({
-    map,
-    pickupLat,
-    pickupLng,
-    dropoffLat,
-    dropoffLng,
-    driverLat,
-    driverLng,
-    tripStatus,
-  }: {
-    map: google.maps.Map;
-    pickupLat: number | null | undefined;
-    pickupLng: number | null | undefined;
-    dropoffLat: number | null | undefined;
-    dropoffLng: number | null | undefined;
-    driverLat: number | null | undefined;
-    driverLng: number | null | undefined;
-    tripStatus: string | null | undefined;
-  }) {
-    if (!window.google?.maps) return;
-
-    clearRouteRenderers();
-
-    const directionsService = new window.google.maps.DirectionsService();
-
-    const hasPickupToDropoff =
-      typeof pickupLat === "number" &&
-      typeof pickupLng === "number" &&
-      typeof dropoffLat === "number" &&
-      typeof dropoffLng === "number";
-
-    const hasDriverToPickup =
-      typeof driverLat === "number" &&
-      typeof driverLng === "number" &&
-      typeof pickupLat === "number" &&
-      typeof pickupLng === "number";
-
-    if (hasPickupToDropoff) {
-      const tripRenderer = new window.google.maps.DirectionsRenderer({
-        suppressMarkers: false,
-        preserveViewport: true,
-        polylineOptions: {
-          strokeColor: "#2563eb",
-          strokeOpacity: 0.95,
-          strokeWeight: 5,
-        },
-      });
-
-      tripRenderer.setMap(map);
-      tripRouteRendererRef.current = tripRenderer;
-
-      directionsService.route(
-        {
-          origin: { lat: pickupLat!, lng: pickupLng! },
-          destination: { lat: dropoffLat!, lng: dropoffLng! },
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-          if (status === "OK" && result) {
-            tripRenderer.setDirections(result);
-          }
-        }
-      );
-    }
-
-    const showApproachLine =
-      tripStatus === "assigned" ||
-      tripStatus === "offered" ||
-      tripStatus === "arrived";
-
-    if (showApproachLine && hasDriverToPickup) {
-      const approachRenderer = new window.google.maps.DirectionsRenderer({
-        suppressMarkers: true,
-        preserveViewport: true,
-        polylineOptions: {
-          strokeColor: "#60a5fa",
-          strokeOpacity: 0.95,
-          strokeWeight: 5,
-        },
-      });
-
-      approachRenderer.setMap(map);
-      approachRouteRendererRef.current = approachRenderer;
-
-      directionsService.route(
-        {
-          origin: { lat: driverLat!, lng: driverLng! },
-          destination: { lat: pickupLat!, lng: pickupLng! },
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-          if (status === "OK" && result) {
-            approachRenderer.setDirections(result);
-          }
-        }
-      );
-    }
-  }
-
-  function renderMap() {
-    const map = mapInstanceRef.current;
-    if (!map || !trip || !window.google?.maps) return;
-
-    clearMarkers();
-
-    const bounds = new window.google.maps.LatLngBounds();
-    let hasAnyPoint = false;
-
-    if (typeof trip.pickup_lat === "number" && typeof trip.pickup_lng === "number") {
-      pickupMarkerRef.current = new window.google.maps.Marker({
-        map,
-        position: { lat: trip.pickup_lat, lng: trip.pickup_lng },
-        title: "Pickup",
-        label: { text: "P", color: "white", fontWeight: "bold" },
-      });
-      bounds.extend({ lat: trip.pickup_lat, lng: trip.pickup_lng });
-      hasAnyPoint = true;
-    }
-
-    if (typeof trip.dropoff_lat === "number" && typeof trip.dropoff_lng === "number") {
-      dropoffMarkerRef.current = new window.google.maps.Marker({
-        map,
-        position: { lat: trip.dropoff_lat, lng: trip.dropoff_lng },
-        title: "Dropoff",
-        label: { text: "D", color: "white", fontWeight: "bold" },
-      });
-      bounds.extend({ lat: trip.dropoff_lat, lng: trip.dropoff_lng });
-      hasAnyPoint = true;
-    }
-
-    if (typeof trip.driver_lat === "number" && typeof trip.driver_lng === "number") {
-      driverMarkerRef.current = new window.google.maps.Marker({
-        map,
-        position: { lat: trip.driver_lat, lng: trip.driver_lng },
-        title: "Driver",
-        label: { text: "Y", color: "white", fontWeight: "bold" },
-      });
-      bounds.extend({ lat: trip.driver_lat, lng: trip.driver_lng });
-      hasAnyPoint = true;
-    }
-
-    if (hasAnyPoint && !bounds.isEmpty()) {
-      map.fitBounds(bounds);
-      window.setTimeout(() => {
-        if (map.getZoom() && map.getZoom()! > 15) map.setZoom(15);
-      }, 300);
-    } else {
-      map.setCenter({ lat: -25.12, lng: 29.05 });
-      map.setZoom(11);
-    }
-
-    renderTripRoutes({
-      map,
-      pickupLat: trip.pickup_lat,
-      pickupLng: trip.pickup_lng,
-      dropoffLat: trip.dropoff_lat,
-      dropoffLng: trip.dropoff_lng,
-      driverLat: trip.driver_lat,
-      driverLng: trip.driver_lng,
-      tripStatus: trip.status,
-    });
-  }
-
-  useEffect(() => {
-    if (!tripId) return;
-
-    setLoading(true);
-    loadTrip();
-
-    const t = setInterval(loadTrip, 5000);
-    return () => clearInterval(t);
-  }, [tripId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    function initMap() {
-      if (!mapRef.current || !window.google?.maps) return;
-
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-        center: { lat: -25.12, lng: 29.05 },
-        zoom: 11,
+    if (!mapInitializedRef.current || !mapInstanceRef.current || containerChanged) {
+      mapInstanceRef.current = new window.google.maps.Map(currentNode, {
+        center: DEFAULT_CENTER,
+        zoom: 12,
         mapTypeControl: true,
         streetViewControl: false,
         fullscreenControl: true,
       });
 
-      if (!cancelled) {
-        setMapReady(true);
-        setMapError(null);
+      mapContainerNodeRef.current = currentNode;
+      mapInitializedRef.current = true;
+    }
+
+    return true;
+  }
+
+  function drawTripOnMap() {
+    const map = mapInstanceRef.current;
+    if (!map || !window.google?.maps || !trip) return;
+
+    clearMapOverlays();
+    setEtaText(null);
+    setDistanceText(null);
+
+    const pickupOk =
+      typeof trip.pickup_lat === "number" && typeof trip.pickup_lng === "number";
+    const dropoffOk =
+      typeof trip.dropoff_lat === "number" && typeof trip.dropoff_lng === "number";
+    const driverOk =
+      typeof trip.driver_lat === "number" && typeof trip.driver_lng === "number";
+
+    const bounds = new window.google.maps.LatLngBounds();
+
+    if (pickupOk) {
+      const pickupPos = { lat: trip.pickup_lat!, lng: trip.pickup_lng! };
+      pickupMarkerRef.current = new window.google.maps.Marker({
+        position: pickupPos,
+        map,
+        title: "Pickup",
+        label: "Pickup",
+      });
+      bounds.extend(pickupPos);
+    }
+
+    if (dropoffOk) {
+      const dropoffPos = { lat: trip.dropoff_lat!, lng: trip.dropoff_lng! };
+      dropoffMarkerRef.current = new window.google.maps.Marker({
+        position: dropoffPos,
+        map,
+        title: "Destination",
+        label: "Destination",
+      });
+      bounds.extend(dropoffPos);
+    }
+
+    if (driverOk) {
+      const driverPos = { lat: trip.driver_lat!, lng: trip.driver_lng! };
+      driverMarkerRef.current = new window.google.maps.Marker({
+        position: driverPos,
+        map,
+        title: "Driver",
+        label: "Driver",
+      });
+      bounds.extend(driverPos);
+    }
+
+    const fitBoundsSafely = () => {
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds);
+        window.setTimeout(() => {
+          const zoom = map.getZoom();
+          if (zoom && zoom > 15) map.setZoom(15);
+        }, 300);
+      } else {
+        map.setCenter(DEFAULT_CENTER);
+        map.setZoom(11);
       }
+    };
+
+    const directionsService = new window.google.maps.DirectionsService();
+
+    const isPreAssignmentStatus =
+      trip.status === "requested" ||
+      trip.status === "pending" ||
+      trip.status === "searching" ||
+      trip.status === "unassigned";
+
+    if (isPreAssignmentStatus && pickupOk && dropoffOk) {
+      const preAssignRenderer = new window.google.maps.DirectionsRenderer({
+        suppressMarkers: true,
+        preserveViewport: true,
+        polylineOptions: {
+          strokeColor: "#1d4ed8",
+          strokeOpacity: 1,
+          strokeWeight: 6,
+        },
+      });
+
+      preAssignRenderer.setMap(map);
+      directionsRendererPreAssignRef.current = preAssignRenderer;
+
+      directionsService.route(
+        {
+          origin: { lat: trip.pickup_lat!, lng: trip.pickup_lng! },
+          destination: { lat: trip.dropoff_lat!, lng: trip.dropoff_lng! },
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (status === "OK" && result) {
+            preAssignRenderer.setDirections(result);
+
+            const legs = result.routes?.[0]?.legs ?? [];
+            if (legs.length) {
+              const totalSeconds = legs.reduce(
+                (sum, leg) => sum + (leg.duration?.value ?? 0),
+                0
+              );
+              const totalMeters = legs.reduce(
+                (sum, leg) => sum + (leg.distance?.value ?? 0),
+                0
+              );
+
+              setEtaText(`${Math.max(1, Math.round(totalSeconds / 60))} min`);
+              setDistanceText(
+                totalMeters >= 1000
+                  ? `${(totalMeters / 1000).toFixed(1)} km`
+                  : `${totalMeters} m`
+              );
+
+              legs.forEach((leg) => {
+                if (leg.start_location) bounds.extend(leg.start_location);
+                if (leg.end_location) bounds.extend(leg.end_location);
+              });
+            }
+          }
+
+          fitBoundsSafely();
+        }
+      );
+
+      return;
+    }
+
+    if (driverOk && pickupOk && dropoffOk) {
+      const toPickupRenderer = new window.google.maps.DirectionsRenderer({
+        suppressMarkers: true,
+        preserveViewport: true,
+        polylineOptions: {
+          strokeColor: "#60a5fa",
+          strokeOpacity: 1,
+          strokeWeight: 6,
+        },
+      });
+
+      const tripRenderer = new window.google.maps.DirectionsRenderer({
+        suppressMarkers: true,
+        preserveViewport: true,
+        polylineOptions: {
+          strokeColor: "#1d4ed8",
+          strokeOpacity: 1,
+          strokeWeight: 6,
+        },
+      });
+
+      toPickupRenderer.setMap(map);
+      tripRenderer.setMap(map);
+
+      directionsRendererToPickupRef.current = toPickupRenderer;
+      directionsRendererTripRef.current = tripRenderer;
+
+      directionsService.route(
+        {
+          origin: { lat: trip.driver_lat!, lng: trip.driver_lng! },
+          destination: { lat: trip.pickup_lat!, lng: trip.pickup_lng! },
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (resultToPickup, statusToPickup) => {
+          if (statusToPickup === "OK" && resultToPickup) {
+            toPickupRenderer.setDirections(resultToPickup);
+
+            const firstLeg = resultToPickup.routes?.[0]?.legs?.[0];
+            setEtaText(firstLeg?.duration?.text ?? null);
+            setDistanceText(firstLeg?.distance?.text ?? null);
+
+            resultToPickup.routes?.[0]?.legs?.forEach((leg) => {
+              if (leg.start_location) bounds.extend(leg.start_location);
+              if (leg.end_location) bounds.extend(leg.end_location);
+            });
+          }
+
+          directionsService.route(
+            {
+              origin: { lat: trip.pickup_lat!, lng: trip.pickup_lng! },
+              destination: { lat: trip.dropoff_lat!, lng: trip.dropoff_lng! },
+              travelMode: window.google.maps.TravelMode.DRIVING,
+            },
+            (resultTrip, statusTrip) => {
+              if (statusTrip === "OK" && resultTrip) {
+                tripRenderer.setDirections(resultTrip);
+
+                resultTrip.routes?.[0]?.legs?.forEach((leg) => {
+                  if (leg.start_location) bounds.extend(leg.start_location);
+                  if (leg.end_location) bounds.extend(leg.end_location);
+                });
+              }
+
+              fitBoundsSafely();
+            }
+          );
+        }
+      );
+
+      return;
+    }
+
+    fitBoundsSafely();
+  }
+
+  async function cancelTrip() {
+    if (!trip) return;
+
+    setCancelBusy(true);
+    setMsg(null);
+
+    try {
+      const res = await fetch("/api/public/cancel-trip", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tripId: trip.id,
+          reason: cancelReason,
+        }),
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setMsg("Cancel route is not returning JSON.");
+        setCancelBusy(false);
+        return;
+      }
+
+      const json = await res.json();
+
+      if (!json?.ok) {
+        setMsg(json?.error || "Failed to cancel trip.");
+        setCancelBusy(false);
+        return;
+      }
+
+      setMsg("Trip cancelled successfully.");
+      setCancelBusy(false);
+      await loadTrip();
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to cancel trip.");
+      setCancelBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    loadTrip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId]);
+
+  useEffect(() => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+
+    pollTimerRef.current = setInterval(() => {
+      loadTrip();
+    }, 3000);
+
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimer: any = null;
+
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+    if (!apiKey) {
+      setMapError("Google Maps API key is missing.");
+      return;
+    }
+
+    function initWhenReady() {
+      if (cancelled) return;
+
+      if (!ensureMap()) {
+        retryTimer = setTimeout(initWhenReady, 150);
+        return;
+      }
+
+      drawTripOnMap();
     }
 
     if (window.google?.maps) {
-      initMap();
-      return;
+      initWhenReady();
+      return () => {
+        cancelled = true;
+        if (retryTimer) clearTimeout(retryTimer);
+      };
     }
 
     const existingScript = document.getElementById("google-maps-script") as HTMLScriptElement | null;
 
     if (existingScript) {
-      existingScript.addEventListener("load", initMap);
+      existingScript.addEventListener("load", initWhenReady);
+      existingScript.addEventListener("error", () =>
+        setMapError("Failed to load Google Maps script.")
+      );
       return () => {
         cancelled = true;
-        existingScript.removeEventListener("load", initMap);
+        if (retryTimer) clearTimeout(retryTimer);
+        existingScript.removeEventListener("load", initWhenReady);
       };
-    }
-
-    const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-    if (!key) {
-      setMapError("Google Maps API key is missing.");
-      return;
     }
 
     const script = document.createElement("script");
     script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
     script.async = true;
     script.defer = true;
-    script.onload = initMap;
-    script.onerror = () => {
-      setMapError("Failed to load Google Maps.");
-    };
+    script.onload = initWhenReady;
+    script.onerror = () => setMapError("Failed to load Google Maps script.");
     document.body.appendChild(script);
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!mapReady || !trip) return;
-    renderMap();
+    if (!trip) return;
+    if (!mapInitializedRef.current) return;
+
+    const t = setTimeout(() => {
+      drawTripOnMap();
+    }, 200);
+
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, trip]);
+  }, [
+    trip?.id,
+    trip?.status,
+    trip?.pickup_lat,
+    trip?.pickup_lng,
+    trip?.dropoff_lat,
+    trip?.dropoff_lng,
+    trip?.driver_lat,
+    trip?.driver_lng,
+  ]);
 
-  const vehicleLabel = useMemo(() => {
-    if (!trip) return "—";
+  const callDriverHref = telLink(trip?.driver_phone);
+  const whatsappDriverHref = waLinkZA(
+    trip?.driver_phone,
+    `Hi ${trip?.driver_name ?? "Driver"}, I am your rider on MOOVU for trip ${trip?.id}.`
+  );
+
+  const carText = useMemo(() => {
     const parts = [
-      trip.driver_vehicle_color,
-      trip.driver_vehicle_make,
-      trip.driver_vehicle_model,
+      trip?.vehicle_color ?? "",
+      trip?.vehicle_make ?? "",
+      trip?.vehicle_model ?? "",
     ].filter(Boolean);
-    return parts.length ? parts.join(" ") : "—";
-  }, [trip]);
 
-  const hasMapCoordinates = useMemo(() => {
-    if (!trip) return false;
+    return parts.length ? parts.join(" ") : "—";
+  }, [trip?.vehicle_color, trip?.vehicle_make, trip?.vehicle_model]);
+
+  const canCancel =
+    trip &&
+    trip.status !== "completed" &&
+    trip.status !== "cancelled";
+
+  if (loading) {
     return (
-      (typeof trip.pickup_lat === "number" && typeof trip.pickup_lng === "number") ||
-      (typeof trip.dropoff_lat === "number" && typeof trip.dropoff_lng === "number") ||
-      (typeof trip.driver_lat === "number" && typeof trip.driver_lng === "number")
+      <main className="min-h-screen px-6 py-10 text-black">
+        <div className="max-w-4xl mx-auto border rounded-[2rem] p-6 bg-white shadow-sm">
+          Loading trip...
+        </div>
+      </main>
     );
-  }, [trip]);
+  }
 
   return (
     <main className="min-h-screen px-6 py-10 text-black">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto space-y-6">
         <div>
           <div className="text-sm text-gray-500">MOOVU Ride Tracking</div>
           <h1 className="text-3xl font-semibold mt-1">Track Your Ride</h1>
           <p className="text-gray-700 mt-2">
-            Follow your driver and route progress live.
+            Follow your trip, driver details, car details and live progress.
           </p>
         </div>
 
-        {info && (
+        {msg && (
           <div
             className="border rounded-2xl p-4 text-sm text-black"
             style={{ background: "var(--moovu-primary-soft)" }}
           >
-            {info}
+            {msg}
           </div>
         )}
 
-        {loading ? (
-          <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-            <p className="text-gray-700">Loading trip...</p>
-          </section>
-        ) : !trip ? (
-          <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-            <p className="text-gray-700">Trip could not be loaded.</p>
-          </section>
+        {!trip ? (
+          <div className="border rounded-[2rem] p-6 bg-white shadow-sm">
+            Trip not found.
+          </div>
         ) : (
           <>
             <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
@@ -416,19 +606,23 @@ export default function RiderTrackingPage() {
                 </div>
 
                 <div className="border rounded-2xl p-4 bg-white">
-                  <div className="text-sm text-gray-600">Trip ID</div>
-                  <div className="font-semibold mt-1 text-black break-all">{trip.id}</div>
+                  <div className="text-sm text-gray-600">Requested</div>
+                  <div className="font-semibold mt-1 text-black">
+                    {trip.created_at ? new Date(trip.created_at).toLocaleString() : "—"}
+                  </div>
                 </div>
               </div>
             </section>
 
             <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-              <h2 className="text-xl font-semibold text-black">Driver Details</h2>
+              <h2 className="text-xl font-semibold text-black">Driver & Car Details</h2>
 
               <div className="grid md:grid-cols-4 gap-4">
                 <div className="border rounded-2xl p-4 bg-white">
                   <div className="text-sm text-gray-600">Driver</div>
-                  <div className="font-semibold mt-1 text-black">{trip.driver_name ?? "Waiting for driver"}</div>
+                  <div className="font-semibold mt-1 text-black">
+                    {trip.driver_name ?? (trip.driver_id ? "Assigned" : "Searching...")}
+                  </div>
                 </div>
 
                 <div className="border rounded-2xl p-4 bg-white">
@@ -437,28 +631,135 @@ export default function RiderTrackingPage() {
                 </div>
 
                 <div className="border rounded-2xl p-4 bg-white">
-                  <div className="text-sm text-gray-600">Vehicle</div>
-                  <div className="font-semibold mt-1 text-black">{vehicleLabel}</div>
+                  <div className="text-sm text-gray-600">Car</div>
+                  <div className="font-semibold mt-1 text-black">{carText}</div>
                 </div>
 
                 <div className="border rounded-2xl p-4 bg-white">
                   <div className="text-sm text-gray-600">Registration</div>
-                  <div className="font-semibold mt-1 text-black">{trip.driver_vehicle_registration ?? "—"}</div>
+                  <div className="font-semibold mt-1 text-black">
+                    {trip.vehicle_registration ?? "—"}
+                  </div>
                 </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="border rounded-2xl p-4 bg-white">
+                  <div className="text-sm text-gray-600">
+                    {trip.driver_id ? "Driver ETA to Pickup" : "Estimated Trip Time"}
+                  </div>
+                  <div className="font-semibold mt-1 text-black">{etaText ?? "—"}</div>
+                </div>
+
+                <div className="border rounded-2xl p-4 bg-white">
+                  <div className="text-sm text-gray-600">
+                    {trip.driver_id ? "Driver Distance to Pickup" : "Trip Distance"}
+                  </div>
+                  <div className="font-semibold mt-1 text-black">{distanceText ?? "—"}</div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {callDriverHref ? (
+                  <a
+                    href={callDriverHref}
+                    className="rounded-xl px-4 py-2 text-white"
+                    style={{ background: "var(--moovu-primary)" }}
+                  >
+                    Call Driver
+                  </a>
+                ) : (
+                  <button
+                    disabled
+                    className="rounded-xl px-4 py-2 text-white opacity-50"
+                    style={{ background: "var(--moovu-primary)" }}
+                  >
+                    Call Driver
+                  </button>
+                )}
+
+                {whatsappDriverHref ? (
+                  <a
+                    href={whatsappDriverHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="border rounded-xl px-4 py-2 bg-white text-black"
+                  >
+                    WhatsApp Driver
+                  </a>
+                ) : (
+                  <button
+                    disabled
+                    className="border rounded-xl px-4 py-2 bg-white text-black opacity-50"
+                  >
+                    WhatsApp Driver
+                  </button>
+                )}
               </div>
             </section>
 
-            <section className="border rounded-[2rem] p-5 bg-white shadow-sm">
-              <h2 className="text-xl font-semibold text-black mb-4">Live Map</h2>
+            <section className="border rounded-[2rem] p-5 bg-white shadow-sm space-y-3">
+              <h2 className="text-xl font-semibold text-black">Live Tracking Map</h2>
 
               {mapError ? (
-                <div className="border rounded-2xl p-4 text-sm">{mapError}</div>
-              ) : !hasMapCoordinates ? (
-                <div className="border rounded-2xl p-4 text-sm">
-                  Trip coordinates are not available yet, so the map cannot be drawn.
+                <div
+                  className="border rounded-2xl p-4 text-sm text-black"
+                  style={{ background: "var(--moovu-primary-soft)" }}
+                >
+                  {mapError}
                 </div>
               ) : (
-                <div ref={mapRef} className="w-full h-[60vh] rounded-[1.5rem]" />
+                <div
+                  ref={mapRef}
+                  className="w-full h-[55vh] rounded-[1.5rem] border bg-gray-100"
+                />
+              )}
+            </section>
+
+            <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+              <h2 className="text-xl font-semibold text-black">Cancel Trip</h2>
+
+              {trip.status === "cancelled" ? (
+                <div className="border rounded-2xl p-4 bg-white">
+                  <div className="text-sm text-gray-600">Trip cancelled</div>
+                  <div className="font-medium mt-1 text-black">
+                    Reason: {trip.cancel_reason ?? "—"}
+                  </div>
+                </div>
+              ) : trip.status === "completed" ? (
+                <div className="border rounded-2xl p-4 bg-white text-black">
+                  Completed trips cannot be cancelled.
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">
+                      Select a reason
+                    </label>
+                    <select
+                      className="w-full border rounded-xl p-3 bg-white text-black"
+                      value={cancelReason}
+                      onChange={(e) =>
+                        setCancelReason(e.target.value as (typeof CANCEL_REASONS)[number])
+                      }
+                    >
+                      {CANCEL_REASONS.map((reason) => (
+                        <option key={reason} value={reason}>
+                          {reason}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    disabled={!canCancel || cancelBusy}
+                    onClick={cancelTrip}
+                    className="rounded-xl px-4 py-2 text-white"
+                    style={{ background: "#dc2626" }}
+                  >
+                    {cancelBusy ? "Cancelling..." : "Cancel Trip"}
+                  </button>
+                </>
               )}
             </section>
           </>
