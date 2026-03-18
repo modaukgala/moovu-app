@@ -1,225 +1,299 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { supabaseClient } from "@/lib/supabase/client";
 
 type Trip = {
   id: string;
   rider_name: string | null;
   rider_phone: string | null;
-  pickup_address: string;
-  dropoff_address: string;
-  payment_method: string;
+  pickup_address: string | null;
+  dropoff_address: string | null;
   fare_amount: number | null;
-  status: string;
-  created_at: string;
+  payment_method: string | null;
+  status: string | null;
   driver_id: string | null;
+  created_at: string | null;
 };
 
-type Driver = {
+type DriverOpt = {
   id: string;
-  first_name: string;
-  last_name: string;
-  phone: string;
-  status: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  status: string | null;
+  online: boolean | null;
+  busy: boolean | null;
 };
 
-const STATUSES = ["all", "requested", "assigned", "arrived", "started", "completed", "cancelled"] as const;
-
-export default function TripsPage() {
+export default function AdminTripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
+  const [drivers, setDrivers] = useState<DriverOpt[]>([]);
+  const [busyTripId, setBusyTripId] = useState<string | null>(null);
+  const [driverSelections, setDriverSelections] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<string | null>(null);
 
-  async function loadDrivers() {
-    const { data } = await supabaseClient
-      .from("drivers")
-      .select("id, first_name, last_name, phone, status")
-      .in("status", ["approved", "active"])
-      .order("created_at", { ascending: false });
+  async function loadTrips() {
+    setMsg(null);
 
-    setDrivers((data as any) ?? []);
+    const res = await fetch("/api/admin/trips/list", { cache: "no-store" });
+    const contentType = res.headers.get("content-type") || "";
+
+    if (!contentType.includes("application/json")) {
+      setMsg("Trips list route is not returning JSON.");
+      return;
+    }
+
+    const json = await res.json();
+
+    if (!json.ok) {
+      setMsg(json.error || "Failed to load trips.");
+      return;
+    }
+
+    setTrips(json.trips ?? []);
   }
 
-  async function loadTrips(s: string) {
-    setLoading(true);
+  async function loadDrivers() {
+    const res = await fetch("/api/admin/drivers/options", { cache: "no-store" });
+    const contentType = res.headers.get("content-type") || "";
 
-    let q = supabaseClient
-      .from("trips")
-      .select("*")
-      .order("created_at", { ascending: false });
+    if (!contentType.includes("application/json")) {
+      setMsg("Drivers options route is not returning JSON.");
+      return;
+    }
 
-    if (s !== "all") q = q.eq("status", s);
+    const json = await res.json();
 
-    const { data } = await q;
-    setTrips((data as any) ?? []);
-    setLoading(false);
+    if (!json.ok) {
+      setMsg(json.error || "Failed to load drivers.");
+      return;
+    }
+
+    setDrivers(json.drivers ?? []);
+  }
+
+  async function assignDriver(tripId: string) {
+    const driverId = driverSelections[tripId];
+
+    if (!driverId) {
+      setMsg("Please select a driver first.");
+      return;
+    }
+
+    setBusyTripId(tripId);
+    setMsg(null);
+
+    try {
+      const res = await fetch("/api/admin/trips/assign", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tripId,
+          driverId,
+        }),
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setMsg("Assign route is not returning JSON.");
+        setBusyTripId(null);
+        return;
+      }
+
+      const json = await res.json();
+
+      if (!json.ok) {
+        setMsg(json.error || "Failed to assign driver.");
+        setBusyTripId(null);
+        return;
+      }
+
+      setMsg(`✅ ${json.message}`);
+      setBusyTripId(null);
+      await loadTrips();
+      await loadDrivers();
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to assign driver.");
+      setBusyTripId(null);
+    }
   }
 
   useEffect(() => {
+    loadTrips();
     loadDrivers();
-    loadTrips(status);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, []);
 
-  const driverNameById = useMemo(() => {
-    const m = new Map<string, string>();
-    drivers.forEach((d) => m.set(d.id, `${d.first_name} ${d.last_name}`));
-    return m;
-  }, [drivers]);
+  const requestedTrips = useMemo(
+    () => trips.filter((t) => t.status === "requested" || t.status === "pending" || t.status === "searching"),
+    [trips]
+  );
 
-  async function assignDriver(tripId: string, driverId: string) {
-    // set trip driver + status
-    await supabaseClient.from("trips").update({ driver_id: driverId, status: "assigned" }).eq("id", tripId);
+  const activeTrips = useMemo(
+    () => trips.filter((t) => t.status && !["requested", "pending", "searching", "completed", "cancelled"].includes(t.status)),
+    [trips]
+  );
 
-    // add timeline event
-    await supabaseClient.from("trip_events").insert({
-      trip_id: tripId,
-      event_type: "assignment",
-      message: `Assigned driver ${driverId}`,
-      old_status: "requested",
-      new_status: "assigned",
-    });
-
-    await loadTrips(status);
-  }
-
-  async function updateStatus(tripId: string, newStatus: string) {
-    const trip = trips.find((t) => t.id === tripId);
-    const oldStatus = trip?.status ?? null;
-
-    await supabaseClient.from("trips").update({ status: newStatus }).eq("id", tripId);
-
-    await supabaseClient.from("trip_events").insert({
-      trip_id: tripId,
-      event_type: "status_change",
-      message: `Status changed to ${newStatus}`,
-      old_status: oldStatus,
-      new_status: newStatus,
-    });
-
-    await loadTrips(status);
-  }
+  const finishedTrips = useMemo(
+    () => trips.filter((t) => t.status === "completed" || t.status === "cancelled"),
+    [trips]
+  );
 
   return (
-    <main className="p-6 space-y-5">
-      <div className="flex items-center justify-between gap-4">
+    <main className="min-h-screen px-6 py-10 text-black">
+      <div className="max-w-6xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold">Trips</h1>
-          <p className="opacity-70 mt-1">Dispatcher console (manual + smart ops).</p>
+          <div className="text-sm text-gray-500">MOOVU Admin</div>
+          <h1 className="text-3xl font-semibold mt-1">Trips Control Center</h1>
+          <p className="text-gray-700 mt-2">
+            View new trips and manually assign available drivers.
+          </p>
         </div>
 
-        <Link className="border rounded-xl px-4 py-2" href="/admin/trips/new">
-          + New Trip
-        </Link>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        {STATUSES.map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatus(s)}
-            className={`border rounded-full px-4 py-2 text-sm ${
-              status === s ? "bg-white/10" : ""
-            }`}
+        {msg && (
+          <div
+            className="border rounded-2xl p-4 text-sm"
+            style={{ background: "var(--moovu-primary-soft)" }}
           >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div>Loading trips...</div>
-      ) : trips.length === 0 ? (
-        <div className="opacity-70">No trips found.</div>
-      ) : (
-        <div className="border rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-12 gap-0 bg-white/5 text-sm font-medium">
-            <div className="col-span-3 p-3">Pickup → Dropoff</div>
-            <div className="col-span-2 p-3">Rider</div>
-            <div className="col-span-2 p-3">Driver</div>
-            <div className="col-span-1 p-3">Pay</div>
-            <div className="col-span-1 p-3">Fare</div>
-            <div className="col-span-1 p-3">Status</div>
-            <div className="col-span-2 p-3">Actions</div>
+            {msg}
           </div>
+        )}
 
-          {trips.map((t) => (
-            <div key={t.id} className="grid grid-cols-12 gap-0 border-t text-sm">
-            <div className="col-span-3 p-3">
-                <a className="underline underline-offset-4 hover:opacity-80" href={`/admin/trips/${t.id}`}>
-                    <div className="font-medium">{t.pickup_address}</div>
-                    <div className="opacity-70 mt-1">{t.dropoff_address}</div>
-                </a>
-            </div>
-
-              <div className="col-span-2 p-3">
-                <div className="font-medium">{t.rider_name ?? "—"}</div>
-                <div className="opacity-70 mt-1">{t.rider_phone ?? "—"}</div>
-              </div>
-
-              <div className="col-span-2 p-3">
-                {t.driver_id ? (
-                  <div className="font-medium">{driverNameById.get(t.driver_id) ?? t.driver_id}</div>
-                ) : (
-                  <div className="opacity-70">Unassigned</div>
-                )}
-
-                {/* quick assign */}
-                {!t.driver_id && (
-                  <select
-                    className="mt-2 w-full border rounded-xl p-2 bg-transparent"
-                    defaultValue=""
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val) assignDriver(t.id, val);
-                    }}
-                  >
-                    <option value="" disabled>
-                      Assign driver...
-                    </option>
-                    {drivers.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.first_name} {d.last_name} ({d.phone})
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div className="col-span-1 p-3 capitalize">{t.payment_method}</div>
-              <div className="col-span-1 p-3">{t.fare_amount ?? "—"}</div>
-              <div className="col-span-1 p-3 capitalize">{t.status}</div>
-
-              <div className="col-span-2 p-3 flex flex-wrap gap-2">
-                {t.status === "assigned" && (
-                  <button className="border rounded-lg px-3 py-1" onClick={() => updateStatus(t.id, "arrived")}>
-                    Arrived
-                  </button>
-                )}
-                {t.status === "arrived" && (
-                  <button className="border rounded-lg px-3 py-1" onClick={() => updateStatus(t.id, "started")}>
-                    Start
-                  </button>
-                )}
-                {t.status === "started" && (
-                  <button className="border rounded-lg px-3 py-1" onClick={() => updateStatus(t.id, "completed")}>
-                    Complete
-                  </button>
-                )}
-                {t.status !== "completed" && t.status !== "cancelled" && (
-                  <button className="border rounded-lg px-3 py-1" onClick={() => updateStatus(t.id, "cancelled")}>
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="flex gap-2">
+          <button className="border rounded-xl px-4 py-2 bg-white" onClick={loadTrips}>
+            Refresh Trips
+          </button>
+          <button className="border rounded-xl px-4 py-2 bg-white" onClick={loadDrivers}>
+            Refresh Drivers
+          </button>
         </div>
-      )}
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-xl font-semibold">New / Unassigned Trips</h2>
+
+          {requestedTrips.length === 0 ? (
+            <p className="text-gray-700">No unassigned trips.</p>
+          ) : (
+            <div className="space-y-4">
+              {requestedTrips.map((trip) => (
+                <div key={trip.id} className="border rounded-2xl p-4 space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-600">Pickup</div>
+                      <div className="font-medium">{trip.pickup_address ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Dropoff</div>
+                      <div className="font-medium">{trip.dropoff_address ?? "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-5 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-600">Rider</div>
+                      <div className="font-medium">{trip.rider_name ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Phone</div>
+                      <div className="font-medium">{trip.rider_phone ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Fare</div>
+                      <div className="font-medium">R{trip.fare_amount ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Payment</div>
+                      <div className="font-medium">{trip.payment_method ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Status</div>
+                      <div className="font-medium">{trip.status ?? "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-[1fr_auto] gap-3 items-end">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">Assign Driver</label>
+                      <select
+                        className="w-full border rounded-xl p-3 bg-white"
+                        value={driverSelections[trip.id] ?? ""}
+                        onChange={(e) =>
+                          setDriverSelections((prev) => ({
+                            ...prev,
+                            [trip.id]: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Select driver...</option>
+                        {drivers.map((d) => {
+                          const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
+                          return (
+                            <option key={d.id} value={d.id}>
+                              {name} • {d.phone ?? "—"} • {d.online ? "Online" : "Offline"} • {d.busy ? "Busy" : "Free"}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <button
+                      className="rounded-xl px-4 py-3 text-white"
+                      style={{ background: "var(--moovu-primary)" }}
+                      disabled={busyTripId === trip.id}
+                      onClick={() => assignDriver(trip.id)}
+                    >
+                      {busyTripId === trip.id ? "Assigning..." : "Assign Driver"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-xl font-semibold">Active Trips</h2>
+
+          {activeTrips.length === 0 ? (
+            <p className="text-gray-700">No active trips.</p>
+          ) : (
+            <div className="space-y-3">
+              {activeTrips.map((trip) => (
+                <div key={trip.id} className="border rounded-2xl p-4">
+                  <div className="font-medium">
+                    {trip.pickup_address ?? "—"} → {trip.dropoff_address ?? "—"}
+                  </div>
+                  <div className="text-sm text-gray-700 mt-1">
+                    Status: {trip.status ?? "—"} • Fare: R{trip.fare_amount ?? "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-xl font-semibold">Completed / Cancelled Trips</h2>
+
+          {finishedTrips.length === 0 ? (
+            <p className="text-gray-700">No completed or cancelled trips.</p>
+          ) : (
+            <div className="space-y-3">
+              {finishedTrips.map((trip) => (
+                <div key={trip.id} className="border rounded-2xl p-4">
+                  <div className="font-medium">
+                    {trip.pickup_address ?? "—"} → {trip.dropoff_address ?? "—"}
+                  </div>
+                  <div className="text-sm text-gray-700 mt-1">
+                    Status: {trip.status ?? "—"} • Fare: R{trip.fare_amount ?? "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }

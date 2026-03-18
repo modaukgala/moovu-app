@@ -14,11 +14,11 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const role = body?.role as "admin" | "driver" | "customer" | undefined;
-    const userIds = body?.userIds as string[] | undefined;
-    const title = body?.title as string | undefined;
-    const messageBody = body?.body as string | undefined;
-    const url = body?.url as string | undefined;
+    const role = body?.role ? String(body.role) : null;
+    const userIds = Array.isArray(body?.userIds) ? body.userIds.map(String) : null;
+    const title = String(body?.title ?? "").trim();
+    const messageBody = String(body?.body ?? "").trim();
+    const url = String(body?.url ?? "/").trim();
 
     if (!title || !messageBody) {
       return NextResponse.json(
@@ -27,11 +27,18 @@ export async function POST(req: Request) {
       );
     }
 
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT!,
-      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-      process.env.VAPID_PRIVATE_KEY!
-    );
+    const vapidSubject = process.env.VAPID_SUBJECT || "";
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+    const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || "";
+
+    if (!vapidSubject || !vapidPublicKey || !vapidPrivateKey) {
+      return NextResponse.json(
+        { ok: false, error: "Missing VAPID environment variables." },
+        { status: 500 }
+      );
+    }
+
+    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,7 +47,7 @@ export async function POST(req: Request) {
 
     let query = supabase
       .from("push_subscriptions")
-      .select("id, user_id, role, endpoint, subscription");
+      .select("id,user_id,role,endpoint,subscription");
 
     if (role) {
       query = query.eq("role", role);
@@ -60,11 +67,10 @@ export async function POST(req: Request) {
     }
 
     const rows = (data || []) as PushRow[];
-
     const payload = JSON.stringify({
       title,
       body: messageBody,
-      url: url || "/",
+      url,
     });
 
     let sent = 0;
@@ -79,7 +85,10 @@ export async function POST(req: Request) {
 
         const statusCode = err?.statusCode;
         if (statusCode === 404 || statusCode === 410) {
-          await supabase.from("push_subscriptions").delete().eq("endpoint", row.endpoint);
+          await supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("endpoint", row.endpoint);
         }
       }
     }
@@ -92,7 +101,7 @@ export async function POST(req: Request) {
     });
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Send failed" },
+      { ok: false, error: e?.message || "Send failed." },
       { status: 500 }
     );
   }

@@ -13,7 +13,7 @@ function urlBase64ToUint8Array(base64String: string) {
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
 
-  for (let i = 0; i < rawData.length; ++i) {
+  for (let i = 0; i < rawData.length; i++) {
     outputArray[i] = rawData.charCodeAt(i);
   }
 
@@ -30,46 +30,48 @@ export default function EnablePushButton({ role }: Props) {
 
     try {
       if (!("serviceWorker" in navigator)) {
-        setMsg("Service worker not supported on this device/browser.");
+        setMsg("Service worker is not supported on this device.");
         setBusy(false);
         return;
       }
 
       if (!("PushManager" in window)) {
-        setMsg("Push notifications are not supported on this device/browser.");
+        setMsg("Push notifications are not supported on this device.");
         setBusy(false);
         return;
       }
 
       const permission = await Notification.requestPermission();
+
       if (permission !== "granted") {
         setMsg("Notification permission was not granted.");
         setBusy(false);
         return;
       }
 
-      const reg = await navigator.serviceWorker.register("/sw.js");
+      const registration = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
 
-      let subscription = await reg.pushManager.getSubscription();
+      let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
         if (!vapidPublicKey) {
-          setMsg("Missing public VAPID key.");
+          setMsg("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY.");
           setBusy(false);
           return;
         }
 
-        subscription = await reg.pushManager.subscribe({
+        subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
       }
 
       const { data: userData, error: userErr } = await supabaseClient.auth.getUser();
+
       if (userErr || !userData.user) {
-        setMsg("You must be logged in first.");
+        setMsg("Please log in first.");
         setBusy(false);
         return;
       }
@@ -86,15 +88,22 @@ export default function EnablePushButton({ role }: Props) {
         }),
       });
 
-      const json = await res.json();
-
-      if (!json.ok) {
-        setMsg(json.error || "Failed to save push subscription.");
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setMsg("Push subscribe route is not returning JSON.");
         setBusy(false);
         return;
       }
 
-      setMsg("Notifications enabled ✅");
+      const json = await res.json();
+
+      if (!json.ok) {
+        setMsg(json.error || "Failed to save notification subscription.");
+        setBusy(false);
+        return;
+      }
+
+      setMsg("Notifications enabled successfully ✅");
       setBusy(false);
     } catch (e: any) {
       setMsg(e?.message || "Failed to enable notifications.");
