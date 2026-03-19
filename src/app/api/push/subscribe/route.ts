@@ -9,9 +9,13 @@ export async function POST(req: Request) {
     const userId = String(body?.userId ?? "").trim();
     const subscription = body?.subscription;
 
-    if (!role || !userId || !subscription?.endpoint) {
+    const endpoint = subscription?.endpoint ?? null;
+    const p256dh = subscription?.keys?.p256dh ?? null;
+    const auth = subscription?.keys?.auth ?? null;
+
+    if (!role || !userId || !endpoint) {
       return NextResponse.json(
-        { ok: false, error: "Missing role, userId or subscription endpoint." },
+        { ok: false, error: "Missing role, userId or endpoint." },
         { status: 400 }
       );
     }
@@ -24,8 +28,10 @@ export async function POST(req: Request) {
     const payload = {
       user_id: userId,
       role,
-      endpoint: subscription.endpoint,
+      endpoint,
       subscription,
+      p256dh,
+      auth,
       updated_at: new Date().toISOString(),
     };
 
@@ -40,7 +46,10 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true, message: "Subscription saved." });
+    return NextResponse.json({
+      ok: true,
+      message: "Subscription saved.",
+    });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Subscribe failed." },
