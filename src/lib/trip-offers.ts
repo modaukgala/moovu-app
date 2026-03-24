@@ -84,14 +84,12 @@ export async function offerNextEligibleDriver(
   tripId: string,
   extraExcludeDriverIds: string[] = []
 ) {
-  // 1) Expire current pending offer first if needed
   const expireResult = await expirePendingOfferIfNeeded(tripId);
 
-  // 2) Load fresh trip
   const { data: trip, error: tripErr } = await supabaseAdmin
     .from("trips")
     .select(
-      "id,status,driver_id,pickup_lat,pickup_lng,offer_status,offer_expires_at,offer_attempted_driver_ids"
+      "id,status,driver_id,pickup_lat,pickup_lng,offer_status,offer_expires_at,offer_attempted_driver_ids,pickup_address,dropoff_address"
     )
     .eq("id", tripId)
     .single();
@@ -130,7 +128,6 @@ export async function offerNextEligibleDriver(
     ...extraExcludeDriverIds,
   ]);
 
-  // 3) Load eligible drivers
   const { data: drivers, error: dErr } = await supabaseAdmin
     .from("drivers")
     .select("id,lat,lng,online,busy,status,subscription_status,subscription_expires_at")
@@ -141,17 +138,6 @@ export async function offerNextEligibleDriver(
 
   if (dErr) return { ok: false as const, error: dErr.message };
 
-  // Safety: flip expired active/grace to inactive
-  for (const d of drivers ?? []) {
-    if (
-      d.subscription_expires_at &&
-      (d.subscription_status === "active" || d.subscription_status === "grace") &&
-      Date.now() > new Date(d.subscription_expires_at).getTime()
-    ) {
-      await supabaseAdmin.from("drivers").update({ subscription_status: "inactive" }).eq("id", d.id);
-    }
-  }
-
   const usable = (drivers ?? [])
     .filter((d: any) => typeof d.lat === "number" && typeof d.lng === "number")
     .filter((d: any) => !excluded.includes(d.id))
@@ -160,13 +146,12 @@ export async function offerNextEligibleDriver(
   if (usable.length === 0) {
     return {
       ok: false as const,
-      error: "No more eligible online drivers (active subscription required)",
+      error: "No more eligible online drivers",
       exhausted: true,
       excluded,
     };
   }
 
-  // 4) Find nearest
   let best = usable[0];
   let bestKm = approxKm(trip.pickup_lat, trip.pickup_lng, best.lat, best.lng);
 
@@ -178,15 +163,12 @@ export async function offerNextEligibleDriver(
     }
   }
 
-  // 5) Lock driver
-  const { error: lockErr } = await supabaseAdmin.from("drivers").update({ busy: true }).eq("id", best.id);
-  if (lockErr) return { ok: false as const, error: lockErr.message };
+  await supabaseAdmin.from("drivers").update({ busy: true }).eq("id", best.id);
 
-  // 6) Offer trip
   const expiresAt = new Date(Date.now() + OFFER_SECONDS * 1000).toISOString();
   const attempted = uniqStrings([...(trip.offer_attempted_driver_ids ?? []), best.id]);
 
-  const { error: upTripErr } = await supabaseAdmin
+  await supabaseAdmin
     .from("trips")
     .update({
       driver_id: best.id,
@@ -197,20 +179,37 @@ export async function offerNextEligibleDriver(
     })
     .eq("id", tripId);
 
-  if (upTripErr) {
-    await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", best.id);
-    return { ok: false as const, error: upTripErr.message };
-  }
-
   await supabaseAdmin.from("trip_events").insert({
     trip_id: tripId,
     event_type: "offer_sent",
-    message: `Offered to driver ${best.id} (expires in ${OFFER_SECONDS}s, ≈ ${bestKm.toFixed(
-      2
-    )} km away)`,
+    message: `Offered to driver ${best.id}`,
     old_status: "requested",
     new_status: "offered",
   });
+
+  // SEND PUSH NOTIFICATION TO DRIVER
+  try {
+    const { data: driverAccount } = await supabaseAdmin
+      .from("driver_accounts")
+      .select("user_id")
+      .eq("driver_id", best.id)
+      .maybeSingle();
+
+    if (driverAccount?.user_id) {
+      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/push/send`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userIds: [driverAccount.user_id],
+          title: "New trip offer",
+          body: `Trip from ${trip.pickup_address} to ${trip.dropoff_address}`,
+          url: "/driver/offers",
+        }),
+      });
+    }
+  } catch {}
 
   return {
     ok: true as const,

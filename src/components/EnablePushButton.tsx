@@ -29,6 +29,12 @@ export default function EnablePushButton({ role }: Props) {
     setMsg(null);
 
     try {
+      if (typeof window === "undefined") {
+        setMsg("This action must run in the browser.");
+        setBusy(false);
+        return;
+      }
+
       if (!("serviceWorker" in navigator)) {
         setMsg("Service worker is not supported on this device.");
         setBusy(false);
@@ -41,6 +47,12 @@ export default function EnablePushButton({ role }: Props) {
         return;
       }
 
+      if (!("Notification" in window)) {
+        setMsg("Notifications are not supported on this device.");
+        setBusy(false);
+        return;
+      }
+
       const permission = await Notification.requestPermission();
 
       if (permission !== "granted") {
@@ -49,13 +61,17 @@ export default function EnablePushButton({ role }: Props) {
         return;
       }
 
-      const registration = await navigator.serviceWorker.register("/sw.js");
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+      });
+
       await navigator.serviceWorker.ready;
 
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+
         if (!vapidPublicKey) {
           setMsg("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY.");
           setBusy(false);
@@ -97,7 +113,7 @@ export default function EnablePushButton({ role }: Props) {
 
       const json = await res.json();
 
-      if (!json.ok) {
+      if (!res.ok || !json.ok) {
         setMsg(json.error || "Failed to save notification subscription.");
         setBusy(false);
         return;
@@ -117,7 +133,7 @@ export default function EnablePushButton({ role }: Props) {
         type="button"
         disabled={busy}
         onClick={enableNotifications}
-        className="rounded-xl px-4 py-2 text-white"
+        className="rounded-xl px-4 py-2 text-white disabled:opacity-60"
         style={{ background: "var(--moovu-primary)" }}
       >
         {busy ? "Enabling..." : "Enable Notifications"}

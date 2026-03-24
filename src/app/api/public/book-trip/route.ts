@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { offerNextEligibleDriver } from "@/lib/trip-offers";
 
 type BookTripBody = {
   riderName?: string | null;
@@ -150,10 +151,20 @@ export async function POST(req: Request) {
       }),
     }).catch(() => null);
 
+    let offerResult: any = null;
+
+    try {
+      offerResult = await offerNextEligibleDriver(trip.id, []);
+    } catch {
+      offerResult = null;
+    }
+
     return NextResponse.json({
       ok: true,
       tripId: trip.id,
       trip,
+      autoOfferStarted: !!offerResult?.ok,
+      autoOfferResult: offerResult,
     });
   } catch (e: any) {
     return NextResponse.json(

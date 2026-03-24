@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
@@ -197,7 +198,7 @@ export default function RideTrackingPage() {
         position: pickupPos,
         map,
         title: "Pickup",
-        label: "Pickup",
+        label: "P",
       });
       bounds.extend(pickupPos);
     }
@@ -208,7 +209,7 @@ export default function RideTrackingPage() {
         position: dropoffPos,
         map,
         title: "Destination",
-        label: "Destination",
+        label: "D",
       });
       bounds.extend(dropoffPos);
     }
@@ -219,7 +220,7 @@ export default function RideTrackingPage() {
         position: driverPos,
         map,
         title: "Driver",
-        label: "Driver",
+        label: "Y",
       });
       bounds.extend(driverPos);
     }
@@ -695,6 +696,13 @@ export default function RideTrackingPage() {
                     WhatsApp Driver
                   </button>
                 )}
+
+                <Link
+                  href={`/ride/${trip.id}/receipt`}
+                  className="border rounded-xl px-4 py-2 bg-white text-black"
+                >
+                  View Receipt
+                </Link>
               </div>
             </section>
 

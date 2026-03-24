@@ -139,7 +139,7 @@ export async function POST(req: Request) {
           }),
         });
       } catch {
-        // keep assignment successful even if push fails
+        // Keep assignment successful even if push fails
       }
     }
 
