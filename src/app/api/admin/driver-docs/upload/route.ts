@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdminUser } from "@/lib/auth/admin";
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireAdminUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    }
+
+    const { supabaseAdmin } = auth;
     const form = await req.formData();
 
     const driverId = String(form.get("driverId") ?? "");
@@ -16,7 +22,6 @@ export async function POST(req: Request) {
 
     const safeName = file.name.replace(/[^\w.\-]+/g, "_");
     const path = `kasi/${driverId}/${Date.now()}_${safeName}`;
-
     const bytes = new Uint8Array(await file.arrayBuffer());
 
     const { error: upErr } = await supabaseAdmin.storage
@@ -34,7 +39,7 @@ export async function POST(req: Request) {
       driver_id: driverId,
       doc_type: docType,
       file_path: path,
-      expires_on: expiresOn ? expiresOn : null,
+      expires_on: expiresOn || null,
       status: "pending",
     });
 

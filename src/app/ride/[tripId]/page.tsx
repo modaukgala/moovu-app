@@ -59,6 +59,92 @@ function telLink(phone: string | null | undefined) {
   return `tel:${cleaned}`;
 }
 
+function statusLabel(status: string | null | undefined) {
+  switch (status) {
+    case "requested":
+    case "pending":
+    case "searching":
+    case "unassigned":
+      return "Searching for driver";
+    case "offered":
+      return "Trip offer sent to driver";
+    case "assigned":
+      return "Driver accepted and is coming to you";
+    case "arrived":
+      return "Driver has arrived";
+    case "ongoing":
+      return "Trip in progress";
+    case "completed":
+      return "Trip completed";
+    case "cancelled":
+      return "Trip cancelled";
+    default:
+      return status || "Unknown";
+  }
+}
+
+function statusMessage(status: string | null | undefined) {
+  switch (status) {
+    case "requested":
+    case "pending":
+    case "searching":
+    case "unassigned":
+      return "We are looking for a nearby driver for your trip.";
+    case "offered":
+      return "A trip offer has been sent to a driver. Waiting for acceptance.";
+    case "assigned":
+      return "Your driver accepted the trip and is on the way to your pickup point.";
+    case "arrived":
+      return "Your driver has arrived at the pickup point.";
+    case "ongoing":
+      return "Your ride is currently in progress.";
+    case "completed":
+      return "Your trip has been completed successfully.";
+    case "cancelled":
+      return "This trip has been cancelled.";
+    default:
+      return "Tracking your trip live.";
+  }
+}
+
+function riderNotificationTitle(status: string | null | undefined) {
+  switch (status) {
+    case "assigned":
+      return "Driver accepted your trip";
+    case "arrived":
+      return "Driver has arrived";
+    case "ongoing":
+      return "Trip started";
+    case "completed":
+      return "Trip completed";
+    case "cancelled":
+      return "Trip cancelled";
+    default:
+      return null;
+  }
+}
+
+function riderNotificationBody(status: string | null | undefined, driverName?: string | null) {
+  switch (status) {
+    case "assigned":
+      return driverName
+        ? `${driverName} is on the way to your pickup point.`
+        : "Your driver is on the way to your pickup point.";
+    case "arrived":
+      return driverName
+        ? `${driverName} has arrived at your pickup point.`
+        : "Your driver has arrived at your pickup point.";
+    case "ongoing":
+      return "Your ride is now in progress.";
+    case "completed":
+      return "Thanks for riding with MOOVU.";
+    case "cancelled":
+      return "Your trip is no longer active.";
+    default:
+      return null;
+  }
+}
+
 export default function RideTrackingPage() {
   const params = useParams<{ tripId: string }>();
   const tripId = params.tripId;
@@ -67,6 +153,7 @@ export default function RideTrackingPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [statusFlash, setStatusFlash] = useState<string | null>(null);
 
   const [cancelReason, setCancelReason] =
     useState<(typeof CANCEL_REASONS)[number]>("Driver is taking too long");
@@ -76,6 +163,8 @@ export default function RideTrackingPage() {
   const [distanceText, setDistanceText] = useState<string | null>(null);
 
   const pollTimerRef = useRef<any>(null);
+  const previousStatusRef = useRef<string | null>(null);
+  const statusFlashTimerRef = useRef<any>(null);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -92,6 +181,58 @@ export default function RideTrackingPage() {
     useRef<google.maps.DirectionsRenderer | null>(null);
   const directionsRendererTripRef =
     useRef<google.maps.DirectionsRenderer | null>(null);
+
+  async function ensureBrowserNotifications() {
+    if (typeof window === "undefined") return;
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      try {
+        await Notification.requestPermission();
+      } catch {}
+    }
+  }
+
+  function showStatusFlash(text: string) {
+    setStatusFlash(text);
+    if (statusFlashTimerRef.current) clearTimeout(statusFlashTimerRef.current);
+    statusFlashTimerRef.current = setTimeout(() => {
+      setStatusFlash(null);
+    }, 5000);
+  }
+
+  function maybeNotifyStatusChange(nextTrip: RideTrip | null) {
+    if (!nextTrip) return;
+
+    const previousStatus = previousStatusRef.current;
+    const nextStatus = nextTrip.status ?? null;
+
+    if (!previousStatus) {
+      previousStatusRef.current = nextStatus;
+      return;
+    }
+
+    if (previousStatus === nextStatus) return;
+
+    previousStatusRef.current = nextStatus;
+
+    const flashText = statusLabel(nextStatus);
+    showStatusFlash(`Trip update: ${flashText}`);
+
+    const title = riderNotificationTitle(nextStatus);
+    const body = riderNotificationBody(nextStatus, nextTrip.driver_name);
+
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "granted" &&
+      title &&
+      body
+    ) {
+      try {
+        new Notification(title, { body });
+      } catch {}
+    }
+  }
 
   async function loadTrip() {
     if (!tripId) return;
@@ -118,7 +259,9 @@ export default function RideTrackingPage() {
         return;
       }
 
-      setTrip(json.trip ?? null);
+      const nextTrip = (json.trip ?? null) as RideTrip | null;
+      maybeNotifyStatusChange(nextTrip);
+      setTrip(nextTrip);
       setMsg(null);
       setLoading(false);
     } catch (e: any) {
@@ -244,7 +387,8 @@ export default function RideTrackingPage() {
       trip.status === "requested" ||
       trip.status === "pending" ||
       trip.status === "searching" ||
-      trip.status === "unassigned";
+      trip.status === "unassigned" ||
+      trip.status === "offered";
 
     if (isPreAssignmentStatus && pickupOk && dropoffOk) {
       const preAssignRenderer = new window.google.maps.DirectionsRenderer({
@@ -420,6 +564,7 @@ export default function RideTrackingPage() {
   }
 
   useEffect(() => {
+    ensureBrowserNotifications();
     loadTrip();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
@@ -433,6 +578,7 @@ export default function RideTrackingPage() {
 
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (statusFlashTimerRef.current) clearTimeout(statusFlashTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
@@ -559,6 +705,15 @@ export default function RideTrackingPage() {
           </p>
         </div>
 
+        {statusFlash && (
+          <div
+            className="border rounded-2xl p-4 text-sm text-black"
+            style={{ background: "var(--moovu-primary-soft)" }}
+          >
+            {statusFlash}
+          </div>
+        )}
+
         {msg && (
           <div
             className="border rounded-2xl p-4 text-sm text-black"
@@ -575,6 +730,16 @@ export default function RideTrackingPage() {
         ) : (
           <>
             <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+              <div className="border rounded-2xl p-4 bg-white">
+                <div className="text-sm text-gray-600">Live Trip Status</div>
+                <div className="text-xl font-semibold mt-1 text-black">
+                  {statusLabel(trip.status)}
+                </div>
+                <div className="text-sm text-gray-700 mt-2">
+                  {statusMessage(trip.status)}
+                </div>
+              </div>
+
               <div className="grid md:grid-cols-2 gap-4">
                 <div
                   className="border rounded-2xl p-4"
@@ -592,7 +757,7 @@ export default function RideTrackingPage() {
 
               <div className="grid md:grid-cols-4 gap-4">
                 <div className="border rounded-2xl p-4 bg-white">
-                  <div className="text-sm text-gray-600">Status</div>
+                  <div className="text-sm text-gray-600">Raw Status</div>
                   <div className="font-semibold mt-1 text-black">{trip.status}</div>
                 </div>
 

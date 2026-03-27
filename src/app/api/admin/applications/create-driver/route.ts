@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdminUser } from "@/lib/auth/admin";
 
 function splitName(full: string | null): { first: string | null; last: string | null } {
   const n = (full ?? "").trim();
@@ -11,12 +11,18 @@ function splitName(full: string | null): { first: string | null; last: string | 
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireAdminUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    }
+
+    const { supabaseAdmin } = auth;
     const { applicationId } = await req.json();
+
     if (!applicationId) {
       return NextResponse.json({ ok: false, error: "Missing applicationId" }, { status: 400 });
     }
 
-    // Load application
     const { data: app, error: aErr } = await supabaseAdmin
       .from("driver_applications")
       .select("id,user_id,full_name,phone,email,status")
@@ -24,10 +30,12 @@ export async function POST(req: Request) {
       .single();
 
     if (aErr || !app) {
-      return NextResponse.json({ ok: false, error: aErr?.message ?? "Application not found" }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: aErr?.message ?? "Application not found" },
+        { status: 404 }
+      );
     }
 
-    // If already linked, return quickly
     const { data: existingMap } = await supabaseAdmin
       .from("driver_accounts")
       .select("driver_id")
@@ -42,8 +50,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // Create driver record
     const { first, last } = splitName(app.full_name);
+
     const { data: createdDriver, error: dErr } = await supabaseAdmin
       .from("drivers")
       .insert({
@@ -51,7 +59,7 @@ export async function POST(req: Request) {
         last_name: last,
         phone: app.phone ?? null,
         email: app.email ?? null,
-        status: "approved", // change to "active" if you prefer
+        status: "approved",
         online: false,
         busy: false,
       })
@@ -59,12 +67,14 @@ export async function POST(req: Request) {
       .single();
 
     if (dErr || !createdDriver) {
-      return NextResponse.json({ ok: false, error: dErr?.message ?? "Failed to create driver" }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: dErr?.message ?? "Failed to create driver" },
+        { status: 500 }
+      );
     }
 
     const driverId = createdDriver.id;
 
-    // Link auth user to the new driver
     const { error: linkErr } = await supabaseAdmin
       .from("driver_accounts")
       .upsert({ user_id: app.user_id, driver_id: driverId }, { onConflict: "user_id" });
@@ -76,12 +86,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // Approve application
-    await supabaseAdmin.from("driver_applications").update({ status: "approved" }).eq("id", applicationId);
+    await supabaseAdmin
+      .from("driver_applications")
+      .update({ status: "approved" })
+      .eq("id", applicationId);
 
     return NextResponse.json({
       ok: true,
-      message: "Driver created + linked + approved ✅",
+      message: "Driver created + linked + approved",
       driverId,
     });
   } catch (e: any) {

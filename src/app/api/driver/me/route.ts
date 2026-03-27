@@ -5,7 +5,6 @@ async function getUserFromBearer(req: Request) {
   const auth = req.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
   if (!token) return null;
-
   // @ts-ignore
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error) return null;
@@ -40,7 +39,7 @@ export async function GET(req: Request) {
     const { data: driver, error: driverErr } = await supabaseAdmin
       .from("drivers")
       .select(
-        "id,first_name,last_name,phone,status,online,busy,subscription_status,subscription_expires_at,subscription_plan,lat,lng,last_seen,profile_completed,verification_status"
+        "id,first_name,last_name,phone,status,online,busy,subscription_status,subscription_expires_at,subscription_plan,lat,lng,last_seen,profile_completed,verification_status,vehicle_make,vehicle_model,vehicle_registration,vehicle_color,vehicle_year"
       )
       .eq("id", mapping.driver_id)
       .maybeSingle();

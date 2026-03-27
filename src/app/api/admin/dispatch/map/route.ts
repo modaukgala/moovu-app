@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-const ACTIVE_TRIP_STATUSES = ["offered", "assigned", "arrived", "started"];
+const ACTIVE_TRIP_STATUSES = ["offered", "assigned", "arrived", "ongoing"];
 
 export async function GET() {
   try {
@@ -35,7 +35,9 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: tErr.message }, { status: 500 });
     }
 
-    const driverIds = Array.from(new Set((trips ?? []).map((t: any) => t.driver_id).filter(Boolean)));
+    const driverIds = Array.from(
+      new Set((trips ?? []).map((t: any) => t.driver_id).filter(Boolean))
+    );
 
     let tripDriversById: Record<string, any> = {};
     if (driverIds.length > 0) {
@@ -77,18 +79,19 @@ export async function GET() {
       status: t.status,
       offer_status: t.offer_status ?? null,
       created_at: t.created_at,
-      driver: t.driver_id && tripDriversById[t.driver_id]
-        ? {
-            id: tripDriversById[t.driver_id].id,
-            name:
-              `${tripDriversById[t.driver_id].first_name ?? ""} ${tripDriversById[t.driver_id].last_name ?? ""}`.trim() ||
-              "Unnamed",
-            phone: tripDriversById[t.driver_id].phone ?? null,
-            online: tripDriversById[t.driver_id].online ?? null,
-            busy: tripDriversById[t.driver_id].busy ?? null,
-            subscription_status: tripDriversById[t.driver_id].subscription_status ?? null,
-          }
-        : null,
+      driver:
+        t.driver_id && tripDriversById[t.driver_id]
+          ? {
+              id: tripDriversById[t.driver_id].id,
+              name:
+                `${tripDriversById[t.driver_id].first_name ?? ""} ${tripDriversById[t.driver_id].last_name ?? ""}`.trim() ||
+                "Unnamed",
+              phone: tripDriversById[t.driver_id].phone ?? null,
+              online: tripDriversById[t.driver_id].online ?? null,
+              busy: tripDriversById[t.driver_id].busy ?? null,
+              subscription_status: tripDriversById[t.driver_id].subscription_status ?? null,
+            }
+          : null,
     }));
 
     return NextResponse.json({
@@ -97,6 +100,9 @@ export async function GET() {
       trips: tripRows,
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "Server error" },
+      { status: 500 }
+    );
   }
 }

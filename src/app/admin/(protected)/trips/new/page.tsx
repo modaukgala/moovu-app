@@ -18,70 +18,44 @@ type Prediction = {
   place_id: string;
 };
 
-function useDebounced<T>(value: T, delayMs: number) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(t);
-  }, [value, delayMs]);
-  return debounced;
+function generateOtp() {
+  return String(Math.floor(1000 + Math.random() * 9000));
 }
 
 export default function NewTripPage() {
   const router = useRouter();
 
-  const [autoAssignOnCreate, setAutoAssignOnCreate] = useState(true);
-  const [assignInfo, setAssignInfo] = useState<string | null>(null);
-
-  // Rider + trip fields
   const [riderName, setRiderName] = useState("");
   const [riderPhone, setRiderPhone] = useState("");
 
-  // Pickup/Dropoff display text + place_id (IMPORTANT)
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
   const [pickupPlaceId, setPickupPlaceId] = useState<string | null>(null);
   const [dropoffPlaceId, setDropoffPlaceId] = useState<string | null>(null);
 
-  // Pickup/Dropoff coordinates (NEW)
-  const [pickupLat, setPickupLat] = useState<number | null>(null);
-  const [pickupLng, setPickupLng] = useState<number | null>(null);
-  const [dropoffLat, setDropoffLat] = useState<number | null>(null);
-  const [dropoffLng, setDropoffLng] = useState<number | null>(null);
-
-  // Autocomplete lists
-  const [pickupSuggestions, setPickupSuggestions] = useState<Prediction[]>([]);
-  const [dropoffSuggestions, setDropoffSuggestions] = useState<Prediction[]>([]);
+  const [pickupPred, setPickupPred] = useState<Prediction[]>([]);
+  const [dropoffPred, setDropoffPred] = useState<Prediction[]>([]);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [dropoffOpen, setDropoffOpen] = useState(false);
+  const pickupTimer = useRef<number | null>(null);
+  const dropoffTimer = useRef<number | null>(null);
 
-  const debPickup = useDebounced(pickup, 250);
-  const debDropoff = useDebounced(dropoff, 250);
-
-  // Pricing inputs
   const [distanceKm, setDistanceKm] = useState("3");
   const [durationMin, setDurationMin] = useState("");
   const [autoFare, setAutoFare] = useState<number | null>(null);
 
-  // Payment + fare override
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "online" | "other">("cash");
   const [fare, setFare] = useState<string>("");
 
-  // Optional assign driver at creation time
   const [driverId, setDriverId] = useState<string>("");
   const [drivers, setDrivers] = useState<Driver[]>([]);
 
-  // UI state
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const [calcBusy, setCalcBusy] = useState(false);
   const [calcInfo, setCalcInfo] = useState<string | null>(null);
 
-  const pickupBoxRef = useRef<HTMLDivElement | null>(null);
-  const dropoffBoxRef = useRef<HTMLDivElement | null>(null);
-
-  // Load drivers
   useEffect(() => {
     (async () => {
       const { data } = await supabaseClient
@@ -90,102 +64,45 @@ export default function NewTripPage() {
         .in("status", ["approved", "active"])
         .order("created_at", { ascending: false });
 
-      setDrivers((data as any) ?? []);
+      setDrivers((data as Driver[]) ?? []);
     })();
   }, []);
 
-  // Close suggestion popups when clicking outside
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      const t = e.target as Node;
-      if (pickupBoxRef.current && !pickupBoxRef.current.contains(t)) setPickupOpen(false);
-      if (dropoffBoxRef.current && !dropoffBoxRef.current.contains(t)) setDropoffOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  // Fetch pickup suggestions
-  useEffect(() => {
-    (async () => {
-      if (!debPickup || debPickup.trim().length < 3) {
-        setPickupSuggestions([]);
-        return;
-      }
-
-      const res = await fetch("/api/maps/autocomplete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: debPickup.trim() }),
-      });
-
-      const json = await res.json();
-      if (json.ok) setPickupSuggestions(json.predictions ?? []);
-    })();
-  }, [debPickup]);
-
-  // Fetch dropoff suggestions
-  useEffect(() => {
-    (async () => {
-      if (!debDropoff || debDropoff.trim().length < 3) {
-        setDropoffSuggestions([]);
-        return;
-      }
-
-      const res = await fetch("/api/maps/autocomplete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: debDropoff.trim() }),
-      });
-
-      const json = await res.json();
-      if (json.ok) setDropoffSuggestions(json.predictions ?? []);
-    })();
-  }, [debDropoff]);
-
-  // NEW: select pickup and fetch coordinates
-  async function selectPickup(p: Prediction) {
-    setPickup(p.description);
-    setPickupPlaceId(p.place_id);
-    setPickupOpen(false);
-
-    // Reset current coords until fetched
-    setPickupLat(null);
-    setPickupLng(null);
-
-    const res = await fetch("/api/maps/place-details", {
+  async function fetchPredictions(input: string): Promise<Prediction[]> {
+    const res = await fetch("/api/maps/autocomplete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ place_id: p.place_id }),
+      body: JSON.stringify({ input }),
     });
     const json = await res.json();
-
-    if (json.ok) {
-      setPickupLat(json.lat);
-      setPickupLng(json.lng);
-    }
+    if (!json.ok) return [];
+    return (json.predictions ?? []) as Prediction[];
   }
 
-  // NEW: select dropoff and fetch coordinates
-  async function selectDropoff(p: Prediction) {
-    setDropoff(p.description);
-    setDropoffPlaceId(p.place_id);
-    setDropoffOpen(false);
+  function schedulePickupAutocomplete(value: string) {
+    if (pickupTimer.current) window.clearTimeout(pickupTimer.current);
+    pickupTimer.current = window.setTimeout(async () => {
+      if (value.trim().length < 3) {
+        setPickupPred([]);
+        return;
+      }
+      const preds = await fetchPredictions(value.trim());
+      setPickupPred(preds);
+      setPickupOpen(true);
+    }, 250);
+  }
 
-    setDropoffLat(null);
-    setDropoffLng(null);
-
-    const res = await fetch("/api/maps/place-details", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ place_id: p.place_id }),
-    });
-    const json = await res.json();
-
-    if (json.ok) {
-      setDropoffLat(json.lat);
-      setDropoffLng(json.lng);
-    }
+  function scheduleDropoffAutocomplete(value: string) {
+    if (dropoffTimer.current) window.clearTimeout(dropoffTimer.current);
+    dropoffTimer.current = window.setTimeout(async () => {
+      if (value.trim().length < 3) {
+        setDropoffPred([]);
+        return;
+      }
+      const preds = await fetchPredictions(value.trim());
+      setDropoffPred(preds);
+      setDropoffOpen(true);
+    }, 250);
   }
 
   async function calculateDistance() {
@@ -197,7 +114,6 @@ export default function NewTripPage() {
     }
 
     setCalcBusy(true);
-
     const res = await fetch("/api/maps/distance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -206,7 +122,6 @@ export default function NewTripPage() {
         destination_place_id: dropoffPlaceId,
       }),
     });
-
     const json = await res.json();
     setCalcBusy(false);
 
@@ -219,8 +134,8 @@ export default function NewTripPage() {
     setDurationMin(String(json.durationMin));
     setCalcInfo(`${json.distanceText} • ${json.durationText}`);
 
-    // Auto fare immediately after distance
-    const calcFare = calculateKasiFare(Number(json.distanceKm));
+    const km = Number(json.distanceKm);
+    const calcFare = calculateKasiFare(km);
     setAutoFare(calcFare);
     setFare(String(calcFare));
   }
@@ -234,14 +149,9 @@ export default function NewTripPage() {
       return;
     }
 
-    if (!pickupPlaceId || !dropoffPlaceId) {
-      setErr("Please select pickup and dropoff from the suggestions list.");
-      return;
-    }
-
     const km = Number(distanceKm);
-    if (!distanceKm || !Number.isFinite(km) || km <= 0) {
-      setErr("Distance (km) is required and must be greater than 0.");
+    if (!Number.isFinite(km) || km <= 0) {
+      setErr("Distance (km) is required (use Calculate distance).");
       return;
     }
 
@@ -255,8 +165,8 @@ export default function NewTripPage() {
 
     const { data: userData } = await supabaseClient.auth.getUser();
     const createdBy = userData.user?.id ?? null;
-
     const initialStatus = driverId ? "assigned" : "requested";
+    const completionOtp = generateOtp();
 
     const { data: trip, error } = await supabaseClient
       .from("trips")
@@ -264,24 +174,16 @@ export default function NewTripPage() {
         created_by: createdBy,
         rider_name: riderName || null,
         rider_phone: riderPhone || null,
-
         pickup_address: pickup.trim(),
         dropoff_address: dropoff.trim(),
-
-        // NEW: store coordinates
-        pickup_lat: pickupLat,
-        pickup_lng: pickupLng,
-        dropoff_lat: dropoffLat,
-        dropoff_lng: dropoffLng,
-
         payment_method: paymentMethod,
-
         fare_amount: finalFare,
         distance_km: km,
         duration_min: durationMin ? Number(durationMin) : null,
-
         status: initialStatus,
         driver_id: driverId || null,
+        completion_otp: completionOtp,
+        otp_verified: false,
       })
       .select("*")
       .single();
@@ -295,7 +197,7 @@ export default function NewTripPage() {
     await supabaseClient.from("trip_events").insert({
       trip_id: trip.id,
       event_type: "created",
-      message: "Trip created",
+      message: `Trip created. Rider OTP: ${completionOtp}`,
       old_status: null,
       new_status: trip.status,
       created_by: createdBy,
@@ -311,15 +213,6 @@ export default function NewTripPage() {
         created_by: createdBy,
       });
     }
-
-    // Auto assign nearest driver
-    await fetch("/api/admin/trips/auto-assign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tripId: trip.id
-      })
-    });
 
     setBusy(false);
     router.push("/admin/trips");
@@ -346,85 +239,82 @@ export default function NewTripPage() {
           />
         </div>
 
-        {/* Pickup with autocomplete */}
-        <div ref={pickupBoxRef} className="relative">
+        <div className="relative">
           <input
             className="border rounded-xl p-3 w-full"
-            placeholder="Pickup address / area *"
+            placeholder="Pickup (select from suggestions) *"
             value={pickup}
             onChange={(e) => {
-              setPickup(e.target.value);
+              const v = e.target.value;
+              setPickup(v);
               setPickupPlaceId(null);
-              setPickupLat(null);
-              setPickupLng(null);
-              setPickupOpen(true);
+              schedulePickupAutocomplete(v);
             }}
-            onFocus={() => setPickupOpen(true)}
+            onFocus={() => pickupPred.length && setPickupOpen(true)}
             required
           />
-
-          {pickupOpen && pickupSuggestions.length > 0 && (
-            <div className="absolute z-[9999] mt-2 w-full border rounded-2xl bg-white text-black overflow-hidden shadow">
-              {pickupSuggestions.slice(0, 6).map((p) => (
+          {pickupOpen && pickupPred.length > 0 && (
+            <div className="absolute z-10 mt-2 w-full border rounded-2xl bg-white text-black overflow-hidden shadow">
+              {pickupPred.slice(0, 6).map((p) => (
                 <button
-                  key={p.place_id}
                   type="button"
+                  key={p.place_id}
                   className="w-full text-left px-4 py-3 hover:bg-black/5"
-                  onClick={() => selectPickup(p)}
+                  onClick={() => {
+                    setPickup(p.description);
+                    setPickupPlaceId(p.place_id);
+                    setPickupOpen(false);
+                    setPickupPred([]);
+                  }}
                 >
                   {p.description}
                 </button>
               ))}
             </div>
           )}
-
-          <div className="text-xs opacity-60 mt-1">
-            {pickupPlaceId ? "✅ Pickup selected (place_id saved)" : "Select a suggestion so distance can be calculated."}
-            {pickupPlaceId && (pickupLat == null || pickupLng == null) ? " • Fetching coords..." : ""}
-            {pickupPlaceId && pickupLat != null && pickupLng != null ? " • Coords saved ✅" : ""}
-          </div>
+          {pickup && !pickupPlaceId && (
+            <p className="text-xs opacity-70 mt-1">Pick from suggestions so distance can be calculated.</p>
+          )}
         </div>
 
-        {/* Dropoff with autocomplete */}
-        <div ref={dropoffBoxRef} className="relative">
+        <div className="relative">
           <input
             className="border rounded-xl p-3 w-full"
-            placeholder="Dropoff address / area *"
+            placeholder="Dropoff (select from suggestions) *"
             value={dropoff}
             onChange={(e) => {
-              setDropoff(e.target.value);
+              const v = e.target.value;
+              setDropoff(v);
               setDropoffPlaceId(null);
-              setDropoffLat(null);
-              setDropoffLng(null);
-              setDropoffOpen(true);
+              scheduleDropoffAutocomplete(v);
             }}
-            onFocus={() => setDropoffOpen(true)}
+            onFocus={() => dropoffPred.length && setDropoffOpen(true)}
             required
           />
-
-          {dropoffOpen && dropoffSuggestions.length > 0 && (
-            <div className="absolute z-[9999] mt-2 w-full border rounded-2xl bg-white text-black overflow-hidden shadow">
-              {dropoffSuggestions.slice(0, 6).map((p) => (
+          {dropoffOpen && dropoffPred.length > 0 && (
+            <div className="absolute z-10 mt-2 w-full border rounded-2xl bg-white text-black overflow-hidden shadow">
+              {dropoffPred.slice(0, 6).map((p) => (
                 <button
-                  key={p.place_id}
                   type="button"
+                  key={p.place_id}
                   className="w-full text-left px-4 py-3 hover:bg-black/5"
-                  onClick={() => selectDropoff(p)}
+                  onClick={() => {
+                    setDropoff(p.description);
+                    setDropoffPlaceId(p.place_id);
+                    setDropoffOpen(false);
+                    setDropoffPred([]);
+                  }}
                 >
                   {p.description}
                 </button>
               ))}
             </div>
           )}
-
-          <div className="text-xs opacity-60 mt-1">
-            {dropoffPlaceId ? "✅ Dropoff selected (place_id saved)" : "Select a suggestion so distance can be calculated."}
-            {dropoffPlaceId && (dropoffLat == null || dropoffLng == null) ? " • Fetching coords..." : ""}
-            {dropoffPlaceId && dropoffLat != null && dropoffLng != null ? " • Coords saved ✅" : ""}
-          </div>
+          {dropoff && !dropoffPlaceId && (
+            <p className="text-xs opacity-70 mt-1">Pick from suggestions so distance can be calculated.</p>
+          )}
         </div>
 
-        {/* Smart Kasi Pricing */}
         <div className="border rounded-2xl p-4">
           <div className="font-semibold">Smart Kasi Pricing</div>
           <div className="text-sm opacity-70 mt-1">
@@ -434,15 +324,14 @@ export default function NewTripPage() {
           <div className="grid md:grid-cols-4 gap-3 mt-4">
             <input
               className="border rounded-xl p-3"
-              placeholder="Distance (km) *"
+              placeholder="Distance (km)"
               value={distanceKm}
               onChange={(e) => setDistanceKm(e.target.value)}
-              required
             />
 
             <input
               className="border rounded-xl p-3"
-              placeholder="Duration (min) (optional)"
+              placeholder="Duration (min)"
               value={durationMin}
               onChange={(e) => setDurationMin(e.target.value)}
             />
@@ -487,7 +376,7 @@ export default function NewTripPage() {
 
           <input
             className="border rounded-xl p-3"
-            placeholder="Fare amount (auto or manual)"
+            placeholder="Fare (auto or manual)"
             value={fare}
             onChange={(e) => setFare(e.target.value)}
           />

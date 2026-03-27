@@ -12,6 +12,17 @@ async function getUserFromBearer(req: Request) {
   return data?.user ?? null;
 }
 
+function isValidLatLng(lat: number, lng: number) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getUserFromBearer(req);
@@ -25,11 +36,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "lat/lng must be numbers" }, { status: 400 });
     }
 
+    if (!isValidLatLng(lat, lng)) {
+      return NextResponse.json({ ok: false, error: "Invalid coordinates" }, { status: 400 });
+    }
+
     const { data: mapping, error: mErr } = await supabaseAdmin
       .from("driver_accounts")
       .select("driver_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (mErr) {
       return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 });
@@ -37,18 +52,16 @@ export async function POST(req: Request) {
 
     const driverId = mapping?.driver_id ?? null;
     if (!driverId) {
-      return NextResponse.json({ ok: false, error: "Not linked" }, { status: 403 });
+      return NextResponse.json({ ok: false, code: "NOT_LINKED", error: "Not linked" }, { status: 403 });
     }
 
-    // Refresh subscription if expired
     await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
 
-    // Only online + subscribed drivers should heartbeat
     const { data: driver, error: dErr } = await supabaseAdmin
       .from("drivers")
       .select("id,online,subscription_status")
       .eq("id", driverId)
-      .single();
+      .maybeSingle();
 
     if (dErr || !driver) {
       return NextResponse.json({ ok: false, error: "Driver not found" }, { status: 404 });

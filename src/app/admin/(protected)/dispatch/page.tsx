@@ -30,7 +30,7 @@ type BoardTrip = {
 function groupKey(status: string) {
   if (status === "requested") return "requested";
   if (status === "offered") return "offered";
-  if (status === "assigned" || status === "arrived" || status === "started") return "active";
+  if (status === "assigned" || status === "arrived" || status === "ongoing") return "active";
   return "closed";
 }
 

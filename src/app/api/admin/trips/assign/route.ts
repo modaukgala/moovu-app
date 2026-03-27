@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { requireAdminUser } from "@/lib/auth/admin";
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireAdminUser(req);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { ok: false, error: auth.error },
+        { status: auth.status }
+      );
+    }
+
+    const { user, supabaseAdmin } = auth;
     const body = await req.json();
 
     const tripId = String(body?.tripId ?? "").trim();
@@ -15,20 +24,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-
-    if (!supabaseUrl || !serviceRoleKey || !siteUrl) {
-      return NextResponse.json(
-        { ok: false, error: "Missing server environment variables." },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-    const { data: trip, error: tripError } = await supabase
+    const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
       .select("id,status,driver_id,pickup_address,dropoff_address")
       .eq("id", tripId)
@@ -48,21 +44,14 @@ export async function POST(req: Request) {
       );
     }
 
-    if (trip.status === "completed") {
+    if (["completed", "cancelled"].includes(String(trip.status))) {
       return NextResponse.json(
-        { ok: false, error: "Completed trips cannot be reassigned." },
+        { ok: false, error: `Trips in status "${trip.status}" cannot be assigned.` },
         { status: 400 }
       );
     }
 
-    if (trip.status === "cancelled") {
-      return NextResponse.json(
-        { ok: false, error: "Cancelled trips cannot be assigned." },
-        { status: 400 }
-      );
-    }
-
-    const { data: driver, error: driverError } = await supabase
+    const { data: driver, error: driverError } = await supabaseAdmin
       .from("drivers")
       .select("id,first_name,last_name,phone,status,online,busy")
       .eq("id", driverId)
@@ -82,12 +71,29 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error: updateTripError } = await supabase
+    if (!["approved", "active"].includes(String(driver.status ?? ""))) {
+      return NextResponse.json(
+        { ok: false, error: "Driver is not approved/active." },
+        { status: 400 }
+      );
+    }
+
+    if (driver.busy) {
+      return NextResponse.json(
+        { ok: false, error: "Driver is already busy." },
+        { status: 400 }
+      );
+    }
+
+    const expiresAt = new Date(Date.now() + 30 * 1000).toISOString();
+
+    const { error: updateTripError } = await supabaseAdmin
       .from("trips")
       .update({
         driver_id: driverId,
-        status: "assigned",
-        offer_status: "accepted",
+        status: "offered",
+        offer_status: "pending",
+        offer_expires_at: expiresAt,
       })
       .eq("id", tripId);
 
@@ -98,61 +104,51 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error: driverBusyError } = await supabase
-      .from("drivers")
-      .update({ busy: true })
-      .eq("id", driverId);
+    try {
+      await supabaseAdmin.from("trip_events").insert({
+        trip_id: tripId,
+        event_type: "driver_offer_sent",
+        message: "Trip offer sent to driver by admin",
+        old_status: trip.status,
+        new_status: "offered",
+        created_by: user.id,
+      });
+    } catch {}
 
-    if (driverBusyError) {
-      return NextResponse.json(
-        { ok: false, error: driverBusyError.message },
-        { status: 500 }
-      );
-    }
-
-    await supabase.from("trip_events").insert({
-      trip_id: tripId,
-      event_type: "driver_assigned",
-      message: "Driver manually assigned by admin",
-      old_status: trip.status,
-      new_status: "assigned",
-    });
-
-    const { data: driverAccount } = await supabase
+    const { data: driverAccount } = await supabaseAdmin
       .from("driver_accounts")
       .select("user_id")
       .eq("driver_id", driverId)
       .maybeSingle();
 
-    if (driverAccount?.user_id) {
+    if (driverAccount?.user_id && process.env.NEXT_PUBLIC_SITE_URL) {
       try {
-        await fetch(`${siteUrl}/api/push/send`, {
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/push/send`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             userIds: [driverAccount.user_id],
-            title: "New trip assigned",
-            body: `You have been assigned a new trip from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
+            title: "New trip offer",
+            body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
             url: "/driver",
           }),
         });
-      } catch {
-        // Keep assignment successful even if push fails
-      }
+      } catch {}
     }
 
     return NextResponse.json({
       ok: true,
-      message: "Driver assigned successfully.",
+      message: "Trip offer sent to driver successfully.",
       tripId,
       driverId,
+      expiresAt,
       driverName: `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim(),
     });
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error" },
+      { ok: false, error: e?.message || "Server error." },
       { status: 500 }
     );
   }

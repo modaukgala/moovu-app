@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdminUser } from "@/lib/auth/admin";
 
 export async function GET(req: Request) {
   try {
+    const auth = await requireAdminUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    }
+
+    const { supabaseAdmin } = auth;
     const url = new URL(req.url);
     const tripId = String(url.searchParams.get("tripId") ?? "").trim();
 
-    if (!tripId) return NextResponse.json({ ok: false, error: "Missing tripId" }, { status: 400 });
+    if (!tripId) {
+      return NextResponse.json({ ok: false, error: "Missing tripId" }, { status: 400 });
+    }
 
     const { data: trip, error: tErr } = await supabaseAdmin
       .from("trips")
@@ -19,7 +27,10 @@ export async function GET(req: Request) {
     }
 
     if (!trip.driver_id) {
-      return NextResponse.json({ ok: false, error: "Trip has no driver assigned yet" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Trip has no driver assigned yet" },
+        { status: 400 }
+      );
     }
 
     const { data: driver, error: dErr } = await supabaseAdmin

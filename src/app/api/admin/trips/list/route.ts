@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { requireAdminUser } from "@/lib/auth/admin";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const auth = await requireAdminUser(req);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { ok: false, error: auth.error },
+        { status: auth.status }
+      );
+    }
 
-    const { data, error } = await supabase
+    const { supabaseAdmin } = auth;
+
+    const { data, error } = await supabaseAdmin
       .from("trips")
       .select(`
         id,
@@ -16,11 +21,20 @@ export async function GET() {
         rider_phone,
         pickup_address,
         dropoff_address,
+        pickup_lat,
+        pickup_lng,
+        dropoff_lat,
+        dropoff_lng,
         fare_amount,
         payment_method,
         status,
+        offer_status,
+        offer_expires_at,
         driver_id,
-        created_at
+        created_at,
+        commission_pct,
+        commission_amount,
+        driver_net_earnings
       `)
       .order("created_at", { ascending: false });
 

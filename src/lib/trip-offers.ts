@@ -2,6 +2,24 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const OFFER_SECONDS = 20;
 
+type TripOfferResult =
+  | {
+      ok: true;
+      driverId: string;
+      approxKm: number;
+      offer_expires_at: string;
+      status: "offered";
+      attempted: string[];
+      expiredPrevious: boolean;
+      alreadyPending?: boolean;
+    }
+  | {
+      ok: false;
+      error: string;
+      exhausted?: boolean;
+      excluded?: string[];
+    };
+
 function approxKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -17,8 +35,8 @@ function approxKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   return R * c;
 }
 
-function uniqStrings(arr: string[]) {
-  return Array.from(new Set(arr.filter(Boolean)));
+function uniqStrings(arr: Array<string | null | undefined>) {
+  return Array.from(new Set(arr.filter(Boolean) as string[]));
 }
 
 export async function expirePendingOfferIfNeeded(tripId: string) {
@@ -26,7 +44,7 @@ export async function expirePendingOfferIfNeeded(tripId: string) {
     .from("trips")
     .select("id,status,driver_id,offer_status,offer_expires_at,offer_attempted_driver_ids")
     .eq("id", tripId)
-    .single();
+    .maybeSingle();
 
   if (!trip) return { expired: false, trip: null };
 
@@ -41,7 +59,7 @@ export async function expirePendingOfferIfNeeded(tripId: string) {
 
   const attempted = uniqStrings([
     ...((trip.offer_attempted_driver_ids ?? []) as string[]),
-    ...(trip.driver_id ? [trip.driver_id] : []),
+    trip.driver_id,
   ]);
 
   if (trip.driver_id) {
@@ -83,44 +101,47 @@ export async function expirePendingOfferIfNeeded(tripId: string) {
 export async function offerNextEligibleDriver(
   tripId: string,
   extraExcludeDriverIds: string[] = []
-) {
+): Promise<TripOfferResult> {
   const expireResult = await expirePendingOfferIfNeeded(tripId);
 
   const { data: trip, error: tripErr } = await supabaseAdmin
     .from("trips")
     .select(
-      "id,status,driver_id,pickup_lat,pickup_lng,offer_status,offer_expires_at,offer_attempted_driver_ids,pickup_address,dropoff_address"
+      "id,status,driver_id,pickup_lat,pickup_lng,offer_status,offer_expires_at,offer_attempted_driver_ids"
     )
     .eq("id", tripId)
-    .single();
+    .maybeSingle();
 
   if (tripErr || !trip) {
-    return { ok: false as const, error: tripErr?.message ?? "Trip not found" };
+    return { ok: false, error: tripErr?.message ?? "Trip not found" };
   }
 
   if (trip.status === "cancelled" || trip.status === "completed") {
-    return { ok: false as const, error: "Trip is closed" };
+    return { ok: false, error: "Trip is closed" };
   }
 
   if (trip.offer_status === "pending" && trip.driver_id && trip.offer_expires_at) {
     return {
-      ok: true as const,
+      ok: true,
       alreadyPending: true,
       driverId: trip.driver_id,
+      approxKm: 0,
       offer_expires_at: trip.offer_expires_at,
       status: "offered",
+      attempted: (trip.offer_attempted_driver_ids ?? []) as string[],
+      expiredPrevious: false,
     };
   }
 
   if (trip.status !== "requested") {
     return {
-      ok: false as const,
-      error: `Trip must be 'requested' to offer next driver. Current: ${trip.status}`,
+      ok: false,
+      error: `Trip must be requested to offer next driver. Current: ${trip.status}`,
     };
   }
 
   if (trip.pickup_lat == null || trip.pickup_lng == null) {
-    return { ok: false as const, error: "Trip missing pickup coordinates" };
+    return { ok: false, error: "Trip missing pickup coordinates" };
   }
 
   const excluded = uniqStrings([
@@ -136,7 +157,20 @@ export async function offerNextEligibleDriver(
     .in("status", ["approved", "active"])
     .in("subscription_status", ["active", "grace"]);
 
-  if (dErr) return { ok: false as const, error: dErr.message };
+  if (dErr) return { ok: false, error: dErr.message };
+
+  for (const d of drivers ?? []) {
+    if (
+      d.subscription_expires_at &&
+      (d.subscription_status === "active" || d.subscription_status === "grace") &&
+      Date.now() > new Date(d.subscription_expires_at).getTime()
+    ) {
+      await supabaseAdmin
+        .from("drivers")
+        .update({ subscription_status: "inactive" })
+        .eq("id", d.id);
+    }
+  }
 
   const usable = (drivers ?? [])
     .filter((d: any) => typeof d.lat === "number" && typeof d.lng === "number")
@@ -145,7 +179,7 @@ export async function offerNextEligibleDriver(
 
   if (usable.length === 0) {
     return {
-      ok: false as const,
+      ok: false,
       error: "No more eligible online drivers",
       exhausted: true,
       excluded,
@@ -163,12 +197,22 @@ export async function offerNextEligibleDriver(
     }
   }
 
-  await supabaseAdmin.from("drivers").update({ busy: true }).eq("id", best.id);
+  const { error: lockErr } = await supabaseAdmin
+    .from("drivers")
+    .update({ busy: true })
+    .eq("id", best.id);
+
+  if (lockErr) {
+    return { ok: false, error: lockErr.message };
+  }
 
   const expiresAt = new Date(Date.now() + OFFER_SECONDS * 1000).toISOString();
-  const attempted = uniqStrings([...(trip.offer_attempted_driver_ids ?? []), best.id]);
+  const attempted = uniqStrings([
+    ...((trip.offer_attempted_driver_ids ?? []) as string[]),
+    best.id,
+  ]);
 
-  await supabaseAdmin
+  const { error: upTripErr } = await supabaseAdmin
     .from("trips")
     .update({
       driver_id: best.id,
@@ -179,40 +223,21 @@ export async function offerNextEligibleDriver(
     })
     .eq("id", tripId);
 
+  if (upTripErr) {
+    await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", best.id);
+    return { ok: false, error: upTripErr.message };
+  }
+
   await supabaseAdmin.from("trip_events").insert({
     trip_id: tripId,
     event_type: "offer_sent",
-    message: `Offered to driver ${best.id}`,
+    message: `Offered to driver ${best.id} (expires in ${OFFER_SECONDS}s, ≈ ${bestKm.toFixed(2)} km away)`,
     old_status: "requested",
     new_status: "offered",
   });
 
-  // SEND PUSH NOTIFICATION TO DRIVER
-  try {
-    const { data: driverAccount } = await supabaseAdmin
-      .from("driver_accounts")
-      .select("user_id")
-      .eq("driver_id", best.id)
-      .maybeSingle();
-
-    if (driverAccount?.user_id) {
-      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/push/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userIds: [driverAccount.user_id],
-          title: "New trip offer",
-          body: `Trip from ${trip.pickup_address} to ${trip.dropoff_address}`,
-          url: "/driver/offers",
-        }),
-      });
-    }
-  } catch {}
-
   return {
-    ok: true as const,
+    ok: true,
     driverId: best.id,
     approxKm: Math.round(bestKm * 100) / 100,
     offer_expires_at: expiresAt,

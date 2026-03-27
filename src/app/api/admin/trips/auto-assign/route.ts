@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { offerNextEligibleDriver } from "@/lib/trip-offers";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdminUser } from "@/lib/auth/admin";
+import { offerNextDriver } from "@/lib/dispatch/offerNextDriver";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const auth = await requireAdminUser(req);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { ok: false, error: auth.error },
+        { status: auth.status }
+      );
+    }
 
+    const body = await req.json();
     const tripId = String(body?.tripId ?? "").trim();
-    const excludeDriverIds = Array.isArray(body?.excludeDriverIds)
-      ? body.excludeDriverIds.map((x: unknown) => String(x).trim()).filter(Boolean)
-      : [];
 
     if (!tripId) {
       return NextResponse.json(
@@ -18,15 +22,17 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: trip, error: tripErr } = await supabaseAdmin
+    const { supabaseAdmin, user } = auth;
+
+    const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
-      .select("id,status,driver_id,offer_status,offer_expires_at")
+      .select("id,status")
       .eq("id", tripId)
       .maybeSingle();
 
-    if (tripErr) {
+    if (tripError) {
       return NextResponse.json(
-        { ok: false, error: tripErr.message },
+        { ok: false, error: tripError.message },
         { status: 500 }
       );
     }
@@ -38,28 +44,49 @@ export async function POST(req: Request) {
       );
     }
 
-    if (trip.status === "cancelled" || trip.status === "completed") {
+    if (!["requested", "offered"].includes(String(trip.status))) {
       return NextResponse.json(
-        { ok: false, error: "Trip is already closed." },
+        { ok: false, error: "Only requested/offered trips can be auto-assigned." },
         { status: 400 }
       );
     }
 
-    const result = await offerNextEligibleDriver(tripId, excludeDriverIds);
+    const result = await offerNextDriver({ tripId });
 
     if (!result.ok) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: result.error || "Failed to auto-assign driver.",
-          exhausted: "exhausted" in result ? result.exhausted : false,
-          excluded: "excluded" in result ? result.excluded : [],
-        },
-        { status: 400 }
+        { ok: false, error: result.error },
+        { status: 500 }
       );
     }
 
-    return NextResponse.json(result);
+    try {
+      await supabaseAdmin.from("trip_events").insert({
+        trip_id: tripId,
+        event_type: "auto_assign_attempt",
+        message: result.reassigned
+          ? `Auto-assign offered trip to driver ${result.driverId}`
+          : result.message,
+        old_status: trip.status,
+        new_status: result.reassigned ? "offered" : trip.status,
+        created_by: user.id,
+      });
+    } catch {}
+
+    if (!result.reassigned) {
+      return NextResponse.json(
+        { ok: false, error: result.message },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: "Nearest driver offered successfully.",
+      driverId: result.driverId,
+      driverName: result.driverName,
+      expiresAt: result.expiresAt,
+    });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Server error." },

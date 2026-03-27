@@ -9,7 +9,6 @@ async function getUserFromBearer(req: Request) {
 
   // @ts-ignore
   const { data } = await supabaseAdmin.auth.getUser(token);
-
   return data?.user ?? null;
 }
 
@@ -17,86 +16,136 @@ export async function POST(req: Request) {
   try {
     const user = await getUserFromBearer(req);
     if (!user) {
-      return NextResponse.json({ ok: false, error: "Not logged in" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "Not logged in" },
+        { status: 401 }
+      );
     }
 
     const { tripId, action } = await req.json();
 
-    const { data: mapping } = await supabaseAdmin
+    if (!tripId || !action) {
+      return NextResponse.json(
+        { ok: false, error: "tripId and action are required" },
+        { status: 400 }
+      );
+    }
+
+    const { data: mapping, error: mappingError } = await supabaseAdmin
       .from("driver_accounts")
       .select("driver_id")
       .eq("user_id", user.id)
       .single();
 
-    if (!mapping?.driver_id) {
-      return NextResponse.json({ ok: false, error: "Driver not linked" });
+    if (mappingError || !mapping?.driver_id) {
+      return NextResponse.json(
+        { ok: false, error: "Driver not linked" },
+        { status: 403 }
+      );
     }
 
     const driverId = mapping.driver_id;
 
-    const { data: trip } = await supabaseAdmin
+    const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
-      .select("*")
+      .select("id,status,driver_id")
       .eq("id", tripId)
       .single();
 
-    if (!trip) {
-      return NextResponse.json({ ok: false, error: "Trip not found" });
+    if (tripError || !trip) {
+      return NextResponse.json(
+        { ok: false, error: "Trip not found" },
+        { status: 404 }
+      );
     }
+
+    if (trip.driver_id !== driverId) {
+      return NextResponse.json(
+        { ok: false, error: "This trip is not assigned to you" },
+        { status: 403 }
+      );
+    }
+
+    let newStatus: string | null = null;
+    let eventType: string | null = null;
+    let message: string | null = null;
 
     if (action === "arrived") {
-      await supabaseAdmin
-        .from("trips")
-        .update({ status: "arrived" })
-        .eq("id", tripId);
+      if (trip.status !== "assigned") {
+        return NextResponse.json(
+          { ok: false, error: "Only assigned trips can be marked arrived" },
+          { status: 400 }
+        );
+      }
 
-      await supabaseAdmin.from("trip_events").insert({
-        trip_id: tripId,
-        event_type: "driver_arrived",
-        message: "Driver arrived at pickup",
-        old_status: trip.status,
-        new_status: "arrived",
-      });
+      newStatus = "arrived";
+      eventType = "driver_arrived";
+      message = "Driver arrived at pickup";
+    } else if (action === "start") {
+      if (!["assigned", "arrived"].includes(String(trip.status))) {
+        return NextResponse.json(
+          { ok: false, error: "Only assigned or arrived trips can be started" },
+          { status: 400 }
+        );
+      }
+
+      newStatus = "ongoing";
+      eventType = "trip_started";
+      message = "Trip started";
+    } else if (action === "complete") {
+      if (trip.status !== "ongoing") {
+        return NextResponse.json(
+          { ok: false, error: "Only ongoing trips can be completed" },
+          { status: 400 }
+        );
+      }
+
+      newStatus = "completed";
+      eventType = "trip_completed";
+      message = "Trip completed";
+    } else {
+      return NextResponse.json(
+        { ok: false, error: "Invalid action" },
+        { status: 400 }
+      );
     }
 
-    if (action === "start") {
-      await supabaseAdmin
-        .from("trips")
-        .update({ status: "started" })
-        .eq("id", tripId);
+    const { error: updateError } = await supabaseAdmin
+      .from("trips")
+      .update({ status: newStatus })
+      .eq("id", tripId);
 
+    if (updateError) {
+      return NextResponse.json(
+        { ok: false, error: updateError.message },
+        { status: 500 }
+      );
+    }
+
+    try {
       await supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
-        event_type: "trip_started",
-        message: "Trip started",
+        event_type: eventType,
+        message,
         old_status: trip.status,
-        new_status: "started",
+        new_status: newStatus,
       });
-    }
+    } catch {}
 
     if (action === "complete") {
-      await supabaseAdmin
-        .from("trips")
-        .update({ status: "completed" })
-        .eq("id", tripId);
-
-      await supabaseAdmin.from("trip_events").insert({
-        trip_id: tripId,
-        event_type: "trip_completed",
-        message: "Trip completed",
-        old_status: trip.status,
-        new_status: "completed",
-      });
-
-      await supabaseAdmin
-        .from("drivers")
-        .update({ busy: false })
-        .eq("id", driverId);
+      try {
+        await supabaseAdmin
+          .from("drivers")
+          .update({ busy: false })
+          .eq("id", driverId);
+      } catch {}
     }
 
-    return NextResponse.json({ ok: true });
-
+    return NextResponse.json({ ok: true, status: newStatus });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message });
+    return NextResponse.json(
+      { ok: false, error: e?.message || "Server error" },
+      { status: 500 }
+    );
   }
 }

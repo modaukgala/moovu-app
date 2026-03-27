@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   try {
     const user = await getUserFromBearer(req);
     if (!user) {
-      return NextResponse.json({ ok: false, error: "Not logged in (missing/invalid token)" }, { status: 401 });
+      return NextResponse.json({ ok: false, error: "Not logged in" }, { status: 401 });
     }
 
     const { tripId, action } = await req.json();
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     if (!tripId || !action) {
       return NextResponse.json({ ok: false, error: "Missing tripId/action" }, { status: 400 });
     }
+
     if (action !== "accept" && action !== "reject") {
       return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
     }
@@ -33,20 +34,22 @@ export async function POST(req: Request) {
       .from("driver_accounts")
       .select("driver_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (mErr) return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 });
+    if (mErr) {
+      return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 });
+    }
 
     const driverId = mapping?.driver_id ?? null;
     if (!driverId) {
-      return NextResponse.json({ ok: false, error: "Not linked (admin must link your account to a driver)" }, { status: 403 });
+      return NextResponse.json({ ok: false, code: "NOT_LINKED", error: "Not linked" }, { status: 403 });
     }
 
     const { data: trip, error: tErr } = await supabaseAdmin
       .from("trips")
       .select("id,driver_id,status,offer_status,offer_expires_at,offer_attempted_driver_ids")
       .eq("id", tripId)
-      .single();
+      .maybeSingle();
 
     if (tErr || !trip) {
       return NextResponse.json({ ok: false, error: tErr?.message ?? "Trip not found" }, { status: 404 });
@@ -80,14 +83,13 @@ export async function POST(req: Request) {
         new_status: "requested",
       });
 
-      // Auto re-offer next driver
       const next = await offerNextEligibleDriver(tripId, [driverId]);
 
       if (!next.ok) {
-        return NextResponse.json({
-          ok: false,
-          error: "Offer expired. No next eligible driver available.",
-        }, { status: 400 });
+        return NextResponse.json(
+          { ok: false, error: "Offer expired. No next eligible driver available." },
+          { status: 400 }
+        );
       }
 
       return NextResponse.json({
@@ -115,7 +117,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, status: "assigned" });
     }
 
-    // reject → free current driver, mark attempted, then auto-offer next
     await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", driverId);
 
     await supabaseAdmin
@@ -141,20 +142,11 @@ export async function POST(req: Request) {
 
     const next = await offerNextEligibleDriver(tripId, [driverId]);
 
-    if (!next.ok) {
-      return NextResponse.json({
-        ok: true,
-        status: "requested",
-        reoffered: false,
-        message: "Rejected. No next eligible driver available.",
-      });
-    }
-
     return NextResponse.json({
       ok: true,
-      status: "offered",
-      reoffered: true,
-      nextDriverId: next.driverId,
+      status: next.ok ? "offered" : "requested",
+      reoffered: !!next.ok,
+      nextDriverId: next.ok ? next.driverId : null,
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });

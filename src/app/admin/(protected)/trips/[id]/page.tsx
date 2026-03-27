@@ -73,7 +73,6 @@ export default function TripDetailPage() {
 
   useEffect(() => {
     loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
   useEffect(() => {
@@ -89,17 +88,23 @@ export default function TripDetailPage() {
 
   const offerSecondsLeft = useMemo(() => {
     if (!trip?.offer_expires_at) return null;
-    const left = Math.ceil((new Date(trip.offer_expires_at).getTime() - Date.now()) / 1000);
-    return left;
+    return Math.ceil((new Date(trip.offer_expires_at).getTime() - Date.now()) / 1000);
   }, [trip?.offer_expires_at, tick]);
 
   async function offerNearest(exclude: string[] = []) {
     if (!trip) return;
 
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
     const res = await fetch("/api/admin/trips/auto-assign", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {}),
       },
       body: JSON.stringify({ tripId: trip.id, excludeDriverIds: exclude }),
     });
@@ -135,31 +140,11 @@ export default function TripDetailPage() {
     await loadAll();
   }
 
-  async function markCompleted() {
-    if (!trip) return;
-
-    await supabaseClient.from("trips").update({ status: "completed" }).eq("id", tripId);
-
-    await supabaseClient.from("trip_events").insert({
-      trip_id: tripId,
-      event_type: "status_change",
-      message: "Completed",
-      old_status: trip.status,
-      new_status: "completed",
-    });
-
-    if (trip.driver_id) {
-      await supabaseClient.from("drivers").update({ busy: false }).eq("id", trip.driver_id);
-    }
-
-    await loadAll();
-  }
-
   if (loading) {
     return (
       <main className="space-y-6 text-black">
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-          <p className="text-gray-700">Loading trip...</p>
+          <p className="text-gray-700">Loading trip.</p>
         </section>
       </main>
     );
@@ -206,16 +191,8 @@ export default function TripDetailPage() {
       </div>
 
       <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-        <div className="mb-2">
-          <div className="text-sm text-gray-500">Trip Summary</div>
-          <h2 className="text-xl font-semibold text-black mt-1">Route and Assignment</h2>
-        </div>
-
         <div className="grid md:grid-cols-2 gap-4">
-          <div
-            className="border rounded-2xl p-4"
-            style={{ background: "var(--moovu-primary-soft)" }}
-          >
+          <div className="border rounded-2xl p-4" style={{ background: "var(--moovu-primary-soft)" }}>
             <div className="text-sm text-gray-600">Pickup</div>
             <div className="font-medium text-black mt-1">{trip.pickup_address}</div>
           </div>
@@ -257,11 +234,6 @@ export default function TripDetailPage() {
       </section>
 
       <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-        <div className="mb-4">
-          <div className="text-sm text-gray-500">Trip Controls</div>
-          <h2 className="text-xl font-semibold text-black mt-1">Actions</h2>
-        </div>
-
         <div className="flex flex-wrap gap-2">
           {!isClosed && trip.offer_status !== "pending" && trip.status !== "assigned" && (
             <button
@@ -273,15 +245,6 @@ export default function TripDetailPage() {
             </button>
           )}
 
-          {!isClosed && trip.offer_status === "pending" && (
-            <button
-              className="border rounded-xl px-4 py-2 bg-white text-black"
-              onClick={() => loadAll()}
-            >
-              Refresh
-            </button>
-          )}
-
           {!isClosed && (
             <button
               className="border rounded-xl px-4 py-2 bg-white text-black"
@@ -290,53 +253,19 @@ export default function TripDetailPage() {
               Cancel
             </button>
           )}
-
-          {!isClosed && trip.status === "assigned" && (
-            <button
-              className="rounded-xl px-4 py-2 text-white"
-              style={{ background: "var(--moovu-primary)" }}
-              onClick={markCompleted}
-            >
-              Mark Completed
-            </button>
-          )}
         </div>
-
-        <p className="text-sm text-gray-700 mt-4">
-          If an offer expires, it will clear on the next driver or admin refresh. Then you can offer the next driver.
-        </p>
       </section>
 
       <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-        <div className="mb-4">
-          <div className="text-sm text-gray-500">Trip Timeline</div>
-          <h2 className="text-xl font-semibold text-black mt-1">Events</h2>
+        <h2 className="text-xl font-semibold text-black">Events</h2>
+        <div className="mt-4 space-y-3">
+          {events.map((e) => (
+            <div key={e.id} className="border rounded-xl p-4">
+              <div className="font-medium">{e.event_type}</div>
+              {e.message && <div className="text-sm text-gray-700 mt-2">{e.message}</div>}
+            </div>
+          ))}
         </div>
-
-        {events.length === 0 ? (
-          <p className="text-gray-700">No events yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {events.map((e) => (
-              <div key={e.id} className="border rounded-2xl p-4 bg-white">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-semibold text-black">{e.event_type}</div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(e.created_at).toLocaleString()}
-                  </div>
-                </div>
-
-                {e.message && <div className="text-gray-700 mt-2">{e.message}</div>}
-
-                {(e.old_status || e.new_status) && (
-                  <div className="text-sm text-gray-600 mt-2">
-                    {e.old_status ?? "—"} → {e.new_status ?? "—"}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </section>
     </main>
   );

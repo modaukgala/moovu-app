@@ -1,221 +1,215 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabaseClient } from "@/lib/supabase/client";
 
-type Row = {
-  driver_id: string;
-  name: string;
-  phone: string | null;
+type ReportRow = {
+  id: string;
+  driver_id: string | null;
+  fare_amount: number | null;
+  payment_method: string | null;
+  pickup_address: string | null;
+  dropoff_address: string | null;
   status: string | null;
-  online: boolean;
-  busy: boolean;
-
-  subscription_status: string | null;
-  subscription_plan: string | null;
-  subscription_expires_at: string | null;
-  subscription_due: boolean;
-  subscription_days_overdue: number;
-  subscription_amount_due: number;
-
-  trips_completed: number;
-  total_earnings: number;
-  cash_trips: number;
-  cash_total: number;
-  avg_fare: number;
-
-  in_progress_trips: number;
-  in_progress_total: number;
-  in_progress_by_status: Record<string, number>;
+  created_at: string | null;
+  commission_amount?: number | null;
+  driver_net_earnings?: number | null;
 };
 
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
+type ReportResponse = {
+  completed: ReportRow[];
+  inProgress: ReportRow[];
+  totals: {
+    completedTrips: number;
+    completedRevenue: number;
+    completedCommission: number;
+    completedDriverNet: number;
+    inProgressTrips: number;
+    inProgressValue: number;
+  };
+  byDriver: Array<{
+    driver_id: string;
+    completed_trips: number;
+    completed_revenue: number;
+    completed_commission: number;
+    completed_driver_net: number;
+  }>;
+};
+
+function money(v: number | null | undefined) {
+  return `R${Number(v ?? 0).toFixed(2)}`;
 }
 
-export default function DriverEarningsReportPage() {
-  const [from, setFrom] = useState<string>(() => isoDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
-  const [to, setTo] = useState<string>(() => isoDate(new Date()));
+function todayIso() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
-  const [rows, setRows] = useState<Row[]>([]);
+function weekAgoIso() {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export default function AdminReportsPage() {
+  const [from, setFrom] = useState(weekAgoIso());
+  const [to, setTo] = useState(todayIso());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [data, setData] = useState<ReportResponse | null>(null);
 
-  const [totTrips, setTotTrips] = useState<number>(0);
-  const [totEarnings, setTotEarnings] = useState<number>(0);
-  const [totInProgress, setTotInProgress] = useState<number>(0);
-  const [totInProgressAmount, setTotInProgressAmount] = useState<number>(0);
-  const [totSubDue, setTotSubDue] = useState<number>(0);
+  async function getAccessToken() {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+    return session?.access_token ?? null;
+  }
 
-  async function load() {
+  async function runReport() {
     setBusy(true);
     setMsg(null);
 
-    const res = await fetch(
-      `/api/admin/reports/driver-earnings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-    );
-    const json = await res.json();
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setMsg("Missing access token.");
+        setBusy(false);
+        return;
+      }
 
-    setBusy(false);
+      const url = `/api/admin/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
 
-    if (!json.ok) {
-      setRows([]);
-      setMsg(json.error || "Failed to load report");
-      return;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!json?.ok) {
+        setMsg(json?.error || "Failed to load report.");
+        setBusy(false);
+        return;
+      }
+
+      setData(json.report ?? null);
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to load report.");
     }
 
-    setRows(json.rows ?? []);
-    setTotTrips(json.totals?.trips_completed ?? 0);
-    setTotEarnings(json.totals?.total_earnings ?? 0);
-    setTotInProgress(json.totals?.in_progress_trips ?? 0);
-    setTotInProgressAmount(json.totals?.in_progress_total ?? 0);
-    setTotSubDue(json.totals?.subscription_due_total ?? 0);
+    setBusy(false);
   }
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    runReport();
   }, []);
 
-  const dueCount = useMemo(() => rows.filter((r) => r.subscription_due).length, [rows]);
+  const totals = useMemo(() => {
+    return (
+      data?.totals ?? {
+        completedTrips: 0,
+        completedRevenue: 0,
+        completedCommission: 0,
+        completedDriverNet: 0,
+        inProgressTrips: 0,
+        inProgressValue: 0,
+      }
+    );
+  }, [data]);
 
   return (
     <main className="p-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Driver Earnings Report</h1>
-          <p className="opacity-70 mt-1">
-            Completed = cash collected by driver. In-progress = active trips not yet completed. Subscription “due” is based on expiry/active status.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-semibold">Driver Earnings Report</h1>
+        <p className="opacity-70 mt-1">
+          Completed = cash collected by driver. In-progress = active trips not yet completed.
+        </p>
+      </div>
 
-        <div className="flex flex-wrap gap-2 items-center">
-          <input className="border rounded-xl px-4 py-2" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <input className="border rounded-xl px-4 py-2" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={load}>
-            {busy ? "Loading..." : "Run"}
-          </button>
-        </div>
+      <div className="flex flex-wrap gap-3">
+        <input
+          type="date"
+          className="border rounded-xl px-4 py-2"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <input
+          type="date"
+          className="border rounded-xl px-4 py-2"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+        />
+        <button
+          className="border rounded-xl px-4 py-2"
+          disabled={busy}
+          onClick={runReport}
+        >
+          {busy ? "Running..." : "Run"}
+        </button>
       </div>
 
       {msg && <div className="border rounded-2xl p-4 text-sm">{msg}</div>}
 
-      <section className="border rounded-2xl p-5">
+      <section className="border rounded-2xl p-5 space-y-4">
         <h2 className="font-semibold">Totals</h2>
-        <div className="grid md:grid-cols-5 gap-4 mt-4">
+
+        <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="border rounded-2xl p-4">
             <div className="text-sm opacity-70">Completed trips</div>
-            <div className="text-2xl font-semibold mt-1">{totTrips}</div>
+            <div className="text-2xl font-semibold mt-2">{totals.completedTrips}</div>
           </div>
 
           <div className="border rounded-2xl p-4">
             <div className="text-sm opacity-70">Total earnings (completed)</div>
-            <div className="text-2xl font-semibold mt-1">R{totEarnings}</div>
+            <div className="text-2xl font-semibold mt-2">{money(totals.completedRevenue)}</div>
+          </div>
+
+          <div className="border rounded-2xl p-4">
+            <div className="text-sm opacity-70">MOOVU commission</div>
+            <div className="text-2xl font-semibold mt-2">{money(totals.completedCommission)}</div>
+          </div>
+
+          <div className="border rounded-2xl p-4">
+            <div className="text-sm opacity-70">Driver net</div>
+            <div className="text-2xl font-semibold mt-2">{money(totals.completedDriverNet)}</div>
           </div>
 
           <div className="border rounded-2xl p-4">
             <div className="text-sm opacity-70">In-progress trips</div>
-            <div className="text-2xl font-semibold mt-1">{totInProgress}</div>
-            <div className="text-xs opacity-60 mt-1">Value: R{totInProgressAmount}</div>
+            <div className="text-2xl font-semibold mt-2">{totals.inProgressTrips}</div>
           </div>
 
           <div className="border rounded-2xl p-4">
-            <div className="text-sm opacity-70">Subscriptions due</div>
-            <div className="text-2xl font-semibold mt-1">{dueCount}</div>
-          </div>
-
-          <div className="border rounded-2xl p-4">
-            <div className="text-sm opacity-70">Total subscription due</div>
-            <div className="text-2xl font-semibold mt-1">R{totSubDue}</div>
+            <div className="text-sm opacity-70">In-progress value</div>
+            <div className="text-2xl font-semibold mt-2">{money(totals.inProgressValue)}</div>
           </div>
         </div>
       </section>
 
-      <section className="border rounded-2xl p-5">
+      <section className="border rounded-2xl p-5 space-y-4">
         <h2 className="font-semibold">By Driver</h2>
 
-        {rows.length === 0 ? (
-          <p className="opacity-70 mt-3">No data.</p>
+        {!data?.byDriver?.length ? (
+          <div className="opacity-70">No data.</div>
         ) : (
-          <div className="mt-4 space-y-3">
-            {rows.map((r) => {
-              const exp = r.subscription_expires_at ? new Date(r.subscription_expires_at).toLocaleDateString() : "—";
-              const plan = r.subscription_plan ? ` (${r.subscription_plan})` : "";
-
-              const dueText = r.subscription_due
-                ? `DUE${r.subscription_days_overdue > 0 ? ` • ${r.subscription_days_overdue}d overdue` : ""}`
-                : "OK";
-
-              const statusBreakdown = Object.keys(r.in_progress_by_status ?? {}).length
-                ? Object.entries(r.in_progress_by_status)
-                    .map(([k, v]) => `${k}:${v}`)
-                    .join(" • ")
-                : "—";
-
-              return (
-                <div key={r.driver_id} className="border rounded-2xl p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{r.name}</div>
-                      <div className="text-xs opacity-60 mt-1">
-                        {r.phone ?? "—"} • driver status: {r.status ?? "—"} • online: {r.online ? "yes" : "no"} • busy:{" "}
-                        {r.busy ? "yes" : "no"}
-                      </div>
-
-                      <div className="text-xs opacity-60 mt-1">
-                        sub: {r.subscription_status ?? "—"}
-                        {plan} • exp: {exp} • <span className="font-semibold">{dueText}</span>
-                        {r.subscription_due ? (
-                          <>
-                            {" "}
-                            • due amount: <span className="font-semibold">R{r.subscription_amount_due}</span>
-                          </>
-                        ) : null}
-                      </div>
-
-                      <div className="text-xs opacity-60 mt-1">{r.driver_id}</div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-sm opacity-70">Completed earnings</div>
-                      <div className="text-xl font-semibold">R{r.total_earnings}</div>
-                      <div className="text-xs opacity-60 mt-1">Avg: R{r.avg_fare}</div>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-6 gap-3 mt-4">
-                    <div className="border rounded-xl p-3">
-                      <div className="text-xs opacity-60">Completed</div>
-                      <div className="font-semibold mt-1">{r.trips_completed}</div>
-                    </div>
-
-                    <div className="border rounded-xl p-3">
-                      <div className="text-xs opacity-60">Cash trips</div>
-                      <div className="font-semibold mt-1">{r.cash_trips}</div>
-                    </div>
-
-                    <div className="border rounded-xl p-3">
-                      <div className="text-xs opacity-60">Cash total</div>
-                      <div className="font-semibold mt-1">R{r.cash_total}</div>
-                    </div>
-
-                    <div className="border rounded-xl p-3">
-                      <div className="text-xs opacity-60">In-progress</div>
-                      <div className="font-semibold mt-1">{r.in_progress_trips}</div>
-                    </div>
-
-                    <div className="border rounded-xl p-3">
-                      <div className="text-xs opacity-60">In-progress value</div>
-                      <div className="font-semibold mt-1">R{r.in_progress_total}</div>
-                    </div>
-
-                    <div className="border rounded-xl p-3">
-                      <div className="text-xs opacity-60">Breakdown</div>
-                      <div className="text-xs mt-1 opacity-80">{statusBreakdown}</div>
-                    </div>
-                  </div>
+          <div className="space-y-3">
+            {data.byDriver.map((row) => (
+              <div key={row.driver_id} className="border rounded-xl p-4">
+                <div className="font-medium break-all">{row.driver_id}</div>
+                <div className="text-sm opacity-70 mt-2">
+                  Trips: {row.completed_trips} • Revenue: {money(row.completed_revenue)} • Commission: {money(row.completed_commission)} • Driver Net: {money(row.completed_driver_net)}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </section>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type DriverOpt = {
   id: string;
@@ -23,11 +24,32 @@ export default function AdminLinkDriverAccountPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  async function getAccessToken() {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    return session?.access_token ?? null;
+  }
+
   async function loadDrivers() {
     setLoadingDrivers(true);
     setMsg(null);
 
-    const res = await fetch("/api/admin/drivers/options");
+    const token = await getAccessToken();
+    if (!token) {
+      setMsg("You are not logged in.");
+      setLoadingDrivers(false);
+      return;
+    }
+
+    const res = await fetch("/api/admin/drivers/options", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+
     const json = await res.json();
 
     if (!json.ok) {
@@ -49,18 +71,26 @@ export default function AdminLinkDriverAccountPage() {
     const d = drivers.find((x) => x.id === driverId);
     if (!d) return null;
     const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
-    return `${name} • ${d.phone ?? "—"} • ${d.status ?? "—"} ${d.online ? "• online" : ""} ${
-      d.busy ? "• busy" : ""
-    }`;
+    return `${name} • ${d.phone ?? "—"} • ${d.status ?? "—"} ${d.online ? "• online" : ""} ${d.busy ? "• busy" : ""}`;
   }, [drivers, driverId]);
 
   async function link() {
     setBusy(true);
     setMsg(null);
 
+    const token = await getAccessToken();
+    if (!token) {
+      setBusy(false);
+      setMsg("You are not logged in.");
+      return;
+    }
+
     const res = await fetch("/api/admin/drivers/link-account", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         action: "link",
         email: email.trim(),
@@ -83,9 +113,19 @@ export default function AdminLinkDriverAccountPage() {
     setBusy(true);
     setMsg(null);
 
+    const token = await getAccessToken();
+    if (!token) {
+      setBusy(false);
+      setMsg("You are not logged in.");
+      return;
+    }
+
     const res = await fetch("/api/admin/drivers/link-account", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         action: "unlink",
         email: email.trim(),
@@ -108,7 +148,7 @@ export default function AdminLinkDriverAccountPage() {
       <div>
         <h1 className="text-2xl font-semibold">Link Driver Account</h1>
         <p className="opacity-70 mt-1">
-          Link a driver’s login (email) to a Driver UUID so they only access their own portal.
+          Link a driver login email to a Driver UUID so they can use the driver portal.
         </p>
       </div>
 
@@ -119,13 +159,13 @@ export default function AdminLinkDriverAccountPage() {
 
         <input
           className="border rounded-xl p-3 w-full"
-          placeholder="Driver email (must exist in Supabase Auth users)"
+          placeholder="Driver email in Supabase Auth"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
 
         <div className="text-xs opacity-60">
-          Email must match what the driver used on <code>/driver/apply</code> or <code>/driver/login</code>.
+          This must match the email the driver used to sign up.
         </div>
       </section>
 
@@ -138,7 +178,9 @@ export default function AdminLinkDriverAccountPage() {
             value={driverId}
             onChange={(e) => setDriverId(e.target.value)}
           >
-            <option value="">{loadingDrivers ? "Loading drivers..." : "Select driver..."}</option>
+            <option value="">
+              {loadingDrivers ? "Loading drivers..." : "Select driver..."}
+            </option>
             {drivers.map((d) => {
               const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
               const label = `${name} • ${d.phone ?? "—"} • ${d.id}`;
@@ -170,10 +212,6 @@ export default function AdminLinkDriverAccountPage() {
           <button className="border rounded-xl px-4 py-2" disabled={loadingDrivers} onClick={loadDrivers}>
             Refresh Drivers
           </button>
-        </div>
-
-        <div className="text-xs opacity-60">
-          If link fails with a duplicate key error, that Driver UUID is already linked to someone else.
         </div>
       </section>
     </main>

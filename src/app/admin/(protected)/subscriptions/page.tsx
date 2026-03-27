@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type DriverRow = {
   id: string;
@@ -40,28 +41,72 @@ export default function AdminSubscriptionsPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  async function getAccessToken() {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    return session?.access_token ?? null;
+  }
+
   async function loadDrivers() {
     setMsg(null);
-    const res = await fetch(`/api/admin/subscriptions/drivers?q=${encodeURIComponent(q)}`);
+
+    const token = await getAccessToken();
+    if (!token) {
+      setDrivers([]);
+      setMsg("You are not logged in.");
+      return;
+    }
+
+    const res = await fetch(
+      `/api/admin/subscriptions/drivers?q=${encodeURIComponent(q)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      }
+    );
+
     const json = await res.json();
     if (!json.ok) {
       setDrivers([]);
       setMsg(json.error || "Failed to load drivers");
       return;
     }
+
     setDrivers(json.drivers ?? []);
   }
 
   async function loadHistory(driverId: string) {
-    const res = await fetch(`/api/admin/subscriptions/history?driverId=${encodeURIComponent(driverId)}`);
+    const token = await getAccessToken();
+    if (!token) {
+      setHistory([]);
+      setMsg("You are not logged in.");
+      return;
+    }
+
+    const res = await fetch(
+      `/api/admin/subscriptions/history?driverId=${encodeURIComponent(driverId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      }
+    );
+
     const json = await res.json();
     if (json.ok) setHistory(json.events ?? []);
-    else setHistory([]);
+    else {
+      setHistory([]);
+      setMsg(json.error || "Failed to load subscription history");
+    }
   }
 
   useEffect(() => {
     loadDrivers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selectedLabel = useMemo(() => {
@@ -79,9 +124,19 @@ export default function AdminSubscriptionsPage() {
     setBusy(true);
     setMsg(null);
 
+    const token = await getAccessToken();
+    if (!token) {
+      setBusy(false);
+      setMsg("You are not logged in.");
+      return;
+    }
+
     const res = await fetch("/api/admin/subscriptions/update", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         driverId: selected.id,
         action,
@@ -103,9 +158,11 @@ export default function AdminSubscriptionsPage() {
     await loadDrivers();
     await loadHistory(selected.id);
 
-    // Refresh selected data from list
-    const updated = drivers.find((d) => d.id === selected.id);
-    if (updated) setSelected(updated);
+    setSelected((prev) => {
+      if (!prev) return prev;
+      const updated = drivers.find((d) => d.id === prev.id);
+      return updated ?? prev;
+    });
   }
 
   return (
@@ -113,13 +170,15 @@ export default function AdminSubscriptionsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Subscription Manager</h1>
-          <p className="opacity-70 mt-1">Only subscribed + online drivers can receive trip offers.</p>
+          <p className="opacity-70 mt-1">
+            Only subscribed and online drivers can receive trip offers.
+          </p>
         </div>
 
         <div className="flex gap-2">
           <input
             className="border rounded-xl px-4 py-2"
-            placeholder="Search driver (name/phone/email)"
+            placeholder="Search driver"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -132,78 +191,74 @@ export default function AdminSubscriptionsPage() {
       {msg && <div className="border rounded-2xl p-4 text-sm">{msg}</div>}
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Drivers list */}
         <section className="border rounded-2xl p-5">
           <h2 className="font-semibold">Drivers ({drivers.length})</h2>
 
           <div className="mt-4 space-y-3">
             {drivers.map((d) => {
               const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
-              const exp = d.subscription_expires_at ? new Date(d.subscription_expires_at).toLocaleDateString() : "—";
+              const exp = d.subscription_expires_at
+                ? new Date(d.subscription_expires_at).toLocaleDateString()
+                : "—";
+
               return (
                 <button
                   key={d.id}
                   className={`w-full text-left border rounded-2xl p-4 hover:opacity-90 ${
-                    selected?.id === d.id ? "opacity-100" : "opacity-85"
+                    selected?.id === d.id ? "bg-black text-white" : ""
                   }`}
-                  onClick={async () => {
+                  onClick={() => {
                     setSelected(d);
+                    loadHistory(d.id);
                     setPlan(d.subscription_plan ?? "");
-                    setNote("");
-                    setMsg(null);
-                    await loadHistory(d.id);
                   }}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium">{name}</div>
-                    <div className="text-xs opacity-60">{d.phone ?? "—"}</div>
+                  <div className="font-medium">{name}</div>
+                  <div className="text-sm opacity-75 mt-1">{d.phone ?? "—"}</div>
+                  <div className="text-sm opacity-75 mt-1">
+                    {d.subscription_status ?? "inactive"} • plan: {d.subscription_plan ?? "—"} • exp: {exp}
                   </div>
-                  <div className="text-sm opacity-70 mt-1">
-                    {d.subscription_status ?? "—"} • exp: {exp} • online: {d.online ? "yes" : "no"} • busy:{" "}
-                    {d.busy ? "yes" : "no"}
-                  </div>
-                  <div className="text-xs opacity-60 mt-1">{d.id}</div>
                 </button>
               );
             })}
           </div>
         </section>
 
-        {/* Editor */}
         <section className="border rounded-2xl p-5">
-          <h2 className="font-semibold">Edit Subscription</h2>
+          <h2 className="font-semibold">Selected Driver</h2>
 
           {!selected ? (
-            <p className="opacity-70 mt-3">Select a driver.</p>
+            <p className="opacity-70 mt-4">Choose a driver from the list.</p>
           ) : (
-            <div className="mt-4 space-y-4">
+            <div className="space-y-5 mt-4">
               <div className="border rounded-2xl p-4">
-                <div className="text-sm opacity-70">Selected driver</div>
-                <div className="font-medium mt-1">{selectedLabel}</div>
-                <div className="text-xs opacity-60 mt-2">{selected.id}</div>
+                <div className="font-medium">{selectedLabel}</div>
+                <div className="text-sm opacity-70 mt-2">Driver ID: {selected.id}</div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-3">
+              <div className="grid md:grid-cols-2 gap-4">
                 <input
                   className="border rounded-xl p-3"
-                  placeholder="Plan (optional) e.g. Monthly"
-                  value={plan}
-                  onChange={(e) => setPlan(e.target.value)}
-                />
-                <input
-                  className="border rounded-xl p-3"
-                  placeholder="Note (receipt/ref/etc)"
+                  placeholder="Optional note"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />
+
+                <select
+                  className="border rounded-xl p-3 bg-transparent"
+                  value={plan}
+                  onChange={(e) => setPlan(e.target.value)}
+                >
+                  <option value="">Keep existing plan</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
               </div>
 
               <div className="flex flex-wrap gap-2">
                 <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("activate")}>
                   Activate
-                </button>
-                <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("inactive")}>
-                  Set Inactive
                 </button>
                 <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("grace")}>
                   Grace
@@ -211,35 +266,32 @@ export default function AdminSubscriptionsPage() {
                 <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("suspend")}>
                   Suspend
                 </button>
-              </div>
-
-              <div className="border rounded-2xl p-4 space-y-2">
-                <div className="font-semibold">Extend</div>
-                <div className="flex flex-wrap gap-2">
-                  <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("extend", 7)}>
-                    +1 day
-                  </button>
-                  <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("extend", 30)}>
-                    +7 days
-                  </button>
-                  <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("extend", 90)}>
-                    +30 days
-                  </button>
-                </div>
-                <div className="text-xs opacity-60">Extend makes subscription active and moves expiry forward.</div>
+                <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("inactive")}>
+                  Set Inactive
+                </button>
+                <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("extend", 1)}>
+                  +1 day
+                </button>
+                <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("extend", 7)}>
+                  +7 days
+                </button>
+                <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={() => act("extend", 30)}>
+                  +30 days
+                </button>
               </div>
 
               <div className="border rounded-2xl p-4">
-                <div className="font-semibold">History</div>
+                <h3 className="font-medium">History</h3>
+
                 {history.length === 0 ? (
-                  <p className="opacity-70 mt-2">No changes logged yet.</p>
+                  <p className="opacity-70 mt-3">No subscription history yet.</p>
                 ) : (
-                  <div className="mt-3 space-y-2">
+                  <div className="space-y-3 mt-3">
                     {history.map((h) => (
                       <div key={h.id} className="border rounded-xl p-3">
-                        <div className="text-sm">
-                          <span className="font-medium">{h.action}</span>{" "}
-                          <span className="opacity-70">
+                        <div className="font-medium">{h.action}</div>
+                        <div className="text-sm opacity-70 mt-1">
+                          <span>
                             ({h.old_status ?? "—"} → {h.new_status ?? "—"})
                           </span>
                         </div>
@@ -248,7 +300,9 @@ export default function AdminSubscriptionsPage() {
                           {h.new_expires_at ? new Date(h.new_expires_at).toLocaleString() : "—"}
                         </div>
                         {h.note && <div className="text-xs opacity-70 mt-1">note: {h.note}</div>}
-                        <div className="text-xs opacity-60 mt-1">{new Date(h.created_at).toLocaleString()}</div>
+                        <div className="text-xs opacity-60 mt-1">
+                          {new Date(h.created_at).toLocaleString()}
+                        </div>
                       </div>
                     ))}
                   </div>

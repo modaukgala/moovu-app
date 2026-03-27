@@ -1,178 +1,228 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Driver = {
   id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
+  first_name: string;
+  last_name: string;
+  phone: string;
   email: string | null;
   id_number: string | null;
-
-  status: string | null; // e.g. pending/approved/active/etc.
+  status: string;
   notes: string | null;
-
-  online: boolean | null;
-  lat: number | null;
-  lng: number | null;
-  last_seen: string | null;
-
-  created_at: string | null;
+  created_at: string;
 };
 
-export default function DriverProfilePage() {
+type Vehicle = {
+  id: string;
+  driver_id: string;
+  make: string | null;
+  model: string | null;
+  color: string | null;
+  plate_number: string;
+  vehicle_type: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+type DriverDoc = {
+  id: string;
+  driver_id: string;
+  doc_type: string;
+  file_path: string;
+  status: string;
+  expires_on: string | null;
+  uploaded_at: string;
+};
+
+type DriverWallet = {
+  id: string;
+  driver_id: string;
+  balance_due: number;
+  total_commission: number;
+  total_driver_net: number;
+  total_trips_completed: number;
+  updated_at: string;
+  created_at: string;
+};
+
+type WalletTransaction = {
+  id: string;
+  driver_id: string;
+  wallet_id: string;
+  trip_id: string | null;
+  tx_type: string;
+  amount: number;
+  direction: string;
+  description: string | null;
+  created_at: string;
+};
+
+export default function DriverDetailPage() {
   const params = useParams<{ id: string }>();
-  const driverId = params.id;
   const router = useRouter();
+  const driverId = params.id;
 
   const [driver, setDriver] = useState<Driver | null>(null);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [docs, setDocs] = useState<DriverDoc[]>([]);
+  const [wallet, setWallet] = useState<DriverWallet | null>(null);
+  const [walletTxs, setWalletTxs] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // editable fields
-  const [status, setStatus] = useState("");
+  // Vehicle form
+  const [vMake, setVMake] = useState("");
+  const [vModel, setVModel] = useState("");
+  const [vColor, setVColor] = useState("");
+  const [vPlate, setVPlate] = useState("");
+  const [vType, setVType] = useState("car");
+
+  // Notes form
   const [notes, setNotes] = useState("");
 
-  // location by name
-  const [locationName, setLocationName] = useState("");
-  const [locBusy, setLocBusy] = useState(false);
-  const [locInfo, setLocInfo] = useState<string | null>(null);
+  // Payment form
+  const [paymentAmount, setPaymentAmount] = useState("");
 
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function loadDriver() {
+  async function loadAll() {
     setLoading(true);
-    setErr(null);
 
-    const { data, error } = await supabaseClient
+    const { data: d } = await supabaseClient
       .from("drivers")
-      .select(
-        "id, first_name, last_name, phone, email, id_number, status, notes, online, lat, lng, last_seen, created_at"
-      )
+      .select("*")
       .eq("id", driverId)
       .single();
 
-    if (error || !data) {
-      setDriver(null);
-      setErr(error?.message ?? "Driver not found");
-      setLoading(false);
-      return;
-    }
+    const { data: v } = await supabaseClient
+      .from("vehicles")
+      .select("*")
+      .eq("driver_id", driverId)
+      .order("created_at", { ascending: false });
 
-    const d = data as any as Driver;
-    setDriver(d);
+    const { data: doc } = await supabaseClient
+      .from("driver_documents")
+      .select("*")
+      .eq("driver_id", driverId)
+      .order("uploaded_at", { ascending: false });
 
-    setStatus(d.status ?? "");
-    setNotes(d.notes ?? "");
+    const { data: w } = await supabaseClient
+      .from("driver_wallets")
+      .select("*")
+      .eq("driver_id", driverId)
+      .maybeSingle();
 
+    const { data: txs } = await supabaseClient
+      .from("driver_wallet_transactions")
+      .select("*")
+      .eq("driver_id", driverId)
+      .order("created_at", { ascending: false });
+
+    setDriver((d as Driver) ?? null);
+    setVehicles((v as Vehicle[]) ?? []);
+    setDocs((doc as DriverDoc[]) ?? []);
+    setWallet((w as DriverWallet) ?? null);
+    setWalletTxs((txs as WalletTransaction[]) ?? []);
+    setNotes(d?.notes ?? "");
     setLoading(false);
   }
 
   useEffect(() => {
-    loadDriver();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadAll();
   }, [driverId]);
 
-  async function setOnline(online: boolean) {
-    if (!driver) return;
-    setSaving(true);
-    setErr(null);
+  const title = useMemo(() => {
+    if (!driver) return "Driver";
+    return `${driver.first_name} ${driver.last_name}`;
+  }, [driver]);
 
-    const { error } = await supabaseClient
+  async function updateDriverStatus(status: string) {
+    await supabaseClient
       .from("drivers")
-      .update({
-        online,
-        last_seen: new Date().toISOString(),
-      })
+      .update({ status })
       .eq("id", driverId);
 
-    setSaving(false);
-
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-
-    await loadDriver();
+    await loadAll();
   }
 
-  async function saveProfile() {
-    if (!driver) return;
-    setSaving(true);
-    setErr(null);
-
-    const { error } = await supabaseClient
+  async function saveNotes() {
+    await supabaseClient
       .from("drivers")
-      .update({
-        status: status || null,
-        notes: notes || null,
-      })
+      .update({ notes })
       .eq("id", driverId);
 
-    setSaving(false);
-
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-
-    await loadDriver();
+    await loadAll();
   }
 
-  async function saveLocationFromName() {
-    if (!driver) return;
+  async function addVehicle(e: React.FormEvent) {
+    e.preventDefault();
 
-    const place = locationName.trim();
-    if (!place) {
-      setLocInfo("Type a place name first (e.g. Siyabuswa C).");
-      return;
-    }
+    if (!vPlate.trim()) return;
 
-    setLocBusy(true);
-    setLocInfo(null);
-    setErr(null);
+    await supabaseClient.from("vehicles").insert({
+      driver_id: driverId,
+      make: vMake || null,
+      model: vModel || null,
+      color: vColor || null,
+      plate_number: vPlate.trim(),
+      vehicle_type: vType,
+      is_active: true,
+    });
 
-    try {
-      const res = await fetch("/api/maps/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ place }),
+    setVMake("");
+    setVModel("");
+    setVColor("");
+    setVPlate("");
+    setVType("car");
+
+    await loadAll();
+  }
+
+  async function approveDoc(docId: string, status: "approved" | "rejected") {
+    await supabaseClient
+      .from("driver_documents")
+      .update({ status })
+      .eq("id", docId);
+
+    await loadAll();
+  }
+
+  async function recordDriverPayment() {
+    const amount = Number(paymentAmount);
+
+    if (!wallet || !Number.isFinite(amount) || amount <= 0) return;
+
+    const { data: userData } = await supabaseClient.auth.getUser();
+    const createdBy = userData.user?.id ?? null;
+
+    const { error: txError } = await supabaseClient
+      .from("driver_wallet_transactions")
+      .insert({
+        driver_id: driverId,
+        wallet_id: wallet.id,
+        trip_id: null,
+        tx_type: "payment",
+        amount,
+        direction: "credit",
+        description: `Driver paid Moovu R${amount}`,
+        created_by: createdBy,
       });
 
-      const json = await res.json();
+    if (txError) return;
 
-      if (!json.ok) {
-        setLocBusy(false);
-        setLocInfo(json.error || "Location not found");
-        return;
-      }
+    const newBalance = Math.max(0, Number(wallet.balance_due || 0) - amount);
 
-      const { error } = await supabaseClient
-        .from("drivers")
-        .update({
-          lat: json.lat,
-          lng: json.lng,
-          last_seen: new Date().toISOString(),
-        })
-        .eq("id", driverId);
+    await supabaseClient
+      .from("driver_wallets")
+      .update({
+        balance_due: newBalance,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", wallet.id);
 
-      setLocBusy(false);
-
-      if (error) {
-        setErr(error.message);
-        return;
-      }
-
-      setLocInfo(`Saved: ${json.address ?? place}`);
-      await loadDriver();
-    } catch (e: any) {
-      setLocBusy(false);
-      setErr(e?.message ?? "Failed to save location");
-    }
+    setPaymentAmount("");
+    await loadAll();
   }
 
   if (loading) {
@@ -182,131 +232,293 @@ export default function DriverProfilePage() {
   if (!driver) {
     return (
       <main className="p-6">
-        <p className="text-red-600">{err ?? "Driver not found"}</p>
-        <button className="border rounded-xl px-4 py-2 mt-4" onClick={() => router.push("/admin/drivers")}>
-          Back to Drivers
+        <p>Driver not found.</p>
+        <button
+          className="border rounded-xl px-4 py-2 mt-3"
+          onClick={() => router.push("/admin/drivers")}
+        >
+          Back
         </button>
       </main>
     );
   }
 
   return (
-    <main className="p-6 space-y-6 max-w-3xl">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+    <main className="p-6 space-y-8">
+      <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-semibold">
-            {driver.first_name ?? "—"} {driver.last_name ?? ""}
-          </h1>
-          <p className="opacity-70 mt-1">Driver Profile</p>
+          <h1 className="text-2xl font-semibold">{title}</h1>
+          <p className="opacity-70 mt-1">
+            Status: <span className="capitalize">{driver.status}</span> • Phone: {driver.phone}
+            {driver.email ? ` • Email: ${driver.email}` : ""}
+          </p>
         </div>
 
         <div className="flex gap-2">
-          <Link className="border rounded-xl px-4 py-2" href="/admin/drivers">
-            Back
-          </Link>
+          {driver.status === "pending" && (
+            <button
+              className="border rounded-xl px-4 py-2"
+              onClick={() => updateDriverStatus("approved")}
+            >
+              Approve
+            </button>
+          )}
+
+          {driver.status !== "suspended" && (
+            <button
+              className="border rounded-xl px-4 py-2"
+              onClick={() => updateDriverStatus("suspended")}
+            >
+              Suspend
+            </button>
+          )}
+
+          {driver.status === "suspended" && (
+            <button
+              className="border rounded-xl px-4 py-2"
+              onClick={() => updateDriverStatus("active")}
+            >
+              Activate
+            </button>
+          )}
         </div>
       </div>
 
-      {err && <p className="text-sm text-red-600">{err}</p>}
-
-      {/* Basic info */}
-      <section className="border rounded-2xl p-5 space-y-3">
-        <h2 className="font-semibold">Details</h2>
-
-        <div className="grid md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <div className="opacity-70">Phone</div>
-            <div className="font-medium">{driver.phone ?? "—"}</div>
-          </div>
-
-          <div>
-            <div className="opacity-70">Email</div>
-            <div className="font-medium">{driver.email ?? "—"}</div>
-          </div>
-
-          <div>
-            <div className="opacity-70">ID Number</div>
-            <div className="font-medium">{driver.id_number ?? "—"}</div>
-          </div>
-
-          <div>
-            <div className="opacity-70">Created</div>
-            <div className="font-medium">
-              {driver.created_at ? new Date(driver.created_at).toLocaleString() : "—"}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Status + notes */}
-      <section className="border rounded-2xl p-5 space-y-4">
-        <h2 className="font-semibold">Admin Settings</h2>
-
-        <div className="grid md:grid-cols-2 gap-3">
-          <input
-            className="border rounded-xl p-3"
-            placeholder="Status (e.g. approved, active)"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          />
-          <button disabled={saving} className="border rounded-xl px-4 py-2" onClick={saveProfile}>
-            {saving ? "Saving..." : "Save Profile"}
-          </button>
-        </div>
-
+      <section className="border rounded-2xl p-5">
+        <h2 className="font-semibold">Notes</h2>
         <textarea
-          className="border rounded-xl p-3 w-full min-h-[110px]"
-          placeholder="Notes (optional)"
+          className="w-full border rounded-xl p-3 mt-3 min-h-[120px]"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add internal notes about this driver..."
         />
+        <div className="mt-3">
+          <button className="border rounded-xl px-4 py-2" onClick={saveNotes}>
+            Save Notes
+          </button>
+        </div>
       </section>
 
-      {/* Availability + Location */}
-      <section className="border rounded-2xl p-5 space-y-4">
-        <h2 className="font-semibold">Availability & Location</h2>
+      <section className="border rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Documents</h2>
+          <a
+            className="text-sm underline opacity-80"
+            href={`/admin/drivers/${driverId}/documents/upload`}
+          >
+            Upload document
+          </a>
+        </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="text-sm opacity-70">
-            Online: <span className="font-medium">{driver.online ? "Yes" : "No"}</span>
-            {driver.last_seen ? ` • Last seen: ${new Date(driver.last_seen).toLocaleString()}` : ""}
+        {docs.length === 0 ? (
+          <p className="opacity-70 mt-3">No documents uploaded yet.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {docs.map((d) => (
+              <div key={d.id} className="border rounded-xl p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium capitalize">{d.doc_type}</div>
+                    <div className="text-sm opacity-70">
+                      Status: <span className="capitalize">{d.status}</span>
+                      {d.expires_on ? ` • Expires: ${d.expires_on}` : ""}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <a
+                      className="border rounded-lg px-3 py-1 text-sm"
+                      href={`/admin/drivers/${driverId}/documents/view?path=${encodeURIComponent(
+                        d.file_path
+                      )}`}
+                    >
+                      View
+                    </a>
+
+                    {d.status !== "approved" && (
+                      <button
+                        className="border rounded-lg px-3 py-1 text-sm"
+                        onClick={() => approveDoc(d.id, "approved")}
+                      >
+                        Approve
+                      </button>
+                    )}
+
+                    {d.status !== "rejected" && (
+                      <button
+                        className="border rounded-lg px-3 py-1 text-sm"
+                        onClick={() => approveDoc(d.id, "rejected")}
+                      >
+                        Reject
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-xs opacity-60 break-all">{d.file_path}</div>
+              </div>
+            ))}
           </div>
+        )}
+      </section>
 
-          <button disabled={saving} className="border rounded-xl px-4 py-2" onClick={() => setOnline(true)}>
-            Set Online
-          </button>
-          <button disabled={saving} className="border rounded-xl px-4 py-2" onClick={() => setOnline(false)}>
-            Set Offline
-          </button>
+      <section className="border rounded-2xl p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">Driver Commission Balance</h2>
+            <p className="text-sm opacity-70 mt-1">
+              This is the amount the driver owes Moovu from completed trips.
+            </p>
+          </div>
         </div>
 
-        <div className="text-sm opacity-70">
-          Coords:{" "}
-          <span className="font-medium">
-            {driver.lat != null && driver.lng != null ? `${driver.lat}, ${driver.lng}` : "—"}
-          </span>
-        </div>
+        {!wallet ? (
+          <p className="opacity-70 mt-4">No wallet activity yet.</p>
+        ) : (
+          <>
+            <div className="grid md:grid-cols-4 gap-4 mt-4">
+              <div className="border rounded-xl p-4">
+                <div className="text-sm opacity-70">Balance Due</div>
+                <div className="text-xl font-semibold">
+                  R{Number(wallet.balance_due || 0).toFixed(2)}
+                </div>
+              </div>
 
-        {/* Location by place name */}
-        <div className="grid md:grid-cols-2 gap-3">
+              <div className="border rounded-xl p-4">
+                <div className="text-sm opacity-70">Total Commission</div>
+                <div className="text-xl font-semibold">
+                  R{Number(wallet.total_commission || 0).toFixed(2)}
+                </div>
+              </div>
+
+              <div className="border rounded-xl p-4">
+                <div className="text-sm opacity-70">Driver Net</div>
+                <div className="text-xl font-semibold">
+                  R{Number(wallet.total_driver_net || 0).toFixed(2)}
+                </div>
+              </div>
+
+              <div className="border rounded-xl p-4">
+                <div className="text-sm opacity-70">Completed Trips</div>
+                <div className="text-xl font-semibold">{wallet.total_trips_completed}</div>
+              </div>
+            </div>
+
+            <div className="mt-5 border rounded-xl p-4">
+              <div className="font-medium">Record driver payment</div>
+              <div className="flex gap-3 mt-3">
+                <input
+                  className="border rounded-xl p-3 w-full max-w-xs"
+                  placeholder="Amount paid"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                />
+                <button
+                  className="border rounded-xl px-4 py-2"
+                  onClick={recordDriverPayment}
+                >
+                  Record Payment
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {walletTxs.length === 0 ? (
+                <p className="opacity-70">No wallet transactions yet.</p>
+              ) : (
+                walletTxs.map((tx) => (
+                  <div key={tx.id} className="border rounded-xl p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium capitalize">
+                        {tx.tx_type} • {tx.direction}
+                      </div>
+                      <div className="font-semibold">
+                        R{Number(tx.amount).toFixed(2)}
+                      </div>
+                    </div>
+
+                    {tx.description && (
+                      <div className="text-sm opacity-70 mt-2">{tx.description}</div>
+                    )}
+
+                    <div className="text-xs opacity-60 mt-2">
+                      {new Date(tx.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="border rounded-2xl p-5">
+        <h2 className="font-semibold">Vehicles</h2>
+
+        <form onSubmit={addVehicle} className="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4">
           <input
             className="border rounded-xl p-3"
-            placeholder="Type driver location (e.g. Siyabuswa C)"
-            value={locationName}
-            onChange={(e) => setLocationName(e.target.value)}
+            placeholder="Make"
+            value={vMake}
+            onChange={(e) => setVMake(e.target.value)}
           />
-          <button
-            type="button"
-            className="border rounded-xl px-4 py-2"
-            disabled={locBusy}
-            onClick={saveLocationFromName}
-          >
-            {locBusy ? "Saving..." : "Save Location"}
-          </button>
-        </div>
 
-        {locInfo && <p className="text-sm opacity-70">{locInfo}</p>}
+          <input
+            className="border rounded-xl p-3"
+            placeholder="Model"
+            value={vModel}
+            onChange={(e) => setVModel(e.target.value)}
+          />
+
+          <input
+            className="border rounded-xl p-3"
+            placeholder="Color"
+            value={vColor}
+            onChange={(e) => setVColor(e.target.value)}
+          />
+
+          <input
+            className="border rounded-xl p-3"
+            placeholder="Plate number *"
+            value={vPlate}
+            onChange={(e) => setVPlate(e.target.value)}
+            required
+          />
+
+          <select
+            className="border rounded-xl p-3"
+            value={vType}
+            onChange={(e) => setVType(e.target.value)}
+          >
+            <option value="car">Car</option>
+            <option value="hatchback">Hatchback</option>
+            <option value="sedan">Sedan</option>
+            <option value="suv">SUV</option>
+            <option value="minibus">Minibus</option>
+            <option value="other">Other</option>
+          </select>
+
+          <div className="md:col-span-5">
+            <button className="border rounded-xl px-4 py-2">Add Vehicle</button>
+          </div>
+        </form>
+
+        {vehicles.length === 0 ? (
+          <p className="opacity-70 mt-4">No vehicles added yet.</p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {vehicles.map((v) => (
+              <div key={v.id} className="border rounded-xl p-4">
+                <div className="font-medium">
+                  {v.plate_number} • <span className="capitalize">{v.vehicle_type}</span>
+                </div>
+                <div className="text-sm opacity-70">
+                  {[v.make, v.model, v.color].filter(Boolean).join(" • ")}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );
