@@ -46,6 +46,9 @@ type Driver = {
   lat: number | null;
   lng: number | null;
   last_seen: string | null;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
+  vehicle_registration?: string | null;
 };
 
 declare global {
@@ -83,6 +86,10 @@ export default function DriverHomePage() {
 
   const [startOtp, setStartOtp] = useState("");
   const [showStartOtp, setShowStartOtp] = useState(false);
+  const [endOtp, setEndOtp] = useState("");
+  const [showEndOtp, setShowEndOtp] = useState(false);
+
+  const otpEntryOpen = showStartOtp || showEndOtp;
 
   const offersTimerRef = useRef<any>(null);
   const tripTimerRef = useRef<any>(null);
@@ -122,32 +129,37 @@ export default function DriverHomePage() {
     return session?.access_token ?? null;
   }
 
-  async function loadDriverProfile() {
-    setLoadingDriver(true);
-    setInfo(null);
+  async function loadDriverProfile(silent = false) {
+    if (!silent) {
+      setLoadingDriver(true);
+      setInfo(null);
+    }
 
     const session = await safeGetSession();
     if (!session) {
-      setLoadingDriver(false);
+      if (!silent) setLoadingDriver(false);
       return null;
     }
 
     const res = await fetch("/api/driver/me", {
       method: "GET",
       headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
     });
 
     const json = await res.json().catch(() => null);
 
     if (!json?.ok || !json?.driver) {
-      setDriver(null);
-      setInfo(json?.error || "Driver record not found.");
-      setLoadingDriver(false);
+      if (!silent) {
+        setDriver(null);
+        setInfo(json?.error || "Driver record not found.");
+      }
+      if (!silent) setLoadingDriver(false);
       return null;
     }
 
     setDriver(json.driver as Driver);
-    setLoadingDriver(false);
+    if (!silent) setLoadingDriver(false);
     return json.driver as Driver;
   }
 
@@ -193,7 +205,7 @@ export default function DriverHomePage() {
     setInfo(null);
 
     if (wantOnline) {
-      await captureCurrentLocationAndSave();
+      await captureCurrentLocationAndSave(true);
     }
 
     const token = await getAccessToken();
@@ -217,12 +229,12 @@ export default function DriverHomePage() {
 
     if (!json?.ok) {
       setInfo(json?.error || "Failed to update online status");
-      await loadDriverProfile();
+      await loadDriverProfile(true);
       return;
     }
 
     setInfo(wantOnline ? "You are online ✅" : "You are offline ✅");
-    await loadDriverProfile();
+    await loadDriverProfile(true);
   }
 
   async function saveLocationFromName() {
@@ -264,7 +276,7 @@ export default function DriverHomePage() {
 
     setBusy(false);
     setInfo(`Location saved: ${json.address ?? place}`);
-    await loadDriverProfile();
+    await loadDriverProfile(true);
   }
 
   async function sendHeartbeat(lat: number, lng: number) {
@@ -291,7 +303,7 @@ export default function DriverHomePage() {
     return true;
   }
 
-  async function captureCurrentLocationAndSave() {
+  async function captureCurrentLocationAndSave(silent = false) {
     return new Promise<boolean>((resolve) => {
       if (!navigator.geolocation) {
         setGpsInfo("GPS not supported");
@@ -302,7 +314,7 @@ export default function DriverHomePage() {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           const ok = await sendHeartbeat(pos.coords.latitude, pos.coords.longitude);
-          await loadDriverProfile();
+          await loadDriverProfile(silent);
           resolve(ok);
         },
         (err) => {
@@ -355,7 +367,7 @@ export default function DriverHomePage() {
     setInfo(action === "accept" ? "Offer accepted ✅" : "Offer declined ✅");
     await loadCurrentOffer();
     await loadCurrentTrip();
-    await loadDriverProfile();
+    await loadDriverProfile(true);
   }
 
   async function tripAction(
@@ -387,13 +399,13 @@ export default function DriverHomePage() {
     if (!json?.ok) {
       setInfo(json?.error || "Action failed");
       await loadCurrentTrip();
-      await loadDriverProfile();
+      await loadDriverProfile(true);
       return;
     }
 
     setInfo(successMsg);
     await loadCurrentTrip();
-    await loadDriverProfile();
+    await loadDriverProfile(true);
   }
 
   async function arriveTrip(tripId: string) {
@@ -404,8 +416,8 @@ export default function DriverHomePage() {
     await tripAction("/api/driver/trips/start", { tripId, otp }, "Trip started ✅");
   }
 
-  async function completeTrip(tripId: string) {
-    await tripAction("/api/driver/trips/complete", { tripId }, "Trip completed ✅");
+  async function completeTrip(tripId: string, otp: string) {
+    await tripAction("/api/driver/trips/complete", { tripId, otp }, "Trip completed ✅");
   }
 
   async function logout() {
@@ -551,11 +563,10 @@ export default function DriverHomePage() {
 
   useEffect(() => {
     (async () => {
-      await loadDriverProfile();
+      await loadDriverProfile(false);
       await loadCurrentOffer();
       await loadCurrentTrip();
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -569,12 +580,11 @@ export default function DriverHomePage() {
     return () => {
       if (offersTimerRef.current) clearInterval(offersTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driver?.online]);
 
   useEffect(() => {
     if (tripTimerRef.current) clearInterval(tripTimerRef.current);
-    if (!driver?.online) return;
+    if (!driver?.online || otpEntryOpen) return;
 
     tripTimerRef.current = setInterval(() => {
       loadCurrentTrip();
@@ -583,8 +593,7 @@ export default function DriverHomePage() {
     return () => {
       if (tripTimerRef.current) clearInterval(tripTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.online]);
+  }, [driver?.online, otpEntryOpen]);
 
   useEffect(() => {
     if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
@@ -594,16 +603,15 @@ export default function DriverHomePage() {
       return;
     }
 
-    captureCurrentLocationAndSave();
+    captureCurrentLocationAndSave(true);
 
     gpsTimerRef.current = setInterval(() => {
-      captureCurrentLocationAndSave();
+      captureCurrentLocationAndSave(true);
     }, 5000);
 
     return () => {
       if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driver?.online]);
 
   useEffect(() => {
@@ -649,7 +657,7 @@ export default function DriverHomePage() {
 
     const script = document.createElement("script");
     script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places`;
     script.async = true;
     script.defer = true;
     script.onload = initWhenReady;
@@ -660,13 +668,11 @@ export default function DriverHomePage() {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!mapInitializedRef.current) return;
     updateMapObjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     driver?.lat,
     driver?.lng,
@@ -768,6 +774,10 @@ export default function DriverHomePage() {
                     {" • "}Busy: <span className="font-medium text-black">{driver.busy ? "Yes" : "No"}</span>
                   </div>
 
+                  <div className="text-sm text-gray-700">
+                    Subscription: <span className="font-medium text-black">{driver.subscription_status ?? "—"}</span>
+                  </div>
+
                   <div className="flex flex-wrap gap-2 pt-2">
                     <button
                       className="rounded-xl px-4 py-2 text-white"
@@ -832,7 +842,7 @@ export default function DriverHomePage() {
                       className="rounded-xl px-4 py-2 text-white"
                       style={{ background: "var(--moovu-primary)" }}
                       disabled={busy}
-                      onClick={captureCurrentLocationAndSave}
+                      onClick={() => captureCurrentLocationAndSave(true)}
                     >
                       Save Current GPS
                     </button>
@@ -1039,7 +1049,7 @@ export default function DriverHomePage() {
                             disabled={busy}
                             className="border rounded-xl px-4 py-2 bg-white text-black"
                           >
-                            Enter OTP & Start Trip
+                            Enter Start OTP
                           </button>
                         ) : (
                           <div className="space-y-2 max-w-md">
@@ -1049,7 +1059,7 @@ export default function DriverHomePage() {
                               maxLength={4}
                               value={startOtp}
                               onChange={(e) => setStartOtp(e.target.value)}
-                              placeholder="Enter passenger OTP"
+                              placeholder="Enter passenger start OTP"
                               className="w-full rounded-xl border px-4 py-3"
                             />
 
@@ -1084,14 +1094,56 @@ export default function DriverHomePage() {
                     )}
 
                     {currentTrip.status === "ongoing" && (
-                      <button
-                        className="rounded-xl px-4 py-2 text-white"
-                        style={{ background: "var(--moovu-primary)" }}
-                        disabled={busy}
-                        onClick={() => completeTrip(currentTrip.id)}
-                      >
-                        Complete Trip
-                      </button>
+                      <div className="space-y-3 w-full">
+                        {!showEndOtp ? (
+                          <button
+                            onClick={() => setShowEndOtp(true)}
+                            disabled={busy}
+                            className="rounded-xl px-4 py-2 text-white"
+                            style={{ background: "var(--moovu-primary)" }}
+                          >
+                            Enter End OTP
+                          </button>
+                        ) : (
+                          <div className="space-y-2 max-w-md">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={4}
+                              value={endOtp}
+                              onChange={(e) => setEndOtp(e.target.value)}
+                              placeholder="Enter passenger end OTP"
+                              className="w-full rounded-xl border px-4 py-3"
+                            />
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={async () => {
+                                  await completeTrip(currentTrip.id, endOtp);
+                                  setEndOtp("");
+                                  setShowEndOtp(false);
+                                }}
+                                disabled={busy || endOtp.trim().length < 4}
+                                className="rounded-xl px-4 py-3 text-white"
+                                style={{ background: "var(--moovu-primary)" }}
+                              >
+                                Verify & Complete
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setEndOtp("");
+                                  setShowEndOtp(false);
+                                }}
+                                disabled={busy}
+                                className="rounded-xl border px-4 py-3 bg-white text-black"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
