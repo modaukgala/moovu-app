@@ -1,37 +1,31 @@
-export type FareInput = {
-  distanceKm: number;
-  durationMin: number;
+type CalculateFareParams = {
+  distanceKm?: number | null;
+  durationMin?: number | null;
 };
 
-export type FareResult = {
-  baseFare: number;
-  distanceFare: number;
-  timeFare: number;
-  totalFare: number;
-};
+export function calculateFare(params: CalculateFareParams) {
+  const distanceKm = Number(params.distanceKm ?? 0);
+  const durationMin = Number(params.durationMin ?? 0);
 
-const BASE_FARE = 25;
-const PER_KM = 7;
-const PER_MINUTE = 1.2;
-const MIN_FARE = 40;
+  const baseFare = 25;
+  const perKm = 7;
+  const perMinute = 1.2;
+  const minFare = 40;
 
-export function calculateFare(input: FareInput): FareResult {
-  const distanceKm = Number(input.distanceKm || 0);
-  const durationMin = Number(input.durationMin || 0);
+  const rawFare = baseFare + distanceKm * perKm + durationMin * perMinute;
+  const fareBeforeRounding = Math.max(minFare, rawFare);
 
-  const distanceFare = distanceKm * PER_KM;
-  const timeFare = durationMin * PER_MINUTE;
-
-  let total = BASE_FARE + distanceFare + timeFare;
-
-  if (total < MIN_FARE) {
-    total = MIN_FARE;
-  }
+  const totalFare = Math.round(fareBeforeRounding);
 
   return {
-    baseFare: BASE_FARE,
-    distanceFare,
-    timeFare,
-    totalFare: Math.round(total * 100) / 100,
+    baseFare,
+    perKm,
+    perMinute,
+    minFare,
+    distanceKm,
+    durationMin,
+    rawFare: Math.round(rawFare * 100) / 100,
+    fareBeforeRounding: Math.round(fareBeforeRounding * 100) / 100,
+    totalFare,
   };
 }

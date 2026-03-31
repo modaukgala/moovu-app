@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 
 type Trip = {
@@ -54,6 +55,10 @@ declare global {
 }
 
 const DEFAULT_CENTER = { lat: -25.12, lng: 29.05 };
+
+function money(value: number | null | undefined) {
+  return `R${Number(value ?? 0).toFixed(2)}`;
+}
 
 export default function RideConfirmPage() {
   const params = useParams<{ id: string }>();
@@ -279,7 +284,11 @@ export default function RideConfirmPage() {
   }, [trip, driver]);
 
   const completionEvent = useMemo(() => {
-    return events.find((e) => e.event_type === "trip_completed" || e.event_type === "trip_completed_admin") ?? null;
+    return (
+      events.find(
+        (e) => e.event_type === "trip_completed" || e.event_type === "trip_completed_admin"
+      ) ?? null
+    );
   }, [events]);
 
   if (loading) {
@@ -403,50 +412,30 @@ export default function RideConfirmPage() {
           <section className="border rounded-2xl p-5 bg-white shadow-sm space-y-4">
             <h2 className="font-semibold">Trip Receipt</h2>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="border rounded-xl p-4">
-                <div className="text-sm opacity-70">Trip ID</div>
-                <div className="font-medium mt-1 break-all">{trip.id}</div>
-              </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Link
+                href={`/ride/${trip.id}/reciept`}
+                className="border rounded-xl px-4 py-3 text-center"
+              >
+                View Receipt
+              </Link>
 
-              <div className="border rounded-xl p-4">
-                <div className="text-sm opacity-70">Completed</div>
-                <div className="font-medium mt-1">
-                  {completionEvent
-                    ? new Date(completionEvent.created_at).toLocaleString()
-                    : "Completed"}
-                </div>
-              </div>
-
-              <div className="border rounded-xl p-4">
-                <div className="text-sm opacity-70">Pickup</div>
-                <div className="font-medium mt-1">{trip.pickup_address ?? "—"}</div>
-              </div>
-
-              <div className="border rounded-xl p-4">
-                <div className="text-sm opacity-70">Dropoff</div>
-                <div className="font-medium mt-1">{trip.dropoff_address ?? "—"}</div>
-              </div>
-
-              <div className="border rounded-xl p-4">
-                <div className="text-sm opacity-70">Fare Paid</div>
-                <div className="font-medium mt-1">
-                  {trip.fare_amount != null ? `R${Number(trip.fare_amount).toFixed(2)}` : "—"}
-                </div>
-              </div>
-
-              <div className="border rounded-xl p-4">
-                <div className="text-sm opacity-70">Payment Method</div>
-                <div className="font-medium mt-1 capitalize">{trip.payment_method ?? "—"}</div>
-              </div>
+              <button
+                className="border rounded-xl px-4 py-3"
+                onClick={() => window.open(`/ride/${trip.id}/reciept`, "_blank")}
+              >
+                Open Printable Receipt
+              </button>
             </div>
 
-            <button
-              className="border rounded-xl px-4 py-2"
-              onClick={() => window.print()}
-            >
-              Print Receipt
-            </button>
+            <div className="border rounded-xl p-4">
+              <div className="text-sm opacity-70">Completed</div>
+              <div className="font-medium mt-1">
+                {completionEvent
+                  ? new Date(completionEvent.created_at).toLocaleString()
+                  : "Completed"}
+              </div>
+            </div>
           </section>
         )}
 
