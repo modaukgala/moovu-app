@@ -8,6 +8,10 @@ declare global {
   }
 }
 
+function wholeRand(value: number | null | undefined) {
+  return value == null ? null : Math.round(Number(value));
+}
+
 export default function RiderBookingPage() {
   const [riderName, setRiderName] = useState("");
   const [riderPhone, setRiderPhone] = useState("");
@@ -45,9 +49,12 @@ export default function RiderBookingPage() {
   async function reverseGeocode(lat: number, lng: number) {
     const res = await fetch("/api/maps/reverse-geocode", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ lat, lng }),
     });
+
     return res.json();
   }
 
@@ -59,6 +66,7 @@ export default function RiderBookingPage() {
 
   async function useCurrentLocation() {
     setMsg(null);
+
     if (!navigator.geolocation) {
       setMsg("This device/browser does not support location.");
       return;
@@ -94,7 +102,11 @@ export default function RiderBookingPage() {
         setBusy(false);
         setMsg(`Could not detect current location: ${err.message}`);
       },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0,
+      }
     );
   }
 
@@ -105,12 +117,16 @@ export default function RiderBookingPage() {
 
     pickupAutocompleteRef.current = new window.google.maps.places.Autocomplete(
       pickupInputRef.current,
-      { fields: ["formatted_address", "geometry", "name"] }
+      {
+        fields: ["formatted_address", "geometry", "name"],
+      }
     );
 
     dropoffAutocompleteRef.current = new window.google.maps.places.Autocomplete(
       dropoffInputRef.current,
-      { fields: ["formatted_address", "geometry", "name"] }
+      {
+        fields: ["formatted_address", "geometry", "name"],
+      }
     );
 
     pickupAutocompleteRef.current.addListener("place_changed", () => {
@@ -189,7 +205,10 @@ export default function RiderBookingPage() {
         destinations: [{ lat: dropoffLat!, lng: dropoffLng! }],
         travelMode: google.maps.TravelMode.DRIVING,
       },
-      (response, status) => {
+      (
+        response: google.maps.DistanceMatrixResponse | null,
+        status: google.maps.DistanceMatrixStatus
+      ) => {
         if (status !== "OK" || !response) {
           setMsg("Could not calculate trip distance.");
           return;
@@ -203,13 +222,15 @@ export default function RiderBookingPage() {
 
         const meters = el.distance?.value ?? 0;
         const seconds = el.duration?.value ?? 0;
+
         const km = meters / 1000;
         const mins = seconds / 60;
+
         const estimatedFare = Math.max(40, 25 + km * 7 + mins * 1.2);
 
         setDistanceKm(Number(km.toFixed(2)));
         setDurationMin(Math.ceil(mins));
-        setFare(Math.round(estimatedFare * 100) / 100);
+        setFare(Math.round(estimatedFare));
         setMsg("Fare calculated ✅");
       }
     );
@@ -243,7 +264,9 @@ export default function RiderBookingPage() {
     try {
       const res = await fetch("/api/public/book-trip", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           riderName,
           riderPhone,
@@ -267,12 +290,14 @@ export default function RiderBookingPage() {
         return;
       }
 
-      const bookedFare =
+      const bookedFareRaw =
         json?.trip?.fare_amount ??
         json?.fareBreakdown?.totalFare ??
         fare;
 
-      setFare(bookedFare != null ? Math.round(Number(bookedFare) * 100) / 100 : null);
+      const bookedFare = wholeRand(bookedFareRaw);
+
+      setFare(bookedFare);
 
       const tripId = json?.tripId ?? json?.trip?.id;
       if (tripId) {
@@ -280,7 +305,7 @@ export default function RiderBookingPage() {
         return;
       }
 
-      setMsg(`Trip booked successfully ✅ Fare: R${Number(bookedFare ?? 0).toFixed(2)}`);
+      setMsg(`Trip booked successfully ✅ Fare: R${bookedFare ?? 0}`);
     } catch (e: any) {
       setMsg(e?.message || "Could not create trip.");
     }
@@ -300,16 +325,31 @@ export default function RiderBookingPage() {
         </div>
 
         {msg && (
-          <div className="border rounded-2xl p-4 text-sm" style={{ background: "var(--moovu-primary-soft)" }}>
+          <div
+            className="border rounded-2xl p-4 text-sm"
+            style={{ background: "var(--moovu-primary-soft)" }}
+          >
             {msg}
           </div>
         )}
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
           <h2 className="text-xl font-semibold">Rider Details</h2>
+
           <div className="grid md:grid-cols-2 gap-4">
-            <input className="border rounded-xl p-3" placeholder="Full name" value={riderName} onChange={(e) => setRiderName(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Phone number" value={riderPhone} onChange={(e) => setRiderPhone(e.target.value)} />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Full name"
+              value={riderName}
+              onChange={(e) => setRiderName(e.target.value)}
+            />
+
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Phone number"
+              value={riderPhone}
+              onChange={(e) => setRiderPhone(e.target.value)}
+            />
           </div>
         </section>
 
@@ -362,7 +402,11 @@ export default function RiderBookingPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button className="border rounded-xl px-4 py-2" onClick={calculateTrip} disabled={busy}>
+            <button
+              className="border rounded-xl px-4 py-2"
+              onClick={calculateTrip}
+              disabled={busy}
+            >
               Calculate Fare
             </button>
 
@@ -379,17 +423,23 @@ export default function RiderBookingPage() {
           <div className="grid md:grid-cols-3 gap-4 pt-2">
             <div className="border rounded-2xl p-4">
               <div className="text-sm text-gray-600">Distance</div>
-              <div className="font-semibold mt-1">{distanceKm != null ? `${distanceKm} km` : "—"}</div>
+              <div className="font-semibold mt-1">
+                {distanceKm != null ? `${distanceKm} km` : "—"}
+              </div>
             </div>
 
             <div className="border rounded-2xl p-4">
               <div className="text-sm text-gray-600">Duration</div>
-              <div className="font-semibold mt-1">{durationMin != null ? `${durationMin} min` : "—"}</div>
+              <div className="font-semibold mt-1">
+                {durationMin != null ? `${durationMin} min` : "—"}
+              </div>
             </div>
 
             <div className="border rounded-2xl p-4">
               <div className="text-sm text-gray-600">Estimated Fare</div>
-              <div className="font-semibold mt-1">{fare != null ? `R${fare.toFixed(2)}` : "—"}</div>
+              <div className="font-semibold mt-1">
+                {fare != null ? `R${fare}` : "—"}
+              </div>
             </div>
           </div>
 

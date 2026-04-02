@@ -15,6 +15,7 @@ export function calculateFare(params: CalculateFareParams) {
   const rawFare = baseFare + distanceKm * perKm + durationMin * perMinute;
   const fareBeforeRounding = Math.max(minFare, rawFare);
 
+  // Final rider price is a whole Rand amount only
   const totalFare = Math.round(fareBeforeRounding);
 
   return {
