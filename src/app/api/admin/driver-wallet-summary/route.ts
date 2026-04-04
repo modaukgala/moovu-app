@@ -49,7 +49,6 @@ export async function GET(req: Request) {
         trip_id,
         tx_type,
         amount,
-        note,
         created_at
       `)
       .eq("driver_id", driverId)

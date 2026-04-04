@@ -13,7 +13,7 @@ export async function GET(req: Request) {
 
     const { supabaseAdmin } = auth;
     const url = new URL(req.url);
-    const status = (url.searchParams.get("status") || "pending").trim();
+    const status = (url.searchParams.get("status") || "all").trim();
 
     let query = supabaseAdmin
       .from("drivers")
@@ -31,11 +31,13 @@ export async function GET(req: Request) {
         vehicle_year,
         vehicle_color,
         vehicle_registration,
-        created_at
+        created_at,
+        is_deleted
       `)
+      .eq("is_deleted", false)
       .order("created_at", { ascending: false });
 
-    if (status && status !== "all") {
+    if (status !== "all") {
       query = query.eq("verification_status", status);
     }
 

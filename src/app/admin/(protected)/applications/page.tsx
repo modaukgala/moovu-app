@@ -22,7 +22,7 @@ type ApplicationRow = {
 };
 
 export default function AdminDriverApplicationsPage() {
-  const [filter, setFilter] = useState("pending");
+  const [filter, setFilter] = useState("all");
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [selected, setSelected] = useState<ApplicationRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -77,7 +77,7 @@ export default function AdminDriverApplicationsPage() {
   }
 
   useEffect(() => {
-    loadApplications();
+    loadApplications("all");
   }, []);
 
   const selectedVehicle = useMemo(() => {
@@ -94,7 +94,7 @@ export default function AdminDriverApplicationsPage() {
           <div className="text-sm text-gray-500">Driver Onboarding</div>
           <h1 className="text-4xl font-semibold mt-1">Driver Applications</h1>
           <p className="text-gray-700 mt-2">
-            Approve, link, review profile details, inspect documents and notify applicants.
+            Approve, link, review profile details, inspect registered applicants.
           </p>
         </div>
 
@@ -108,12 +108,12 @@ export default function AdminDriverApplicationsPage() {
               loadApplications(value);
             }}
           >
+            <option value="all">All</option>
             <option value="pending">Pending</option>
             <option value="pending_review">Pending Review</option>
             <option value="draft">Draft</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
-            <option value="all">All</option>
           </select>
 
           <button

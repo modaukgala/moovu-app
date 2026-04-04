@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type DriverProfile = {
@@ -28,6 +28,10 @@ type DriverProfile = {
   subscription_plan?: string | null;
   subscription_expires_at?: string | null;
   created_at?: string | null;
+  is_deleted?: boolean | null;
+  deleted_at?: string | null;
+  delete_mode?: string | null;
+  deleted_reason?: string | null;
   driver_profile?: {
     home_address?: string | null;
     area_name?: string | null;
@@ -57,7 +61,6 @@ type WalletTxn = {
   trip_id: string | null;
   tx_type: string;
   amount: number;
-  note: string | null;
   created_at: string | null;
 };
 
@@ -67,12 +70,14 @@ function money(v: number | null | undefined) {
 
 export default function AdminDriverProfilePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const driverId = params.id;
 
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [transactions, setTransactions] = useState<WalletTxn[]>([]);
   const [busy, setBusy] = useState(true);
+  const [actionBusy, setActionBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function getAccessToken() {
@@ -136,6 +141,58 @@ export default function AdminDriverProfilePage() {
     loadAll();
   }, [driverId]);
 
+  async function removeDriver(mode: "deactivate" | "permanent") {
+    const confirmText =
+      mode === "deactivate"
+        ? "Deactivate this driver? They can register again later."
+        : "Permanently delete this driver account data? Trips will stay, but profile/account data will be purged.";
+
+    const ok = window.confirm(confirmText);
+    if (!ok) return;
+
+    const reason = window.prompt("Optional reason for this action:")?.trim() || "";
+
+    setActionBusy(true);
+    setMsg(null);
+
+    const token = await getAccessToken();
+    if (!token) {
+      setActionBusy(false);
+      setMsg("Missing access token.");
+      return;
+    }
+
+    const res = await fetch("/api/admin/drivers/remove", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        driverId,
+        mode,
+        reason,
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+    setActionBusy(false);
+
+    if (!json?.ok) {
+      setMsg(json?.error || "Failed to remove driver.");
+      return;
+    }
+
+    setMsg(json?.message || "Driver updated.");
+    await loadAll();
+
+    if (mode === "deactivate") {
+      window.setTimeout(() => {
+        router.push("/admin/applications");
+      }, 1000);
+    }
+  }
+
   const driverName = useMemo(() => {
     return `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() || "Unnamed Driver";
   }, [profile]);
@@ -173,6 +230,11 @@ export default function AdminDriverProfilePage() {
             <p className="text-gray-700 mt-2">
               {profile.phone ?? "—"} • {profile.status ?? "—"} • verification: {profile.verification_status ?? "—"}
             </p>
+            {profile.is_deleted && (
+              <p className="text-red-600 mt-2">
+                Deleted • mode: {profile.delete_mode ?? "—"} • {profile.deleted_at ? new Date(profile.deleted_at).toLocaleString() : ""}
+              </p>
+            )}
           </div>
 
           <Link href="/admin/applications" className="inline-flex border rounded-xl px-4 py-2 bg-white">
@@ -202,6 +264,33 @@ export default function AdminDriverProfilePage() {
             <div className="text-sm text-gray-600">Completed Trips</div>
             <div className="text-3xl font-semibold mt-2">{wallet?.total_trips_completed ?? 0}</div>
           </div>
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-2xl font-semibold">Admin Actions</h2>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => removeDriver("deactivate")}
+              disabled={actionBusy || !!profile.is_deleted}
+              className="rounded-xl px-5 py-3 text-white"
+              style={{ background: "var(--moovu-primary)" }}
+            >
+              {actionBusy ? "Working..." : "Deactivate Driver"}
+            </button>
+
+            <button
+              onClick={() => removeDriver("permanent")}
+              disabled={actionBusy || !!profile.is_deleted}
+              className="border rounded-xl px-5 py-3 bg-white text-red-600 border-red-300"
+            >
+              {actionBusy ? "Working..." : "Permanently Delete"}
+            </button>
+          </div>
+
+          <p className="text-sm text-gray-600">
+            Deactivate keeps history and lets the person register again later. Permanent delete purges account/profile/wallet data but keeps trip records.
+          </p>
         </section>
 
         <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6">
@@ -287,9 +376,6 @@ export default function AdminDriverProfilePage() {
                       <div className="text-sm text-gray-700 mt-1 break-all">
                         Trip: {txn.trip_id}
                       </div>
-                    )}
-                    {txn.note && (
-                      <div className="text-sm text-gray-700 mt-1">{txn.note}</div>
                     )}
                     <div className="text-xs text-gray-500 mt-2">
                       {txn.created_at ? new Date(txn.created_at).toLocaleString() : "—"}

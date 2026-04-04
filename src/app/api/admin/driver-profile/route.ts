@@ -39,7 +39,11 @@ export async function GET(req: NextRequest) {
         subscription_status,
         subscription_plan,
         subscription_expires_at,
-        created_at
+        created_at,
+        is_deleted,
+        deleted_at,
+        delete_mode,
+        deleted_reason
       `)
       .eq("id", driverId)
       .maybeSingle();
@@ -68,7 +72,8 @@ export async function GET(req: NextRequest) {
         pdp_expiry,
         profile_completed,
         submitted_at,
-        updated_at
+        updated_at,
+        deleted_at
       `)
       .eq("driver_id", driverId)
       .maybeSingle();
