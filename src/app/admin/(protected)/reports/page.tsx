@@ -7,6 +7,7 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 type ReportRow = {
   id: string;
   driver_id: string | null;
+  driver_name?: string | null;
   fare_amount: number | null;
   payment_method: string | null;
   pickup_address: string | null;
@@ -30,6 +31,7 @@ type ReportResponse = {
   };
   byDriver: Array<{
     driver_id: string;
+    driver_name: string;
     completed_trips: number;
     completed_revenue: number;
     completed_commission: number;
@@ -205,7 +207,8 @@ export default function AdminReportsPage() {
           <div className="space-y-3">
             {data.byDriver.map((row) => (
               <div key={row.driver_id} className="border rounded-xl p-4">
-                <div className="font-medium break-all">{row.driver_id}</div>
+                <div className="font-medium">{row.driver_name}</div>
+                <div className="text-xs opacity-60 mt-1">{row.driver_id}</div>
                 <div className="text-sm opacity-70 mt-2">
                   Trips: {row.completed_trips} • Revenue: {money(row.completed_revenue)} • Commission: {money(row.completed_commission)} • Driver Net: {money(row.completed_driver_net)}
                 </div>

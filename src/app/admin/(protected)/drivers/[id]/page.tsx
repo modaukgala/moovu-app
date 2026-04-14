@@ -17,52 +17,50 @@ type DriverProfile = {
   busy: boolean | null;
   profile_completed: boolean | null;
   verification_status: string | null;
-  vehicle_make?: string | null;
-  vehicle_model?: string | null;
-  vehicle_year?: string | null;
-  vehicle_color?: string | null;
-  vehicle_registration?: string | null;
-  vehicle_vin?: string | null;
-  vehicle_engine_number?: string | null;
-  seating_capacity?: number | null;
   subscription_status?: string | null;
   subscription_plan?: string | null;
   subscription_expires_at?: string | null;
+  subscription_amount_due?: number | null;
+  subscription_last_paid_at?: string | null;
+  subscription_last_payment_amount?: number | null;
   created_at?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
   delete_mode?: string | null;
   deleted_reason?: string | null;
-  driver_profile?: {
-    home_address?: string | null;
-    area_name?: string | null;
-    id_number?: string | null;
-    alt_phone?: string | null;
-    emergency_contact_name?: string | null;
-    emergency_contact_phone?: string | null;
-    license_number?: string | null;
-    license_code?: string | null;
-    license_expiry?: string | null;
-    pdp_number?: string | null;
-    pdp_expiry?: string | null;
-  } | null;
 };
 
-type Wallet = {
-  driver_id: string;
-  balance_due: number;
-  total_commission: number;
-  total_driver_net: number;
-  total_trips_completed: number;
-  updated_at: string | null;
-};
-
-type WalletTxn = {
+type SubscriptionPayment = {
   id: string;
-  trip_id: string | null;
-  tx_type: string;
-  amount: number;
+  amount_paid: number;
+  payment_method: string;
+  reference: string | null;
+  note: string | null;
   created_at: string | null;
+};
+
+type SubscriptionRequest = {
+  id: string;
+  plan_type: string;
+  amount_expected: number;
+  payment_reference: string;
+  note: string | null;
+  status: string;
+  created_at: string;
+  confirmed_at: string | null;
+};
+
+const PLAN_PRICES = {
+  day: 20,
+  week: 100,
+  month: 300,
+} as const;
+
+const BANK_DETAILS = {
+  bankName: "NEDBANK",
+  accountName: "Current Account",
+  accountNumber: "2129562558",
+  branchCode: "198765",
 };
 
 function money(v: number | null | undefined) {
@@ -75,11 +73,17 @@ export default function AdminDriverProfilePage() {
   const driverId = params.id;
 
   const [profile, setProfile] = useState<DriverProfile | null>(null);
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [transactions, setTransactions] = useState<WalletTxn[]>([]);
+  const [subscriptionPayments, setSubscriptionPayments] = useState<SubscriptionPayment[]>([]);
+  const [subscriptionRequests, setSubscriptionRequests] = useState<SubscriptionRequest[]>([]);
   const [busy, setBusy] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  const [planType, setPlanType] = useState<"day" | "week" | "month">("month");
+  const [amountPaid, setAmountPaid] = useState("300");
+  const [paymentMethod, setPaymentMethod] = useState("eft");
+  const [reference, setReference] = useState("");
+  const [note, setNote] = useState("");
 
   async function getAccessToken() {
     const {
@@ -100,25 +104,15 @@ export default function AdminDriverProfilePage() {
       return;
     }
 
-    const [profileRes, walletRes] = await Promise.all([
-      fetch(`/api/admin/driver-profile?driverId=${encodeURIComponent(driverId)}`, {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }),
-      fetch(`/api/admin/driver-wallet-summary?driverId=${encodeURIComponent(driverId)}`, {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }),
-    ]);
+    const profileRes = await fetch(`/api/admin/driver-profile?driverId=${encodeURIComponent(driverId)}`, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     const profileJson = await profileRes.json().catch(() => null);
-    const walletJson = await walletRes.json().catch(() => null);
 
     if (!profileJson?.ok) {
       setBusy(false);
@@ -126,32 +120,17 @@ export default function AdminDriverProfilePage() {
       return;
     }
 
-    if (!walletJson?.ok) {
-      setBusy(false);
-      setMsg(walletJson?.error || "Failed to load wallet summary.");
-      return;
-    }
-
     setProfile(profileJson.profile ?? null);
-    setWallet(walletJson.wallet ?? null);
-    setTransactions(walletJson.transactions ?? []);
+    setSubscriptionPayments(profileJson.subscription_payments ?? []);
+    setSubscriptionRequests(profileJson.subscription_requests ?? []);
     setBusy(false);
   }
 
-  useEffect(() => {
-    loadAll();
-  }, [driverId]);
-
-  async function removeDriver(mode: "deactivate" | "permanent") {
-    const confirmText =
-      mode === "deactivate"
-        ? "Deactivate this driver? They can register again later."
-        : "Permanently delete this driver account data? Trips will stay, but profile/account data will be purged.";
-
-    const ok = window.confirm(confirmText);
-    if (!ok) return;
-
-    const reason = window.prompt("Optional reason for this action:")?.trim() || "";
+  async function activateSubscription(requestId?: string) {
+    if (!amountPaid || Number(amountPaid) <= 0) {
+      setMsg("Enter a valid payment amount.");
+      return;
+    }
 
     setActionBusy(true);
     setMsg(null);
@@ -163,7 +142,7 @@ export default function AdminDriverProfilePage() {
       return;
     }
 
-    const res = await fetch("/api/admin/drivers/remove", {
+    const res = await fetch("/api/admin/driver-subscription-activate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -171,8 +150,12 @@ export default function AdminDriverProfilePage() {
       },
       body: JSON.stringify({
         driverId,
-        mode,
-        reason,
+        planType,
+        amountPaid: Number(amountPaid),
+        paymentMethod,
+        reference,
+        note,
+        requestId,
       }),
     });
 
@@ -180,19 +163,23 @@ export default function AdminDriverProfilePage() {
     setActionBusy(false);
 
     if (!json?.ok) {
-      setMsg(json?.error || "Failed to remove driver.");
+      setMsg(json?.error || "Failed to activate subscription.");
       return;
     }
 
-    setMsg(json?.message || "Driver updated.");
+    setMsg(json?.message || "Subscription activated.");
+    setReference("");
+    setNote("");
     await loadAll();
-
-    if (mode === "deactivate") {
-      window.setTimeout(() => {
-        router.push("/admin/applications");
-      }, 1000);
-    }
   }
+
+  useEffect(() => {
+    loadAll();
+  }, [driverId]);
+
+  useEffect(() => {
+    setAmountPaid(String(PLAN_PRICES[planType]));
+  }, [planType]);
 
   const driverName = useMemo(() => {
     return `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() || "Unnamed Driver";
@@ -229,13 +216,8 @@ export default function AdminDriverProfilePage() {
             <div className="text-sm text-gray-500">Admin Driver Profile</div>
             <h1 className="text-4xl font-semibold mt-1">{driverName}</h1>
             <p className="text-gray-700 mt-2">
-              {profile.phone ?? "—"} • {profile.status ?? "—"} • verification: {profile.verification_status ?? "—"}
+              {profile.phone ?? "—"} • sub status: {profile.subscription_status ?? "—"} • plan: {profile.subscription_plan ?? "—"}
             </p>
-            {profile.is_deleted && (
-              <p className="text-red-600 mt-2">
-                Deleted • mode: {profile.delete_mode ?? "—"} • {profile.deleted_at ? new Date(profile.deleted_at).toLocaleString() : ""}
-              </p>
-            )}
           </div>
 
           <Link href="/admin/applications" className="inline-flex border rounded-xl px-4 py-2 bg-white">
@@ -245,148 +227,189 @@ export default function AdminDriverProfilePage() {
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-        <section className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <section className="grid md:grid-cols-4 gap-4">
           <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Driver Owes MOOVU</div>
-            <div className="text-3xl font-semibold mt-2">{money(wallet?.balance_due)}</div>
+            <div className="text-sm text-gray-600">Subscription Status</div>
+            <div className="text-2xl font-semibold mt-2">{profile.subscription_status ?? "—"}</div>
           </div>
 
           <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Total Commission</div>
-            <div className="text-3xl font-semibold mt-2">{money(wallet?.total_commission)}</div>
+            <div className="text-sm text-gray-600">Current Plan</div>
+            <div className="text-2xl font-semibold mt-2">{profile.subscription_plan ?? "—"}</div>
           </div>
 
           <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Driver Net Earnings</div>
-            <div className="text-3xl font-semibold mt-2">{money(wallet?.total_driver_net)}</div>
+            <div className="text-sm text-gray-600">Expires</div>
+            <div className="text-lg font-semibold mt-2">
+              {profile.subscription_expires_at
+                ? new Date(profile.subscription_expires_at).toLocaleString()
+                : "—"}
+            </div>
           </div>
 
           <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Completed Trips</div>
-            <div className="text-3xl font-semibold mt-2">{wallet?.total_trips_completed ?? 0}</div>
+            <div className="text-sm text-gray-600">Last Payment</div>
+            <div className="text-lg font-semibold mt-2">
+              {profile.subscription_last_paid_at
+                ? money(profile.subscription_last_payment_amount)
+                : "—"}
+            </div>
           </div>
         </section>
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-2xl font-semibold">Admin Actions</h2>
+          <h2 className="text-2xl font-semibold">Confirm Payment & Activate Prepaid Subscription</h2>
 
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => removeDriver("deactivate")}
-              disabled={actionBusy || !!profile.is_deleted}
-              className="rounded-xl px-5 py-3 text-white"
-              style={{ background: "var(--moovu-primary)" }}
+          <div className="grid md:grid-cols-4 gap-4">
+            <select
+              className="border rounded-xl p-3"
+              value={planType}
+              onChange={(e) => setPlanType(e.target.value as "day" | "week" | "month")}
             >
-              {actionBusy ? "Working..." : "Deactivate Driver"}
-            </button>
+              <option value="day">Day Plan</option>
+              <option value="week">Week Plan</option>
+              <option value="month">Month Plan</option>
+            </select>
 
-            <button
-              onClick={() => removeDriver("permanent")}
-              disabled={actionBusy || !!profile.is_deleted}
-              className="border rounded-xl px-5 py-3 bg-white text-red-600 border-red-300"
+            <input
+              className="border rounded-xl p-3"
+              type="number"
+              min="0"
+              step="0.01"
+              value={amountPaid}
+              onChange={(e) => setAmountPaid(e.target.value)}
+              placeholder="Amount paid"
+            />
+
+            <select
+              className="border rounded-xl p-3"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
             >
-              {actionBusy ? "Working..." : "Permanently Delete"}
-            </button>
+              <option value="eft">EFT</option>
+              <option value="transfer">Transfer</option>
+              <option value="deposit">Deposit</option>
+              <option value="cash">Cash</option>
+            </select>
+
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Reference"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+            />
           </div>
 
-          <p className="text-sm text-gray-600">
-            Deactivate keeps history and lets the person register again later. Permanent delete purges account/profile/wallet data but keeps trip records.
-          </p>
+          <input
+            className="border rounded-xl p-3 w-full"
+            placeholder="Optional note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+
+          <div className="border rounded-2xl p-4 space-y-2">
+            <div><span className="text-gray-500">Bank:</span> {BANK_DETAILS.bankName}</div>
+            <div><span className="text-gray-500">Account Name:</span> {BANK_DETAILS.accountName}</div>
+            <div><span className="text-gray-500">Account Number:</span> {BANK_DETAILS.accountNumber}</div>
+            <div><span className="text-gray-500">Branch Code:</span> {BANK_DETAILS.branchCode}</div>
+          </div>
+
+          <button
+            onClick={() => activateSubscription()}
+            disabled={actionBusy}
+            className="rounded-xl px-4 py-3 text-white"
+            style={{ background: "var(--moovu-primary)" }}
+          >
+            {actionBusy ? "Activating..." : "Confirm Payment & Activate"}
+          </button>
         </section>
 
-        <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6">
-          <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-5">
-            <h2 className="text-2xl font-semibold">Driver Details</h2>
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-2xl font-semibold">Recent Subscription Requests</h2>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm text-gray-500">Phone</div>
-                <div className="text-lg mt-1">{profile.phone ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-gray-500">Email</div>
-                <div className="text-lg mt-1">{profile.email ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-gray-500">Online</div>
-                <div className="text-lg mt-1">{profile.online ? "Yes" : "No"}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-gray-500">Busy</div>
-                <div className="text-lg mt-1">{profile.busy ? "Yes" : "No"}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-gray-500">Subscription</div>
-                <div className="text-lg mt-1">{profile.subscription_status ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-gray-500">Plan</div>
-                <div className="text-lg mt-1">{profile.subscription_plan ?? "—"}</div>
-              </div>
-            </div>
-
-            <div className="border-t pt-4">
-              <h3 className="text-xl font-semibold">Vehicle</h3>
-              <div className="grid md:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <div className="text-sm text-gray-500">Vehicle</div>
-                  <div className="text-lg mt-1">
-                    {[profile.vehicle_make, profile.vehicle_model].filter(Boolean).join(" ") || "—"}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-sm text-gray-500">Registration</div>
-                  <div className="text-lg mt-1">{profile.vehicle_registration ?? "—"}</div>
-                </div>
-
-                <div>
-                  <div className="text-sm text-gray-500">Vehicle Details</div>
-                  <div className="text-lg mt-1">
-                    {[profile.vehicle_year, profile.vehicle_color].filter(Boolean).join(" • ") || "—"}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-sm text-gray-500">Seating Capacity</div>
-                  <div className="text-lg mt-1">{profile.seating_capacity ?? "—"}</div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-5">
-            <h2 className="text-2xl font-semibold">Recent Wallet Transactions</h2>
-
-            {transactions.length === 0 ? (
-              <div className="text-gray-600">No wallet transactions yet.</div>
-            ) : (
-              <div className="space-y-3">
-                {transactions.map((txn) => (
-                  <div key={txn.id} className="border rounded-xl p-4">
-                    <div className="font-medium">{txn.tx_type}</div>
-                    <div className="text-sm text-gray-700 mt-2">
-                      Amount: {money(txn.amount)}
+          {subscriptionRequests.length === 0 ? (
+            <div>No subscription requests yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {subscriptionRequests.map((row) => (
+                <div key={row.id} className="border rounded-xl p-4">
+                  <div className="grid md:grid-cols-5 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-500">Plan</div>
+                      <div className="font-medium">{row.plan_type}</div>
                     </div>
-                    {txn.trip_id && (
-                      <div className="text-sm text-gray-700 mt-1 break-all">
-                        Trip: {txn.trip_id}
+                    <div>
+                      <div className="text-sm text-gray-500">Expected</div>
+                      <div className="font-medium">{money(row.amount_expected)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Reference</div>
+                      <div className="font-medium">{row.payment_reference}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Status</div>
+                      <div className="font-medium">{row.status}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Action</div>
+                      {row.status === "pending" ? (
+                        <button
+                          onClick={() => {
+                            setPlanType(row.plan_type as "day" | "week" | "month");
+                            setAmountPaid(String(row.amount_expected));
+                            setReference(row.payment_reference);
+                            activateSubscription(row.id);
+                          }}
+                          disabled={actionBusy}
+                          className="border rounded-xl px-3 py-2 bg-white"
+                        >
+                          Confirm & Activate
+                        </button>
+                      ) : (
+                        <div className="font-medium">Done</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-2xl font-semibold">Subscription Payment History</h2>
+
+          {subscriptionPayments.length === 0 ? (
+            <div>No subscription payments recorded yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {subscriptionPayments.map((row) => (
+                <div key={row.id} className="border rounded-xl p-4">
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-500">Amount</div>
+                      <div className="font-medium">{money(row.amount_paid)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Method</div>
+                      <div className="font-medium">{row.payment_method}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Reference</div>
+                      <div className="font-medium">{row.reference || "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Date</div>
+                      <div className="font-medium">
+                        {row.created_at ? new Date(row.created_at).toLocaleString() : "—"}
                       </div>
-                    )}
-                    <div className="text-xs text-gray-500 mt-2">
-                      {txn.created_at ? new Date(txn.created_at).toLocaleString() : "—"}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { scoreDriverForTrip } from "@/lib/dispatch/driverScoring";
 import { rebuildDriverQualityMetrics } from "@/lib/quality/rebuildDriverQualityMetrics";
 import { sendPushToTargets } from "@/lib/push-server";
+import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -102,7 +103,10 @@ export async function expirePendingOfferIfNeeded(tripId: string) {
   }
 
   const attemptedDriverIds = Array.from(
-    new Set([...(trip.offer_attempted_driver_ids ?? []), ...(trip.driver_id ? [trip.driver_id] : [])])
+    new Set([
+      ...(trip.offer_attempted_driver_ids ?? []),
+      ...(trip.driver_id ? [trip.driver_id] : []),
+    ])
   );
 
   if (trip.driver_id) {
@@ -150,6 +154,8 @@ export async function offerNextEligibleDriver(
   tripId: string,
   excludedDriverIds: string[] = []
 ) {
+  await expireDriverSubscriptions().catch(() => {});
+
   const { data: trip, error: tripError } = await supabaseAdmin
     .from("trips")
     .select("*")
@@ -191,7 +197,8 @@ export async function offerNextEligibleDriver(
       lng,
       online,
       busy,
-      subscription_status
+      subscription_status,
+      subscription_expires_at
     `)
     .eq("online", true)
     .eq("busy", false);
@@ -203,9 +210,22 @@ export async function offerNextEligibleDriver(
     };
   }
 
-  const filteredDrivers = (drivers ?? []).filter(
-    (driver: any) => !blockedDriverIds.has(driver.id)
-  );
+  const nowMs = Date.now();
+
+  const filteredDrivers = (drivers ?? []).filter((driver: any) => {
+    if (blockedDriverIds.has(driver.id)) return false;
+
+    const expiryMs = driver.subscription_expires_at
+      ? new Date(driver.subscription_expires_at).getTime()
+      : null;
+
+    const subscriptionValid =
+      driver.subscription_status === "active" &&
+      expiryMs != null &&
+      expiryMs > nowMs;
+
+    return subscriptionValid;
+  });
 
   if (filteredDrivers.length === 0) {
     return {

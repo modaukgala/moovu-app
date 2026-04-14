@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
+import { waLinkZA } from "@/lib/whatsapp";
 
 type Wallet = {
   balance_due: number | null;
@@ -15,22 +16,34 @@ type Wallet = {
   account_status: string | null;
 };
 
-type Transaction = {
+type DriverInfo = {
   id: string;
-  amount: number | null;
-  tx_type: string | null;
-  direction: string | null;
-  description: string | null;
-  created_at: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  subscription_status: string | null;
+  subscription_plan: string | null;
+  subscription_expires_at: string | null;
 };
 
-type Settlement = {
+type SubscriptionPayment = {
   id: string;
   amount_paid: number;
   payment_method: string;
   reference: string | null;
   note: string | null;
   created_at: string;
+};
+
+type SubscriptionRequest = {
+  id: string;
+  plan_type: string;
+  amount_expected: number;
+  payment_reference: string;
+  note: string | null;
+  status: string;
+  created_at: string;
+  confirmed_at: string | null;
 };
 
 type CompletedTrip = {
@@ -42,7 +55,21 @@ type CompletedTrip = {
   pickup_address: string | null;
   dropoff_address: string | null;
   created_at: string | null;
+  completed_at?: string | null;
   status: string | null;
+};
+
+const PLAN_PRICES = {
+  day: 20,
+  week: 100,
+  month: 300,
+} as const;
+
+const BANK_DETAILS = {
+  bankName: "NEDBANK",
+  accountName: "Current Account",
+  accountNumber: "2129562558",
+  branchCode: "198765",
 };
 
 function money(value: number | null | undefined) {
@@ -51,11 +78,14 @@ function money(value: number | null | undefined) {
 
 export default function DriverEarningsPage() {
   const [loading, setLoading] = useState(true);
+  const [requestBusy, setRequestBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [driver, setDriver] = useState<DriverInfo | null>(null);
+  const [subscriptionPayments, setSubscriptionPayments] = useState<SubscriptionPayment[]>([]);
+  const [subscriptionRequests, setSubscriptionRequests] = useState<SubscriptionRequest[]>([]);
   const [trips, setTrips] = useState<CompletedTrip[]>([]);
+  const [showBank, setShowBank] = useState<false | "day" | "week" | "month">(false);
 
   async function getToken() {
     const {
@@ -92,15 +122,73 @@ export default function DriverEarningsPage() {
     }
 
     setWallet(json.earnings?.wallet ?? null);
-    setTransactions(json.earnings?.transactions ?? []);
-    setSettlements(json.earnings?.settlements ?? []);
+    setDriver(json.earnings?.driver ?? null);
+    setSubscriptionPayments(json.earnings?.subscription_payments ?? []);
+    setSubscriptionRequests(json.earnings?.subscription_requests ?? []);
     setTrips(json.earnings?.recent_completed_trips ?? []);
     setLoading(false);
+  }
+
+  async function requestSubscription(planType: "day" | "week" | "month") {
+    setRequestBusy(true);
+    setMsg(null);
+
+    const token = await getToken();
+    if (!token) {
+      setMsg("You are not logged in.");
+      setRequestBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/driver/subscription-request", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        planType,
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+
+    if (!json?.ok) {
+      setMsg(json?.error || "Failed to create subscription request.");
+      setRequestBusy(false);
+      return;
+    }
+
+    setMsg(
+      `${json?.message || "Subscription request created."} Reference: ${json?.paymentReference}`
+    );
+    await loadData();
+    setShowBank(planType);
+    setRequestBusy(false);
   }
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const driverName = useMemo(() => {
+    return `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
+  }, [driver]);
+
+  const currentPlanReference = useMemo(() => {
+    if (!showBank || !driver?.id) return "";
+    return `SUB-${driver.id.slice(0, 6).toUpperCase()}-${showBank.toUpperCase()}`;
+  }, [showBank, driver?.id]);
+
+  const whatsappPlanReminder = useMemo(() => {
+    if (!showBank || !driver?.phone) return "";
+    return waLinkZA(
+      driver.phone,
+      `Hi MOOVU, I want to buy a ${showBank} subscription for ${money(
+        PLAN_PRICES[showBank]
+      )}. I have used reference ${currentPlanReference}.`
+    );
+  }, [showBank, driver?.phone, currentPlanReference]);
 
   if (loading) {
     return <main className="p-6 text-black">Loading driver earnings...</main>;
@@ -114,9 +202,9 @@ export default function DriverEarningsPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm text-gray-500">MOOVU Driver</div>
-            <h1 className="text-3xl font-semibold mt-1">Earnings & Wallet</h1>
+            <h1 className="text-3xl font-semibold mt-1">Earnings & Prepaid Subscription</h1>
             <p className="text-gray-700 mt-2">
-              Review your commission balance, settlement history and recent completed trips.
+              Buy a prepaid subscription, then admin confirms your payment and activates access.
             </p>
           </div>
 
@@ -125,48 +213,145 @@ export default function DriverEarningsPage() {
           </Link>
         </div>
 
-        <section className="grid md:grid-cols-5 gap-4">
+        <section className="grid md:grid-cols-4 gap-4">
           <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Balance Due to MOOVU</div>
-            <div className="text-2xl font-semibold mt-2">{money(wallet?.balance_due)}</div>
+            <div className="text-sm text-gray-600">Subscription Status</div>
+            <div className="text-2xl font-semibold mt-2">{driver?.subscription_status ?? "—"}</div>
           </div>
 
           <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Total Commission</div>
-            <div className="text-2xl font-semibold mt-2">{money(wallet?.total_commission)}</div>
+            <div className="text-sm text-gray-600">Current Plan</div>
+            <div className="text-2xl font-semibold mt-2">{driver?.subscription_plan ?? "—"}</div>
           </div>
 
           <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Total Driver Net</div>
-            <div className="text-2xl font-semibold mt-2">{money(wallet?.total_driver_net)}</div>
-          </div>
-
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Trips Completed</div>
-            <div className="text-2xl font-semibold mt-2">{wallet?.total_trips_completed ?? 0}</div>
-          </div>
-
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Last Payment</div>
+            <div className="text-sm text-gray-600">Expires</div>
             <div className="text-lg font-semibold mt-2">
-              {wallet?.last_payment_at
-                ? `${money(wallet?.last_payment_amount)}`
+              {driver?.subscription_expires_at
+                ? new Date(driver.subscription_expires_at).toLocaleString()
                 : "—"}
             </div>
-            <div className="text-xs text-gray-500 mt-1">
-              {wallet?.last_payment_at ? new Date(wallet.last_payment_at).toLocaleString() : ""}
-            </div>
+          </div>
+
+          <div className="border rounded-2xl p-5 bg-white shadow-sm">
+            <div className="text-sm text-gray-600">Trip Balance Due</div>
+            <div className="text-2xl font-semibold mt-2">{money(wallet?.balance_due)}</div>
           </div>
         </section>
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Settlement History</h2>
+          <h2 className="text-xl font-semibold">Buy Prepaid Subscription</h2>
 
-          {settlements.length === 0 ? (
-            <div>No payments to MOOVU have been recorded yet.</div>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="border rounded-2xl p-5 space-y-3">
+              <div className="text-sm text-gray-500">Day Plan</div>
+              <div className="text-3xl font-semibold">{money(PLAN_PRICES.day)}</div>
+              <button
+                onClick={() => requestSubscription("day")}
+                disabled={requestBusy}
+                className="rounded-xl px-4 py-3 text-white w-full"
+                style={{ background: "var(--moovu-primary)" }}
+              >
+                {requestBusy ? "Processing..." : "Buy Day Plan"}
+              </button>
+            </div>
+
+            <div className="border rounded-2xl p-5 space-y-3">
+              <div className="text-sm text-gray-500">Week Plan</div>
+              <div className="text-3xl font-semibold">{money(PLAN_PRICES.week)}</div>
+              <button
+                onClick={() => requestSubscription("week")}
+                disabled={requestBusy}
+                className="rounded-xl px-4 py-3 text-white w-full"
+                style={{ background: "var(--moovu-primary)" }}
+              >
+                {requestBusy ? "Processing..." : "Buy Week Plan"}
+              </button>
+            </div>
+
+            <div className="border rounded-2xl p-5 space-y-3">
+              <div className="text-sm text-gray-500">Month Plan</div>
+              <div className="text-3xl font-semibold">{money(PLAN_PRICES.month)}</div>
+              <button
+                onClick={() => requestSubscription("month")}
+                disabled={requestBusy}
+                className="rounded-xl px-4 py-3 text-white w-full"
+                style={{ background: "var(--moovu-primary)" }}
+              >
+                {requestBusy ? "Processing..." : "Buy Month Plan"}
+              </button>
+            </div>
+          </div>
+
+          {showBank && (
+            <div className="border rounded-2xl p-4 space-y-2">
+              <div><span className="text-gray-500">Bank:</span> {BANK_DETAILS.bankName}</div>
+              <div><span className="text-gray-500">Account Name:</span> {BANK_DETAILS.accountName}</div>
+              <div><span className="text-gray-500">Account Number:</span> {BANK_DETAILS.accountNumber}</div>
+              <div><span className="text-gray-500">Branch Code:</span> {BANK_DETAILS.branchCode}</div>
+              <div><span className="text-gray-500">Plan:</span> {showBank}</div>
+              <div><span className="text-gray-500">Amount:</span> {money(PLAN_PRICES[showBank])}</div>
+              <div><span className="text-gray-500">Reference:</span> {currentPlanReference}</div>
+
+              {whatsappPlanReminder ? (
+                <a
+                  href={whatsappPlanReminder}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex mt-3 border rounded-xl px-4 py-2 bg-white"
+                >
+                  Notify Admin on WhatsApp
+                </a>
+              ) : null}
+            </div>
+          )}
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-xl font-semibold">Recent Subscription Requests</h2>
+
+          {subscriptionRequests.length === 0 ? (
+            <div>No subscription requests yet.</div>
           ) : (
             <div className="space-y-3">
-              {settlements.map((row) => (
+              {subscriptionRequests.map((row) => (
+                <div key={row.id} className="border rounded-2xl p-4">
+                  <div className="grid md:grid-cols-5 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-500">Plan</div>
+                      <div className="font-medium">{row.plan_type}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Amount</div>
+                      <div className="font-medium">{money(row.amount_expected)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Reference</div>
+                      <div className="font-medium">{row.payment_reference}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Status</div>
+                      <div className="font-medium">{row.status}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Created</div>
+                      <div className="font-medium">{new Date(row.created_at).toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-xl font-semibold">Subscription Payment History</h2>
+
+          {subscriptionPayments.length === 0 ? (
+            <div>No subscription payments recorded yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {subscriptionPayments.map((row) => (
                 <div key={row.id} className="border rounded-2xl p-4">
                   <div className="grid md:grid-cols-4 gap-4">
                     <div>
@@ -186,45 +371,6 @@ export default function DriverEarningsPage() {
                       <div className="font-medium">{new Date(row.created_at).toLocaleString()}</div>
                     </div>
                   </div>
-
-                  {row.note && <div className="text-sm text-gray-700 mt-3">{row.note}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Wallet Transactions</h2>
-
-          {transactions.length === 0 ? (
-            <div>No wallet transactions yet.</div>
-          ) : (
-            <div className="space-y-3">
-              {transactions.map((tx) => (
-                <div key={tx.id} className="border rounded-2xl p-4">
-                  <div className="grid md:grid-cols-4 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-500">Type</div>
-                      <div className="font-medium">{tx.tx_type || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Direction</div>
-                      <div className="font-medium">{tx.direction || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Amount</div>
-                      <div className="font-medium">{money(tx.amount)}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Date</div>
-                      <div className="font-medium">
-                        {tx.created_at ? new Date(tx.created_at).toLocaleString() : "—"}
-                      </div>
-                    </div>
-                  </div>
-
-                  {tx.description && <div className="text-sm text-gray-700 mt-3">{tx.description}</div>}
                 </div>
               ))}
             </div>
@@ -242,6 +388,14 @@ export default function DriverEarningsPage() {
                 <div key={trip.id} className="border rounded-2xl p-4">
                   <div className="grid md:grid-cols-5 gap-4">
                     <div>
+                      <div className="text-sm text-gray-500">Pickup</div>
+                      <div className="font-medium">{trip.pickup_address || "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Dropoff</div>
+                      <div className="font-medium">{trip.dropoff_address || "—"}</div>
+                    </div>
+                    <div>
                       <div className="text-sm text-gray-500">Fare</div>
                       <div className="font-medium">{money(trip.fare_amount)}</div>
                     </div>
@@ -250,29 +404,12 @@ export default function DriverEarningsPage() {
                       <div className="font-medium">{money(trip.commission_amount)}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Your Net</div>
-                      <div className="font-medium">{money(trip.driver_net_earnings)}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Payment</div>
-                      <div className="font-medium">{trip.payment_method || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Date</div>
+                      <div className="text-sm text-gray-500">Completed</div>
                       <div className="font-medium">
-                        {trip.created_at ? new Date(trip.created_at).toLocaleString() : "—"}
+                        {(trip.completed_at ?? trip.created_at)
+                          ? new Date(trip.completed_at ?? trip.created_at!).toLocaleString()
+                          : "—"}
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4 mt-3">
-                    <div>
-                      <div className="text-sm text-gray-500">Pickup</div>
-                      <div className="font-medium">{trip.pickup_address || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Dropoff</div>
-                      <div className="font-medium">{trip.dropoff_address || "—"}</div>
                     </div>
                   </div>
                 </div>

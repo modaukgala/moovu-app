@@ -34,16 +34,30 @@ export async function POST(req: Request) {
         ? "rejected"
         : "pending";
 
-    const { error } = await supabaseAdmin
+    const profileCompleted = verificationStatus === "approved";
+
+    const { error: driverError } = await supabaseAdmin
       .from("drivers")
       .update({
         verification_status: verificationStatus,
         status: driverStatus,
+        profile_completed: profileCompleted ? true : undefined,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", driverId);
 
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    if (driverError) {
+      return NextResponse.json({ ok: false, error: driverError.message }, { status: 500 });
+    }
+
+    if (verificationStatus === "approved") {
+      await supabaseAdmin
+        .from("driver_profiles")
+        .update({
+          profile_completed: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("driver_id", driverId);
     }
 
     return NextResponse.json({

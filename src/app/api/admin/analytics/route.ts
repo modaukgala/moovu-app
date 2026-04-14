@@ -26,6 +26,7 @@ export async function GET(req: Request) {
       lowRatedDrivers,
       cancellations,
       topDrivers,
+      drivers,
     ] = await Promise.all([
       supabaseAdmin
         .from("trips")
@@ -50,7 +51,7 @@ export async function GET(req: Request) {
         .limit(10),
       supabaseAdmin
         .from("trips")
-        .select("id,cancelled_by,cancellation_fee_amount,created_at")
+        .select("id,cancelled_by,cancellation_fee_amount,created_at,rider_name")
         .eq("status", "cancelled")
         .order("created_at", { ascending: false })
         .limit(50),
@@ -59,7 +60,16 @@ export async function GET(req: Request) {
         .select("driver_id,avg_rating,total_ratings,total_completed_trips,quality_score")
         .order("quality_score", { ascending: false })
         .limit(10),
+      supabaseAdmin
+        .from("drivers")
+        .select("id,first_name,last_name,phone"),
     ]);
+
+    const driverNameById = new Map<string, string>();
+    for (const d of drivers.data ?? []) {
+      const fullName = `${(d as any).first_name ?? ""} ${(d as any).last_name ?? ""}`.trim();
+      driverNameById.set((d as any).id, fullName || (d as any).phone || (d as any).id);
+    }
 
     return NextResponse.json({
       ok: true,
@@ -67,9 +77,15 @@ export async function GET(req: Request) {
         scheduled_due_next_hour: scheduledDue.count ?? 0,
         scheduled_total_pending: scheduledTotal.count ?? 0,
         open_support_issues: openIssues.count ?? 0,
-        low_rated_drivers: lowRatedDrivers.data ?? [],
+        low_rated_drivers: (lowRatedDrivers.data ?? []).map((row: any) => ({
+          ...row,
+          driver_name: driverNameById.get(row.driver_id) ?? row.driver_id,
+        })),
         recent_cancellations: cancellations.data ?? [],
-        top_drivers: topDrivers.data ?? [],
+        top_drivers: (topDrivers.data ?? []).map((row: any) => ({
+          ...row,
+          driver_name: driverNameById.get(row.driver_id) ?? row.driver_id,
+        })),
         generated_at: now,
       },
     });

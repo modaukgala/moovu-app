@@ -8,12 +8,14 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 type CompletedTrip = {
   id: string;
   driver_id: string | null;
+  driver_name?: string | null;
   fare_amount: number | null;
   payment_method: string | null;
   pickup_address: string | null;
   dropoff_address: string | null;
   status: string | null;
   created_at: string | null;
+  completed_at?: string | null;
   commission_amount?: number | null;
   driver_net_earnings?: number | null;
 };
@@ -269,17 +271,13 @@ export default function AdminEarningsPage() {
                           </div>
                         </div>
                         <div>
-                          <div className="text-sm text-gray-600">Payment</div>
-                          <div className="font-semibold">{trip.payment_method ?? "—"}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-600">Driver ID</div>
-                          <div className="font-semibold break-all">{trip.driver_id ?? "—"}</div>
+                          <div className="text-sm text-gray-600">Driver</div>
+                          <div className="font-semibold">{trip.driver_name ?? "—"}</div>
                         </div>
                         <div>
                           <div className="text-sm text-gray-600">Completed</div>
                           <div className="font-semibold">
-                            {trip.created_at ? new Date(trip.created_at).toLocaleString() : "—"}
+                            {(trip.completed_at ?? trip.created_at) ? new Date(trip.completed_at ?? trip.created_at!).toLocaleString() : "—"}
                           </div>
                         </div>
                       </div>

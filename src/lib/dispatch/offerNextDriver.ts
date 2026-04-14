@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { sendPushToTargets } from "@/lib/push-server";
+import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
 
 type DriverRow = {
   id: string;
@@ -12,6 +13,7 @@ type DriverRow = {
   lng: number | null;
   verification_status: string | null;
   subscription_status: string | null;
+  subscription_expires_at: string | null;
 };
 
 function distanceKm(
@@ -37,6 +39,15 @@ function distanceKm(
 }
 
 function canTakeTrips(driver: DriverRow) {
+  const expiryMs = driver.subscription_expires_at
+    ? new Date(driver.subscription_expires_at).getTime()
+    : null;
+
+  const subscriptionValid =
+    driver.subscription_status === "active" &&
+    expiryMs != null &&
+    expiryMs > Date.now();
+
   return (
     driver.online === true &&
     driver.busy === false &&
@@ -44,9 +55,7 @@ function canTakeTrips(driver: DriverRow) {
     driver.lng != null &&
     (driver.verification_status === "approved" ||
       driver.verification_status === null) &&
-    (driver.subscription_status === "active" ||
-      driver.subscription_status === "grace" ||
-      driver.subscription_status === null)
+    subscriptionValid
   );
 }
 
@@ -54,6 +63,8 @@ export async function offerNextDriver(params: {
   tripId: string;
   excludeDriverIds?: string[];
 }) {
+  await expireDriverSubscriptions().catch(() => {});
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -122,7 +133,8 @@ export async function offerNextDriver(params: {
       lat,
       lng,
       verification_status,
-      subscription_status
+      subscription_status,
+      subscription_expires_at
     `);
 
   if (driversError) {

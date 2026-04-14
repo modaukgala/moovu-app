@@ -9,21 +9,22 @@ type DriverRow = {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
-  driver_wallets?: {
-    id: string;
+  wallet_summary: {
     balance_due: number | null;
     total_commission: number | null;
     total_driver_net: number | null;
     total_trips_completed: number | null;
+    total_paid: number | null;
     last_payment_at: string | null;
     last_payment_amount: number | null;
     account_status: string | null;
-  }[] | null;
+  };
 };
 
 type SettlementRow = {
   id: string;
   driver_id: string;
+  driver_name: string;
   wallet_id: string | null;
   amount_paid: number;
   payment_method: string;
@@ -146,14 +147,20 @@ export default function AdminSettlementsPage() {
 
   const driverOptions = useMemo(() => {
     return drivers.map((driver) => {
-      const wallet = driver.driver_wallets?.[0];
+      const label =
+        `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() ||
+        driver.phone ||
+        driver.id;
+
       return {
         id: driver.id,
-        label: `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || driver.phone || driver.id,
-        wallet,
+        label,
+        wallet: driver.wallet_summary,
       };
     });
   }, [drivers]);
+
+  const selectedDriver = driverOptions.find((d) => d.id === driverId) ?? null;
 
   return (
     <main className="min-h-screen px-6 py-10 text-black">
@@ -184,6 +191,27 @@ export default function AdminSettlementsPage() {
             ))}
           </select>
 
+          {selectedDriver && (
+            <div className="grid md:grid-cols-4 gap-4 border rounded-2xl p-4">
+              <div>
+                <div className="text-sm text-gray-500">Balance Due</div>
+                <div className="font-semibold">{money(selectedDriver.wallet?.balance_due)}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Total Commission</div>
+                <div className="font-semibold">{money(selectedDriver.wallet?.total_commission)}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Total Paid</div>
+                <div className="font-semibold">{money(selectedDriver.wallet?.total_paid)}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Trips Completed</div>
+                <div className="font-semibold">{selectedDriver.wallet?.total_trips_completed ?? 0}</div>
+              </div>
+            </div>
+          )}
+
           <div className="grid md:grid-cols-2 gap-4">
             <input
               className="border rounded-xl p-3"
@@ -203,6 +231,7 @@ export default function AdminSettlementsPage() {
               <option value="cash">Cash</option>
               <option value="eft">EFT</option>
               <option value="transfer">Transfer</option>
+              <option value="deposit">Deposit</option>
             </select>
 
             <input
@@ -239,7 +268,7 @@ export default function AdminSettlementsPage() {
             <div className="space-y-3">
               {driverOptions.map((driver) => (
                 <div key={driver.id} className="border rounded-2xl p-4">
-                  <div className="grid md:grid-cols-5 gap-4">
+                  <div className="grid md:grid-cols-6 gap-4">
                     <div>
                       <div className="text-sm text-gray-500">Driver</div>
                       <div className="font-medium">{driver.label}</div>
@@ -251,6 +280,10 @@ export default function AdminSettlementsPage() {
                     <div>
                       <div className="text-sm text-gray-500">Total Commission</div>
                       <div className="font-medium">{money(driver.wallet?.total_commission)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Total Paid</div>
+                      <div className="font-medium">{money(driver.wallet?.total_paid)}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Trips Completed</div>
@@ -282,8 +315,8 @@ export default function AdminSettlementsPage() {
                 <div key={row.id} className="border rounded-2xl p-4">
                   <div className="grid md:grid-cols-5 gap-4">
                     <div>
-                      <div className="text-sm text-gray-500">Driver ID</div>
-                      <div className="font-medium break-all">{row.driver_id}</div>
+                      <div className="text-sm text-gray-500">Driver</div>
+                      <div className="font-medium">{row.driver_name}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Amount</div>

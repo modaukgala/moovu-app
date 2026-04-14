@@ -51,28 +51,44 @@ export async function GET(req: Request) {
 
     const { supabaseAdmin } = auth;
 
-    const { data: trips, error: tripsError } = await supabaseAdmin
-      .from("trips")
-      .select(`
-        id,
-        driver_id,
-        fare_amount,
-        payment_method,
-        pickup_address,
-        dropoff_address,
-        status,
-        created_at,
-        commission_amount,
-        driver_net_earnings
-      `)
-      .eq("status", "completed")
-      .order("created_at", { ascending: false });
+    const [{ data: trips, error: tripsError }, { data: drivers, error: driversError }] = await Promise.all([
+      supabaseAdmin
+        .from("trips")
+        .select(`
+          id,
+          driver_id,
+          fare_amount,
+          payment_method,
+          pickup_address,
+          dropoff_address,
+          status,
+          created_at,
+          commission_amount,
+          driver_net_earnings
+        `)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false }),
+      supabaseAdmin.from("drivers").select("id,first_name,last_name,phone"),
+    ]);
 
     if (tripsError) {
       return NextResponse.json(
         { ok: false, error: tripsError.message },
         { status: 500 }
       );
+    }
+
+    if (driversError) {
+      return NextResponse.json(
+        { ok: false, error: driversError.message },
+        { status: 500 }
+      );
+    }
+
+    const driverNameById = new Map<string, string>();
+    for (const d of drivers ?? []) {
+      const fullName = `${(d as any).first_name ?? ""} ${(d as any).last_name ?? ""}`.trim();
+      driverNameById.set((d as any).id, fullName || (d as any).phone || (d as any).id);
     }
 
     const completedTrips = (trips ?? []) as TripRow[];
@@ -89,8 +105,8 @@ export async function GET(req: Request) {
         .order("created_at", { ascending: false });
 
       for (const row of events ?? []) {
-        if (!completedAtMap.has(row.trip_id)) {
-          completedAtMap.set(row.trip_id, row.created_at);
+        if (!completedAtMap.has((row as any).trip_id)) {
+          completedAtMap.set((row as any).trip_id, (row as any).created_at);
         }
       }
     }
@@ -98,6 +114,7 @@ export async function GET(req: Request) {
     const normalizedTrips = completedTrips.map((trip) => ({
       ...trip,
       completed_at: completedAtMap.get(trip.id) ?? trip.created_at,
+      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : null,
     }));
 
     const todayStart = startOfToday().getTime();

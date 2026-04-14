@@ -78,8 +78,12 @@ export async function GET(req: Request) {
       inProgressQuery = inProgressQuery.lte("created_at", `${to}T23:59:59`);
     }
 
-    const { data: completed, error: completedErr } = await completedQuery;
-    const { data: inProgress, error: inProgressErr } = await inProgressQuery;
+    const [{ data: completed, error: completedErr }, { data: inProgress, error: inProgressErr }, { data: drivers, error: driversErr }] =
+      await Promise.all([
+        completedQuery,
+        inProgressQuery,
+        supabaseAdmin.from("drivers").select("id,first_name,last_name,phone"),
+      ]);
 
     if (completedErr) {
       return NextResponse.json(
@@ -95,8 +99,28 @@ export async function GET(req: Request) {
       );
     }
 
-    const completedTrips = (completed ?? []) as TripRow[];
-    const inProgressTrips = (inProgress ?? []) as TripRow[];
+    if (driversErr) {
+      return NextResponse.json(
+        { ok: false, error: driversErr.message },
+        { status: 500 }
+      );
+    }
+
+    const driverNameById = new Map<string, string>();
+    for (const d of drivers ?? []) {
+      const fullName = `${(d as any).first_name ?? ""} ${(d as any).last_name ?? ""}`.trim();
+      driverNameById.set((d as any).id, fullName || (d as any).phone || (d as any).id);
+    }
+
+    const completedTrips = ((completed ?? []) as TripRow[]).map((trip) => ({
+      ...trip,
+      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : null,
+    }));
+
+    const inProgressTrips = ((inProgress ?? []) as TripRow[]).map((trip) => ({
+      ...trip,
+      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : null,
+    }));
 
     const totals = {
       completedTrips: completedTrips.length,
@@ -111,6 +135,7 @@ export async function GET(req: Request) {
       string,
       {
         driver_id: string;
+        driver_name: string;
         completed_trips: number;
         completed_revenue: number;
         completed_commission: number;
@@ -125,6 +150,7 @@ export async function GET(req: Request) {
         byDriverMap.get(trip.driver_id) ??
         {
           driver_id: trip.driver_id,
+          driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "—",
           completed_trips: 0,
           completed_revenue: 0,
           completed_commission: 0,

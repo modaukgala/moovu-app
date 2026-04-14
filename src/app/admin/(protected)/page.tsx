@@ -13,6 +13,7 @@ type AnalyticsResponse = {
     open_support_issues: number;
     low_rated_drivers: Array<{
       driver_id: string;
+      driver_name: string;
       avg_rating: number;
       total_ratings: number;
       total_issues: number;
@@ -20,12 +21,14 @@ type AnalyticsResponse = {
     }>;
     recent_cancellations: Array<{
       id: string;
+      rider_name?: string | null;
       cancelled_by: string | null;
       cancellation_fee_amount: number | null;
       created_at: string | null;
     }>;
     top_drivers: Array<{
       driver_id: string;
+      driver_name: string;
       avg_rating: number;
       total_ratings: number;
       total_completed_trips: number;
@@ -134,8 +137,8 @@ export default function AdminDashboardPage() {
                   <div key={driver.driver_id} className="border rounded-xl p-4">
                     <div className="grid grid-cols-4 gap-3">
                       <div>
-                        <div className="text-sm text-gray-500">Driver ID</div>
-                        <div className="font-medium break-all">{driver.driver_id}</div>
+                        <div className="text-sm text-gray-500">Driver</div>
+                        <div className="font-medium">{driver.driver_name}</div>
                       </div>
                       <div>
                         <div className="text-sm text-gray-500">Rating</div>
@@ -167,8 +170,8 @@ export default function AdminDashboardPage() {
                   <div key={driver.driver_id} className="border rounded-xl p-4">
                     <div className="grid grid-cols-4 gap-3">
                       <div>
-                        <div className="text-sm text-gray-500">Driver ID</div>
-                        <div className="font-medium break-all">{driver.driver_id}</div>
+                        <div className="text-sm text-gray-500">Driver</div>
+                        <div className="font-medium">{driver.driver_name}</div>
                       </div>
                       <div>
                         <div className="text-sm text-gray-500">Rating</div>
@@ -210,6 +213,10 @@ export default function AdminDashboardPage() {
                       <div className="font-medium break-all">{item.id}</div>
                     </div>
                     <div>
+                      <div className="text-sm text-gray-500">Rider</div>
+                      <div className="font-medium">{item.rider_name || "—"}</div>
+                    </div>
+                    <div>
                       <div className="text-sm text-gray-500">Cancelled By</div>
                       <div className="font-medium">{item.cancelled_by || "—"}</div>
                     </div>
@@ -217,12 +224,10 @@ export default function AdminDashboardPage() {
                       <div className="text-sm text-gray-500">Fee</div>
                       <div className="font-medium">{money(item.cancellation_fee_amount)}</div>
                     </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Date</div>
-                      <div className="font-medium">
-                        {item.created_at ? new Date(item.created_at).toLocaleString() : "—"}
-                      </div>
-                    </div>
+                  </div>
+
+                  <div className="text-sm text-gray-500 mt-3">
+                    {item.created_at ? new Date(item.created_at).toLocaleString() : "—"}
                   </div>
                 </div>
               ))}
