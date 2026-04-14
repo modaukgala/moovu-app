@@ -2,192 +2,234 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
-type Profile = {
-  full_name: string | null;
-  role: string | null;
+type AnalyticsResponse = {
+  ok: boolean;
+  analytics?: {
+    scheduled_due_next_hour: number;
+    scheduled_total_pending: number;
+    open_support_issues: number;
+    low_rated_drivers: Array<{
+      driver_id: string;
+      avg_rating: number;
+      total_ratings: number;
+      total_issues: number;
+      quality_score: number;
+    }>;
+    recent_cancellations: Array<{
+      id: string;
+      cancelled_by: string | null;
+      cancellation_fee_amount: number | null;
+      created_at: string | null;
+    }>;
+    top_drivers: Array<{
+      driver_id: string;
+      avg_rating: number;
+      total_ratings: number;
+      total_completed_trips: number;
+      quality_score: number;
+    }>;
+    generated_at: string;
+  };
+  error?: string;
 };
 
-type DashboardCounts = {
-  totalDrivers: number;
-  pendingDrivers: number;
-  activeDrivers: number;
-  requestedTrips: number;
-  assignedTrips: number;
-  ongoingTrips: number;
-  completedTrips: number;
-  cancelledTrips: number;
-};
+function money(value: number | null | undefined) {
+  return `R${Number(value ?? 0).toFixed(2)}`;
+}
 
-export default function AdminPage() {
-  const router = useRouter();
-
+export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [name, setName] = useState<string | null>(null);
-  const [role, setRole] = useState<string | null>(null);
-  const [counts, setCounts] = useState<DashboardCounts>({
-    totalDrivers: 0,
-    pendingDrivers: 0,
-    activeDrivers: 0,
-    requestedTrips: 0,
-    assignedTrips: 0,
-    ongoingTrips: 0,
-    completedTrips: 0,
-    cancelledTrips: 0,
-  });
+  const [msg, setMsg] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsResponse["analytics"] | null>(null);
+
+  async function loadAnalytics() {
+    setLoading(true);
+    setMsg(null);
+
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    if (!session) {
+      setMsg("You are not logged in.");
+      setLoading(false);
+      return;
+    }
+
+    const res = await fetch("/api/admin/analytics", {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    const json = (await res.json()) as AnalyticsResponse;
+
+    if (!json?.ok || !json.analytics) {
+      setMsg(json?.error || "Failed to load analytics.");
+      setLoading(false);
+      return;
+    }
+
+    setAnalytics(json.analytics);
+    setLoading(false);
+  }
 
   useEffect(() => {
-    (async () => {
-      const { data: userData } = await supabaseClient.auth.getUser();
-      const user = userData.user;
-
-      if (!user) {
-        router.replace("/admin/login");
-        return;
-      }
-
-      const { data: profile, error: profileError } = await supabaseClient
-        .from("profiles")
-        .select("full_name, role")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError || !profile) {
-        router.replace("/admin/login?error=profile_missing");
-        return;
-      }
-
-      const typedProfile = profile as Profile;
-      const isStaff = ["owner", "admin", "dispatcher", "support"].includes(
-        typedProfile.role ?? ""
-      );
-
-      if (!isStaff) {
-        await supabaseClient.auth.signOut();
-        router.replace("/admin/login?error=not_allowed");
-        return;
-      }
-
-      setName(typedProfile.full_name ?? null);
-      setRole(typedProfile.role ?? null);
-
-      const [
-        driversRes,
-        requestedTripsRes,
-        assignedTripsRes,
-        ongoingTripsRes,
-        completedTripsRes,
-        cancelledTripsRes,
-      ] = await Promise.all([
-        supabaseClient.from("drivers").select("id, status"),
-        supabaseClient.from("trips").select("id").eq("status", "requested"),
-        supabaseClient.from("trips").select("id").eq("status", "assigned"),
-        supabaseClient.from("trips").select("id").eq("status", "ongoing"),
-        supabaseClient.from("trips").select("id").eq("status", "completed"),
-        supabaseClient.from("trips").select("id").eq("status", "cancelled"),
-      ]);
-
-      const drivers = driversRes.data ?? [];
-      const pendingDrivers = drivers.filter((d: any) => d.status === "pending").length;
-      const activeDrivers = drivers.filter((d: any) =>
-        ["approved", "active"].includes(d.status)
-      ).length;
-
-      setCounts({
-        totalDrivers: drivers.length,
-        pendingDrivers,
-        activeDrivers,
-        requestedTrips: requestedTripsRes.data?.length ?? 0,
-        assignedTrips: assignedTripsRes.data?.length ?? 0,
-        ongoingTrips: ongoingTripsRes.data?.length ?? 0,
-        completedTrips: completedTripsRes.data?.length ?? 0,
-        cancelledTrips: cancelledTripsRes.data?.length ?? 0,
-      });
-
-      setLoading(false);
-    })();
-  }, [router]);
+    loadAnalytics();
+  }, []);
 
   if (loading) {
-    return <main className="p-6">Loading admin...</main>;
+    return <main className="p-6 text-black">Loading admin dashboard...</main>;
   }
 
   return (
-    <main className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
-        <p className="opacity-70 mt-2">
-          Welcome{name ? `, ${name}` : ""} — role: {role}
-        </p>
+    <main className="min-h-screen px-6 py-10 text-black">
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div>
+          <div className="text-sm text-gray-500">MOOVU Admin</div>
+          <h1 className="text-3xl font-semibold mt-1">Operations Dashboard</h1>
+          <p className="text-gray-700 mt-2">
+            Live platform intelligence for scheduling, quality and support.
+          </p>
+        </div>
+
+        <section className="grid md:grid-cols-3 gap-4">
+          <div className="border rounded-2xl p-5 bg-white shadow-sm">
+            <div className="text-sm text-gray-600">Scheduled Due Next Hour</div>
+            <div className="text-2xl font-semibold mt-2">
+              {analytics?.scheduled_due_next_hour ?? 0}
+            </div>
+          </div>
+
+          <div className="border rounded-2xl p-5 bg-white shadow-sm">
+            <div className="text-sm text-gray-600">Scheduled Pending Total</div>
+            <div className="text-2xl font-semibold mt-2">
+              {analytics?.scheduled_total_pending ?? 0}
+            </div>
+          </div>
+
+          <div className="border rounded-2xl p-5 bg-white shadow-sm">
+            <div className="text-sm text-gray-600">Open Support Issues</div>
+            <div className="text-2xl font-semibold mt-2">
+              {analytics?.open_support_issues ?? 0}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid lg:grid-cols-2 gap-6">
+          <div className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+            <h2 className="text-xl font-semibold">Top Drivers</h2>
+
+            {(analytics?.top_drivers?.length ?? 0) === 0 ? (
+              <div>No quality metrics available yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {analytics!.top_drivers.map((driver) => (
+                  <div key={driver.driver_id} className="border rounded-xl p-4">
+                    <div className="grid grid-cols-4 gap-3">
+                      <div>
+                        <div className="text-sm text-gray-500">Driver ID</div>
+                        <div className="font-medium break-all">{driver.driver_id}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Rating</div>
+                        <div className="font-medium">{Number(driver.avg_rating).toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Rated Trips</div>
+                        <div className="font-medium">{driver.total_ratings}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Quality Score</div>
+                        <div className="font-medium">{Number(driver.quality_score).toFixed(2)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+            <h2 className="text-xl font-semibold">Low Rated Drivers</h2>
+
+            {(analytics?.low_rated_drivers?.length ?? 0) === 0 ? (
+              <div>No low-rated drivers currently flagged.</div>
+            ) : (
+              <div className="space-y-3">
+                {analytics!.low_rated_drivers.map((driver) => (
+                  <div key={driver.driver_id} className="border rounded-xl p-4">
+                    <div className="grid grid-cols-4 gap-3">
+                      <div>
+                        <div className="text-sm text-gray-500">Driver ID</div>
+                        <div className="font-medium break-all">{driver.driver_id}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Rating</div>
+                        <div className="font-medium">{Number(driver.avg_rating).toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Issues</div>
+                        <div className="font-medium">{driver.total_issues}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Quality Score</div>
+                        <div className="font-medium">{Number(driver.quality_score).toFixed(2)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Recent Cancellations</h2>
+            <Link href="/admin/trips" className="border rounded-xl px-4 py-2">
+              Open Trips
+            </Link>
+          </div>
+
+          {(analytics?.recent_cancellations?.length ?? 0) === 0 ? (
+            <div>No recent cancellations found.</div>
+          ) : (
+            <div className="space-y-3">
+              {analytics!.recent_cancellations.map((item) => (
+                <div key={item.id} className="border rounded-xl p-4">
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-500">Trip ID</div>
+                      <div className="font-medium break-all">{item.id}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Cancelled By</div>
+                      <div className="font-medium">{item.cancelled_by || "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Fee</div>
+                      <div className="font-medium">{money(item.cancellation_fee_amount)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Date</div>
+                      <div className="font-medium">
+                        {item.created_at ? new Date(item.created_at).toLocaleString() : "—"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
-
-      <div className="grid md:grid-cols-4 gap-4">
-        <div className="border rounded-2xl p-5">
-          <div className="text-sm opacity-70">Total Drivers</div>
-          <div className="text-2xl font-semibold mt-2">{counts.totalDrivers}</div>
-        </div>
-
-        <div className="border rounded-2xl p-5">
-          <div className="text-sm opacity-70">Pending Drivers</div>
-          <div className="text-2xl font-semibold mt-2">{counts.pendingDrivers}</div>
-        </div>
-
-        <div className="border rounded-2xl p-5">
-          <div className="text-sm opacity-70">Active Drivers</div>
-          <div className="text-2xl font-semibold mt-2">{counts.activeDrivers}</div>
-        </div>
-
-        <div className="border rounded-2xl p-5">
-          <div className="text-sm opacity-70">Completed Trips</div>
-          <div className="text-2xl font-semibold mt-2">{counts.completedTrips}</div>
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-4 gap-4">
-        <div className="border rounded-2xl p-5">
-          <div className="text-sm opacity-70">Requested Trips</div>
-          <div className="text-2xl font-semibold mt-2">{counts.requestedTrips}</div>
-        </div>
-
-        <div className="border rounded-2xl p-5">
-          <div className="text-sm opacity-70">Assigned Trips</div>
-          <div className="text-2xl font-semibold mt-2">{counts.assignedTrips}</div>
-        </div>
-
-        <div className="border rounded-2xl p-5">
-          <div className="text-sm opacity-70">Ongoing Trips</div>
-          <div className="text-2xl font-semibold mt-2">{counts.ongoingTrips}</div>
-        </div>
-
-        <div className="border rounded-2xl p-5">
-          <div className="text-sm opacity-70">Cancelled Trips</div>
-          <div className="text-2xl font-semibold mt-2">{counts.cancelledTrips}</div>
-        </div>
-      </div>
-
-      <section className="border rounded-2xl p-5">
-        <h2 className="font-semibold">Quick Actions</h2>
-
-        <div className="flex flex-wrap gap-3 mt-4">
-          <Link href="/admin/drivers" className="border rounded-xl px-4 py-2">
-            Manage Drivers
-          </Link>
-
-          <Link href="/admin/drivers/new" className="border rounded-xl px-4 py-2">
-            Add Driver
-          </Link>
-
-          <Link href="/admin/trips" className="border rounded-xl px-4 py-2">
-            View Trips
-          </Link>
-
-          <Link href="/admin/trips/new" className="border rounded-xl px-4 py-2">
-            Create Trip
-          </Link>
-        </div>
-      </section>
     </main>
   );
 }

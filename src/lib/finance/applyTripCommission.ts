@@ -12,6 +12,24 @@ type ApplyTripCommissionServerResult =
   | { ok: true; skipped: boolean; calc: CommissionCalc }
   | { ok: false; error: string };
 
+async function resolveSafeCreatedBy(createdBy?: string | null) {
+  const candidate = String(createdBy ?? "").trim();
+
+  if (!candidate) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("id", candidate)
+    .maybeSingle();
+
+  if (error || !data?.id) {
+    return null;
+  }
+
+  return data.id as string;
+}
+
 export async function applyTripCommissionServer(params: {
   tripId: string;
   driverId: string;
@@ -94,23 +112,27 @@ export async function applyTripCommissionServer(params: {
     return { ok: false, error: tripUpdateError.message };
   }
 
+  const safeCreatedBy = await resolveSafeCreatedBy(createdBy);
+
+  const txPayload = {
+    driver_id: driverId,
+    wallet_id: wallet.id,
+    trip_id: tripId,
+    tx_type: "commission",
+    amount: calc.commissionAmount,
+    direction: "debit",
+    description: `${calc.commissionPct}% commission charged on trip ${tripId}`,
+    meta: {
+      fare_amount: calc.fareAmount,
+      commission_pct: calc.commissionPct,
+      driver_net: calc.driverNet,
+    },
+    created_by: safeCreatedBy,
+  };
+
   const { error: txError } = await supabaseAdmin
     .from("driver_wallet_transactions")
-    .insert({
-      driver_id: driverId,
-      wallet_id: wallet.id,
-      trip_id: tripId,
-      tx_type: "commission",
-      amount: calc.commissionAmount,
-      direction: "debit",
-      description: `5% commission charged on trip ${tripId}`,
-      meta: {
-        fare_amount: calc.fareAmount,
-        commission_pct: calc.commissionPct,
-        driver_net: calc.driverNet,
-      },
-      created_by: createdBy,
-    });
+    .insert(txPayload);
 
   if (txError) {
     return { ok: false, error: txError.message };

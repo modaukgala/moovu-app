@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 export default function DriverLoginPage() {
   const router = useRouter();
@@ -132,7 +133,7 @@ export default function DriverLoginPage() {
           />
         )}
 
-        {msg && <div className="text-sm">{msg}</div>}
+        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
         {mode === "login" ? (
           <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={login}>

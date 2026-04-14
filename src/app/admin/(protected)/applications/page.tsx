@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabaseClient } from "@/lib/supabase/client";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type ApplicationRow = {
   id: string;
@@ -126,11 +127,7 @@ export default function AdminDriverApplicationsPage() {
           </button>
         </div>
 
-        {msg && (
-          <div className="border rounded-2xl p-4 text-sm bg-white">
-            {msg}
-          </div>
-        )}
+        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
         <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-6">
           <section className="border rounded-[2rem] p-6 bg-white shadow-sm">

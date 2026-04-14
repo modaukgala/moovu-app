@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { sendPushToTargets } from "@/lib/push-server";
 
 type DriverRow = {
   id: string;
@@ -44,6 +45,7 @@ function canTakeTrips(driver: DriverRow) {
     (driver.verification_status === "approved" ||
       driver.verification_status === null) &&
     (driver.subscription_status === "active" ||
+      driver.subscription_status === "grace" ||
       driver.subscription_status === null)
   );
 }
@@ -64,6 +66,7 @@ export async function offerNextDriver(params: {
     .select(`
       id,
       status,
+      driver_id,
       pickup_address,
       dropoff_address,
       pickup_lat,
@@ -96,6 +99,10 @@ export async function offerNextDriver(params: {
     ]);
 
   const triedDriverIds = new Set<string>(exclude);
+
+  if (trip.driver_id) {
+    triedDriverIds.add(trip.driver_id);
+  }
 
   for (const row of alreadyTriedRows ?? []) {
     const msg = String((row as any)?.message ?? "");
@@ -167,6 +174,16 @@ export async function offerNextDriver(params: {
   const driver = candidates[0];
   const expiresAt = new Date(Date.now() + 30 * 1000).toISOString();
 
+  const { error: busyError } = await supabase
+    .from("drivers")
+    .update({ busy: true })
+    .eq("id", driver.id)
+    .eq("busy", false);
+
+  if (busyError) {
+    return { ok: false as const, error: busyError.message };
+  }
+
   const { error: updateError } = await supabase
     .from("trips")
     .update({
@@ -178,6 +195,7 @@ export async function offerNextDriver(params: {
     .eq("id", params.tripId);
 
   if (updateError) {
+    await supabase.from("drivers").update({ busy: false }).eq("id", driver.id);
     return { ok: false as const, error: updateError.message };
   }
 
@@ -199,17 +217,11 @@ export async function offerNextDriver(params: {
 
   if (driverAccount?.user_id) {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/push/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userIds: [driverAccount.user_id],
-          title: "New trip offer",
-          body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
-          url: "/driver",
-        }),
+      await sendPushToTargets({
+        userIds: [driverAccount.user_id],
+        title: "New trip offer",
+        body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
+        url: "/driver",
       });
     } catch {}
   }

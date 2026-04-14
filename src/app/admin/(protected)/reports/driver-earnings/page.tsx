@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type Row = {
   driver_id: string;
@@ -97,7 +98,7 @@ export default function DriverEarningsReportPage() {
         </div>
       </div>
 
-      {msg && <div className="border rounded-2xl p-4 text-sm">{msg}</div>}
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <section className="border rounded-2xl p-5">
         <h2 className="font-semibold">Totals</h2>

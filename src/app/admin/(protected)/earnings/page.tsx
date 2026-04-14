@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabaseClient } from "@/lib/supabase/client";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type CompletedTrip = {
   id: string;
@@ -133,15 +134,7 @@ export default function AdminEarningsPage() {
           </div>
         </div>
 
-        {msg && (
-          <div
-            className="border rounded-2xl p-4 text-sm"
-            style={{ background: "var(--moovu-primary-soft)" }}
-          >
-            {msg}
-          </div>
-        )}
-
+        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
         {!earnings ? (
           <div className="border rounded-[2rem] p-6 bg-white shadow-sm">
             No earnings data found.

@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import AdminTripNotifications from "@/components/AdminTripNotifications";
-import EnablePushButton from "@/components/EnablePushButton";
 
 export default function AdminProtectedLayout({
   children,
@@ -116,17 +115,11 @@ export default function AdminProtectedLayout({
               </p>
             </div>
 
-            <EnablePushButton role="admin" />
-
             <nav className="space-y-2">
               <Link
                 href="/admin"
                 className={navClass("/admin")}
-                style={
-                  pathname === "/admin"
-                    ? { background: "var(--moovu-primary)" }
-                    : undefined
-                }
+                style={pathname === "/admin" ? { background: "var(--moovu-primary)" } : undefined}
               >
                 Dashboard
               </Link>
@@ -134,11 +127,7 @@ export default function AdminProtectedLayout({
               <Link
                 href="/admin/drivers"
                 className={navClass("/admin/drivers")}
-                style={
-                  pathname.startsWith("/admin/drivers")
-                    ? { background: "var(--moovu-primary)" }
-                    : undefined
-                }
+                style={pathname.startsWith("/admin/drivers") ? { background: "var(--moovu-primary)" } : undefined}
               >
                 Drivers
               </Link>
@@ -146,11 +135,7 @@ export default function AdminProtectedLayout({
               <Link
                 href="/admin/trips"
                 className={navClass("/admin/trips")}
-                style={
-                  pathname.startsWith("/admin/trips")
-                    ? { background: "var(--moovu-primary)" }
-                    : undefined
-                }
+                style={pathname.startsWith("/admin/trips") ? { background: "var(--moovu-primary)" } : undefined}
               >
                 Trips
               </Link>
@@ -158,11 +143,7 @@ export default function AdminProtectedLayout({
               <Link
                 href="/admin/dispatch/map"
                 className={navClass("/admin/dispatch/map")}
-                style={
-                  pathname.startsWith("/admin/dispatch/map")
-                    ? { background: "var(--moovu-primary)" }
-                    : undefined
-                }
+                style={pathname.startsWith("/admin/dispatch/map") ? { background: "var(--moovu-primary)" } : undefined}
               >
                 Dispatch Map
               </Link>
@@ -170,11 +151,7 @@ export default function AdminProtectedLayout({
               <Link
                 href="/admin/applications"
                 className={navClass("/admin/applications")}
-                style={
-                  pathname.startsWith("/admin/applications")
-                    ? { background: "var(--moovu-primary)" }
-                    : undefined
-                }
+                style={pathname.startsWith("/admin/applications") ? { background: "var(--moovu-primary)" } : undefined}
               >
                 Driver Applications
               </Link>
@@ -182,11 +159,7 @@ export default function AdminProtectedLayout({
               <Link
                 href="/admin/link-driver"
                 className={navClass("/admin/link-driver")}
-                style={
-                  pathname.startsWith("/admin/link-driver")
-                    ? { background: "var(--moovu-primary)" }
-                    : undefined
-                }
+                style={pathname.startsWith("/admin/link-driver") ? { background: "var(--moovu-primary)" } : undefined}
               >
                 Link Driver
               </Link>
@@ -194,11 +167,7 @@ export default function AdminProtectedLayout({
               <Link
                 href="/admin/subscriptions"
                 className={navClass("/admin/subscriptions")}
-                style={
-                  pathname.startsWith("/admin/subscriptions")
-                    ? { background: "var(--moovu-primary)" }
-                    : undefined
-                }
+                style={pathname.startsWith("/admin/subscriptions") ? { background: "var(--moovu-primary)" } : undefined}
               >
                 Subscriptions
               </Link>
@@ -206,13 +175,25 @@ export default function AdminProtectedLayout({
               <Link
                 href="/admin/reports"
                 className={navClass("/admin/reports")}
-                style={
-                  pathname.startsWith("/admin/reports")
-                    ? { background: "var(--moovu-primary)" }
-                    : undefined
-                }
+                style={pathname.startsWith("/admin/reports") ? { background: "var(--moovu-primary)" } : undefined}
               >
                 Earnings Report
+              </Link>
+
+              <Link
+                href="/admin/earnings"
+                className={navClass("/admin/earnings")}
+                style={pathname.startsWith("/admin/earnings") ? { background: "var(--moovu-primary)" } : undefined}
+              >
+                Earnings Dashboard
+              </Link>
+
+              <Link
+                href="/admin/settlements"
+                className={navClass("/admin/settlements")}
+                style={pathname.startsWith("/admin/settlements") ? { background: "var(--moovu-primary)" } : undefined}
+              >
+                Settlements
               </Link>
 
               <button
@@ -222,53 +203,10 @@ export default function AdminProtectedLayout({
                 Logout
               </button>
             </nav>
-
-            <div
-              className="border rounded-[1.5rem] p-4"
-              style={{ background: "var(--moovu-primary-soft)" }}
-            >
-              <div className="text-sm text-gray-600">MOOVU Operations</div>
-              <div className="font-semibold mt-1 text-black">
-                Smart local ride dispatch
-              </div>
-              <p className="text-sm text-gray-700 mt-2">
-                Keep rider requests, driver movement and admin visibility aligned.
-              </p>
-            </div>
           </div>
         </aside>
 
-        <section className="px-6 py-6 lg:px-8 lg:py-8">
-          <div className="max-w-7xl mx-auto space-y-6">
-            <header className="border rounded-[2rem] px-6 py-5 bg-white shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <div className="text-sm text-gray-500">MOOVU Admin Panel</div>
-                <div className="text-2xl font-semibold text-black mt-1">
-                  Operations Dashboard
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href="/book"
-                  className="border rounded-xl px-4 py-2 bg-white text-black hover:bg-black hover:text-white"
-                >
-                  View Rider Booking
-                </Link>
-
-                <Link
-                  href="/driver/login"
-                  className="rounded-xl px-4 py-2 text-white"
-                  style={{ background: "var(--moovu-primary)" }}
-                >
-                  Driver Login
-                </Link>
-              </div>
-            </header>
-
-            {children}
-          </div>
-        </section>
+        <section className="min-w-0">{children}</section>
       </div>
     </main>
   );

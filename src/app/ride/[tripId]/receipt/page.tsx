@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type Trip = {
   id: string;
@@ -14,6 +16,7 @@ type Trip = {
   fare_amount: number | null;
   status: string;
   created_at: string | null;
+  completed_at?: string | null;
   driver_id: string | null;
 };
 
@@ -45,16 +48,17 @@ function formatDateTime(value: string | null | undefined) {
   });
 }
 
-function buildReceiptNumber(tripId: string, createdAt: string | null | undefined) {
+function buildReceiptNumber(tripId: string, issueAt: string | null | undefined) {
   const shortTrip = tripId.slice(0, 8).toUpperCase();
-  const datePart = createdAt
-    ? new Date(createdAt).toISOString().slice(0, 10).replace(/-/g, "")
+  const datePart = issueAt
+    ? new Date(issueAt).toISOString().slice(0, 10).replace(/-/g, "")
     : "00000000";
 
   return `MV-${datePart}-${shortTrip}`;
 }
 
 export default function TripReceiptPage() {
+  const router = useRouter();
   const params = useParams<{ tripId: string }>();
   const tripId = params.tripId;
 
@@ -68,8 +72,20 @@ export default function TripReceiptPage() {
     setMsg(null);
 
     try {
-      const res = await fetch(`/api/public/trip-status?tripId=${encodeURIComponent(tripId)}`, {
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+
+      if (!session) {
+        router.replace(`/customer/auth?next=/ride/${tripId}/receipt`);
+        return;
+      }
+
+      const res = await fetch(`/api/customer/trip-status?tripId=${encodeURIComponent(tripId)}`, {
         cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
       const json = await res.json().catch(() => null);
@@ -94,6 +110,7 @@ export default function TripReceiptPage() {
   }, [tripId]);
 
   const totalPaid = Number(trip?.fare_amount ?? 0);
+  const issueAt = trip?.completed_at ?? trip?.created_at ?? null;
 
   const vatAmount = useMemo(() => {
     return totalPaid - totalPaid / 1.15;
@@ -104,8 +121,8 @@ export default function TripReceiptPage() {
   }, [totalPaid]);
 
   const receiptNumber = useMemo(() => {
-    return buildReceiptNumber(trip?.id ?? "", trip?.created_at);
-  }, [trip?.id, trip?.created_at]);
+    return buildReceiptNumber(trip?.id ?? "", issueAt);
+  }, [trip?.id, issueAt]);
 
   const vehicleLabel = useMemo(() => {
     if (!driver) return "—";
@@ -118,15 +135,22 @@ export default function TripReceiptPage() {
   }
 
   if (!trip) {
-    return <main className="p-6 text-black">{msg || "Receipt not found."}</main>;
+    return (
+      <main className="p-6 text-black">
+        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+        Receipt not found.
+      </main>
+    );
   }
 
   return (
     <main className="min-h-screen bg-[#eaf2ff] px-4 py-6 text-black">
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
       <div className="mx-auto max-w-5xl space-y-4">
         <div className="flex items-center justify-between gap-3 print:hidden">
           <Link
-            href={`/ride-confirm/${trip.id}`}
+            href={`/ride/${trip.id}`}
             className="inline-flex items-center rounded-xl border px-4 py-2 bg-white"
           >
             ← Back to Trip
@@ -141,44 +165,31 @@ export default function TripReceiptPage() {
           </button>
         </div>
 
-        {msg && (
-          <div className="rounded-xl border bg-white p-4 text-sm print:hidden">
-            {msg}
-          </div>
-        )}
-
-        <section className="mx-auto max-w-4xl rounded-[2rem] border bg-white px-6 py-8 shadow-sm print:shadow-none print:border-black">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold">MOOVU Kasi Rides</h1>
-            <div className="mt-2 text-2xl font-semibold">Digital Receipt</div>
-            <div className="mt-3 text-xl text-gray-600">{receiptNumber}</div>
-          </div>
-
-          <div className="my-8 border-t border-dashed border-black" />
-
-          <div className="grid gap-8 md:grid-cols-2">
-            <div className="space-y-5">
-              <div>
-                <div className="text-gray-500">Trip ID</div>
-                <div className="mt-1 break-all text-xl">{trip.id}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Date & Time</div>
-                <div className="mt-1 text-xl">{formatDateTime(trip.created_at)}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Payment Method</div>
-                <div className="mt-1 text-xl capitalize">{trip.payment_method ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Trip Status</div>
-                <div className="mt-1 text-xl capitalize">{trip.status}</div>
-              </div>
+        <section className="mx-auto max-w-4xl rounded-[2rem] border-2 border-black bg-white p-6 shadow-lg print:rounded-none print:shadow-none">
+          <div className="flex flex-col gap-4 border-b border-black pb-6 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="text-4xl font-black tracking-tight">MOOVU</div>
+              <div className="text-lg font-semibold mt-1">Trip Receipt</div>
+              <div className="text-sm text-gray-600 mt-2">Safe • Fast • Trusted</div>
             </div>
 
+            <div className="text-sm md:text-right">
+              <div>
+                <span className="font-semibold">Receipt No:</span> {receiptNumber}
+              </div>
+              <div className="mt-1">
+                <span className="font-semibold">Trip ID:</span> {trip.id}
+              </div>
+              <div className="mt-1">
+                <span className="font-semibold">Issued:</span> {formatDateTime(issueAt)}
+              </div>
+              <div className="mt-1">
+                <span className="font-semibold">Status:</span> {trip.status}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-8 pt-6 md:grid-cols-2">
             <div className="space-y-5">
               <div>
                 <div className="text-gray-500">Rider</div>
@@ -202,19 +213,22 @@ export default function TripReceiptPage() {
                 <div className="mt-1 text-xl">{driver?.phone ?? "—"}</div>
               </div>
             </div>
-          </div>
 
-          <div className="my-8 border-t border-dashed border-black" />
+            <div className="space-y-5">
+              <div>
+                <div className="text-gray-500">Pickup</div>
+                <div className="mt-1 text-xl">{trip.pickup_address ?? "—"}</div>
+              </div>
 
-          <div className="space-y-5">
-            <div>
-              <div className="text-gray-500">Pickup</div>
-              <div className="mt-1 text-xl">{trip.pickup_address ?? "—"}</div>
-            </div>
+              <div>
+                <div className="text-gray-500">Dropoff</div>
+                <div className="mt-1 text-xl">{trip.dropoff_address ?? "—"}</div>
+              </div>
 
-            <div>
-              <div className="text-gray-500">Dropoff</div>
-              <div className="mt-1 text-xl">{trip.dropoff_address ?? "—"}</div>
+              <div>
+                <div className="text-gray-500">Payment Method</div>
+                <div className="mt-1 text-xl">{trip.payment_method ?? "—"}</div>
+              </div>
             </div>
           </div>
 
@@ -247,25 +261,14 @@ export default function TripReceiptPage() {
               </div>
 
               <div className="flex items-center justify-between gap-4 text-xl">
-                <span className="text-gray-600">VAT 15%</span>
+                <span className="text-gray-600">VAT (15%)</span>
                 <span>{money(vatAmount)}</span>
               </div>
 
-              <div className="border-t border-black pt-4">
-                <div className="flex items-center justify-between gap-4 text-3xl font-bold">
-                  <span>Total Paid</span>
-                  <span>{money(totalPaid)}</span>
-                </div>
+              <div className="border-t border-black pt-4 flex items-center justify-between gap-4 text-2xl font-bold">
+                <span>Total Paid</span>
+                <span>{money(totalPaid)}</span>
               </div>
-            </div>
-          </div>
-
-          <div className="my-8 border-t border-dashed border-black" />
-
-          <div className="text-center">
-            <div className="text-3xl font-bold">Thank you for riding with MOOVU</div>
-            <div className="mt-4 text-xl text-gray-600">
-              This amount already includes VAT. The rider still pays the full fare calculated by the app.
             </div>
           </div>
         </section>

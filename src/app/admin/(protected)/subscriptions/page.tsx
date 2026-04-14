@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type DriverRow = {
   id: string;
@@ -188,7 +189,7 @@ export default function AdminSubscriptionsPage() {
         </div>
       </div>
 
-      {msg && <div className="border rounded-2xl p-4 text-sm">{msg}</div>}
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="grid lg:grid-cols-2 gap-6">
         <section className="border rounded-2xl p-5">

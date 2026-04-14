@@ -157,6 +157,48 @@ export async function POST(req: Request) {
 
     const nowIso = new Date().toISOString();
 
+    const [{ data: existingDriver, error: existingDriverError }, { data: existingProfile, error: existingProfileError }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("drivers")
+          .select("id,profile_completed,verification_status")
+          .eq("id", driverId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("driver_profiles")
+          .select("driver_id,profile_completed,submitted_at")
+          .eq("driver_id", driverId)
+          .maybeSingle(),
+      ]);
+
+    if (existingDriverError) {
+      return NextResponse.json({ ok: false, error: existingDriverError.message }, { status: 500 });
+    }
+
+    if (existingProfileError) {
+      return NextResponse.json({ ok: false, error: existingProfileError.message }, { status: 500 });
+    }
+
+    const preservedProfileCompleted =
+      existingDriver?.profile_completed ??
+      existingProfile?.profile_completed ??
+      false;
+
+    const preservedVerificationStatus =
+      existingDriver?.verification_status ?? "draft";
+
+    const nextProfileCompleted = submit ? true : preservedProfileCompleted;
+
+    const nextVerificationStatus = submit
+      ? preservedVerificationStatus === "approved"
+        ? "approved"
+        : "pending_review"
+      : preservedVerificationStatus;
+
+    const nextSubmittedAt = submit
+      ? existingProfile?.submitted_at ?? nowIso
+      : existingProfile?.submitted_at ?? null;
+
     const { error: profileError } = await supabaseAdmin
       .from("driver_profiles")
       .upsert(
@@ -176,8 +218,8 @@ export async function POST(req: Request) {
           license_expiry,
           pdp_number,
           pdp_expiry,
-          profile_completed: submit ? true : false,
-          submitted_at: submit ? nowIso : null,
+          profile_completed: nextProfileCompleted,
+          submitted_at: nextSubmittedAt,
           updated_at: nowIso,
         },
         { onConflict: "driver_id" }
@@ -201,8 +243,8 @@ export async function POST(req: Request) {
         vehicle_vin,
         vehicle_engine_number,
         seating_capacity,
-        profile_completed: submit ? true : false,
-        verification_status: submit ? "pending_review" : "draft",
+        profile_completed: nextProfileCompleted,
+        verification_status: nextVerificationStatus,
         updated_at: nowIso,
       })
       .eq("id", driverId);
@@ -215,6 +257,8 @@ export async function POST(req: Request) {
       ok: true,
       message: submit ? "Profile submitted successfully." : "Draft saved successfully.",
       driverId,
+      profile_completed: nextProfileCompleted,
+      verification_status: nextVerificationStatus,
     });
   } catch (e: any) {
     return NextResponse.json(

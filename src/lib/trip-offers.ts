@@ -1,248 +1,337 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@supabase/supabase-js";
+import { scoreDriverForTrip } from "@/lib/dispatch/driverScoring";
+import { rebuildDriverQualityMetrics } from "@/lib/quality/rebuildDriverQualityMetrics";
+import { sendPushToTargets } from "@/lib/push-server";
 
-const OFFER_SECONDS = 20;
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
 
-type TripOfferResult =
-  | {
-      ok: true;
-      driverId: string;
-      approxKm: number;
-      offer_expires_at: string;
-      status: "offered";
-      attempted: string[];
-      expiredPrevious: boolean;
-      alreadyPending?: boolean;
-    }
-  | {
-      ok: false;
-      error: string;
-      exhausted?: boolean;
-      excluded?: string[];
-    };
+const OFFER_EXPIRY_SECONDS = 20;
 
-function approxKm(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const R = 6371;
-  const toRad = (d: number) => (d * Math.PI) / 180;
+async function incrementDriverOfferReceived(driverId: string) {
+  try {
+    const rpcResult = await supabaseAdmin.rpc("increment_driver_offer_received", {
+      p_driver_id: driverId,
+    });
 
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
+    if (!rpcResult.error) return;
+  } catch {}
 
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const { data: stats } = await supabaseAdmin
+    .from("driver_offer_stats")
+    .select("*")
+    .eq("driver_id", driverId)
+    .maybeSingle();
 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+  const current = stats ?? {
+    offers_received: 0,
+    offers_accepted: 0,
+    offers_rejected: 0,
+    offers_missed: 0,
+  };
+
+  await supabaseAdmin.from("driver_offer_stats").upsert(
+    {
+      driver_id: driverId,
+      offers_received: Number(current.offers_received || 0) + 1,
+      offers_accepted: Number(current.offers_accepted || 0),
+      offers_rejected: Number(current.offers_rejected || 0),
+      offers_missed: Number(current.offers_missed || 0),
+      last_offer_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "driver_id" }
+  );
 }
 
-function uniqStrings(arr: Array<string | null | undefined>) {
-  return Array.from(new Set(arr.filter(Boolean) as string[]));
+async function incrementDriverOfferMissed(driverId: string) {
+  const { data: stats } = await supabaseAdmin
+    .from("driver_offer_stats")
+    .select("*")
+    .eq("driver_id", driverId)
+    .maybeSingle();
+
+  const current = stats ?? {
+    offers_received: 0,
+    offers_accepted: 0,
+    offers_rejected: 0,
+    offers_missed: 0,
+  };
+
+  await supabaseAdmin.from("driver_offer_stats").upsert(
+    {
+      driver_id: driverId,
+      offers_received: Number(current.offers_received || 0),
+      offers_accepted: Number(current.offers_accepted || 0),
+      offers_rejected: Number(current.offers_rejected || 0),
+      offers_missed: Number(current.offers_missed || 0) + 1,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "driver_id" }
+  );
 }
 
 export async function expirePendingOfferIfNeeded(tripId: string) {
-  const { data: trip } = await supabaseAdmin
+  const { data: trip, error } = await supabaseAdmin
     .from("trips")
     .select("id,status,driver_id,offer_status,offer_expires_at,offer_attempted_driver_ids")
     .eq("id", tripId)
     .maybeSingle();
 
-  if (!trip) return { expired: false, trip: null };
-
-  if (trip.offer_status !== "pending" || !trip.offer_expires_at) {
-    return { expired: false, trip };
+  if (error || !trip) {
+    return {
+      ok: false,
+      expired: false,
+      error: error?.message || "Trip not found.",
+    };
   }
 
-  const exp = new Date(trip.offer_expires_at).getTime();
-  if (Date.now() <= exp) {
-    return { expired: false, trip };
+  if (trip.status !== "offered" || trip.offer_status !== "pending") {
+    return { ok: true, expired: false };
   }
 
-  const attempted = uniqStrings([
-    ...((trip.offer_attempted_driver_ids ?? []) as string[]),
-    trip.driver_id,
-  ]);
+  const expiresAtMs = trip.offer_expires_at
+    ? new Date(trip.offer_expires_at).getTime()
+    : null;
+
+  if (!expiresAtMs || Date.now() <= expiresAtMs) {
+    return { ok: true, expired: false };
+  }
+
+  const attemptedDriverIds = Array.from(
+    new Set([...(trip.offer_attempted_driver_ids ?? []), ...(trip.driver_id ? [trip.driver_id] : [])])
+  );
 
   if (trip.driver_id) {
     await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", trip.driver_id);
+
+    try {
+      await incrementDriverOfferMissed(trip.driver_id);
+    } catch {}
   }
 
-  await supabaseAdmin
+  const { error: updateError } = await supabaseAdmin
     .from("trips")
     .update({
       driver_id: null,
       status: "requested",
       offer_status: "expired",
       offer_expires_at: null,
-      offer_attempted_driver_ids: attempted,
+      offer_attempted_driver_ids: attemptedDriverIds,
     })
     .eq("id", tripId);
 
-  await supabaseAdmin.from("trip_events").insert({
-    trip_id: tripId,
-    event_type: "offer_expired",
-    message: "Offer expired (no response)",
-    old_status: "offered",
-    new_status: "requested",
-  });
+  if (updateError) {
+    return { ok: false, expired: false, error: updateError.message };
+  }
+
+  try {
+    await supabaseAdmin.from("trip_events").insert({
+      trip_id: tripId,
+      event_type: "offer_expired",
+      message: "Offer expired automatically",
+      old_status: "offered",
+      new_status: "requested",
+    });
+  } catch {}
 
   return {
+    ok: true,
     expired: true,
-    trip: {
-      ...trip,
-      offer_attempted_driver_ids: attempted,
-      driver_id: null,
-      status: "requested",
-      offer_status: "expired",
-      offer_expires_at: null,
-    },
+    expiredDriverId: trip.driver_id ?? null,
+    attemptedDriverIds,
   };
 }
 
 export async function offerNextEligibleDriver(
   tripId: string,
-  extraExcludeDriverIds: string[] = []
-): Promise<TripOfferResult> {
-  const expireResult = await expirePendingOfferIfNeeded(tripId);
-
-  const { data: trip, error: tripErr } = await supabaseAdmin
+  excludedDriverIds: string[] = []
+) {
+  const { data: trip, error: tripError } = await supabaseAdmin
     .from("trips")
-    .select(
-      "id,status,driver_id,pickup_lat,pickup_lng,offer_status,offer_expires_at,offer_attempted_driver_ids"
-    )
+    .select("*")
     .eq("id", tripId)
     .maybeSingle();
 
-  if (tripErr || !trip) {
-    return { ok: false, error: tripErr?.message ?? "Trip not found" };
-  }
-
-  if (trip.status === "cancelled" || trip.status === "completed") {
-    return { ok: false, error: "Trip is closed" };
-  }
-
-  if (trip.offer_status === "pending" && trip.driver_id && trip.offer_expires_at) {
-    return {
-      ok: true,
-      alreadyPending: true,
-      driverId: trip.driver_id,
-      approxKm: 0,
-      offer_expires_at: trip.offer_expires_at,
-      status: "offered",
-      attempted: (trip.offer_attempted_driver_ids ?? []) as string[],
-      expiredPrevious: false,
-    };
-  }
-
-  if (trip.status !== "requested") {
+  if (tripError || !trip) {
     return {
       ok: false,
-      error: `Trip must be requested to offer next driver. Current: ${trip.status}`,
+      error: tripError?.message || "Trip not found.",
     };
   }
 
-  if (trip.pickup_lat == null || trip.pickup_lng == null) {
-    return { ok: false, error: "Trip missing pickup coordinates" };
+  if (
+    trip.pickup_lat == null ||
+    trip.pickup_lng == null ||
+    trip.status === "completed" ||
+    trip.status === "cancelled"
+  ) {
+    return {
+      ok: false,
+      error: "Trip is not eligible for offering.",
+    };
   }
 
-  const excluded = uniqStrings([
+  const blockedDriverIds = new Set<string>([
+    ...(excludedDriverIds ?? []),
     ...((trip.offer_attempted_driver_ids ?? []) as string[]),
-    ...extraExcludeDriverIds,
   ]);
 
-  const { data: drivers, error: dErr } = await supabaseAdmin
+  const { data: drivers, error: driverError } = await supabaseAdmin
     .from("drivers")
-    .select("id,lat,lng,online,busy,status,subscription_status,subscription_expires_at")
+    .select(`
+      id,
+      first_name,
+      last_name,
+      phone,
+      lat,
+      lng,
+      online,
+      busy,
+      subscription_status
+    `)
     .eq("online", true)
-    .eq("busy", false)
-    .in("status", ["approved", "active"])
-    .in("subscription_status", ["active", "grace"]);
+    .eq("busy", false);
 
-  if (dErr) return { ok: false, error: dErr.message };
-
-  for (const d of drivers ?? []) {
-    if (
-      d.subscription_expires_at &&
-      (d.subscription_status === "active" || d.subscription_status === "grace") &&
-      Date.now() > new Date(d.subscription_expires_at).getTime()
-    ) {
-      await supabaseAdmin
-        .from("drivers")
-        .update({ subscription_status: "inactive" })
-        .eq("id", d.id);
-    }
-  }
-
-  const usable = (drivers ?? [])
-    .filter((d: any) => typeof d.lat === "number" && typeof d.lng === "number")
-    .filter((d: any) => !excluded.includes(d.id))
-    .filter((d: any) => d.subscription_status === "active" || d.subscription_status === "grace");
-
-  if (usable.length === 0) {
+  if (driverError) {
     return {
       ok: false,
-      error: "No more eligible online drivers",
-      exhausted: true,
-      excluded,
+      error: driverError.message,
     };
   }
 
-  let best = usable[0];
-  let bestKm = approxKm(trip.pickup_lat, trip.pickup_lng, best.lat, best.lng);
+  const filteredDrivers = (drivers ?? []).filter(
+    (driver: any) => !blockedDriverIds.has(driver.id)
+  );
 
-  for (const d of usable.slice(1)) {
-    const km = approxKm(trip.pickup_lat, trip.pickup_lng, d.lat, d.lng);
-    if (km < bestKm) {
-      best = d;
-      bestKm = km;
-    }
+  if (filteredDrivers.length === 0) {
+    return {
+      ok: false,
+      error: "No eligible drivers available.",
+    };
   }
 
-  const { error: lockErr } = await supabaseAdmin
+  const enriched: Array<any> = [];
+
+  for (const driver of filteredDrivers) {
+    try {
+      await rebuildDriverQualityMetrics(driver.id);
+    } catch {}
+
+    const { data: quality } = await supabaseAdmin
+      .from("driver_quality_metrics")
+      .select("avg_rating,quality_score,acceptance_rate")
+      .eq("driver_id", driver.id)
+      .maybeSingle();
+
+    const { data: offerStats } = await supabaseAdmin
+      .from("driver_offer_stats")
+      .select("offers_missed")
+      .eq("driver_id", driver.id)
+      .maybeSingle();
+
+    const scored = scoreDriverForTrip({
+      pickupLat: Number(trip.pickup_lat),
+      pickupLng: Number(trip.pickup_lng),
+      driver: {
+        ...driver,
+        quality: quality ?? null,
+        offerStats: offerStats ?? null,
+      },
+    });
+
+    enriched.push({
+      ...driver,
+      quality: quality ?? null,
+      offerStats: offerStats ?? null,
+      dispatchScore: scored.score,
+      distanceKm: scored.distanceKm,
+    });
+  }
+
+  enriched.sort((a, b) => b.dispatchScore - a.dispatchScore);
+
+  const chosen = enriched[0];
+
+  if (!chosen || chosen.dispatchScore < -1000) {
+    return {
+      ok: false,
+      error: "No suitable driver was found.",
+    };
+  }
+
+  const expiresAt = new Date(Date.now() + OFFER_EXPIRY_SECONDS * 1000).toISOString();
+
+  const { error: markBusyError } = await supabaseAdmin
     .from("drivers")
     .update({ busy: true })
-    .eq("id", best.id);
+    .eq("id", chosen.id)
+    .eq("busy", false);
 
-  if (lockErr) {
-    return { ok: false, error: lockErr.message };
+  if (markBusyError) {
+    return {
+      ok: false,
+      error: markBusyError.message,
+    };
   }
 
-  const expiresAt = new Date(Date.now() + OFFER_SECONDS * 1000).toISOString();
-  const attempted = uniqStrings([
-    ...((trip.offer_attempted_driver_ids ?? []) as string[]),
-    best.id,
-  ]);
-
-  const { error: upTripErr } = await supabaseAdmin
+  const { error: updateTripError } = await supabaseAdmin
     .from("trips")
     .update({
-      driver_id: best.id,
       status: "offered",
       offer_status: "pending",
       offer_expires_at: expiresAt,
-      offer_attempted_driver_ids: attempted,
+      driver_id: chosen.id,
+      dispatch_priority_score: chosen.dispatchScore,
     })
-    .eq("id", tripId);
+    .eq("id", trip.id);
 
-  if (upTripErr) {
-    await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", best.id);
-    return { ok: false, error: upTripErr.message };
+  if (updateTripError) {
+    await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", chosen.id);
+
+    return {
+      ok: false,
+      error: updateTripError.message,
+    };
   }
 
-  await supabaseAdmin.from("trip_events").insert({
-    trip_id: tripId,
-    event_type: "offer_sent",
-    message: `Offered to driver ${best.id} (expires in ${OFFER_SECONDS}s, ≈ ${bestKm.toFixed(2)} km away)`,
-    old_status: "requested",
-    new_status: "offered",
-  });
+  await incrementDriverOfferReceived(chosen.id);
+
+  try {
+    await supabaseAdmin.from("trip_events").insert({
+      trip_id: trip.id,
+      event_type: "offer_sent",
+      message: `Offered to driver ${chosen.id} (expires in ${OFFER_EXPIRY_SECONDS}s, ≈ ${chosen.distanceKm} km away, score ${chosen.dispatchScore})`,
+      old_status: trip.status,
+      new_status: "offered",
+    });
+  } catch {}
+
+  const { data: driverAccount } = await supabaseAdmin
+    .from("driver_accounts")
+    .select("user_id")
+    .eq("driver_id", chosen.id)
+    .maybeSingle();
+
+  if (driverAccount?.user_id) {
+    try {
+      await sendPushToTargets({
+        userIds: [driverAccount.user_id],
+        title: "New trip offer",
+        body: `Pickup at ${trip.pickup_address ?? "pickup"} • Destination ${trip.dropoff_address ?? "destination"}`,
+        url: "/driver",
+      });
+    } catch {}
+  }
 
   return {
     ok: true,
-    driverId: best.id,
-    approxKm: Math.round(bestKm * 100) / 100,
-    offer_expires_at: expiresAt,
-    status: "offered",
-    attempted,
-    expiredPrevious: expireResult.expired,
+    driverId: chosen.id,
+    expiresAt,
+    distanceKm: chosen.distanceKm,
+    dispatchScore: chosen.dispatchScore,
   };
 }

@@ -5,10 +5,43 @@ type Role = "admin" | "driver" | "customer";
 
 export async function POST(req: Request) {
   try {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+    if (!token) {
+      return NextResponse.json(
+        { ok: false, error: "Missing access token." },
+        { status: 401 }
+      );
+    }
+
+    const supabaseUser = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      }
+    );
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseUser.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized." },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
 
     const role = String(body?.role ?? "").trim() as Role;
-    const userId = String(body?.userId ?? "").trim();
     const subscription = body?.subscription;
 
     const endpoint = subscription?.endpoint ?? null;
@@ -22,27 +55,21 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!userId || !endpoint || !p256dh || !auth) {
+    if (!endpoint || !p256dh || !auth) {
       return NextResponse.json(
-        { ok: false, error: "Missing userId or subscription keys." },
+        { ok: false, error: "Missing subscription keys." },
         { status: 400 }
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json(
-        { ok: false, error: "Missing Supabase environment variables." },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } }
+    );
 
     const payload = {
-      user_id: userId,
+      user_id: user.id,
       role,
       endpoint,
       subscription,
@@ -64,7 +91,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Subscription saved.",
+      message: "Notifications enabled successfully ✅",
     });
   } catch (e: any) {
     return NextResponse.json(

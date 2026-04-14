@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { offerNextEligibleDriver } from "@/lib/trip-offers";
+import { expirePendingOfferIfNeeded, offerNextEligibleDriver } from "@/lib/trip-offers";
 
 async function getUserFromBearer(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -11,6 +11,39 @@ async function getUserFromBearer(req: Request) {
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error) return null;
   return data?.user ?? null;
+}
+
+async function incrementOfferStat(driverId: string, field: "offers_accepted" | "offers_rejected") {
+  const { data: stats } = await supabaseAdmin
+    .from("driver_offer_stats")
+    .select("*")
+    .eq("driver_id", driverId)
+    .maybeSingle();
+
+  const current = stats ?? {
+    offers_received: 0,
+    offers_accepted: 0,
+    offers_rejected: 0,
+    offers_missed: 0,
+  };
+
+  await supabaseAdmin.from("driver_offer_stats").upsert(
+    {
+      driver_id: driverId,
+      offers_received: Number(current.offers_received || 0),
+      offers_accepted:
+        field === "offers_accepted"
+          ? Number(current.offers_accepted || 0) + 1
+          : Number(current.offers_accepted || 0),
+      offers_rejected:
+        field === "offers_rejected"
+          ? Number(current.offers_rejected || 0) + 1
+          : Number(current.offers_rejected || 0),
+      offers_missed: Number(current.offers_missed || 0),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "driver_id" }
+  );
 }
 
 export async function POST(req: Request) {
@@ -30,115 +63,143 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
     }
 
-    const { data: mapping, error: mErr } = await supabaseAdmin
+    const { data: mapping, error: mappingError } = await supabaseAdmin
       .from("driver_accounts")
       .select("driver_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (mErr) {
-      return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 });
+    if (mappingError) {
+      return NextResponse.json({ ok: false, error: mappingError.message }, { status: 500 });
     }
 
     const driverId = mapping?.driver_id ?? null;
     if (!driverId) {
-      return NextResponse.json({ ok: false, code: "NOT_LINKED", error: "Not linked" }, { status: 403 });
+      return NextResponse.json(
+        { ok: false, code: "NOT_LINKED", error: "Not linked" },
+        { status: 403 }
+      );
     }
 
-    const { data: trip, error: tErr } = await supabaseAdmin
+    const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
       .select("id,driver_id,status,offer_status,offer_expires_at,offer_attempted_driver_ids")
       .eq("id", tripId)
       .maybeSingle();
 
-    if (tErr || !trip) {
-      return NextResponse.json({ ok: false, error: tErr?.message ?? "Trip not found" }, { status: 404 });
+    if (tripError || !trip) {
+      return NextResponse.json(
+        { ok: false, error: tripError?.message ?? "Trip not found" },
+        { status: 404 }
+      );
     }
 
     if (trip.driver_id !== driverId || trip.offer_status !== "pending" || trip.status !== "offered") {
-      return NextResponse.json({ ok: false, error: "No pending offer for your account" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "No pending offer for your account" },
+        { status: 400 }
+      );
     }
 
-    if (trip.offer_expires_at && Date.now() > new Date(trip.offer_expires_at).getTime()) {
-      await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", driverId);
+    const expiryResult = await expirePendingOfferIfNeeded(tripId);
 
-      await supabaseAdmin
-        .from("trips")
-        .update({
-          driver_id: null,
-          status: "requested",
-          offer_status: "expired",
-          offer_expires_at: null,
-          offer_attempted_driver_ids: Array.from(
-            new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
-          ),
-        })
-        .eq("id", tripId);
+    if (!expiryResult.ok) {
+      return NextResponse.json(
+        { ok: false, error: expiryResult.error || "Failed to validate offer expiry." },
+        { status: 500 }
+      );
+    }
 
-      await supabaseAdmin.from("trip_events").insert({
-        trip_id: tripId,
-        event_type: "offer_expired",
-        message: "Offer expired (late response)",
-        old_status: "offered",
-        new_status: "requested",
-      });
-
+    if (expiryResult.expired) {
       const next = await offerNextEligibleDriver(tripId, [driverId]);
 
-      if (!next.ok) {
-        return NextResponse.json(
-          { ok: false, error: "Offer expired. No next eligible driver available." },
-          { status: 400 }
-        );
-      }
-
       return NextResponse.json({
-        ok: true,
-        status: "offered",
-        nextDriverId: next.driverId,
-        reoffered: true,
+        ok: false,
+        error: next.ok
+          ? "Offer expired before your response. It has been passed to the next eligible driver."
+          : "Offer expired before your response.",
+        expired: true,
+        reoffered: !!next.ok,
+        nextDriverId: next.ok ? next.driverId : null,
       });
     }
 
     if (action === "accept") {
-      await supabaseAdmin
+      const { error: acceptError } = await supabaseAdmin
         .from("trips")
-        .update({ status: "assigned", offer_status: "accepted", offer_expires_at: null })
-        .eq("id", tripId);
+        .update({
+          status: "assigned",
+          offer_status: "accepted",
+          offer_expires_at: null,
+        })
+        .eq("id", tripId)
+        .eq("status", "offered")
+        .eq("offer_status", "pending")
+        .eq("driver_id", driverId);
 
-      await supabaseAdmin.from("trip_events").insert({
-        trip_id: tripId,
-        event_type: "offer_accepted",
-        message: "Driver accepted",
-        old_status: "offered",
-        new_status: "assigned",
-      });
+      if (acceptError) {
+        return NextResponse.json({ ok: false, error: acceptError.message }, { status: 500 });
+      }
+
+      try {
+        await incrementOfferStat(driverId, "offers_accepted");
+      } catch {}
+
+      try {
+        await supabaseAdmin.from("trip_events").insert({
+          trip_id: tripId,
+          event_type: "offer_accepted",
+          message: "Driver accepted",
+          old_status: "offered",
+          new_status: "assigned",
+        });
+      } catch {}
 
       return NextResponse.json({ ok: true, status: "assigned" });
     }
 
-    await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", driverId);
+    const { error: freeDriverError } = await supabaseAdmin
+      .from("drivers")
+      .update({ busy: false })
+      .eq("id", driverId);
 
-    await supabaseAdmin
+    if (freeDriverError) {
+      return NextResponse.json({ ok: false, error: freeDriverError.message }, { status: 500 });
+    }
+
+    const attemptedDriverIds = Array.from(
+      new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
+    );
+
+    const { error: rejectError } = await supabaseAdmin
       .from("trips")
       .update({
         driver_id: null,
         status: "requested",
         offer_status: "rejected",
         offer_expires_at: null,
-        offer_attempted_driver_ids: Array.from(
-          new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
-        ),
+        offer_attempted_driver_ids: attemptedDriverIds,
       })
-      .eq("id", tripId);
+      .eq("id", tripId)
+      .eq("driver_id", driverId);
 
-    await supabaseAdmin.from("trip_events").insert({
-      trip_id: tripId,
-      event_type: "offer_rejected",
-      message: "Driver rejected",
-      old_status: "offered",
-      new_status: "requested",
-    });
+    if (rejectError) {
+      return NextResponse.json({ ok: false, error: rejectError.message }, { status: 500 });
+    }
+
+    try {
+      await incrementOfferStat(driverId, "offers_rejected");
+    } catch {}
+
+    try {
+      await supabaseAdmin.from("trip_events").insert({
+        trip_id: tripId,
+        event_type: "offer_rejected",
+        message: "Driver rejected",
+        old_status: "offered",
+        new_status: "requested",
+      });
+    } catch {}
 
     const next = await offerNextEligibleDriver(tripId, [driverId]);
 
@@ -149,6 +210,9 @@ export async function POST(req: Request) {
       nextDriverId: next.ok ? next.driverId : null,
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "Server error" },
+      { status: 500 }
+    );
   }
 }

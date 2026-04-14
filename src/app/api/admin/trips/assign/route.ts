@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { sendPushToTargets } from "@/lib/push-server";
 
 export async function POST(req: Request) {
   try {
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
 
     const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
-      .select("id,status,driver_id,pickup_address,dropoff_address")
+      .select("id,status,driver_id,pickup_address,dropoff_address,offer_attempted_driver_ids")
       .eq("id", tripId)
       .maybeSingle();
 
@@ -87,6 +88,23 @@ export async function POST(req: Request) {
 
     const expiresAt = new Date(Date.now() + 30 * 1000).toISOString();
 
+    const { error: busyError } = await supabaseAdmin
+      .from("drivers")
+      .update({ busy: true })
+      .eq("id", driverId)
+      .eq("busy", false);
+
+    if (busyError) {
+      return NextResponse.json(
+        { ok: false, error: busyError.message },
+        { status: 500 }
+      );
+    }
+
+    const attemptedDriverIds = Array.from(
+      new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
+    );
+
     const { error: updateTripError } = await supabaseAdmin
       .from("trips")
       .update({
@@ -94,10 +112,13 @@ export async function POST(req: Request) {
         status: "offered",
         offer_status: "pending",
         offer_expires_at: expiresAt,
+        offer_attempted_driver_ids: attemptedDriverIds,
       })
       .eq("id", tripId);
 
     if (updateTripError) {
+      await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", driverId);
+
       return NextResponse.json(
         { ok: false, error: updateTripError.message },
         { status: 500 }
@@ -121,19 +142,13 @@ export async function POST(req: Request) {
       .eq("driver_id", driverId)
       .maybeSingle();
 
-    if (driverAccount?.user_id && process.env.NEXT_PUBLIC_SITE_URL) {
+    if (driverAccount?.user_id) {
       try {
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/push/send`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userIds: [driverAccount.user_id],
-            title: "New trip offer",
-            body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
-            url: "/driver",
-          }),
+        await sendPushToTargets({
+          userIds: [driverAccount.user_id],
+          title: "New trip offer",
+          body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
+          url: "/driver",
         });
       } catch {}
     }

@@ -63,6 +63,9 @@ export async function POST(req: Request) {
       .update({
         status: "cancelled",
         cancel_reason: reason,
+        cancelled_by: "admin",
+        cancellation_fee_amount: 0,
+        cancellation_policy_code: "admin_cancelled",
         offer_status: null,
         offer_expires_at: null,
       })

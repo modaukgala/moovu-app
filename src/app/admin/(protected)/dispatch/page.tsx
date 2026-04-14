@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { waLinkZA } from "@/lib/whatsapp";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type BoardTrip = {
   id: string;
@@ -280,7 +281,7 @@ export default function DispatchBoardPage() {
         </button>
       </div>
 
-      {msg && <div className="border rounded-2xl p-4 text-sm">{msg}</div>}
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="grid xl:grid-cols-4 md:grid-cols-2 gap-4">
         <Column title="Requested" items={grouped.requested} />

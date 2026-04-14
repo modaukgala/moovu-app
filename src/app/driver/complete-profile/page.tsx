@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type Driver = {
   id: string;
@@ -22,6 +23,7 @@ type Driver = {
 };
 
 type ExistingProfile = {
+  driver_id?: string | null;
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
@@ -36,6 +38,17 @@ type ExistingProfile = {
   license_expiry: string | null;
   pdp_number: string | null;
   pdp_expiry: string | null;
+  profile_completed?: boolean | null;
+  submitted_at?: string | null;
+  updated_at?: string | null;
+};
+
+type LoadProfileResponse = {
+  ok: boolean;
+  error?: string;
+  driverId?: string;
+  driver?: Driver | null;
+  profile?: ExistingProfile | null;
 };
 
 export default function DriverCompleteProfilePage() {
@@ -110,75 +123,7 @@ export default function DriverCompleteProfilePage() {
     vehicleRegistration,
   ]);
 
-  async function loadData() {
-    setLoading(true);
-    setMsg(null);
-
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session) {
-      router.replace("/driver/login");
-      return;
-    }
-
-    const { data: mapping, error: mappingError } = await supabaseClient
-      .from("driver_accounts")
-      .select("driver_id")
-      .eq("user_id", session.user.id)
-      .maybeSingle();
-
-    if (mappingError || !mapping?.driver_id) {
-      setMsg("Your account is not linked to a driver yet. Ask admin to link your account first.");
-      setLoading(false);
-      return;
-    }
-
-    setDriverId(mapping.driver_id);
-
-    const { data: driverData } = await supabaseClient
-      .from("drivers")
-      .select(`
-        id,
-        first_name,
-        last_name,
-        phone,
-        profile_completed,
-        verification_status,
-        vehicle_make,
-        vehicle_model,
-        vehicle_year,
-        vehicle_color,
-        vehicle_registration,
-        vehicle_vin,
-        vehicle_engine_number,
-        seating_capacity
-      `)
-      .eq("id", mapping.driver_id)
-      .maybeSingle<Driver>();
-
-    const { data: profileData } = await supabaseClient
-      .from("driver_profiles")
-      .select(`
-        first_name,
-        last_name,
-        phone,
-        alt_phone,
-        id_number,
-        home_address,
-        area_name,
-        emergency_contact_name,
-        emergency_contact_phone,
-        license_number,
-        license_code,
-        license_expiry,
-        pdp_number,
-        pdp_expiry
-      `)
-      .eq("driver_id", mapping.driver_id)
-      .maybeSingle<ExistingProfile>();
-
+  function hydrateForm(driverData?: Driver | null, profileData?: ExistingProfile | null) {
     setFirstName(profileData?.first_name ?? driverData?.first_name ?? "");
     setLastName(profileData?.last_name ?? driverData?.last_name ?? "");
     setPhone(profileData?.phone ?? driverData?.phone ?? "");
@@ -204,6 +149,50 @@ export default function DriverCompleteProfilePage() {
     setSeatingCapacity(
       driverData?.seating_capacity != null ? String(driverData.seating_capacity) : ""
     );
+  }
+
+  async function loadData() {
+    setLoading(true);
+    setMsg(null);
+
+    try {
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession();
+
+      if (!session) {
+        router.replace("/driver/login");
+        return;
+      }
+
+      const res = await fetch("/api/driver/profile", {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setMsg("Profile load route is not returning JSON.");
+        setLoading(false);
+        return;
+      }
+
+      const json = (await res.json()) as LoadProfileResponse;
+
+      if (!json?.ok) {
+        setMsg(json?.error || "Failed to load profile.");
+        setLoading(false);
+        return;
+      }
+
+      setDriverId(json.driverId ?? null);
+      hydrateForm(json.driver ?? null, json.profile ?? null);
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to load profile.");
+    }
 
     setLoading(false);
   }
@@ -309,37 +298,73 @@ export default function DriverCompleteProfilePage() {
           <p className="text-gray-700 mt-2">
             Save as draft any time, then submit when all required details are complete.
           </p>
-          {driverId && (
-            <p className="text-xs text-gray-500 mt-2">Driver ID: {driverId}</p>
-          )}
+          {driverId && <p className="text-xs text-gray-500 mt-2">Driver ID: {driverId}</p>}
         </div>
 
-        {msg && (
-          <div
-            className="border rounded-2xl p-4 text-sm"
-            style={{ background: "var(--moovu-primary-soft)" }}
-          >
-            {msg}
-          </div>
-        )}
+        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
           <h2 className="text-xl font-semibold">Personal Details</h2>
 
           <div className="grid md:grid-cols-2 gap-4">
-            <input className="border rounded-xl p-3" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Alternative phone" value={altPhone} onChange={(e) => setAltPhone(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="ID number" value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Area / Township" value={areaName} onChange={(e) => setAreaName(e.target.value)} />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="First name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Last name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Alternative phone"
+              value={altPhone}
+              onChange={(e) => setAltPhone(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="ID number"
+              value={idNumber}
+              onChange={(e) => setIdNumber(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Area / Township"
+              value={areaName}
+              onChange={(e) => setAreaName(e.target.value)}
+            />
           </div>
 
-          <input className="border rounded-xl p-3 w-full" placeholder="Home address" value={homeAddress} onChange={(e) => setHomeAddress(e.target.value)} />
+          <input
+            className="border rounded-xl p-3 w-full"
+            placeholder="Home address"
+            value={homeAddress}
+            onChange={(e) => setHomeAddress(e.target.value)}
+          />
 
           <div className="grid md:grid-cols-2 gap-4">
-            <input className="border rounded-xl p-3" placeholder="Emergency contact name" value={emergencyContactName} onChange={(e) => setEmergencyContactName(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Emergency contact phone" value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Emergency contact name"
+              value={emergencyContactName}
+              onChange={(e) => setEmergencyContactName(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Emergency contact phone"
+              value={emergencyContactPhone}
+              onChange={(e) => setEmergencyContactPhone(e.target.value)}
+            />
           </div>
         </section>
 
@@ -347,11 +372,36 @@ export default function DriverCompleteProfilePage() {
           <h2 className="text-xl font-semibold">Licence Details</h2>
 
           <div className="grid md:grid-cols-2 gap-4">
-            <input className="border rounded-xl p-3" placeholder="License number" value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="License code" value={licenseCode} onChange={(e) => setLicenseCode(e.target.value)} />
-            <input className="border rounded-xl p-3" type="date" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="PDP number" value={pdpNumber} onChange={(e) => setPdpNumber(e.target.value)} />
-            <input className="border rounded-xl p-3" type="date" value={pdpExpiry} onChange={(e) => setPdpExpiry(e.target.value)} />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="License number"
+              value={licenseNumber}
+              onChange={(e) => setLicenseNumber(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="License code"
+              value={licenseCode}
+              onChange={(e) => setLicenseCode(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              type="date"
+              value={licenseExpiry}
+              onChange={(e) => setLicenseExpiry(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="PDP number"
+              value={pdpNumber}
+              onChange={(e) => setPdpNumber(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              type="date"
+              value={pdpExpiry}
+              onChange={(e) => setPdpExpiry(e.target.value)}
+            />
           </div>
         </section>
 
@@ -359,14 +409,54 @@ export default function DriverCompleteProfilePage() {
           <h2 className="text-xl font-semibold">Vehicle Details</h2>
 
           <div className="grid md:grid-cols-2 gap-4">
-            <input className="border rounded-xl p-3" placeholder="Vehicle make" value={vehicleMake} onChange={(e) => setVehicleMake(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Vehicle model" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Vehicle year" value={vehicleYear} onChange={(e) => setVehicleYear(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Vehicle color" value={vehicleColor} onChange={(e) => setVehicleColor(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Vehicle registration" value={vehicleRegistration} onChange={(e) => setVehicleRegistration(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Vehicle VIN" value={vehicleVin} onChange={(e) => setVehicleVin(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Engine number" value={vehicleEngineNumber} onChange={(e) => setVehicleEngineNumber(e.target.value)} />
-            <input className="border rounded-xl p-3" placeholder="Seating capacity" value={seatingCapacity} onChange={(e) => setSeatingCapacity(e.target.value)} />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Vehicle make"
+              value={vehicleMake}
+              onChange={(e) => setVehicleMake(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Vehicle model"
+              value={vehicleModel}
+              onChange={(e) => setVehicleModel(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Vehicle year"
+              value={vehicleYear}
+              onChange={(e) => setVehicleYear(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Vehicle color"
+              value={vehicleColor}
+              onChange={(e) => setVehicleColor(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Vehicle registration"
+              value={vehicleRegistration}
+              onChange={(e) => setVehicleRegistration(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Vehicle VIN"
+              value={vehicleVin}
+              onChange={(e) => setVehicleVin(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Engine number"
+              value={vehicleEngineNumber}
+              onChange={(e) => setVehicleEngineNumber(e.target.value)}
+            />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Seating capacity"
+              value={seatingCapacity}
+              onChange={(e) => setSeatingCapacity(e.target.value)}
+            />
           </div>
         </section>
 

@@ -1,62 +1,139 @@
 import { NextResponse } from "next/server";
 
+type DistanceBody = {
+  origin_place_id?: string;
+  destination_place_id?: string;
+  origin_lat?: number;
+  origin_lng?: number;
+  destination_lat?: number;
+  destination_lng?: number;
+};
+
+function isValidNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function buildLocationParam(params: {
+  placeId?: string;
+  lat?: number;
+  lng?: number;
+}) {
+  const placeId = String(params.placeId ?? "").trim();
+
+  if (placeId) {
+    return `place_id:${placeId}`;
+  }
+
+  if (isValidNumber(params.lat) && isValidNumber(params.lng)) {
+    return `${params.lat},${params.lng}`;
+  }
+
+  return "";
+}
+
 export async function POST(req: Request) {
   try {
-    const { origin_place_id, destination_place_id } = await req.json();
+    const body = (await req.json()) as DistanceBody;
 
-    if (!origin_place_id || !destination_place_id) {
-      return NextResponse.json({ ok: false, error: "Missing origin/destination place_id" }, { status: 400 });
-    }
+    const origin = buildLocationParam({
+      placeId: body.origin_place_id,
+      lat: body.origin_lat,
+      lng: body.origin_lng,
+    });
 
-    const key = process.env.GOOGLE_MAPS_API_KEY;
-    if (!key) {
-      return NextResponse.json({ ok: false, error: "Missing GOOGLE_MAPS_API_KEY" }, { status: 500 });
-    }
+    const destination = buildLocationParam({
+      placeId: body.destination_place_id,
+      lat: body.destination_lat,
+      lng: body.destination_lng,
+    });
 
-    const origins = `place_id:${origin_place_id}`;
-    const destinations = `place_id:${destination_place_id}`;
-
-    const dmUrl =
-      "https://maps.googleapis.com/maps/api/distancematrix/json" +
-      `?origins=${encodeURIComponent(origins)}` +
-      `&destinations=${encodeURIComponent(destinations)}` +
-      `&mode=driving` +
-      `&units=metric` +
-      `&region=za` +
-      `&key=${encodeURIComponent(key)}`;
-
-    const dmResp = await fetch(dmUrl);
-    const dm = await dmResp.json();
-
-    if (dm.status !== "OK") {
+    if (!origin || !destination) {
       return NextResponse.json(
-        { ok: false, error: "Distance Matrix request failed", dm_status: dm.status, dm_error_message: dm.error_message },
+        {
+          ok: false,
+          error:
+            "Origin and destination are required. Use either place IDs or latitude/longitude coordinates.",
+        },
         { status: 400 }
       );
     }
 
-    const element = dm?.rows?.[0]?.elements?.[0];
+    const apiKey =
+      process.env.GOOGLE_MAPS_API_KEY ||
+      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+      "";
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { ok: false, error: "Google Maps API key is missing." },
+        { status: 500 }
+      );
+    }
+
+    const url =
+      `https://maps.googleapis.com/maps/api/distancematrix/json` +
+      `?origins=${encodeURIComponent(origin)}` +
+      `&destinations=${encodeURIComponent(destination)}` +
+      `&mode=driving` +
+      `&language=en` +
+      `&region=za` +
+      `&key=${encodeURIComponent(apiKey)}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok || !data) {
+      return NextResponse.json(
+        { ok: false, error: "Failed to fetch distance matrix." },
+        { status: 500 }
+      );
+    }
+
+    if (data.status !== "OK") {
+      return NextResponse.json(
+        { ok: false, error: data.error_message || data.status || "Distance lookup failed." },
+        { status: 400 }
+      );
+    }
+
+    const element = data?.rows?.[0]?.elements?.[0];
+
     if (!element || element.status !== "OK") {
       return NextResponse.json(
-        { ok: false, error: "No route found", element_status: element?.status ?? null },
+        {
+          ok: false,
+          error:
+            element?.status === "ZERO_RESULTS"
+              ? "No driving route found between the selected locations."
+              : "Could not calculate route.",
+        },
         { status: 400 }
       );
     }
 
-    const distanceMeters = element.distance.value as number;
-    const durationSeconds = element.duration.value as number;
+    const distanceMeters = Number(element?.distance?.value ?? 0);
+    const durationSeconds = Number(element?.duration?.value ?? 0);
 
-    const distanceKm = Math.round((distanceMeters / 1000) * 100) / 100;
-    const durationMin = Math.round((durationSeconds / 60) * 10) / 10;
+    const distanceKm = distanceMeters / 1000;
+    const durationMin = durationSeconds / 60;
 
     return NextResponse.json({
       ok: true,
-      distanceKm,
-      durationMin,
-      distanceText: element.distance.text,
-      durationText: element.duration.text,
+      distanceMeters,
+      durationSeconds,
+      distanceKm: Number(distanceKm.toFixed(2)),
+      durationMin: Math.ceil(durationMin),
+      originAddress: data?.origin_addresses?.[0] ?? null,
+      destinationAddress: data?.destination_addresses?.[0] ?? null,
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message || "Server error." },
+      { status: 500 }
+    );
   }
 }

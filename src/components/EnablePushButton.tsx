@@ -3,8 +3,11 @@
 import { useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 
+type Role = "admin" | "driver" | "customer";
+
 type Props = {
-  role: "admin" | "driver" | "customer";
+  role: Role;
+  className?: string;
 };
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -13,133 +16,106 @@ function urlBase64ToUint8Array(base64String: string) {
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
 
-  for (let i = 0; i < rawData.length; i++) {
+  for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
 
   return outputArray;
 }
 
-export default function EnablePushButton({ role }: Props) {
+export default function EnablePushButton({ role, className = "" }: Props) {
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string>("");
 
-  async function enableNotifications() {
-    setBusy(true);
-    setMsg(null);
-
+  async function handleEnablePush() {
     try {
-      if (typeof window === "undefined") {
-        setMsg("This action must run in the browser.");
-        setBusy(false);
-        return;
-      }
+      setBusy(true);
+      setMsg("");
 
       if (!("serviceWorker" in navigator)) {
-        setMsg("Service worker is not supported on this device.");
-        setBusy(false);
+        setMsg("This browser does not support service workers.");
         return;
       }
 
       if (!("PushManager" in window)) {
-        setMsg("Push notifications are not supported on this device.");
-        setBusy(false);
+        setMsg("This browser does not support push notifications.");
         return;
       }
 
-      if (!("Notification" in window)) {
-        setMsg("Notifications are not supported on this device.");
-        setBusy(false);
+      const {
+        data: { session },
+        error: sessionErr,
+      } = await supabaseClient.auth.getSession();
+
+      if (sessionErr || !session?.access_token) {
+        setMsg("Please log in first.");
+        return;
+      }
+
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        setMsg("Push notifications are not configured.");
         return;
       }
 
       const permission = await Notification.requestPermission();
-
       if (permission !== "granted") {
         setMsg("Notification permission was not granted.");
-        setBusy(false);
         return;
       }
 
-      const registration = await navigator.serviceWorker.register("/sw.js", {
-        scope: "/",
-      });
-
+      const registration = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
 
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
-        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
-
-        if (!vapidPublicKey) {
-          setMsg("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY.");
-          setBusy(false);
-          return;
-        }
-
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
       }
 
-      const { data: userData, error: userErr } = await supabaseClient.auth.getUser();
-
-      if (userErr || !userData.user) {
-        setMsg("Please log in first.");
-        setBusy(false);
-        return;
-      }
-
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           role,
-          userId: userData.user.id,
           subscription: subscription.toJSON(),
         }),
       });
 
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        setMsg("Push subscribe route is not returning JSON.");
-        setBusy(false);
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        setMsg(json?.error || "Failed to enable notifications.");
         return;
       }
 
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        setMsg(json.error || "Failed to save notification subscription.");
-        setBusy(false);
-        return;
-      }
-
-      setMsg("Notifications enabled successfully ✅");
-      setBusy(false);
+      setMsg(json?.message || "Notifications enabled successfully.");
     } catch (e: any) {
       setMsg(e?.message || "Failed to enable notifications.");
+    } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-2">
+    <div className={className}>
       <button
         type="button"
+        onClick={handleEnablePush}
         disabled={busy}
-        onClick={enableNotifications}
         className="rounded-xl px-4 py-2 text-white disabled:opacity-60"
         style={{ background: "var(--moovu-primary)" }}
       >
-        {busy ? "Enabling..." : "Enable Notifications"}
+        {busy ? "Enabling..." : "Enable push notifications"}
       </button>
 
-      {msg && <div className="text-sm text-gray-700">{msg}</div>}
+      {msg ? <p className="mt-2 text-sm text-gray-700">{msg}</p> : null}
     </div>
   );
 }

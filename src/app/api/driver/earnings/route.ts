@@ -1,47 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-type TripRow = {
-  id: string;
-  fare_amount: number | null;
-  payment_method: string | null;
-  pickup_address: string | null;
-  dropoff_address: string | null;
-  status: string | null;
-  created_at: string | null;
-};
-
-function startOfToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-function startOfWeek() {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  const d = new Date(now);
-  d.setDate(now.getDate() - diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function startOfMonth() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
-}
-
-function moneyNumber(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
-
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
-    const token = authHeader.startsWith("Bearer ")
-      ? authHeader.slice(7)
-      : null;
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
     if (!token) {
       return NextResponse.json(
@@ -79,70 +42,122 @@ export async function GET(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const { data: mapping, error: mappingError } = await supabaseAdmin
+    const { data: account, error: accountError } = await supabaseAdmin
       .from("driver_accounts")
       .select("driver_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (mappingError || !mapping?.driver_id) {
+    if (accountError || !account?.driver_id) {
       return NextResponse.json(
-        { ok: false, error: "Driver account not linked." },
-        { status: 400 }
+        { ok: false, error: "Driver account is not linked." },
+        { status: 404 }
       );
     }
 
-    const driverId = mapping.driver_id;
+    const driverId = account.driver_id;
 
-    const { data: trips, error: tripsError } = await supabaseAdmin
-      .from("trips")
-      .select(`
-        id,
-        fare_amount,
-        payment_method,
-        pickup_address,
-        dropoff_address,
-        status,
-        created_at
-      `)
+    const { data: wallet, error: walletError } = await supabaseAdmin
+      .from("driver_wallets")
+      .select("*")
       .eq("driver_id", driverId)
-      .eq("status", "completed")
-      .order("created_at", { ascending: false });
+      .maybeSingle();
 
-    if (tripsError) {
+    if (walletError) {
       return NextResponse.json(
-        { ok: false, error: tripsError.message },
+        { ok: false, error: walletError.message },
         { status: 500 }
       );
     }
 
-    const completedTrips = (trips ?? []) as TripRow[];
+    const { data: transactions, error: txError } = await supabaseAdmin
+      .from("driver_wallet_transactions")
+      .select("*")
+      .eq("driver_id", driverId)
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-    const todayStart = startOfToday().getTime();
-    const weekStart = startOfWeek().getTime();
-    const monthStart = startOfMonth().getTime();
-
-    let todayTotal = 0;
-    let weekTotal = 0;
-    let monthTotal = 0;
-
-    for (const trip of completedTrips) {
-      const fare = moneyNumber(trip.fare_amount);
-      const createdAt = trip.created_at ? new Date(trip.created_at).getTime() : 0;
-
-      if (createdAt >= todayStart) todayTotal += fare;
-      if (createdAt >= weekStart) weekTotal += fare;
-      if (createdAt >= monthStart) monthTotal += fare;
+    if (txError) {
+      return NextResponse.json(
+        { ok: false, error: txError.message },
+        { status: 500 }
+      );
     }
+
+    const { data: settlements, error: settlementsError } = await supabaseAdmin
+      .from("driver_settlements")
+      .select("id,amount_paid,payment_method,reference,note,created_at")
+      .eq("driver_id", driverId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (settlementsError) {
+      return NextResponse.json(
+        { ok: false, error: settlementsError.message },
+        { status: 500 }
+      );
+    }
+
+    const { data: completedTrips, error: tripError } = await supabaseAdmin
+      .from("trips")
+      .select(`
+        id,
+        fare_amount,
+        commission_amount,
+        driver_net_earnings,
+        payment_method,
+        pickup_address,
+        dropoff_address,
+        created_at,
+        status
+      `)
+      .eq("driver_id", driverId)
+      .eq("status", "completed")
+      .limit(100);
+
+    if (tripError) {
+      return NextResponse.json(
+        { ok: false, error: tripError.message },
+        { status: 500 }
+      );
+    }
+
+    const tripIds = (completedTrips ?? []).map((t: any) => t.id);
+    const completedAtMap = new Map<string, string>();
+
+    if (tripIds.length > 0) {
+      const { data: events } = await supabaseAdmin
+        .from("trip_events")
+        .select("trip_id,event_type,created_at")
+        .in("trip_id", tripIds)
+        .eq("event_type", "trip_completed")
+        .order("created_at", { ascending: false });
+
+      for (const row of events ?? []) {
+        if (!completedAtMap.has(row.trip_id)) {
+          completedAtMap.set(row.trip_id, row.created_at);
+        }
+      }
+    }
+
+    const normalizedTrips = (completedTrips ?? [])
+      .map((trip: any) => ({
+        ...trip,
+        completed_at: completedAtMap.get(trip.id) ?? trip.created_at,
+      }))
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime()
+      )
+      .slice(0, 50);
 
     return NextResponse.json({
       ok: true,
       earnings: {
-        today_total: todayTotal,
-        week_total: weekTotal,
-        month_total: monthTotal,
-        total_completed_trips: completedTrips.length,
-        recent_completed_trips: completedTrips.slice(0, 10),
+        wallet: wallet ?? null,
+        transactions: transactions ?? [],
+        settlements: settlements ?? [],
+        recent_completed_trips: normalizedTrips,
       },
     });
   } catch (e: any) {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type DriverProfile = {
   id: string;
@@ -211,7 +212,7 @@ export default function AdminDriverProfilePage() {
     return (
       <main className="min-h-screen px-6 py-10 text-black">
         <div className="max-w-6xl mx-auto space-y-4">
-          {msg && <div className="border rounded-2xl p-4 bg-white">{msg}</div>}
+          {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
           <Link href="/admin/applications" className="inline-flex border rounded-xl px-4 py-2 bg-white">
             Back
           </Link>
@@ -242,7 +243,7 @@ export default function AdminDriverProfilePage() {
           </Link>
         </div>
 
-        {msg && <div className="border rounded-2xl p-4 bg-white">{msg}</div>}
+        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
         <section className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="border rounded-2xl p-5 bg-white shadow-sm">

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type RiderTrip = {
   id: string;
-  rider_name: string | null;
-  rider_phone: string | null;
   pickup_address: string | null;
   dropoff_address: string | null;
   fare_amount: number | null;
@@ -14,6 +15,7 @@ type RiderTrip = {
   status: string | null;
   created_at: string | null;
   driver_id: string | null;
+  cancel_reason?: string | null;
 };
 
 function money(value: number | null | undefined) {
@@ -22,33 +24,31 @@ function money(value: number | null | undefined) {
 }
 
 export default function RiderHistoryPage() {
-  const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [trips, setTrips] = useState<RiderTrip[]>([]);
   const [filter, setFilter] = useState("all");
 
-  async function searchTrips() {
-    const value = phone.trim();
-    if (!value) {
-      setMsg("Enter your phone number first.");
-      return;
-    }
-
+  async function loadTrips() {
     setLoading(true);
     setMsg(null);
 
-    const res = await fetch(
-      `/api/public/rider-history?phone=${encodeURIComponent(value)}`,
-      { cache: "no-store" }
-    );
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
 
-    const contentType = res.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) {
-      setMsg("Rider history route is not returning JSON.");
-      setLoading(false);
+    if (!session) {
+      router.replace("/customer/auth?next=/ride/history");
       return;
     }
+
+    const res = await fetch("/api/customer/trips", {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
 
     const json = await res.json().catch(() => null);
 
@@ -62,6 +62,10 @@ export default function RiderHistoryPage() {
     setLoading(false);
   }
 
+  useEffect(() => {
+    loadTrips();
+  }, []);
+
   const filteredTrips = useMemo(() => {
     if (filter === "all") return trips;
     return trips.filter((t) => t.status === filter);
@@ -69,85 +73,45 @@ export default function RiderHistoryPage() {
 
   return (
     <main className="min-h-screen px-6 py-10 text-black">
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm text-gray-500">MOOVU Rider</div>
-            <h1 className="text-3xl font-semibold mt-1">Trip History</h1>
+            <h1 className="text-3xl font-semibold mt-1">My Trip History</h1>
             <p className="text-gray-700 mt-2">
-              Search your past trips using the phone number used when booking.
+              These are the trips saved under your customer account.
             </p>
           </div>
 
-          <Link
-            href="/"
-            className="border rounded-xl px-4 py-2 bg-white"
-          >
+          <Link href="/" className="border rounded-xl px-4 py-2 bg-white">
             Back Home
           </Link>
         </div>
 
-        {msg && (
-          <div
-            className="border rounded-2xl p-4 text-sm"
-            style={{ background: "var(--moovu-primary-soft)" }}
-          >
-            {msg}
-          </div>
-        )}
-
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Search Trips</h2>
-
-          <div className="grid md:grid-cols-[1fr_auto] gap-3">
-            <input
-              className="rounded-xl p-3 border"
-              placeholder="Enter your booking phone number"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-            <button
-              onClick={searchTrips}
-              disabled={loading}
-              className="rounded-xl px-5 py-3 text-white"
-              style={{ background: "var(--moovu-primary)" }}
-            >
-              {loading ? "Searching..." : "Search History"}
-            </button>
-          </div>
+          <h2 className="text-xl font-semibold">Filters</h2>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              className="border rounded-xl px-4 py-2 bg-white"
-              onClick={() => setFilter("all")}
-            >
-              All
-            </button>
-            <button
-              className="border rounded-xl px-4 py-2 bg-white"
-              onClick={() => setFilter("completed")}
-            >
-              Completed
-            </button>
-            <button
-              className="border rounded-xl px-4 py-2 bg-white"
-              onClick={() => setFilter("cancelled")}
-            >
-              Cancelled
-            </button>
-            <button
-              className="border rounded-xl px-4 py-2 bg-white"
-              onClick={() => setFilter("ongoing")}
-            >
-              Ongoing
-            </button>
+            {["all", "completed", "cancelled", "ongoing", "assigned", "requested"].map((value) => (
+              <button
+                key={value}
+                className="border rounded-xl px-4 py-2 bg-white"
+                onClick={() => setFilter(value)}
+              >
+                {value === "all" ? "All" : value[0].toUpperCase() + value.slice(1)}
+              </button>
+            ))}
           </div>
         </section>
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
           <h2 className="text-xl font-semibold">Trips</h2>
 
-          {filteredTrips.length === 0 ? (
+          {loading ? (
+            <p className="text-gray-700">Loading trips...</p>
+          ) : filteredTrips.length === 0 ? (
             <p className="text-gray-700">No trips found yet.</p>
           ) : (
             <div className="space-y-3">
@@ -191,12 +155,25 @@ export default function RiderHistoryPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4">
+                  {trip.cancel_reason && (
+                    <div className="mt-3 text-sm text-red-600">
+                      Cancellation reason: {trip.cancel_reason}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-3">
                     <Link
                       href={`/ride/${trip.id}`}
                       className="border rounded-xl px-4 py-2 bg-white inline-block"
                     >
                       Open Trip
+                    </Link>
+
+                    <Link
+                      href={`/ride/${trip.id}/receipt`}
+                      className="border rounded-xl px-4 py-2 bg-white inline-block"
+                    >
+                      Receipt
                     </Link>
                   </div>
                 </div>

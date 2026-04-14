@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type DriverTrip = {
   id: string;
@@ -117,14 +118,7 @@ export default function DriverHistoryPage() {
           </div>
         </div>
 
-        {msg && (
-          <div
-            className="border rounded-2xl p-4 text-sm"
-            style={{ background: "var(--moovu-primary-soft)" }}
-          >
-            {msg}
-          </div>
-        )}
+        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
           <div className="flex flex-wrap gap-2">

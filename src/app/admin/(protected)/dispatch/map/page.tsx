@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type DriverMarker = {
   id: string;
@@ -119,6 +120,8 @@ export default function DispatchMapPage() {
     }
 
     for (const t of trips) {
+      const tripUrl = `/admin/trips/${t.id}`;
+
       const marker = new window.google.maps.Marker({
         map,
         position: { lat: t.pickup_lat, lng: t.pickup_lng },
@@ -141,7 +144,7 @@ export default function DispatchMapPage() {
             <div>Offer: ${t.offer_status ?? "—"}</div>
             <div>Driver: ${t.driver?.name ?? "Unassigned"}</div>
             <div style="margin-top:8px">
-              <a href="/admin/trips/${t.id}" target="_blank" rel="noreferrer">Open trip</a>
+              <a href="${tripUrl}" target="_blank" rel="noreferrer">Open trip</a>
             </div>
           </div>
         `);
@@ -238,111 +241,34 @@ export default function DispatchMapPage() {
             Track online drivers and active trip pickups in real time.
           </p>
         </div>
-
-        <button
-          className="rounded-xl px-4 py-2 text-white"
-          style={{ background: "var(--moovu-primary)" }}
-          onClick={loadBoardMap}
-        >
-          Refresh
-        </button>
       </div>
 
-      {msg && (
-        <div
-          className="border rounded-2xl p-4 text-sm text-black"
-          style={{ background: "var(--moovu-primary-soft)" }}
-        >
-          {msg}
-        </div>
-      )}
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <section className="grid md:grid-cols-4 gap-4">
-        <div
-          className="border rounded-[1.5rem] p-5 shadow-sm"
-          style={{ background: "var(--moovu-primary-soft)" }}
-        >
-          <div className="text-sm text-gray-600">Online drivers</div>
-          <div className="text-3xl font-semibold text-black mt-2">{stats.onlineDrivers}</div>
-          <p className="text-sm text-gray-700 mt-2">Drivers currently visible on the board.</p>
+      <section className="grid gap-4 md:grid-cols-4">
+        <div className="rounded-2xl border bg-white p-4">
+          <div className="text-sm text-gray-500">Online Drivers</div>
+          <div className="mt-2 text-3xl font-semibold">{stats.onlineDrivers}</div>
         </div>
 
-        <div className="border rounded-[1.5rem] p-5 bg-white shadow-sm">
-          <div className="text-sm text-gray-600">Busy drivers</div>
-          <div className="text-3xl font-semibold text-black mt-2">{stats.busyDrivers}</div>
-          <p className="text-sm text-gray-700 mt-2">Drivers currently busy with active trips.</p>
+        <div className="rounded-2xl border bg-white p-4">
+          <div className="text-sm text-gray-500">Busy Drivers</div>
+          <div className="mt-2 text-3xl font-semibold">{stats.busyDrivers}</div>
         </div>
 
-        <div className="border rounded-[1.5rem] p-5 bg-white shadow-sm">
-          <div className="text-sm text-gray-600">Active trips</div>
-          <div className="text-3xl font-semibold text-black mt-2">{stats.activeTrips}</div>
-          <p className="text-sm text-gray-700 mt-2">Trips currently shown on the live board.</p>
+        <div className="rounded-2xl border bg-white p-4">
+          <div className="text-sm text-gray-500">Active Trips</div>
+          <div className="mt-2 text-3xl font-semibold">{stats.activeTrips}</div>
         </div>
 
-        <div className="border rounded-[1.5rem] p-5 bg-white shadow-sm">
-          <div className="text-sm text-gray-600">Offered trips</div>
-          <div className="text-3xl font-semibold text-black mt-2">{stats.offeredTrips}</div>
-          <p className="text-sm text-gray-700 mt-2">Trips waiting for driver acceptance.</p>
+        <div className="rounded-2xl border bg-white p-4">
+          <div className="text-sm text-gray-500">Offered Trips</div>
+          <div className="mt-2 text-3xl font-semibold">{stats.offeredTrips}</div>
         </div>
       </section>
 
-      <section className="border rounded-[2rem] p-5 bg-white shadow-sm">
-        <div className="mb-4">
-          <div className="text-sm text-gray-500">Map Overview</div>
-          <h2 className="text-xl font-semibold text-black mt-1">Dispatch Map</h2>
-        </div>
-        <div ref={mapRef} className="w-full h-[70vh] rounded-[1.5rem]" />
-      </section>
-
-      <section className="grid lg:grid-cols-2 gap-6">
-        <div className="border rounded-[2rem] p-6 bg-white shadow-sm">
-          <div className="mb-4">
-            <div className="text-sm text-gray-500">Drivers</div>
-            <h2 className="text-xl font-semibold text-black mt-1">Online Drivers</h2>
-          </div>
-
-          <div className="space-y-3 max-h-[320px] overflow-auto">
-            {drivers.length === 0 ? (
-              <div className="text-sm text-gray-600">No online drivers</div>
-            ) : (
-              drivers.map((d) => (
-                <div key={d.id} className="border rounded-2xl p-4 bg-white">
-                  <div className="font-semibold text-black">{d.name}</div>
-                  <div className="text-sm text-gray-700 mt-1">
-                    {d.phone ?? "—"} • {d.busy ? "busy" : "free"} • {d.subscription_status ?? "—"}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-2">
-                    Last seen: {d.last_seen ? new Date(d.last_seen).toLocaleString() : "—"}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="border rounded-[2rem] p-6 bg-white shadow-sm">
-          <div className="mb-4">
-            <div className="text-sm text-gray-500">Trips</div>
-            <h2 className="text-xl font-semibold text-black mt-1">Active Trips</h2>
-          </div>
-
-          <div className="space-y-3 max-h-[320px] overflow-auto">
-            {trips.length === 0 ? (
-              <div className="text-sm text-gray-600">No active trips</div>
-            ) : (
-              trips.map((t) => (
-                <div key={t.id} className="border rounded-2xl p-4 bg-white">
-                  <div className="font-semibold text-black">Trip {t.id.slice(0, 8)}</div>
-                  <div className="text-sm text-gray-700 mt-1">
-                    {t.status} • {t.offer_status ?? "—"} • R{t.fare_amount ?? "—"}
-                  </div>
-                  <div className="text-sm text-gray-700 mt-2">{t.pickup_address ?? "—"}</div>
-                  <div className="text-sm text-gray-600">{t.dropoff_address ?? "—"}</div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+      <section className="rounded-[2rem] border bg-white p-4 shadow-sm">
+        <div ref={mapRef} className="h-[70vh] w-full rounded-[1.5rem]" />
       </section>
     </main>
   );

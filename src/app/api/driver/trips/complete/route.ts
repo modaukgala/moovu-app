@@ -84,7 +84,9 @@ export async function POST(req: Request) {
 
     const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
-      .select("id,status,driver_id,fare_amount,duration_min,dropoff_lat,dropoff_lng,end_otp,end_otp_verified")
+      .select(
+        "id,status,driver_id,fare_amount,duration_min,dropoff_lat,dropoff_lng,end_otp,end_otp_verified"
+      )
       .eq("id", tripId)
       .maybeSingle();
 
@@ -153,14 +155,20 @@ export async function POST(req: Request) {
 
     if (driver.lat == null || driver.lng == null) {
       return NextResponse.json(
-        { ok: false, error: "Driver GPS location is missing. Please refresh location first." },
+        {
+          ok: false,
+          error: "Driver GPS location is missing. Please refresh location first.",
+        },
         { status: 400 }
       );
     }
 
     if (!isFreshHeartbeat(driver.last_seen)) {
       return NextResponse.json(
-        { ok: false, error: "Driver location is stale. Refresh your GPS and try again." },
+        {
+          ok: false,
+          error: "Driver location is stale. Refresh your GPS and try again.",
+        },
         { status: 400 }
       );
     }
@@ -177,7 +185,9 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             ok: false,
-            error: `You are too far from dropoff to complete this trip. Distance is ${kmAway.toFixed(2)} km.`,
+            error: `You are too far from dropoff to complete this trip. Distance is ${kmAway.toFixed(
+              2
+            )} km.`,
           },
           { status: 400 }
         );
@@ -227,21 +237,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error: updateTripError } = await supabaseAdmin
-      .from("trips")
-      .update({
-        status: "completed",
-        end_otp_verified: true,
-      })
-      .eq("id", tripId);
-
-    if (updateTripError) {
-      return NextResponse.json(
-        { ok: false, error: updateTripError.message },
-        { status: 500 }
-      );
-    }
-
     const commissionResult = await applyTripCommissionServer({
       tripId,
       driverId,
@@ -254,8 +249,24 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Trip was marked completed, but commission failed: ${commissionResult.error}`,
+          error: `Commission failed, so trip was not completed: ${commissionResult.error}`,
         },
+        { status: 500 }
+      );
+    }
+
+    const { error: updateTripError } = await supabaseAdmin
+      .from("trips")
+      .update({
+        status: "completed",
+        end_otp_verified: true,
+      })
+      .eq("id", tripId)
+      .eq("status", "ongoing");
+
+    if (updateTripError) {
+      return NextResponse.json(
+        { ok: false, error: updateTripError.message },
         { status: 500 }
       );
     }

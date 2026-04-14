@@ -76,6 +76,29 @@ export async function GET(req: Request) {
     }
 
     const completedTrips = (trips ?? []) as TripRow[];
+    const tripIds = completedTrips.map((t) => t.id);
+
+    const completedAtMap = new Map<string, string>();
+
+    if (tripIds.length > 0) {
+      const { data: events } = await supabaseAdmin
+        .from("trip_events")
+        .select("trip_id,event_type,created_at")
+        .in("trip_id", tripIds)
+        .eq("event_type", "trip_completed")
+        .order("created_at", { ascending: false });
+
+      for (const row of events ?? []) {
+        if (!completedAtMap.has(row.trip_id)) {
+          completedAtMap.set(row.trip_id, row.created_at);
+        }
+      }
+    }
+
+    const normalizedTrips = completedTrips.map((trip) => ({
+      ...trip,
+      completed_at: completedAtMap.get(trip.id) ?? trip.created_at,
+    }));
 
     const todayStart = startOfToday().getTime();
     const weekStart = startOfWeek().getTime();
@@ -89,36 +112,36 @@ export async function GET(req: Request) {
     let weekCommission = 0;
     let monthCommission = 0;
 
-    for (const trip of completedTrips) {
+    for (const trip of normalizedTrips) {
       const fare = moneyNumber(trip.fare_amount);
       const commission = moneyNumber(trip.commission_amount);
-      const createdAt = trip.created_at ? new Date(trip.created_at).getTime() : 0;
+      const completedAt = trip.completed_at ? new Date(trip.completed_at).getTime() : 0;
 
-      if (createdAt >= todayStart) {
+      if (completedAt >= todayStart) {
         todayTotal += fare;
         todayCommission += commission;
       }
-      if (createdAt >= weekStart) {
+      if (completedAt >= weekStart) {
         weekTotal += fare;
         weekCommission += commission;
       }
-      if (createdAt >= monthStart) {
+      if (completedAt >= monthStart) {
         monthTotal += fare;
         monthCommission += commission;
       }
     }
 
-    const totalRevenue = completedTrips.reduce(
+    const totalRevenue = normalizedTrips.reduce(
       (sum, trip) => sum + moneyNumber(trip.fare_amount),
       0
     );
 
-    const totalCommission = completedTrips.reduce(
+    const totalCommission = normalizedTrips.reduce(
       (sum, trip) => sum + moneyNumber(trip.commission_amount),
       0
     );
 
-    const driverPayoutEstimate = completedTrips.reduce(
+    const driverPayoutEstimate = normalizedTrips.reduce(
       (sum, trip) =>
         sum +
         (trip.driver_net_earnings != null
@@ -127,7 +150,7 @@ export async function GET(req: Request) {
       0
     );
 
-    const byPaymentMethod = completedTrips.reduce<
+    const byPaymentMethod = normalizedTrips.reduce<
       Record<string, { revenue: number; commission: number; count: number }>
     >((acc, trip) => {
       const key = String(trip.payment_method ?? "unknown").toLowerCase();
@@ -153,9 +176,9 @@ export async function GET(req: Request) {
         total_commission: totalCommission,
         estimated_driver_payout: driverPayoutEstimate,
         commission_rate: 0.05,
-        total_completed_trips: completedTrips.length,
+        total_completed_trips: normalizedTrips.length,
         by_payment_method: byPaymentMethod,
-        recent_completed_trips: completedTrips.slice(0, 15),
+        recent_completed_trips: normalizedTrips.slice(0, 15),
       },
     });
   } catch (e: any) {
