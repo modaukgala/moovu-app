@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const PLAN_PRICES = {
-  day: 20,
+  day: 45,
   week: 100,
-  month: 300,
+  month: 250,
 } as const;
 
 type PlanType = keyof typeof PLAN_PRICES;

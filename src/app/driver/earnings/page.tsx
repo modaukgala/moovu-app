@@ -60,9 +60,9 @@ type CompletedTrip = {
 };
 
 const PLAN_PRICES = {
-  day: 20,
+  day: 45,
   week: 100,
-  month: 300,
+  month: 250,
 } as const;
 
 const BANK_DETAILS = {
