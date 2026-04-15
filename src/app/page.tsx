@@ -4,8 +4,8 @@ import Image from "next/image";
 const featureCards = [
   ["Current Location Pickup", "Use live location as pickup for faster requests."],
   ["Live Tracking", "Riders see the driver, route and ETA in real time."],
-  ["Driver Trip Controls", "Arrive, start and complete trips from one screen."],
-  ["Dispatch Board", "Admins monitor trip states and assignments live."],
+  ["Driver Trip Controls", "Drivers can arrive, start and complete trips clearly."],
+  ["Reliable Matching", "The system sends trips to eligible nearby drivers quickly."],
   ["Driver GPS Heartbeat", "Driver location updates continuously while online."],
   ["Cash-Friendly Flow", "Simple local payment handling while the app grows."],
 ];
@@ -15,6 +15,12 @@ const rideFlow = [
   ["Dispatch", "Nearby active drivers receive offers."],
   ["Track", "Follow the driver live on the map."],
   ["Complete", "Finish the ride smoothly and clearly."],
+];
+
+const driverSteps = [
+  ["Apply", "Submit your details and vehicle information."],
+  ["Get reviewed", "MOOVU checks your application and documents."],
+  ["Start driving", "Once approved, you can receive and complete trips."],
 ];
 
 export default function HomePage() {
@@ -34,9 +40,6 @@ export default function HomePage() {
               </Link>
               <Link href="/driver/apply" className="moovu-btn moovu-btn-secondary">
                 Become a Driver
-              </Link>
-              <Link href="/admin/login" className="moovu-btn moovu-btn-ghost">
-                Admin
               </Link>
             </div>
           </div>
@@ -64,9 +67,7 @@ export default function HomePage() {
                 <div className="moovu-stat-card">
                   <div className="moovu-stat-label">Experience</div>
                   <div className="moovu-stat-value">Fast</div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Quick booking and dispatch
-                  </p>
+                  <p className="mt-2 text-sm text-slate-600">Quick booking and dispatch</p>
                 </div>
                 <div className="moovu-stat-card">
                   <div className="moovu-stat-label">Visibility</div>
@@ -169,6 +170,35 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="mt-5 moovu-card p-6 md:p-7">
+          <div className="moovu-section-title">Drive with MOOVU</div>
+          <h2 className="mt-3 moovu-heading-lg">Become a driver in a way that makes sense</h2>
+          <p className="mt-3 max-w-3xl moovu-subtext">
+            MOOVU is looking for reliable drivers with roadworthy vehicles and a clean,
+            professional approach. Apply once, let the team review your details, and once
+            approved you can start receiving trips through the driver portal.
+          </p>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            {driverSteps.map(([title, text], index) => (
+              <div key={title} className="moovu-card-soft p-4">
+                <div className="text-sm text-slate-500">Step {index + 1}</div>
+                <div className="mt-1 text-lg font-semibold text-slate-900">{title}</div>
+                <p className="mt-2 text-sm text-slate-600">{text}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/driver/apply" className="moovu-btn moovu-btn-primary">
+              Apply to drive
+            </Link>
+            <Link href="/driver/login" className="moovu-btn moovu-btn-secondary">
+              Driver login
+            </Link>
           </div>
         </section>
       </div>
