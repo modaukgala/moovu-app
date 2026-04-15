@@ -988,7 +988,7 @@ export default function RiderBookingPage() {
                 </div>
 
                 <div className="rounded-2xl border border-blue-100 bg-[var(--moovu-primary-soft)] p-4 text-sm text-slate-700">
-                  Pricing model: base fare R25 + R7/km + R1.20/min, minimum fare R40.
+                  Pricing model: base fare R25 + R7/km + R1.20/min.
                 </div>
               </div>
             </div>
