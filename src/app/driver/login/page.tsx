@@ -11,10 +11,7 @@ export default function DriverLoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  // Used only on signup to link the account to the driver record
   const [driverUuid, setDriverUuid] = useState("");
-
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -48,7 +45,6 @@ export default function DriverLoginPage() {
       return;
     }
 
-    // 1) Create auth user
     const { data, error } = await supabaseClient.auth.signUp({
       email: email.trim(),
       password,
@@ -67,7 +63,6 @@ export default function DriverLoginPage() {
       return;
     }
 
-    // 2) Link this auth user to the driver record (RLS only allows own insert)
     const { error: linkErr } = await supabaseClient.from("driver_accounts").insert({
       user_id: userId,
       driver_id: dUuid,
@@ -77,7 +72,7 @@ export default function DriverLoginPage() {
 
     if (linkErr) {
       setMsg(
-        "Account created but linking failed. Check: driver UUID is correct and not already linked to another account."
+        "Account created but linking failed. Check that the driver UUID is correct and not already linked."
       );
       return;
     }
@@ -87,68 +82,91 @@ export default function DriverLoginPage() {
   }
 
   return (
-    <main className="p-6 max-w-xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Moovu Driver</h1>
-        <p className="opacity-70 mt-1">Login to accept trips.</p>
-      </div>
+    <main className="moovu-auth-shell text-black">
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="flex gap-2">
-        <button
-          className={`border rounded-xl px-4 py-2 ${mode === "login" ? "opacity-100" : "opacity-60"}`}
-          onClick={() => setMode("login")}
-        >
-          Login
-        </button>
-        <button
-          className={`border rounded-xl px-4 py-2 ${mode === "signup" ? "opacity-100" : "opacity-60"}`}
-          onClick={() => setMode("signup")}
-        >
-          Sign up
-        </button>
-      </div>
+      <div className="moovu-auth-card">
+        <div className="mb-6">
+          <div className="moovu-section-title">MOOVU Driver</div>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-950">
+            Driver access
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Sign in to accept trips, update your location and manage active rides.
+          </p>
+        </div>
 
-      <section className="border rounded-2xl p-5 space-y-3">
-        <input
-          className="border rounded-xl p-3 w-full"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <div className="mb-5 inline-flex rounded-2xl bg-slate-100 p-1">
+          <button
+            className={`rounded-2xl px-4 py-2 text-sm font-semibold ${
+              mode === "login"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-600"
+            }`}
+            onClick={() => setMode("login")}
+          >
+            Login
+          </button>
+          <button
+            className={`rounded-2xl px-4 py-2 text-sm font-semibold ${
+              mode === "signup"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-600"
+            }`}
+            onClick={() => setMode("signup")}
+          >
+            Sign up
+          </button>
+        </div>
 
-        <input
-          className="border rounded-xl p-3 w-full"
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        {mode === "signup" && (
+        <section className="space-y-4">
           <input
-            className="border rounded-xl p-3 w-full"
-            placeholder="Driver UUID (given by admin)"
-            value={driverUuid}
-            onChange={(e) => setDriverUuid(e.target.value)}
+            className="moovu-input"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
-        )}
 
-        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+          <input
+            className="moovu-input"
+            placeholder="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
-        {mode === "login" ? (
-          <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={login}>
-            {busy ? "Loading..." : "Login"}
-          </button>
-        ) : (
-          <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={signupAndLink}>
-            {busy ? "Creating..." : "Sign up & Link"}
-          </button>
-        )}
-      </section>
+          {mode === "signup" && (
+            <input
+              className="moovu-input"
+              placeholder="Driver UUID (given by admin)"
+              value={driverUuid}
+              onChange={(e) => setDriverUuid(e.target.value)}
+            />
+          )}
 
-      <p className="text-xs opacity-60">
-        Admin gives you your Driver UUID once. After linking, you only login normally.
-      </p>
+          {mode === "login" ? (
+            <button
+              className="moovu-btn moovu-btn-primary w-full"
+              disabled={busy}
+              onClick={login}
+            >
+              {busy ? "Loading..." : "Login"}
+            </button>
+          ) : (
+            <button
+              className="moovu-btn moovu-btn-primary w-full"
+              disabled={busy}
+              onClick={signupAndLink}
+            >
+              {busy ? "Creating..." : "Sign up & link"}
+            </button>
+          )}
+        </section>
+
+        <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-xs leading-6 text-slate-600">
+          Admin gives you your driver UUID once. After linking, you only log in normally.
+        </div>
+      </div>
     </main>
   );
 }

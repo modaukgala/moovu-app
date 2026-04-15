@@ -26,6 +26,10 @@ function wholeRand(value: number | null | undefined) {
   return value == null ? null : Math.round(Number(value));
 }
 
+function money(value: number | null | undefined) {
+  return value == null ? "—" : `R${Math.round(Number(value))}`;
+}
+
 export default function RiderBookingPage() {
   const router = useRouter();
 
@@ -84,6 +88,14 @@ export default function RiderBookingPage() {
     dropoffLat,
     dropoffLng,
   ]);
+
+  const canSubmit = useMemo(() => {
+    if (!customer) return false;
+    if (!canCalculate) return false;
+    if (distanceKm == null || durationMin == null) return false;
+    if (rideType === "scheduled" && !scheduledFor) return false;
+    return true;
+  }, [customer, canCalculate, distanceKm, durationMin, rideType, scheduledFor]);
 
   async function getAccessToken() {
     const {
@@ -497,231 +509,311 @@ export default function RiderBookingPage() {
   }, []);
 
   if (authLoading) {
-    return <main className="p-6 text-black">Loading your booking account...</main>;
+    return <main className="moovu-page moovu-shell p-6 text-black">Loading your booking account...</main>;
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="moovu-page text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <div className="text-sm text-gray-500">MOOVU Rider</div>
-          <h1 className="text-3xl font-semibold mt-1">Book a Ride</h1>
-          <p className="text-gray-700 mt-2">
-            Ride now or schedule for later.
-          </p>
-        </div>
-
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Customer Details</h2>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="border rounded-xl p-3 bg-gray-50">
-              <div className="text-sm text-gray-500">Full name</div>
-              <div className="font-medium">
-                {customer?.first_name} {customer?.last_name}
-              </div>
-            </div>
-
-            <div className="border rounded-xl p-3 bg-gray-50">
-              <div className="text-sm text-gray-500">Phone number</div>
-              <div className="font-medium">{customer?.phone}</div>
-            </div>
+      <div className="moovu-shell">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="moovu-section-title">MOOVU Rider</div>
+            <h1 className="mt-2 text-3xl font-semibold text-slate-950 md:text-4xl">
+              Book your ride
+            </h1>
           </div>
-        </section>
-
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Ride Type</h2>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <button
-              type="button"
-              className="border rounded-xl p-4 text-left"
-              style={rideType === "now" ? { background: "var(--moovu-primary-soft)" } : undefined}
-              onClick={() => setRideType("now")}
-            >
-              <div className="font-semibold">Ride Now</div>
-              <div className="text-sm text-gray-600 mt-1">Request a driver immediately.</div>
-            </button>
-
-            <button
-              type="button"
-              className="border rounded-xl p-4 text-left"
-              style={rideType === "scheduled" ? { background: "var(--moovu-primary-soft)" } : undefined}
-              onClick={() => setRideType("scheduled")}
-            >
-              <div className="font-semibold">Schedule Ride</div>
-              <div className="text-sm text-gray-600 mt-1">Book your ride for later.</div>
-            </button>
-          </div>
-
-          {rideType === "scheduled" && (
-            <input
-              type="datetime-local"
-              className="border rounded-xl p-3 w-full"
-              value={scheduledFor}
-              onChange={(e) => setScheduledFor(e.target.value)}
-            />
-          )}
-        </section>
-
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Trip Details</h2>
-
-          <div className="space-y-3">
-            <button
-              className="rounded-xl px-4 py-2 text-white"
-              style={{ background: "var(--moovu-primary)" }}
-              onClick={useCurrentLocation}
-              disabled={busy}
-            >
-              Use Current Pickup Location
-            </button>
-
-            <div className="relative" ref={pickupBoxRef}>
-              <input
-                className="border rounded-xl p-3 w-full"
-                placeholder="Pickup address"
-                value={pickupAddress}
-                onChange={(e) => onPickupInputChange(e.target.value)}
-                onFocus={() => {
-                  if (pickupPredictions.length > 0) setShowPickupDropdown(true);
-                }}
-              />
-
-              {pickupLoading && (
-                <div className="text-xs text-gray-500 mt-1">Searching pickup locations...</div>
-              )}
-
-              {showPickupDropdown && pickupPredictions.length > 0 && (
-                <div className="absolute z-50 mt-1 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                  {pickupPredictions.map((item) => (
-                    <button
-                      key={item.place_id}
-                      type="button"
-                      className="block w-full text-left px-4 py-3 hover:bg-gray-50 border-b last:border-b-0"
-                      onClick={() => choosePlace("pickup", item.place_id, item.description)}
-                    >
-                      {item.description}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="relative" ref={dropoffBoxRef}>
-              <input
-                className="border rounded-xl p-3 w-full"
-                placeholder="Destination address"
-                value={dropoffAddress}
-                onChange={(e) => onDropoffInputChange(e.target.value)}
-                onFocus={() => {
-                  if (dropoffPredictions.length > 0) setShowDropoffDropdown(true);
-                }}
-              />
-
-              {dropoffLoading && (
-                <div className="text-xs text-gray-500 mt-1">Searching destinations...</div>
-              )}
-
-              {showDropoffDropdown && dropoffPredictions.length > 0 && (
-                <div className="absolute z-50 mt-1 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                  {dropoffPredictions.map((item) => (
-                    <button
-                      key={item.place_id}
-                      type="button"
-                      className="block w-full text-left px-4 py-3 hover:bg-gray-50 border-b last:border-b-0"
-                      onClick={() => choosePlace("dropoff", item.place_id, item.description)}
-                    >
-                      {item.description}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <select
-              className="border rounded-xl p-3 w-full bg-transparent"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-            >
-              <option value="cash">Cash</option>
-            </select>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="border rounded-xl px-4 py-2"
-              onClick={calculateTrip}
-              disabled={busy}
-            >
-              Calculate Fare
-            </button>
-
-            <button
-              className="rounded-xl px-4 py-2 text-white"
-              style={{ background: "var(--moovu-primary)" }}
-              onClick={submitBooking}
-              disabled={busy}
-            >
-              {busy
-                ? rideType === "scheduled"
-                  ? "Scheduling..."
-                  : "Booking..."
-                : rideType === "scheduled"
-                ? "Schedule Ride"
-                : "Book Ride"}
-            </button>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4 pt-2">
-            <div className="border rounded-2xl p-4">
-              <div className="text-sm text-gray-600">Distance</div>
-              <div className="font-semibold mt-1">
-                {distanceKm != null ? `${distanceKm} km` : "—"}
-              </div>
-            </div>
-
-            <div className="border rounded-2xl p-4">
-              <div className="text-sm text-gray-600">Duration</div>
-              <div className="font-semibold mt-1">
-                {durationMin != null ? `${durationMin} min` : "—"}
-              </div>
-            </div>
-
-            <div className="border rounded-2xl p-4">
-              <div className="text-sm text-gray-600">Estimated Fare</div>
-              <div className="font-semibold mt-1">
-                {fare != null ? `R${fare}` : "—"}
-              </div>
-            </div>
-          </div>
-
-          <div className="text-xs text-gray-500">
-            Pricing model: base fare R25 + R7/km + R1.20/min, minimum fare R40.
-          </div>
-        </section>
-
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Account</h2>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              href="/ride/history"
-              className="border rounded-xl px-4 py-3"
-            >
-              My Trip History
-            </Link>
+            <div className="moovu-chip">
+              <span className="moovu-chip-dot" />
+              {customer?.first_name} {customer?.last_name}
+            </div>
 
-            <button
-              className="border rounded-xl px-4 py-3"
-              onClick={logout}
-            >
+            <button className="moovu-btn moovu-btn-secondary" onClick={logout}>
               Logout
             </button>
           </div>
-        </section>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+          <section className="moovu-panel overflow-hidden p-4 md:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-slate-500">Request a ride</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-950">
+                  Set your trip details
+                </div>
+              </div>
+
+              <button
+                className="moovu-btn moovu-btn-primary"
+                onClick={useCurrentLocation}
+                disabled={busy}
+              >
+                Use my location
+              </button>
+            </div>
+
+            <div className="mb-5 rounded-[28px] border border-[var(--moovu-border)] bg-[var(--moovu-bg-soft)] p-4">
+              <div className="h-[260px] rounded-[22px] border border-dashed border-slate-300 bg-white flex items-center justify-center text-sm text-slate-500">
+                Map area / pickup preview
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="relative" ref={pickupBoxRef}>
+                <div className="flex items-center gap-3 rounded-[20px] border border-[var(--moovu-border)] bg-white px-4 py-4">
+                  <div className="h-3 w-3 rounded-full bg-[var(--moovu-primary)]" />
+                  <input
+                    className="w-full border-0 bg-transparent p-0 outline-none focus:shadow-none"
+                    placeholder="Pickup location"
+                    value={pickupAddress}
+                    onChange={(e) => onPickupInputChange(e.target.value)}
+                    onFocus={() => {
+                      if (pickupPredictions.length > 0) setShowPickupDropdown(true);
+                    }}
+                  />
+                </div>
+
+                {pickupLoading && (
+                  <div className="px-3 pt-2 text-xs text-slate-500">
+                    Searching pickup locations...
+                  </div>
+                )}
+
+                {showPickupDropdown && pickupPredictions.length > 0 && (
+                  <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-[var(--moovu-border)] bg-white shadow-xl">
+                    {pickupPredictions.map((item) => (
+                      <button
+                        key={item.place_id}
+                        type="button"
+                        className="block w-full border-b border-slate-100 px-4 py-3 text-left text-sm hover:bg-slate-50 last:border-b-0"
+                        onClick={() =>
+                          choosePlace("pickup", item.place_id, item.description)
+                        }
+                      >
+                        {item.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="relative" ref={dropoffBoxRef}>
+                <div className="flex items-center gap-3 rounded-[20px] border border-[var(--moovu-border)] bg-white px-4 py-4">
+                  <div className="h-3 w-3 rounded-full bg-slate-900" />
+                  <input
+                    className="w-full border-0 bg-transparent p-0 outline-none focus:shadow-none"
+                    placeholder="Where are you going?"
+                    value={dropoffAddress}
+                    onChange={(e) => onDropoffInputChange(e.target.value)}
+                    onFocus={() => {
+                      if (dropoffPredictions.length > 0) setShowDropoffDropdown(true);
+                    }}
+                  />
+                </div>
+
+                {dropoffLoading && (
+                  <div className="px-3 pt-2 text-xs text-slate-500">
+                    Searching destinations...
+                  </div>
+                )}
+
+                {showDropoffDropdown && dropoffPredictions.length > 0 && (
+                  <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-[var(--moovu-border)] bg-white shadow-xl">
+                    {dropoffPredictions.map((item) => (
+                      <button
+                        key={item.place_id}
+                        type="button"
+                        className="block w-full border-b border-slate-100 px-4 py-3 text-left text-sm hover:bg-slate-50 last:border-b-0"
+                        onClick={() =>
+                          choosePlace("dropoff", item.place_id, item.description)
+                        }
+                      >
+                        {item.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div>
+                <div className="mb-2 text-sm font-medium text-slate-600">When</div>
+                <div className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    className={`rounded-xl px-4 py-3 text-sm font-medium transition ${
+                      rideType === "now"
+                        ? "bg-white text-slate-950 shadow-sm"
+                        : "text-slate-600"
+                    }`}
+                    onClick={() => setRideType("now")}
+                  >
+                    Ride now
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`rounded-xl px-4 py-3 text-sm font-medium transition ${
+                      rideType === "scheduled"
+                        ? "bg-white text-slate-950 shadow-sm"
+                        : "text-slate-600"
+                    }`}
+                    onClick={() => setRideType("scheduled")}
+                  >
+                    Schedule
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-sm font-medium text-slate-600">Payment</div>
+                <div className="grid grid-cols-1 rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    className={`rounded-xl px-4 py-3 text-sm font-medium transition ${
+                      paymentMethod === "cash"
+                        ? "bg-white text-slate-950 shadow-sm"
+                        : "text-slate-600"
+                    }`}
+                    onClick={() => setPaymentMethod("cash")}
+                  >
+                    Cash
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {rideType === "scheduled" && (
+              <div className="mt-4">
+                <div className="mb-2 text-sm font-medium text-slate-600">
+                  Scheduled pickup
+                </div>
+                <input
+                  type="datetime-local"
+                  className="moovu-input"
+                  value={scheduledFor}
+                  onChange={(e) => setScheduledFor(e.target.value)}
+                />
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                className="moovu-btn moovu-btn-secondary"
+                onClick={calculateTrip}
+                disabled={busy || !canCalculate}
+              >
+                Calculate fare
+              </button>
+
+              <button
+                className="moovu-btn moovu-btn-primary"
+                onClick={submitBooking}
+                disabled={busy || !canSubmit}
+              >
+                {busy
+                  ? rideType === "scheduled"
+                    ? "Scheduling..."
+                    : "Booking..."
+                  : rideType === "scheduled"
+                  ? "Schedule ride"
+                  : "Confirm ride"}
+              </button>
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            <div className="moovu-card p-5">
+              <div className="moovu-section-title">Trip summary</div>
+
+              <div className="mt-4 space-y-4">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Pickup</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">
+                    {pickupAddress || "Set pickup location"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Destination</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">
+                    {dropoffAddress || "Set destination"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="text-xs text-slate-500">Trip type</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {rideType === "now" ? "Ride now" : "Scheduled"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="text-xs text-slate-500">Payment</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900 capitalize">
+                      {paymentMethod}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-blue-100 bg-[var(--moovu-primary-soft)] p-4 text-sm text-slate-700">
+                  Pricing model: base fare R25 + R7/km + R1.20/min, minimum fare R40.
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
+              <div className="moovu-stat-card">
+                <div className="moovu-stat-label">Distance</div>
+                <div className="moovu-stat-value">
+                  {distanceKm != null ? `${distanceKm} km` : "—"}
+                </div>
+              </div>
+
+              <div className="moovu-stat-card">
+                <div className="moovu-stat-label">Duration</div>
+                <div className="moovu-stat-value">
+                  {durationMin != null ? `${durationMin} min` : "—"}
+                </div>
+              </div>
+
+              <div className="moovu-stat-card moovu-stat-card-primary">
+                <div className="moovu-stat-label">Estimated fare</div>
+                <div className="moovu-stat-value">{money(fare)}</div>
+              </div>
+            </div>
+
+            <div className="moovu-card p-5">
+              <div className="text-sm font-medium text-slate-500">Account</div>
+              <div className="mt-2 text-lg font-semibold text-slate-900">
+                {customer?.first_name} {customer?.last_name}
+              </div>
+              <div className="mt-1 text-sm text-slate-600">{customer?.phone}</div>
+
+              <div className="mt-4 flex flex-col gap-3">
+                <Link
+                  href="/ride/history"
+                  className="moovu-btn moovu-btn-secondary w-full"
+                >
+                  My trip history
+                </Link>
+
+                <button
+                  className="moovu-btn moovu-btn-secondary w-full"
+                  onClick={logout}
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
     </main>
   );

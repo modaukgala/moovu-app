@@ -1,44 +1,423 @@
 @import "tailwindcss";
 
-/* MOOVU Brand Colors */
 :root {
-
-  /* Main Brand (changed from orange to blue) */
   --moovu-primary: #2f80ed;
-  --moovu-primary-soft: #e8f2ff;
+  --moovu-primary-hover: #236fd4;
+  --moovu-primary-soft: #eaf3ff;
 
-  /* App Colors (light sky blue background) */
-  --background: #eaf4ff;
-  --foreground: #000000;
+  --moovu-bg: #f6f8fb;
+  --moovu-bg-elevated: #ffffff;
+  --moovu-bg-soft: #f1f4f8;
+  --moovu-bg-muted: #eef2f6;
 
-  --card: #ffffff;
-  --border: #e6e6e6;
+  --moovu-text: #111827;
+  --moovu-text-soft: #6b7280;
+  --moovu-text-faint: #94a3b8;
 
+  --moovu-border: #dbe3ec;
+  --moovu-border-strong: #cad5e3;
+
+  --moovu-success: #16a34a;
+  --moovu-success-soft: #ecfdf3;
+  --moovu-danger: #dc2626;
+  --moovu-danger-soft: #fef2f2;
+  --moovu-warning: #d97706;
+  --moovu-warning-soft: #fff7ed;
+
+  --moovu-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.05);
+  --moovu-shadow-md: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --moovu-shadow-lg: 0 28px 70px rgba(15, 23, 42, 0.12);
+
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-xl: 34px;
 }
 
-/* Global page background */
+html {
+  scroll-behavior: smooth;
+}
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(47, 128, 237, 0.07), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, #f5f8fc 42%, #f3f6fa 100%);
+  color: var(--moovu-text);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Card style used across the platform */
-
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 20px;
+* {
+  box-sizing: border-box;
 }
 
-/* Buttons */
+::selection {
+  background: rgba(47, 128, 237, 0.18);
+}
 
-.btn-primary {
+a,
+button,
+input,
+select,
+textarea {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+button:hover:not(:disabled),
+a:hover {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--moovu-border);
+  background: #fff;
+  color: var(--moovu-text);
+  border-radius: 16px;
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--moovu-primary);
+  box-shadow: 0 0 0 4px rgba(47, 128, 237, 0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+th {
+  text-align: left;
+  font-weight: 700;
+  color: #334155;
+  background: #f8fafc;
+}
+
+th,
+td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--moovu-border);
+}
+
+tr:last-child td {
+  border-bottom: 0;
+}
+
+.moovu-page {
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.moovu-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.moovu-card {
+  background: var(--moovu-bg-elevated);
+  border: 1px solid var(--moovu-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-card-soft {
+  background: var(--moovu-bg-soft);
+  border: 1px solid #e9eef5;
+  border-radius: var(--radius-md);
+}
+
+.moovu-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(219, 227, 236, 0.95);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--moovu-shadow-md);
+  backdrop-filter: blur(12px);
+}
+
+.moovu-glass {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(219, 227, 236, 0.75);
+  backdrop-filter: blur(14px);
+}
+
+.moovu-section-title {
+  font-size: 13px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--moovu-text-soft);
+}
+
+.moovu-heading-xl {
+  font-size: clamp(2rem, 3vw, 3.35rem);
+  line-height: 1.05;
+  font-weight: 700;
+  color: var(--moovu-text);
+}
+
+.moovu-heading-lg {
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  line-height: 1.15;
+  font-weight: 700;
+  color: var(--moovu-text);
+}
+
+.moovu-subtext {
+  color: var(--moovu-text-soft);
+  line-height: 1.65;
+}
+
+.moovu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 16px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+
+.moovu-btn-primary {
   background: var(--moovu-primary);
-  color: white;
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(47, 128, 237, 0.18);
 }
 
-.btn-primary:hover {
-  opacity: 0.9;
+.moovu-btn-primary:hover {
+  background: var(--moovu-primary-hover);
+}
+
+.moovu-btn-secondary {
+  background: #fff;
+  color: var(--moovu-text);
+  border-color: var(--moovu-border);
+}
+
+.moovu-btn-ghost {
+  background: #f3f5f8;
+  color: var(--moovu-text);
+  border-color: #e7ecf2;
+}
+
+.moovu-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--moovu-border);
+  background: #f3f5f8;
+  color: #475569;
+}
+
+.moovu-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.moovu-chip-success {
+  background: var(--moovu-success-soft);
+  border-color: #ccefd8;
+  color: #166534;
+}
+
+.moovu-chip-danger {
+  background: var(--moovu-danger-soft);
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.moovu-chip-warning {
+  background: var(--moovu-warning-soft);
+  border-color: #fed7aa;
+  color: #b45309;
+}
+
+.moovu-chip-primary {
+  background: var(--moovu-primary-soft);
+  border-color: #cfe4ff;
+  color: #1d4ed8;
+}
+
+.moovu-input {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--moovu-border);
+  background: #fff;
+  padding: 14px 16px;
+  color: var(--moovu-text);
+  outline: none;
+}
+
+.moovu-stat-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.moovu-stat-card {
+  border-radius: 24px;
+  border: 1px solid var(--moovu-border);
+  background: #fff;
+  padding: 18px;
+  box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-stat-card-primary {
+  background: linear-gradient(135deg, #f7fbff 0%, #eaf3ff 100%);
+  border-color: #cfe4ff;
+}
+
+.moovu-stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--moovu-text-soft);
+}
+
+.moovu-stat-value {
+  margin-top: 8px;
+  font-size: 24px;
+  line-height: 1.12;
+  font-weight: 800;
+  color: var(--moovu-text);
+}
+
+.moovu-divider {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, var(--moovu-border), transparent);
+}
+
+.moovu-table-wrap {
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid var(--moovu-border);
+  background: #fff;
+  box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-sidebar-link {
+  display: block;
+  border-radius: 18px;
+  border: 1px solid transparent;
+  padding: 13px 15px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  background: transparent;
+}
+
+.moovu-sidebar-link:hover {
+  background: #f3f6fa;
+  border-color: #e3eaf2;
+}
+
+.moovu-sidebar-link-active {
+  background: #eef5ff;
+  color: #0f4fb8;
+  border-color: #cfe4ff;
+}
+
+.moovu-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(246, 248, 251, 0.84);
+  backdrop-filter: blur(12px);
+}
+
+.moovu-auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.moovu-auth-card {
+  width: 100%;
+  max-width: 520px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--moovu-border);
+  border-radius: 32px;
+  padding: 28px;
+  box-shadow: var(--moovu-shadow-lg);
+}
+
+.moovu-hero-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.moovu-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #eef2f7;
+  border-radius: 16px;
+}
+
+.moovu-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.65) 50%,
+    rgba(255,255,255,0) 100%
+  );
+  animation: moovu-shimmer 1.4s infinite;
+}
+
+@keyframes moovu-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (min-width: 1024px) {
+  .moovu-hero-grid {
+    grid-template-columns: 1.08fr 0.92fr;
+    align-items: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .moovu-page {
+    padding: 14px;
+  }
+
+  .moovu-auth-card {
+    padding: 22px;
+    border-radius: 28px;
+  }
+
+  .moovu-stat-value {
+    font-size: 20px;
+  }
 }

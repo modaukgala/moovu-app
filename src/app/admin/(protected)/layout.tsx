@@ -1,10 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import AdminTripNotifications from "@/components/AdminTripNotifications";
+
+const navItems = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/drivers", label: "Drivers" },
+  { href: "/admin/trips", label: "Trips" },
+  { href: "/admin/dispatch/map", label: "Dispatch Map" },
+  { href: "/admin/applications", label: "Applications" },
+  { href: "/admin/link-driver", label: "Link Driver" },
+  { href: "/admin/subscriptions", label: "Subscriptions" },
+  { href: "/admin/reports", label: "Earnings Report" },
+  { href: "/admin/earnings", label: "Earnings Dashboard" },
+  { href: "/admin/settlements", label: "Settlements" },
+];
 
 export default function AdminProtectedLayout({
   children,
@@ -69,22 +82,29 @@ export default function AdminProtectedLayout({
     }
   }
 
-  function navClass(href: string) {
-    const active =
-      pathname === href || (href !== "/admin" && pathname.startsWith(href));
-
-    return `block border rounded-2xl px-4 py-3 transition ${
-      active
-        ? "text-white"
-        : "bg-white text-black hover:bg-black hover:text-white"
-    }`;
-  }
+  const activeLabel = useMemo(() => {
+    const current = navItems.find((item) =>
+      item.href === "/admin"
+        ? pathname === "/admin"
+        : pathname === item.href || pathname.startsWith(`${item.href}/`)
+    );
+    return current?.label || "Admin";
+  }, [pathname]);
 
   if (checking) {
     return (
-      <main className="min-h-screen grid place-items-center p-6 text-black">
-        <div className="border rounded-[2rem] p-6 bg-white shadow-sm">
-          Checking admin access...
+      <main className="moovu-auth-shell text-black">
+        <div className="moovu-auth-card text-center">
+          <div className="moovu-chip mx-auto w-fit">
+            <span className="moovu-chip-dot" />
+            MOOVU Admin
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold text-slate-950">
+            Checking admin access...
+          </h1>
+          <p className="mt-3 text-sm text-slate-600">
+            Verifying your session before loading the control center.
+          </p>
         </div>
       </main>
     );
@@ -94,119 +114,79 @@ export default function AdminProtectedLayout({
     <main className="min-h-screen text-black">
       <AdminTripNotifications />
 
-      <div className="min-h-screen grid lg:grid-cols-[300px_1fr]">
-        <aside className="border-r bg-white/90 backdrop-blur px-5 py-6">
-          <div className="space-y-6">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border bg-white shadow-sm">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: "var(--moovu-primary)" }}
-                />
+      <div className="grid min-h-screen lg:grid-cols-[290px_1fr]">
+        <aside className="border-r border-[var(--moovu-border)] bg-white/84 px-5 py-6 backdrop-blur-xl">
+          <div className="sticky top-5 space-y-6">
+            <div className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-5 shadow-sm">
+              <div className="moovu-chip w-fit">
+                <span className="h-2.5 w-2.5 rounded-full bg-[var(--moovu-primary)]" />
                 MOOVU Admin
               </div>
 
-              <h1 className="text-2xl font-semibold mt-4 text-black">
-                Control Center
+              <h1 className="mt-4 text-2xl font-semibold text-slate-950">
+                Control center
               </h1>
 
-              <p className="text-sm text-gray-600 mt-2">
-                Manage trips, dispatch and operations from one place.
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Manage operations, dispatch, subscriptions and trip movement from one place.
               </p>
             </div>
 
-            <nav className="space-y-2">
-              <Link
-                href="/admin"
-                className={navClass("/admin")}
-                style={pathname === "/admin" ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Dashboard
-              </Link>
+            <nav className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-3 shadow-sm">
+              <div className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Navigation
+              </div>
 
-              <Link
-                href="/admin/drivers"
-                className={navClass("/admin/drivers")}
-                style={pathname.startsWith("/admin/drivers") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Drivers
-              </Link>
+              <div className="space-y-1.5">
+                {navItems.map((item) => {
+                  const active =
+                    item.href === "/admin"
+                      ? pathname === "/admin"
+                      : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-              <Link
-                href="/admin/trips"
-                className={navClass("/admin/trips")}
-                style={pathname.startsWith("/admin/trips") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Trips
-              </Link>
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`moovu-sidebar-link ${
+                        active ? "moovu-sidebar-link-active" : ""
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
 
-              <Link
-                href="/admin/dispatch/map"
-                className={navClass("/admin/dispatch/map")}
-                style={pathname.startsWith("/admin/dispatch/map") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Dispatch Map
-              </Link>
-
-              <Link
-                href="/admin/applications"
-                className={navClass("/admin/applications")}
-                style={pathname.startsWith("/admin/applications") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Driver Applications
-              </Link>
-
-              <Link
-                href="/admin/link-driver"
-                className={navClass("/admin/link-driver")}
-                style={pathname.startsWith("/admin/link-driver") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Link Driver
-              </Link>
-
-              <Link
-                href="/admin/subscriptions"
-                className={navClass("/admin/subscriptions")}
-                style={pathname.startsWith("/admin/subscriptions") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Subscriptions
-              </Link>
-
-              <Link
-                href="/admin/reports"
-                className={navClass("/admin/reports")}
-                style={pathname.startsWith("/admin/reports") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Earnings Report
-              </Link>
-
-              <Link
-                href="/admin/earnings"
-                className={navClass("/admin/earnings")}
-                style={pathname.startsWith("/admin/earnings") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Earnings Dashboard
-              </Link>
-
-              <Link
-                href="/admin/settlements"
-                className={navClass("/admin/settlements")}
-                style={pathname.startsWith("/admin/settlements") ? { background: "var(--moovu-primary)" } : undefined}
-              >
-                Settlements
-              </Link>
-
-              <button
-                onClick={handleLogout}
-                className="w-full text-left border rounded-2xl px-4 py-3 bg-white text-black hover:bg-black hover:text-white transition"
-              >
-                Logout
-              </button>
+                <button
+                  onClick={handleLogout}
+                  className="moovu-sidebar-link mt-2 w-full text-left text-red-600 hover:bg-red-50 hover:border-red-100"
+                >
+                  Logout
+                </button>
+              </div>
             </nav>
           </div>
         </aside>
 
-        <section className="min-w-0">{children}</section>
+        <section className="min-w-0">
+          <div className="moovu-topbar border-b border-[var(--moovu-border)]">
+            <div className="flex items-center justify-between gap-4 px-5 py-4 md:px-7">
+              <div>
+                <div className="moovu-section-title">Operations</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-950">
+                  {activeLabel}
+                </div>
+              </div>
+
+              <div className="moovu-chip">
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                Grey status styling active
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 md:p-6">{children}</div>
+        </section>
       </div>
     </main>
   );

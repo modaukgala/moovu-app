@@ -22,22 +22,26 @@ type CheckPhoneResponse = {
 export default function CustomerAuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/book";
+
+  const nextPath = useMemo(() => {
+    const rawNext = searchParams?.get("next");
+    return rawNext && rawNext.startsWith("/") ? rawNext : "/book";
+  }, [searchParams]);
 
   const [step, setStep] = useState<"phone" | "login" | "signup">("phone");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
   const [phone, setPhone] = useState("");
   const [normalizedPhone, setNormalizedPhone] = useState("");
   const [existingName, setExistingName] = useState("");
-
-  const [password, setPassword] = useState("");
-
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const canCheck = useMemo(() => !!normalizePhoneZA(phone), [phone]);
+  const canCheck = useMemo(() => {
+    const normalized = normalizePhoneZA(phone);
+    return !!normalized && normalized.length >= 10;
+  }, [phone]);
 
   async function checkPhone() {
     const normalized = normalizePhoneZA(phone);
@@ -52,7 +56,9 @@ export default function CustomerAuthPage() {
     try {
       const res = await fetch("/api/customer/check-phone", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ phone: normalized }),
       });
 
@@ -181,33 +187,42 @@ export default function CustomerAuthPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="moovu-auth-shell text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-xl mx-auto space-y-6">
-        <div>
-          <div className="text-sm text-gray-500">MOOVU Customer</div>
-          <h1 className="text-3xl font-semibold mt-1">Login or Create Account</h1>
-          <p className="text-gray-700 mt-2">
-            Enter your cellphone number first. After login you will continue straight to booking.
+      <div className="moovu-auth-card">
+        <div className="mb-6">
+          <div className="moovu-section-title">MOOVU Customer</div>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-950">
+            Login or create account
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Enter your cellphone number first. After login you continue straight
+            to booking.
           </p>
         </div>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="space-y-4">
           {step === "phone" && (
             <>
-              <h2 className="text-xl font-semibold">Step 1: Cellphone Number</h2>
+              <div className="moovu-card-soft p-4">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Step 1: Cellphone number
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  We will check whether you already have a customer account.
+                </p>
+              </div>
 
               <input
-                className="border rounded-xl p-3 w-full"
+                className="moovu-input"
                 placeholder="Cellphone number"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
 
               <button
-                className="rounded-xl px-4 py-3 text-white"
-                style={{ background: "var(--moovu-primary)" }}
+                className="moovu-btn moovu-btn-primary w-full"
                 disabled={busy || !canCheck}
                 onClick={checkPhone}
               >
@@ -218,19 +233,17 @@ export default function CustomerAuthPage() {
 
           {step === "login" && (
             <>
-              <h2 className="text-xl font-semibold">Welcome back</h2>
-              <p className="text-gray-700">
-                {existingName || "Customer"} was found for {normalizedPhone}.
-              </p>
+              <div className="moovu-card-soft p-4">
+                <h2 className="text-lg font-semibold text-slate-900">Welcome back</h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  {existingName || "Customer"} was found for {normalizedPhone}.
+                </p>
+              </div>
+
+              <input className="moovu-input bg-slate-50" value={normalizedPhone} readOnly />
 
               <input
-                className="border rounded-xl p-3 w-full bg-gray-100"
-                value={normalizedPhone}
-                readOnly
-              />
-
-              <input
-                className="border rounded-xl p-3 w-full"
+                className="moovu-input"
                 placeholder="Password"
                 type="password"
                 value={password}
@@ -239,8 +252,7 @@ export default function CustomerAuthPage() {
 
               <div className="flex flex-wrap gap-3">
                 <button
-                  className="rounded-xl px-4 py-3 text-white"
-                  style={{ background: "var(--moovu-primary)" }}
+                  className="moovu-btn moovu-btn-primary"
                   disabled={busy}
                   onClick={login}
                 >
@@ -248,7 +260,7 @@ export default function CustomerAuthPage() {
                 </button>
 
                 <button
-                  className="border rounded-xl px-4 py-3"
+                  className="moovu-btn moovu-btn-secondary"
                   onClick={() => {
                     setStep("phone");
                     setPassword("");
@@ -262,24 +274,26 @@ export default function CustomerAuthPage() {
 
           {step === "signup" && (
             <>
-              <h2 className="text-xl font-semibold">Create your customer account</h2>
+              <div className="moovu-card-soft p-4">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Create your customer account
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  We could not find this number, so let’s create a new account.
+                </p>
+              </div>
 
-              <input
-                className="border rounded-xl p-3 w-full bg-gray-100"
-                value={normalizedPhone}
-                readOnly
-              />
+              <input className="moovu-input bg-slate-50" value={normalizedPhone} readOnly />
 
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <input
-                  className="border rounded-xl p-3"
+                  className="moovu-input"
                   placeholder="First name"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                 />
-
                 <input
-                  className="border rounded-xl p-3"
+                  className="moovu-input"
                   placeholder="Surname"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
@@ -287,8 +301,8 @@ export default function CustomerAuthPage() {
               </div>
 
               <input
-                className="border rounded-xl p-3 w-full"
-                placeholder="Create password"
+                className="moovu-input"
+                placeholder="Password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -296,21 +310,18 @@ export default function CustomerAuthPage() {
 
               <div className="flex flex-wrap gap-3">
                 <button
-                  className="rounded-xl px-4 py-3 text-white"
-                  style={{ background: "var(--moovu-primary)" }}
+                  className="moovu-btn moovu-btn-primary"
                   disabled={busy}
                   onClick={register}
                 >
-                  {busy ? "Creating..." : "Create Account"}
+                  {busy ? "Creating..." : "Create account"}
                 </button>
 
                 <button
-                  className="border rounded-xl px-4 py-3"
+                  className="moovu-btn moovu-btn-secondary"
                   onClick={() => {
                     setStep("phone");
                     setPassword("");
-                    setFirstName("");
-                    setLastName("");
                   }}
                 >
                   Back

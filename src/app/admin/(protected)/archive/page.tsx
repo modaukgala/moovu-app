@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type ArchiveTrip = {
@@ -32,42 +32,48 @@ export default function AdminArchivePage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  async function searchTrips() {
+  const searchTrips = useCallback(async () => {
     setLoading(true);
     setMsg(null);
 
-    const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (status) params.set("status", status);
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
+    try {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      if (status) params.set("status", status);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
 
-    const res = await fetch(`/api/admin/archive?${params.toString()}`, {
-      cache: "no-store",
-    });
+      const res = await fetch(`/api/admin/archive?${params.toString()}`, {
+        cache: "no-store",
+      });
 
-    const contentType = res.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) {
-      setMsg("Admin archive route is not returning JSON.");
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setTrips([]);
+        setMsg("Admin archive route is not returning JSON.");
+        return;
+      }
+
+      const json = await res.json().catch(() => null);
+
+      if (!json?.ok) {
+        setTrips([]);
+        setMsg(json?.error || "Failed to search archive.");
+        return;
+      }
+
+      setTrips((json.trips ?? []) as ArchiveTrip[]);
+    } catch {
+      setTrips([]);
+      setMsg("Failed to search archive.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to search archive.");
-      setLoading(false);
-      return;
-    }
-
-    setTrips(json.trips ?? []);
-    setLoading(false);
-  }
+  }, [dateFrom, dateTo, q, status]);
 
   useEffect(() => {
-    searchTrips();
-  }, []);
+    void searchTrips();
+  }, [searchTrips]);
 
   return (
     <main className="min-h-screen px-6 py-10 text-black">
@@ -82,15 +88,12 @@ export default function AdminArchivePage() {
           </div>
 
           <div className="flex gap-2">
-            <Link
-              href="/admin/trips"
-              className="border rounded-xl px-4 py-2 bg-white"
-            >
+            <Link href="/admin/trips" className="border rounded-xl px-4 py-2 bg-white">
               Back to Dispatch
             </Link>
 
             <button
-              onClick={searchTrips}
+              onClick={() => void searchTrips()}
               className="rounded-xl px-4 py-2 text-white"
               style={{ background: "var(--moovu-primary)" }}
             >

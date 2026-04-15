@@ -114,6 +114,21 @@ function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
 }
 
+function statusChipClass(status: string | null | undefined) {
+  switch (status) {
+    case "completed":
+      return "moovu-chip moovu-chip-success";
+    case "cancelled":
+      return "moovu-chip moovu-chip-danger";
+    case "ongoing":
+      return "moovu-chip moovu-chip-primary";
+    case "arrived":
+      return "moovu-chip moovu-chip-warning";
+    default:
+      return "moovu-chip";
+  }
+}
+
 export default function RideTrackingPage() {
   const router = useRouter();
   const params = useParams<{ tripId: string }>();
@@ -124,11 +139,12 @@ export default function RideTrackingPage() {
   const [events, setEvents] = useState<TripEvent[]>([]);
   const [rating, setRating] = useState<Rating | null>(null);
   const [tracking, setTracking] = useState<Tracking | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelReason, setCancelReason] =
     useState<(typeof CANCEL_REASONS)[number]>("Driver is taking too long");
-  const [cancelBusy, setCancelBusy] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -342,7 +358,10 @@ export default function RideTrackingPage() {
       return;
     }
 
-    const existingScript = document.getElementById("google-maps-script-rider-secure") as HTMLScriptElement | null;
+    const existingScript = document.getElementById(
+      "google-maps-script-rider-secure"
+    ) as HTMLScriptElement | null;
+
     if (existingScript) {
       existingScript.addEventListener("load", ready);
       return () => existingScript.removeEventListener("load", ready);
@@ -423,13 +442,46 @@ export default function RideTrackingPage() {
       .join(" • ") || "—";
   }, [driver]);
 
+  const topTimeline = useMemo(() => {
+    const status = trip?.status;
+    return [
+      {
+        label: "Requested",
+        active: !!status,
+        done: ["requested", "offered", "assigned", "arrived", "ongoing", "completed"].includes(
+          status || ""
+        ),
+      },
+      {
+        label: "Matched",
+        active: ["offered", "assigned", "arrived", "ongoing", "completed"].includes(status || ""),
+        done: ["assigned", "arrived", "ongoing", "completed"].includes(status || ""),
+      },
+      {
+        label: "Pickup",
+        active: ["assigned", "arrived", "ongoing", "completed"].includes(status || ""),
+        done: ["arrived", "ongoing", "completed"].includes(status || ""),
+      },
+      {
+        label: "On trip",
+        active: ["ongoing", "completed"].includes(status || ""),
+        done: ["completed"].includes(status || ""),
+      },
+      {
+        label: "Done",
+        active: ["completed"].includes(status || ""),
+        done: ["completed"].includes(status || ""),
+      },
+    ];
+  }, [trip?.status]);
+
   if (loading) {
-    return <main className="p-6 text-black">Loading trip...</main>;
+    return <main className="moovu-page moovu-shell p-6 text-black">Loading trip...</main>;
   }
 
   if (!trip) {
     return (
-      <main className="p-6 text-black">
+      <main className="moovu-page moovu-shell p-6 text-black">
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
         Trip not found.
       </main>
@@ -437,279 +489,342 @@ export default function RideTrackingPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="moovu-page text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div>
-          <div className="text-sm text-gray-500">MOOVU Ride Tracking</div>
-          <h1 className="text-3xl font-semibold mt-1">Track Your Ride</h1>
-          <p className="text-gray-700 mt-2">
-            Your trip is protected under your customer account.
-          </p>
+      <div className="moovu-shell">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="moovu-section-title">MOOVU Ride</div>
+            <h1 className="mt-1 text-3xl font-semibold text-slate-950">Track your ride</h1>
+          </div>
+
+          <div className={statusChipClass(trip.status)}>
+            <span className="moovu-chip-dot" />
+            {statusLabel(trip.status)}
+          </div>
         </div>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <div className="border rounded-2xl p-4 bg-white">
-            <div className="text-sm text-gray-600">Live Trip Status</div>
-            <div className="text-xl font-semibold mt-1 text-black">
-              {statusLabel(trip.status)}
-            </div>
-            <div className="text-sm text-gray-700 mt-2">
-              Requested: {trip.created_at ? new Date(trip.created_at).toLocaleString() : "—"}
-            </div>
-          </div>
-
-          {tracking && (
-            <div className="grid md:grid-cols-4 gap-4">
-              <div className="border rounded-2xl p-4 bg-white">
-                <div className="text-sm text-gray-600">Tracking State</div>
-                <div className="font-semibold mt-1">{tracking.liveState}</div>
-              </div>
-
-              <div className="border rounded-2xl p-4 bg-white">
-                <div className="text-sm text-gray-600">Driver GPS Fresh</div>
-                <div className="font-semibold mt-1">{tracking.driverFresh ? "Yes" : "No"}</div>
-              </div>
-
-              <div className="border rounded-2xl p-4 bg-white">
-                <div className="text-sm text-gray-600">Driver Last Seen</div>
-                <div className="font-semibold mt-1">
-                  {tracking.driverLastSeen
-                    ? new Date(tracking.driverLastSeen).toLocaleString()
-                    : "—"}
-                </div>
-              </div>
-
-              <div className="border rounded-2xl p-4 bg-white">
-                <div className="text-sm text-gray-600">Freshness Seconds</div>
-                <div className="font-semibold mt-1">
-                  {tracking.freshnessSeconds ?? "—"}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {trip.ride_type === "scheduled" && (
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="border rounded-2xl p-4 bg-white">
-                <div className="text-sm text-gray-600">Scheduled For</div>
-                <div className="font-semibold mt-1">
-                  {trip.scheduled_for ? new Date(trip.scheduled_for).toLocaleString() : "—"}
-                </div>
-              </div>
-
-              <div className="border rounded-2xl p-4 bg-white">
-                <div className="text-sm text-gray-600">Planned Release</div>
-                <div className="font-semibold mt-1">
-                  {trip.scheduled_release_at ? new Date(trip.scheduled_release_at).toLocaleString() : "—"}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="border rounded-2xl p-4" style={{ background: "var(--moovu-primary-soft)" }}>
-              <div className="text-sm text-gray-600">Pickup</div>
-              <div className="font-medium mt-1 text-black">{trip.pickup_address ?? "—"}</div>
-            </div>
-
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Dropoff</div>
-              <div className="font-medium mt-1 text-black">{trip.dropoff_address ?? "—"}</div>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-4 gap-4">
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Fare</div>
-              <div className="font-semibold mt-1 text-black">{money(trip.fare_amount)}</div>
-            </div>
-
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Payment</div>
-              <div className="font-semibold mt-1 text-black">{trip.payment_method ?? "—"}</div>
-            </div>
-
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Start OTP</div>
-              <div className="font-semibold mt-1 text-black">
-                {trip.start_otp ?? "—"} {trip.start_otp_verified ? "✅" : ""}
-              </div>
-            </div>
-
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">End OTP</div>
-              <div className="font-semibold mt-1 text-black">
-                {trip.end_otp ?? "—"} {trip.end_otp_verified ? "✅" : ""}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold text-black">Driver & Car Details</h2>
-
-          <div className="grid md:grid-cols-4 gap-4">
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Driver</div>
-              <div className="font-semibold mt-1 text-black">
-                {driver ? `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || "Assigned" : "Searching..."}
-              </div>
-            </div>
-
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Phone</div>
-              <div className="font-semibold mt-1 text-black">{driver?.phone ?? "—"}</div>
-            </div>
-
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Car</div>
-              <div className="font-semibold mt-1 text-black">{carText}</div>
-            </div>
-
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Registration</div>
-              <div className="font-semibold mt-1 text-black">
-                {driver?.vehicle_registration ?? "—"}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/ride/${trip.id}/receipt`}
-              className="border rounded-xl px-4 py-2 bg-white text-black"
-            >
-              View Receipt
-            </Link>
-
-            {canShare && (
-              <Link
-                href={`/ride/${trip.id}/share`}
-                className="rounded-xl px-4 py-2 text-white"
-                style={{ background: "var(--moovu-primary)" }}
-              >
-                Share Trip
-              </Link>
-            )}
-
-            {trip.status === "completed" && !rating && (
-              <Link
-                href={`/ride/${trip.id}/rate`}
-                className="border rounded-xl px-4 py-2 bg-white text-black"
-              >
-                Rate Driver
-              </Link>
-            )}
-
-            <Link
-              href={`/ride/${trip.id}/support`}
-              className="border rounded-xl px-4 py-2 bg-white text-black"
-            >
-              Report Issue
-            </Link>
-          </div>
-        </section>
-
-        <section className="border rounded-[2rem] p-5 bg-white shadow-sm space-y-3">
-          <h2 className="text-xl font-semibold text-black">Live Tracking Map</h2>
-
-          {mapError ? (
-            <div className="border rounded-2xl p-4 text-sm text-black">
-              {mapError}
-            </div>
-          ) : (
+        <div className="mb-4 grid gap-3 md:grid-cols-5">
+          {topTimeline.map((item) => (
             <div
-              ref={mapRef}
-              className="w-full h-[55vh] rounded-[1.5rem] border bg-gray-100"
-            />
-          )}
-        </section>
+              key={item.label}
+              className={`rounded-2xl border px-4 py-3 text-center ${
+                item.done
+                  ? "border-blue-100 bg-[var(--moovu-primary-soft)] text-slate-900"
+                  : item.active
+                  ? "border-slate-200 bg-slate-100 text-slate-700"
+                  : "border-slate-200 bg-white text-slate-400"
+              }`}
+            >
+              <div className="text-xs uppercase tracking-wide opacity-80">Step</div>
+              <div className="mt-1 text-sm font-semibold">{item.label}</div>
+            </div>
+          ))}
+        </div>
 
-        {rating && (
-          <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-            <h2 className="text-xl font-semibold text-black">Your Rating</h2>
-            <div className="mt-3 text-lg">{rating.rating} / 5</div>
-            {rating.comment && <div className="mt-2 text-gray-700">{rating.comment}</div>}
-          </section>
-        )}
+        <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+          <section className="relative overflow-hidden rounded-[34px] border border-[var(--moovu-border)] bg-white shadow-sm">
+            <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow">
+              {tracking?.liveState || statusLabel(trip.status)}
+            </div>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold text-black">Trip Timeline</h2>
+            {mapError ? (
+              <div className="flex h-[58vh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">
+                {mapError}
+              </div>
+            ) : (
+              <div ref={mapRef} className="h-[58vh] w-full bg-slate-100" />
+            )}
 
-          {events.length === 0 ? (
-            <div className="text-gray-600">No events yet.</div>
-          ) : (
-            <div className="space-y-3">
-              {events.map((event) => (
-                <div key={event.id} className="border rounded-xl p-4">
-                  <div className="font-medium">{event.event_type}</div>
-                  {event.message && <div className="text-sm text-gray-700 mt-1">{event.message}</div>}
-                  <div className="text-xs text-gray-500 mt-2">
-                    {new Date(event.created_at).toLocaleString()}
+            <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-white via-white/95 to-white/70 p-4 backdrop-blur md:p-5">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="moovu-stat-card">
+                  <div className="moovu-stat-label">Fare</div>
+                  <div className="moovu-stat-value">{money(trip.fare_amount)}</div>
+                </div>
+
+                <div className="moovu-stat-card">
+                  <div className="moovu-stat-label">Payment</div>
+                  <div className="moovu-stat-value capitalize">
+                    {trip.payment_method ?? "—"}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold text-black">Cancel Trip</h2>
-
-          {trip.status === "cancelled" ? (
-            <div className="border rounded-2xl p-4 bg-white">
-              <div className="text-sm text-gray-600">Trip cancelled</div>
-              <div className="font-medium mt-1 text-black">
-                Reason: {trip.cancel_reason ?? "—"}
+                <div className="moovu-stat-card">
+                  <div className="moovu-stat-label">Requested</div>
+                  <div className="mt-2 text-sm font-medium text-slate-900">
+                    {trip.created_at ? new Date(trip.created_at).toLocaleString() : "—"}
+                  </div>
+                </div>
               </div>
-              {Number(trip.cancellation_fee_amount ?? 0) > 0 && (
-                <div className="font-medium mt-2 text-black">
-                  Cancellation fee: {money(trip.cancellation_fee_amount)}
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            <section className="moovu-card p-5">
+              <div className="text-sm text-slate-500">Driver</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-950">
+                {driver
+                  ? `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || "Assigned"
+                  : "Searching..."}
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Phone</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{driver?.phone ?? "—"}</div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Vehicle</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{carText}</div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Registration</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">
+                    {driver?.vehicle_registration ?? "—"}
+                  </div>
+                </div>
+              </div>
+
+              {tracking && (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">GPS fresh</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {tracking.driverFresh ? "Yes" : "No"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Freshness</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {tracking.freshnessSeconds ?? "—"}s
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
-          ) : trip.status === "completed" ? (
-            <div className="border rounded-2xl p-4 bg-white text-black">
-              Completed trips cannot be cancelled.
-            </div>
-          ) : trip.status === "ongoing" ? (
-            <div className="border rounded-2xl p-4 bg-white text-black">
-              Once a trip has started, use the support section for any issue instead of cancelling here.
-            </div>
-          ) : (
-            <>
-              <div>
-                <label className="block text-sm text-gray-600 mb-2">
-                  Select a reason
-                </label>
-                <select
-                  className="w-full border rounded-xl p-3 bg-white text-black"
-                  value={cancelReason}
-                  onChange={(e) =>
-                    setCancelReason(e.target.value as (typeof CANCEL_REASONS)[number])
-                  }
-                >
-                  {CANCEL_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))}
-                </select>
+            </section>
+
+            <section className="moovu-card p-5">
+              <div className="text-sm font-medium text-slate-500">Trip route</div>
+
+              <div className="mt-4 space-y-4">
+                <div className="flex gap-3">
+                  <div className="mt-1 h-3 w-3 rounded-full bg-[var(--moovu-primary)]" />
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Pickup</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">
+                      {trip.pickup_address ?? "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="ml-[5px] h-8 w-0.5 bg-slate-200" />
+
+                <div className="flex gap-3">
+                  <div className="mt-1 h-3 w-3 rounded-full bg-slate-900" />
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Dropoff</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">
+                      {trip.dropoff_address ?? "—"}
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <button
-                disabled={!canCancel || cancelBusy}
-                onClick={cancelTrip}
-                className="rounded-xl px-4 py-2 text-white"
-                style={{ background: "#dc2626" }}
-              >
-                {cancelBusy ? "Cancelling..." : "Cancel Trip"}
-              </button>
-            </>
-          )}
-        </section>
+              {trip.ride_type === "scheduled" && (
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Scheduled for</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">
+                      {trip.scheduled_for ? new Date(trip.scheduled_for).toLocaleString() : "—"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Planned release</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">
+                      {trip.scheduled_release_at
+                        ? new Date(trip.scheduled_release_at).toLocaleString()
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <section className="moovu-card p-5">
+              <div className="text-sm font-medium text-slate-500">Ride OTP</div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div
+                  className={`rounded-2xl p-4 ${
+                    trip.start_otp_verified
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  <div className="text-xs uppercase tracking-wide opacity-80">Start OTP</div>
+                  <div className="mt-1 text-2xl font-semibold tracking-[0.25em]">
+                    {trip.start_otp ?? "—"}
+                  </div>
+                  <div className="mt-2 text-xs">
+                    {trip.start_otp_verified ? "Verified" : "Give this to driver to start trip"}
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-2xl p-4 ${
+                    trip.end_otp_verified
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  <div className="text-xs uppercase tracking-wide opacity-80">End OTP</div>
+                  <div className="mt-1 text-2xl font-semibold tracking-[0.25em]">
+                    {trip.end_otp ?? "—"}
+                  </div>
+                  <div className="mt-2 text-xs">
+                    {trip.end_otp_verified ? "Verified" : "Use this when the trip ends"}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="moovu-card p-5">
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/ride/${trip.id}/receipt`}
+                  className="moovu-btn moovu-btn-secondary"
+                >
+                  View receipt
+                </Link>
+
+                {canShare && (
+                  <Link
+                    href={`/ride/${trip.id}/share`}
+                    className="moovu-btn moovu-btn-primary"
+                  >
+                    Share trip
+                  </Link>
+                )}
+
+                {trip.status === "completed" && !rating && (
+                  <Link
+                    href={`/ride/${trip.id}/rate`}
+                    className="moovu-btn moovu-btn-secondary"
+                  >
+                    Rate driver
+                  </Link>
+                )}
+
+                <Link
+                  href={`/ride/${trip.id}/support`}
+                  className="moovu-btn moovu-btn-secondary"
+                >
+                  Report issue
+                </Link>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <section className="moovu-card p-5">
+            <div className="text-sm font-medium text-slate-500">Trip timeline</div>
+
+            {events.length === 0 ? (
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                No events yet.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {events.map((event) => (
+                  <div key={event.id} className="flex gap-3 rounded-2xl bg-slate-50 p-4">
+                    <div className="mt-1 h-3 w-3 rounded-full bg-[var(--moovu-primary)]" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900">{event.event_type}</div>
+                      {event.message && (
+                        <div className="mt-1 text-sm text-slate-700">{event.message}</div>
+                      )}
+                      <div className="mt-2 text-xs text-slate-500">
+                        {new Date(event.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="moovu-card p-5">
+            <div className="text-sm font-medium text-slate-500">Trip controls</div>
+
+            {trip.status === "cancelled" ? (
+              <div className="mt-4 rounded-2xl bg-red-50 p-4">
+                <div className="text-sm font-semibold text-red-700">Trip cancelled</div>
+                <div className="mt-2 text-sm text-red-700">
+                  Reason: {trip.cancel_reason ?? "—"}
+                </div>
+                {Number(trip.cancellation_fee_amount ?? 0) > 0 && (
+                  <div className="mt-2 text-sm font-medium text-red-700">
+                    Cancellation fee: {money(trip.cancellation_fee_amount)}
+                  </div>
+                )}
+              </div>
+            ) : trip.status === "completed" ? (
+              <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-700">
+                Completed trips cannot be cancelled.
+              </div>
+            ) : trip.status === "ongoing" ? (
+              <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">
+                Once a trip has started, use the support section for any issue instead of cancelling here.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Select cancellation reason
+                  </label>
+                  <select
+                    className="moovu-input"
+                    value={cancelReason}
+                    onChange={(e) =>
+                      setCancelReason(e.target.value as (typeof CANCEL_REASONS)[number])
+                    }
+                  >
+                    {CANCEL_REASONS.map((reason) => (
+                      <option key={reason} value={reason}>
+                        {reason}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  disabled={!canCancel || cancelBusy}
+                  onClick={cancelTrip}
+                  className="moovu-btn bg-red-600 text-white disabled:opacity-60"
+                >
+                  {cancelBusy ? "Cancelling..." : "Cancel trip"}
+                </button>
+              </div>
+            )}
+
+            {rating && (
+              <div className="mt-5 rounded-2xl bg-slate-100 p-4 text-slate-900">
+                <div className="text-sm text-slate-500">Your rating</div>
+                <div className="mt-1 text-2xl font-semibold">{rating.rating} / 5</div>
+                {rating.comment && (
+                  <div className="mt-2 text-sm text-slate-700">{rating.comment}</div>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   );

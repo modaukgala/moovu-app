@@ -1,32 +1,32 @@
 export default function GlobalLoading() {
   return (
-    <main className="min-h-screen flex items-center justify-center px-6">
-      <div className="text-center space-y-4">
-        <div
-          className="mx-auto h-20 w-20 rounded-3xl flex items-center justify-center shadow-sm border bg-white"
-        >
-          <img
-            src="/icon-192.png"
-            alt="MOOVU"
-            className="h-12 w-12 object-contain"
-          />
+    <main className="moovu-page">
+      <div className="moovu-shell space-y-5">
+        <div className="moovu-card p-6">
+          <div className="moovu-skeleton h-4 w-28" />
+          <div className="mt-4 moovu-skeleton h-10 w-72" />
+          <div className="mt-4 moovu-skeleton h-5 w-full max-w-2xl" />
         </div>
 
-        <div>
-          <h1 className="text-2xl font-semibold text-black">MOOVU Kasi Rides</h1>
-          <p className="text-gray-600 mt-1">Loading your experience...</p>
-        </div>
-
-        <div className="flex justify-center">
-          <div
-            className="h-2 w-28 rounded-full overflow-hidden"
-            style={{ background: "rgba(47,128,237,0.18)" }}
-          >
-            <div
-              className="h-full w-1/2 rounded-full animate-pulse"
-              style={{ background: "var(--moovu-primary)" }}
-            />
+        <div className="grid gap-5 lg:grid-cols-3">
+          <div className="moovu-card p-5">
+            <div className="moovu-skeleton h-5 w-32" />
+            <div className="mt-4 moovu-skeleton h-24 w-full" />
           </div>
+
+          <div className="moovu-card p-5">
+            <div className="moovu-skeleton h-5 w-32" />
+            <div className="mt-4 moovu-skeleton h-24 w-full" />
+          </div>
+
+          <div className="moovu-card p-5">
+            <div className="moovu-skeleton h-5 w-32" />
+            <div className="mt-4 moovu-skeleton h-24 w-full" />
+          </div>
+        </div>
+
+        <div className="moovu-card p-6">
+          <div className="moovu-skeleton h-[320px] w-full" />
         </div>
       </div>
     </main>

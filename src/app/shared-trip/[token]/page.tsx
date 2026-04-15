@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
 type SharedTrip = {
@@ -30,33 +30,45 @@ export default function SharedTripPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function loadSharedTrip() {
+  const loadSharedTrip = useCallback(async () => {
     setLoading(true);
     setMsg(null);
 
-    const res = await fetch(
-      `/api/customer/shared-trip?token=${encodeURIComponent(params.token)}`,
-      { cache: "no-store" }
-    );
+    try {
+      const res = await fetch(
+        `/api/customer/shared-trip?token=${encodeURIComponent(params.token)}`,
+        { cache: "no-store" }
+      );
 
-    const json = await res.json().catch(() => null);
+      const json = await res.json().catch(() => null);
 
-    if (!json?.ok) {
-      setMsg(json?.error || "Could not load shared trip.");
+      if (!json?.ok) {
+        setTrip(null);
+        setDriver(null);
+        setMsg(json?.error || "Could not load shared trip.");
+        return;
+      }
+
+      setTrip((json.trip ?? null) as SharedTrip | null);
+      setDriver((json.driver ?? null) as SharedDriver | null);
+    } catch {
+      setTrip(null);
+      setDriver(null);
+      setMsg("Could not load shared trip.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setTrip(json.trip ?? null);
-    setDriver(json.driver ?? null);
-    setLoading(false);
-  }
+  }, [params.token]);
 
   useEffect(() => {
-    loadSharedTrip();
-    const timer = setInterval(loadSharedTrip, 4000);
+    void loadSharedTrip();
+
+    const timer = setInterval(() => {
+      void loadSharedTrip();
+    }, 4000);
+
     return () => clearInterval(timer);
-  }, [params.token]);
+  }, [loadSharedTrip]);
 
   if (loading) {
     return <main className="p-6 text-black">Loading shared trip...</main>;
@@ -77,11 +89,7 @@ export default function SharedTripPage() {
           </p>
         </div>
 
-        {msg && (
-          <div className="border rounded-2xl p-4 text-sm">
-            {msg}
-          </div>
-        )}
+        {msg && <div className="border rounded-2xl p-4 text-sm">{msg}</div>}
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
           <div className="grid md:grid-cols-2 gap-4">

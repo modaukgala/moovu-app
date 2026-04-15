@@ -69,6 +69,21 @@ function wazeLink(lat: number | null | undefined, lng: number | null | undefined
   return `https://waze.com/ul?ll=${encodeURIComponent(`${lat},${lng}`)}&navigate=yes`;
 }
 
+function tripStatusLabel(status: string | null | undefined) {
+  switch (status) {
+    case "assigned":
+      return "Head to pickup";
+    case "arrived":
+      return "Waiting for OTP";
+    case "ongoing":
+      return "Drive to destination";
+    case "completed":
+      return "Completed";
+    default:
+      return status || "No trip";
+  }
+}
+
 export default function DriverHomePage() {
   const router = useRouter();
 
@@ -91,9 +106,9 @@ export default function DriverHomePage() {
 
   const otpEntryOpen = showStartOtp || showEndOtp;
 
-  const offersTimerRef = useRef<any>(null);
-  const tripTimerRef = useRef<any>(null);
-  const gpsTimerRef = useRef<any>(null);
+  const offersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tripTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gpsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -423,7 +438,9 @@ export default function DriverHomePage() {
   async function logout() {
     try {
       await supabaseClient.auth.signOut({ scope: "local" });
-    } catch {}
+    } catch {
+      // ignore
+    }
     window.location.href = "/driver/login";
   }
 
@@ -616,7 +633,7 @@ export default function DriverHomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    let retryTimer: any = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
     if (!apiKey) {
@@ -699,294 +716,198 @@ export default function DriverHomePage() {
 
   if (loadingDriver) {
     return (
-      <main className="min-h-screen px-6 py-10 text-black">
-        <div className="max-w-4xl mx-auto border rounded-[2rem] p-6 bg-white shadow-sm">
-          Loading driver dashboard...
-        </div>
+      <main className="moovu-page moovu-shell p-6 text-black">
+        <div className="moovu-card p-6">Loading driver dashboard...</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-start justify-between gap-4">
+    <main className="moovu-page text-black">
+      <div className="moovu-shell">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border bg-white shadow-sm mb-3">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: "var(--moovu-primary)" }}
-              />
-              Driver operations
-            </div>
-            <h1 className="text-3xl md:text-4xl font-semibold text-black">Driver Dashboard</h1>
-            <p className="text-gray-700 mt-2">
-              Offers first, then accepted trips become current trips.
-            </p>
+            <div className="moovu-section-title">MOOVU Driver</div>
+            <h1 className="mt-1 text-3xl font-semibold text-slate-950">Driver mission screen</h1>
           </div>
 
-          <button
-            className="rounded-xl px-4 py-2 text-white"
-            style={{ background: "var(--moovu-primary)" }}
-            onClick={logout}
-          >
+          <button className="moovu-btn moovu-btn-secondary" onClick={logout}>
             Logout
           </button>
         </div>
 
-        {info && (
-          <div
-            className="border rounded-2xl p-4 text-sm text-black"
-            style={{ background: "var(--moovu-primary-soft)" }}
-          >
-            {info}
-          </div>
-        )}
+        {(info || gpsInfo) && (
+          <div className="mb-4 grid gap-3 md:grid-cols-2">
+            {info && (
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                {info}
+              </div>
+            )}
 
-        {gpsInfo && (
-          <div className="border rounded-2xl p-4 text-sm bg-white text-black shadow-sm">
-            {gpsInfo}
+            {gpsInfo && (
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {gpsInfo}
+              </div>
+            )}
           </div>
         )}
 
         {!driver ? (
-          <div className="border rounded-2xl p-5 bg-white shadow-sm text-gray-700">
+          <div className="moovu-card p-6 text-slate-700">
             Driver record not found.
           </div>
         ) : (
-          <>
-            <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-              <div className="grid lg:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <h2 className="text-xl font-semibold text-black">Profile</h2>
-
-                  <div className="text-sm text-gray-700">
-                    {driver.first_name ?? "—"} {driver.last_name ?? ""} • {driver.phone ?? "—"}
+          <div className="grid gap-4 xl:grid-cols-[1.22fr_0.78fr]">
+            <section className="space-y-4">
+              <div className="moovu-card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm text-slate-500">Status</div>
+                    <div className="mt-1 text-3xl font-semibold text-slate-950">
+                      {driver.online ? "Online" : "Offline"}
+                    </div>
+                    <div className="mt-2 text-sm text-slate-600">
+                      {driver.first_name ?? "—"} {driver.last_name ?? ""} • {driver.phone ?? "—"}
+                    </div>
                   </div>
 
-                  <div className="text-sm text-gray-700">
-                    Approval status: <span className="font-medium text-black">{driver.status ?? "—"}</span>
-                    {" • "}Verification: <span className="font-medium text-black">{driver.verification_status ?? "—"}</span>
-                  </div>
-
-                  <div className="text-sm text-gray-700">
-                    Online: <span className="font-medium text-black">{driver.online ? "Yes" : "No"}</span>
-                    {" • "}Busy: <span className="font-medium text-black">{driver.busy ? "Yes" : "No"}</span>
-                  </div>
-
-                  <div className="text-sm text-gray-700">
-                    Subscription: <span className="font-medium text-black">{driver.subscription_status ?? "—"}</span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <button
-                      className="rounded-xl px-4 py-2 text-white"
-                      style={{ background: "var(--moovu-primary)" }}
-                      disabled={busy}
-                      onClick={() => setOnlineServer(true)}
-                    >
-                      Go Online
-                    </button>
-
-                    <button
-                      className="border rounded-xl px-4 py-2 bg-white text-black"
-                      disabled={busy}
-                      onClick={() => setOnlineServer(false)}
-                    >
-                      Go Offline
-                    </button>
-
-                    <button
-                      className="border rounded-xl px-4 py-2 bg-white text-black"
-                      onClick={() => router.push("/driver/complete-profile")}
-                    >
-                      {driver.profile_completed ? "Edit Application" : "Complete Application"}
-                    </button>
-
-                    <button
-                      className="border rounded-xl px-4 py-2 bg-white text-black"
-                      onClick={() => router.push("/driver/earnings")}
-                    >
-                      View Earnings
-                    </button>
-
-                    <button
-                      className="border rounded-xl px-4 py-2 bg-white text-black"
-                      onClick={() => router.push("/driver/history")}
-                    >
-                      Trip History
-                    </button>
+                  <div className={driver.online ? "moovu-chip moovu-chip-success" : "moovu-chip"}>
+                    <span className="moovu-chip-dot" />
+                    {driver.online ? "Ready for trips" : "Not receiving trips"}
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <h2 className="text-xl font-semibold text-black">Location</h2>
-
-                  <input
-                    className="rounded-xl p-3 w-full border"
-                    placeholder="Update location manually"
-                    value={locationName}
-                    onChange={(e) => setLocationName(e.target.value)}
-                  />
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      className="border rounded-xl px-4 py-2 bg-white text-black"
-                      disabled={busy}
-                      onClick={saveLocationFromName}
-                    >
-                      Save Manual Location
-                    </button>
-
-                    <button
-                      className="rounded-xl px-4 py-2 text-white"
-                      style={{ background: "var(--moovu-primary)" }}
-                      disabled={busy}
-                      onClick={() => captureCurrentLocationAndSave(true)}
-                    >
-                      Save Current GPS
-                    </button>
+                <div className="mt-5 grid gap-3 md:grid-cols-4">
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Approval</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">{driver.status ?? "—"}</div>
                   </div>
 
-                  <div className="text-xs text-gray-600">
-                    Current coords:{" "}
-                    {driver.lat != null && driver.lng != null
-                      ? `${driver.lat}, ${driver.lng}`
-                      : "—"}
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Verification</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {driver.verification_status ?? "—"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Subscription</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {driver.subscription_status ?? "—"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Busy</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {driver.busy ? "Yes" : "No"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    className="moovu-btn moovu-btn-primary"
+                    disabled={busy}
+                    onClick={() => setOnlineServer(true)}
+                  >
+                    Go online
+                  </button>
+
+                  <button
+                    className="moovu-btn moovu-btn-secondary"
+                    disabled={busy}
+                    onClick={() => setOnlineServer(false)}
+                  >
+                    Go offline
+                  </button>
+
+                  <button
+                    className="moovu-btn moovu-btn-secondary"
+                    onClick={() => router.push("/driver/complete-profile")}
+                  >
+                    {driver.profile_completed ? "Edit application" : "Complete application"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative overflow-hidden rounded-[34px] border border-[var(--moovu-border)] bg-white shadow-sm">
+                <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow">
+                  {currentTrip ? tripStatusLabel(currentTrip.status) : offer ? "New trip offer" : "Waiting for request"}
+                </div>
+
+                {mapError ? (
+                  <div className="flex h-[58vh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">
+                    {mapError}
+                  </div>
+                ) : (
+                  <div ref={mapRef} className="h-[58vh] w-full bg-slate-100" />
+                )}
+
+                <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-white via-white/95 to-white/65 p-4 md:p-5">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="moovu-stat-card">
+                      <div className="moovu-stat-label">Current GPS</div>
+                      <div className="mt-2 text-sm font-medium text-slate-900">
+                        {driver.lat != null && driver.lng != null
+                          ? `${driver.lat}, ${driver.lng}`
+                          : "—"}
+                      </div>
+                    </div>
+
+                    <div className="moovu-stat-card">
+                      <div className="moovu-stat-label">Last seen</div>
+                      <div className="mt-2 text-sm font-medium text-slate-900">
+                        {driver.last_seen ? new Date(driver.last_seen).toLocaleString() : "—"}
+                      </div>
+                    </div>
+
+                    <div className="moovu-stat-card moovu-stat-card-primary">
+                      <div className="moovu-stat-label">Navigation mode</div>
+                      <div className="moovu-stat-value">
+                        {currentTrip ? "Trip active" : offer ? "Offer pending" : "Standby"}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </section>
 
-            <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-              <h2 className="text-xl font-semibold text-black">Current Offer</h2>
-
-              {!offer ? (
-                <p className="text-gray-700">No pending trip offer.</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div
-                      className="border rounded-2xl p-4"
-                      style={{ background: "var(--moovu-primary-soft)" }}
-                    >
-                      <div className="text-sm text-gray-600">Pickup</div>
-                      <div className="font-medium mt-1 text-black">{offer.pickup_address ?? "—"}</div>
+              {currentTrip && (
+                <div className="moovu-card p-5">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-500">Active trip</div>
+                      <div className="mt-1 text-2xl font-semibold text-slate-950">
+                        {tripStatusLabel(currentTrip.status)}
+                      </div>
                     </div>
 
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Dropoff</div>
-                      <div className="font-medium mt-1 text-black">{offer.dropoff_address ?? "—"}</div>
+                    <div className="moovu-chip moovu-chip-primary">
+                      <span className="moovu-chip-dot" />
+                      Fare: R{currentTrip.fare_amount ?? "—"}
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-4 gap-4">
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Offer status</div>
-                      <div className="font-semibold mt-1 text-black">{offer.offer_status}</div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl bg-[var(--moovu-primary-soft)] p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Pickup</div>
+                      <div className="mt-1 text-sm font-medium text-slate-900">
+                        {currentTrip.pickup_address ?? "—"}
+                      </div>
                     </div>
 
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Fare</div>
-                      <div className="font-semibold mt-1 text-black">R{offer.fare_amount ?? "—"}</div>
-                    </div>
-
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Payment</div>
-                      <div className="font-semibold mt-1 text-black">{offer.payment_method ?? "—"}</div>
-                    </div>
-
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Time left</div>
-                      <div className="font-semibold mt-1 text-black">
-                        {secondsLeft != null ? `${secondsLeft}s` : "—"}
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Dropoff</div>
+                      <div className="mt-1 text-sm font-medium text-slate-900">
+                        {currentTrip.dropoff_address ?? "—"}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      className="rounded-xl px-4 py-2 text-white"
-                      style={{ background: "var(--moovu-primary)" }}
-                      disabled={busy || secondsLeft === 0}
-                      onClick={() => respondToOffer("accept")}
-                    >
-                      Accept Trip
-                    </button>
-
-                    <button
-                      className="border rounded-xl px-4 py-2 bg-white text-black"
-                      disabled={busy || secondsLeft === 0}
-                      onClick={() => respondToOffer("reject")}
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <section className="border rounded-[2rem] p-5 bg-white shadow-sm space-y-3">
-              <h2 className="text-xl font-semibold text-black">Driver Map</h2>
-
-              {mapError ? (
-                <div
-                  className="border rounded-2xl p-4 text-sm text-black"
-                  style={{ background: "var(--moovu-primary-soft)" }}
-                >
-                  {mapError}
-                </div>
-              ) : (
-                <div
-                  ref={mapRef}
-                  className="w-full h-[55vh] rounded-[1.5rem] border bg-gray-100"
-                />
-              )}
-            </section>
-
-            <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-              <h2 className="text-xl font-semibold text-black">Current Trip</h2>
-
-              {!currentTrip ? (
-                <p className="text-gray-700">No active trip.</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div
-                      className="border rounded-2xl p-4"
-                      style={{ background: "var(--moovu-primary-soft)" }}
-                    >
-                      <div className="text-sm text-gray-600">Pickup</div>
-                      <div className="font-medium mt-1 text-black">{currentTrip.pickup_address ?? "—"}</div>
-                    </div>
-
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Dropoff</div>
-                      <div className="font-medium mt-1 text-black">{currentTrip.dropoff_address ?? "—"}</div>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Status</div>
-                      <div className="font-semibold mt-1 text-black">{currentTrip.status}</div>
-                    </div>
-
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Fare</div>
-                      <div className="font-semibold mt-1 text-black">R{currentTrip.fare_amount ?? "—"}</div>
-                    </div>
-
-                    <div className="border rounded-2xl p-4 bg-white">
-                      <div className="text-sm text-gray-600">Payment</div>
-                      <div className="font-semibold mt-1 text-black">{currentTrip.payment_method ?? "—"}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-3">
                     {pickupGoogle && (
                       <a
-                        className="border rounded-xl px-4 py-2 bg-white text-black"
+                        className="moovu-btn moovu-btn-secondary"
                         href={pickupGoogle}
                         target="_blank"
                         rel="noreferrer"
@@ -997,7 +918,7 @@ export default function DriverHomePage() {
 
                     {pickupWaze && (
                       <a
-                        className="border rounded-xl px-4 py-2 bg-white text-black"
+                        className="moovu-btn moovu-btn-secondary"
                         href={pickupWaze}
                         target="_blank"
                         rel="noreferrer"
@@ -1008,7 +929,7 @@ export default function DriverHomePage() {
 
                     {dropoffGoogle && (
                       <a
-                        className="border rounded-xl px-4 py-2 bg-white text-black"
+                        className="moovu-btn moovu-btn-secondary"
                         href={dropoffGoogle}
                         target="_blank"
                         rel="noreferrer"
@@ -1019,7 +940,7 @@ export default function DriverHomePage() {
 
                     {dropoffWaze && (
                       <a
-                        className="border rounded-xl px-4 py-2 bg-white text-black"
+                        className="moovu-btn moovu-btn-secondary"
                         href={dropoffWaze}
                         target="_blank"
                         rel="noreferrer"
@@ -1029,30 +950,31 @@ export default function DriverHomePage() {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="mt-5">
                     {currentTrip.status === "assigned" && (
                       <button
-                        className="rounded-xl px-4 py-2 text-white"
-                        style={{ background: "var(--moovu-primary)" }}
+                        className="moovu-btn moovu-btn-primary"
                         disabled={busy}
                         onClick={() => arriveTrip(currentTrip.id)}
                       >
-                        Arrived
+                        Mark as arrived
                       </button>
                     )}
 
                     {currentTrip.status === "arrived" && (
-                      <div className="space-y-3 w-full">
+                      <div className="rounded-[28px] bg-slate-50 p-4">
+                        <div className="text-sm font-semibold text-slate-900">Passenger start OTP</div>
+
                         {!showStartOtp ? (
                           <button
                             onClick={() => setShowStartOtp(true)}
                             disabled={busy}
-                            className="border rounded-xl px-4 py-2 bg-white text-black"
+                            className="moovu-btn moovu-btn-secondary mt-3"
                           >
-                            Enter Start OTP
+                            Enter start OTP
                           </button>
                         ) : (
-                          <div className="space-y-2 max-w-md">
+                          <div className="mt-4 max-w-md space-y-3">
                             <input
                               type="text"
                               inputMode="numeric"
@@ -1060,10 +982,10 @@ export default function DriverHomePage() {
                               value={startOtp}
                               onChange={(e) => setStartOtp(e.target.value)}
                               placeholder="Enter passenger start OTP"
-                              className="w-full rounded-xl border px-4 py-3"
+                              className="moovu-input"
                             />
 
-                            <div className="flex gap-2">
+                            <div className="flex gap-3">
                               <button
                                 onClick={async () => {
                                   await startTrip(currentTrip.id, startOtp);
@@ -1071,10 +993,9 @@ export default function DriverHomePage() {
                                   setShowStartOtp(false);
                                 }}
                                 disabled={busy || startOtp.trim().length < 4}
-                                className="rounded-xl px-4 py-3 text-white"
-                                style={{ background: "var(--moovu-primary)" }}
+                                className="moovu-btn moovu-btn-primary"
                               >
-                                Verify & Start
+                                Verify and start
                               </button>
 
                               <button
@@ -1083,7 +1004,7 @@ export default function DriverHomePage() {
                                   setShowStartOtp(false);
                                 }}
                                 disabled={busy}
-                                className="rounded-xl border px-4 py-3 bg-white text-black"
+                                className="moovu-btn moovu-btn-secondary"
                               >
                                 Cancel
                               </button>
@@ -1094,18 +1015,19 @@ export default function DriverHomePage() {
                     )}
 
                     {currentTrip.status === "ongoing" && (
-                      <div className="space-y-3 w-full">
+                      <div className="rounded-[28px] bg-slate-50 p-4">
+                        <div className="text-sm font-semibold text-slate-900">Passenger end OTP</div>
+
                         {!showEndOtp ? (
                           <button
                             onClick={() => setShowEndOtp(true)}
                             disabled={busy}
-                            className="rounded-xl px-4 py-2 text-white"
-                            style={{ background: "var(--moovu-primary)" }}
+                            className="moovu-btn moovu-btn-primary mt-3"
                           >
-                            Enter End OTP
+                            Enter end OTP
                           </button>
                         ) : (
-                          <div className="space-y-2 max-w-md">
+                          <div className="mt-4 max-w-md space-y-3">
                             <input
                               type="text"
                               inputMode="numeric"
@@ -1113,10 +1035,10 @@ export default function DriverHomePage() {
                               value={endOtp}
                               onChange={(e) => setEndOtp(e.target.value)}
                               placeholder="Enter passenger end OTP"
-                              className="w-full rounded-xl border px-4 py-3"
+                              className="moovu-input"
                             />
 
-                            <div className="flex gap-2">
+                            <div className="flex gap-3">
                               <button
                                 onClick={async () => {
                                   await completeTrip(currentTrip.id, endOtp);
@@ -1124,10 +1046,9 @@ export default function DriverHomePage() {
                                   setShowEndOtp(false);
                                 }}
                                 disabled={busy || endOtp.trim().length < 4}
-                                className="rounded-xl px-4 py-3 text-white"
-                                style={{ background: "var(--moovu-primary)" }}
+                                className="moovu-btn bg-emerald-600 text-white disabled:opacity-60"
                               >
-                                Verify & Complete
+                                Verify and complete
                               </button>
 
                               <button
@@ -1136,7 +1057,7 @@ export default function DriverHomePage() {
                                   setShowEndOtp(false);
                                 }}
                                 disabled={busy}
-                                className="rounded-xl border px-4 py-3 bg-white text-black"
+                                className="moovu-btn moovu-btn-secondary"
                               >
                                 Cancel
                               </button>
@@ -1149,7 +1070,140 @@ export default function DriverHomePage() {
                 </div>
               )}
             </section>
-          </>
+
+            <aside className="space-y-4">
+              <section className="moovu-card p-5">
+                <div className="text-sm font-medium text-slate-500">Location tools</div>
+
+                <div className="mt-4 space-y-3">
+                  <input
+                    className="moovu-input"
+                    placeholder="Update location manually"
+                    value={locationName}
+                    onChange={(e) => setLocationName(e.target.value)}
+                  />
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      className="moovu-btn moovu-btn-secondary"
+                      disabled={busy}
+                      onClick={saveLocationFromName}
+                    >
+                      Save manual location
+                    </button>
+
+                    <button
+                      className="moovu-btn moovu-btn-primary"
+                      disabled={busy}
+                      onClick={() => captureCurrentLocationAndSave(true)}
+                    >
+                      Save current GPS
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="moovu-card p-5">
+                <div className="text-sm font-medium text-slate-500">Quick links</div>
+
+                <div className="mt-4 grid gap-3">
+                  <button
+                    className="moovu-btn moovu-btn-secondary justify-start"
+                    onClick={() => router.push("/driver/earnings")}
+                  >
+                    View earnings
+                  </button>
+
+                  <button
+                    className="moovu-btn moovu-btn-secondary justify-start"
+                    onClick={() => router.push("/driver/history")}
+                  >
+                    Trip history
+                  </button>
+                </div>
+              </section>
+
+              <section className="moovu-card p-5">
+                <div className="text-sm font-medium text-slate-500">Offer queue</div>
+
+                {!offer ? (
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                    No pending trip offer.
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-[28px] border border-[var(--moovu-border)] bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">
+                            New request
+                          </div>
+                          <div className="mt-1 text-xl font-semibold text-slate-950">
+                            R{offer.fare_amount ?? "—"}
+                          </div>
+                        </div>
+
+                        <div className="moovu-chip">
+                          <span className="moovu-chip-dot" />
+                          {secondsLeft != null ? `${secondsLeft}s left` : "—"}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3">
+                        <div className="rounded-2xl bg-white p-3">
+                          <div className="text-xs text-slate-500">Pickup</div>
+                          <div className="mt-1 text-sm font-medium text-slate-900">
+                            {offer.pickup_address ?? "—"}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl bg-white p-3">
+                          <div className="text-xs text-slate-500">Dropoff</div>
+                          <div className="mt-1 text-sm font-medium text-slate-900">
+                            {offer.dropoff_address ?? "—"}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-2xl bg-white p-3">
+                            <div className="text-xs text-slate-500">Payment</div>
+                            <div className="mt-1 text-sm font-medium text-slate-900">
+                              {offer.payment_method ?? "—"}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl bg-white p-3">
+                            <div className="text-xs text-slate-500">Offer status</div>
+                            <div className="mt-1 text-sm font-medium text-slate-900">
+                              {offer.offer_status}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        className="moovu-btn moovu-btn-primary"
+                        disabled={busy || secondsLeft === 0}
+                        onClick={() => respondToOffer("accept")}
+                      >
+                        Accept trip
+                      </button>
+
+                      <button
+                        className="moovu-btn moovu-btn-secondary"
+                        disabled={busy || secondsLeft === 0}
+                        onClick={() => respondToOffer("reject")}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+            </aside>
+          </div>
         )}
       </div>
     </main>

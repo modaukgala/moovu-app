@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 
-export default function AdminLoginPage() {
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -13,6 +13,7 @@ export default function AdminLoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const rawNext = params.get("next");
+
     if (rawNext && rawNext.startsWith("/")) {
       setNextPath(rawNext);
     }

@@ -57,92 +57,90 @@ export async function GET(req: Request) {
 
     const driverId = account.driver_id;
 
-    const [{ data: wallet, error: walletError }, { data: driver, error: driverError }, { data: transactions, error: txError }, { data: settlements, error: settlementsError }, { data: subscriptionPayments, error: subscriptionPaymentsError }, { data: subscriptionRequests, error: subscriptionRequestsError }, { data: completedTrips, error: tripError }] =
-      await Promise.all([
-        supabaseAdmin
-          .from("driver_wallets")
-          .select("*")
-          .eq("driver_id", driverId)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("drivers")
-          .select(`
-            id,
-            first_name,
-            last_name,
-            phone,
-            subscription_status,
-            subscription_plan,
-            subscription_expires_at,
-            subscription_amount_due,
-            subscription_last_paid_at,
-            subscription_last_payment_amount
-          `)
-          .eq("id", driverId)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("driver_wallet_transactions")
-          .select("*")
-          .eq("driver_id", driverId)
-          .order("created_at", { ascending: false })
-          .limit(50),
-        supabaseAdmin
-          .from("driver_settlements")
-          .select("id,amount_paid,payment_method,reference,note,created_at")
-          .eq("driver_id", driverId)
-          .order("created_at", { ascending: false })
-          .limit(20),
-        supabaseAdmin
-          .from("driver_subscription_payments")
-          .select("id,amount_paid,payment_method,reference,note,created_at")
-          .eq("driver_id", driverId)
-          .order("created_at", { ascending: false })
-          .limit(20),
-        supabaseAdmin
-          .from("driver_subscription_requests")
-          .select("id,plan_type,amount_expected,payment_reference,note,status,created_at,confirmed_at")
-          .eq("driver_id", driverId)
-          .order("created_at", { ascending: false })
-          .limit(10),
-        supabaseAdmin
-          .from("trips")
-          .select(`
-            id,
-            fare_amount,
-            commission_amount,
-            driver_net_earnings,
-            payment_method,
-            pickup_address,
-            dropoff_address,
-            created_at,
-            status
-          `)
-          .eq("driver_id", driverId)
-          .eq("status", "completed")
-          .limit(100),
-      ]);
+    const [
+      { data: wallet, error: walletError },
+      { data: driver, error: driverError },
+      { data: settlements, error: settlementsError },
+      { data: subscriptionPayments, error: subscriptionPaymentsError },
+      { data: paymentRequests, error: paymentRequestsError },
+      { data: completedTrips, error: tripError },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("driver_wallets")
+        .select("*")
+        .eq("driver_id", driverId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("drivers")
+        .select(`
+          id,
+          first_name,
+          last_name,
+          phone,
+          subscription_status,
+          subscription_plan,
+          subscription_expires_at,
+          subscription_amount_due,
+          subscription_last_paid_at,
+          subscription_last_payment_amount
+        `)
+        .eq("id", driverId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("driver_settlements")
+        .select("id,amount_paid,payment_method,reference,note,created_at")
+        .eq("driver_id", driverId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("driver_subscription_payments")
+        .select("id,amount_paid,payment_method,reference,note,created_at")
+        .eq("driver_id", driverId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("driver_payment_requests")
+        .select(`
+          id,
+          payment_type,
+          subscription_plan,
+          amount_expected,
+          amount_submitted,
+          payment_reference,
+          note,
+          pop_file_url,
+          status,
+          review_note,
+          submitted_at,
+          reviewed_at
+        `)
+        .eq("driver_id", driverId)
+        .order("submitted_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("trips")
+        .select(`
+          id,
+          fare_amount,
+          commission_amount,
+          driver_net_earnings,
+          payment_method,
+          pickup_address,
+          dropoff_address,
+          created_at,
+          status
+        `)
+        .eq("driver_id", driverId)
+        .eq("status", "completed")
+        .limit(100),
+    ]);
 
-    if (walletError) {
-      return NextResponse.json({ ok: false, error: walletError.message }, { status: 500 });
-    }
-    if (driverError) {
-      return NextResponse.json({ ok: false, error: driverError.message }, { status: 500 });
-    }
-    if (txError) {
-      return NextResponse.json({ ok: false, error: txError.message }, { status: 500 });
-    }
-    if (settlementsError) {
-      return NextResponse.json({ ok: false, error: settlementsError.message }, { status: 500 });
-    }
-    if (subscriptionPaymentsError) {
-      return NextResponse.json({ ok: false, error: subscriptionPaymentsError.message }, { status: 500 });
-    }
-    if (subscriptionRequestsError) {
-      return NextResponse.json({ ok: false, error: subscriptionRequestsError.message }, { status: 500 });
-    }
-    if (tripError) {
-      return NextResponse.json({ ok: false, error: tripError.message }, { status: 500 });
-    }
+    if (walletError) return NextResponse.json({ ok: false, error: walletError.message }, { status: 500 });
+    if (driverError) return NextResponse.json({ ok: false, error: driverError.message }, { status: 500 });
+    if (settlementsError) return NextResponse.json({ ok: false, error: settlementsError.message }, { status: 500 });
+    if (subscriptionPaymentsError) return NextResponse.json({ ok: false, error: subscriptionPaymentsError.message }, { status: 500 });
+    if (paymentRequestsError) return NextResponse.json({ ok: false, error: paymentRequestsError.message }, { status: 500 });
+    if (tripError) return NextResponse.json({ ok: false, error: tripError.message }, { status: 500 });
 
     const tripIds = (completedTrips ?? []).map((t: any) => t.id);
     const completedAtMap = new Map<string, string>();
@@ -178,10 +176,9 @@ export async function GET(req: Request) {
       earnings: {
         wallet: wallet ?? null,
         driver: driver ?? null,
-        transactions: transactions ?? [],
         settlements: settlements ?? [],
         subscription_payments: subscriptionPayments ?? [],
-        subscription_requests: subscriptionRequests ?? [],
+        payment_requests: paymentRequests ?? [],
         recent_completed_trips: normalizedTrips,
       },
     });

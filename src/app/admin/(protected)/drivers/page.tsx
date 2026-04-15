@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Driver = {
@@ -16,42 +17,45 @@ export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
 
-  async function loadDrivers() {
+  const loadDrivers = useCallback(async () => {
+    setLoading(true);
+
     const { data, error } = await supabaseClient
       .from("drivers")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (!error && data) setDrivers(data);
-    setLoading(false);
-  }
+    if (error) {
+      setDrivers([]);
+      setLoading(false);
+      return;
+    }
 
-  useEffect(() => {
-    loadDrivers();
+    setDrivers((data ?? []) as Driver[]);
+    setLoading(false);
   }, []);
 
-  async function updateStatus(id: string, status: string) {
-    await supabaseClient
-      .from("drivers")
-      .update({ status })
-      .eq("id", id);
+  useEffect(() => {
+    void loadDrivers();
+  }, [loadDrivers]);
 
-    loadDrivers();
+  async function updateStatus(id: string, status: string) {
+    await supabaseClient.from("drivers").update({ status }).eq("id", id);
+    await loadDrivers();
   }
 
-  if (loading) return <div className="p-6">Loading drivers...</div>;
+  if (loading) {
+    return <div className="p-6">Loading drivers...</div>;
+  }
 
   return (
     <main className="p-6">
-
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold">Drivers</h1>
-        <a
-          href="/admin/drivers/new"
-          className="border rounded-xl px-4 py-2"
-        >
+
+        <Link href="/admin/drivers/new" className="border rounded-xl px-4 py-2">
           + Add Driver
-        </a>
+        </Link>
       </div>
 
       <table className="w-full border rounded-xl overflow-hidden">
@@ -69,25 +73,22 @@ export default function DriversPage() {
           {drivers.map((d) => (
             <tr key={d.id} className="border-t">
               <td className="p-3">
-                <a
+                <Link
                   className="underline underline-offset-4 hover:opacity-80"
                   href={`/admin/drivers/${d.id}`}
                 >
                   {d.first_name} {d.last_name}
-                </a>
+                </Link>
               </td>
 
               <td className="p-3">{d.phone}</td>
-
               <td className="p-3">{d.email}</td>
-
               <td className="p-3 capitalize">{d.status}</td>
 
               <td className="p-3 space-x-2">
-
                 {d.status === "pending" && (
                   <button
-                    onClick={() => updateStatus(d.id, "approved")}
+                    onClick={() => void updateStatus(d.id, "approved")}
                     className="border px-3 py-1 rounded"
                   >
                     Approve
@@ -96,7 +97,7 @@ export default function DriversPage() {
 
                 {d.status !== "suspended" && (
                   <button
-                    onClick={() => updateStatus(d.id, "suspended")}
+                    onClick={() => void updateStatus(d.id, "suspended")}
                     className="border px-3 py-1 rounded"
                   >
                     Suspend
@@ -105,19 +106,17 @@ export default function DriversPage() {
 
                 {d.status === "suspended" && (
                   <button
-                    onClick={() => updateStatus(d.id, "active")}
+                    onClick={() => void updateStatus(d.id, "active")}
                     className="border px-3 py-1 rounded"
                   >
                     Activate
                   </button>
                 )}
-
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-
     </main>
   );
 }

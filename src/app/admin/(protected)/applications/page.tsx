@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
@@ -29,63 +29,79 @@ export default function AdminDriverApplicationsPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
 
     return session?.access_token ?? null;
-  }
+  }, []);
 
-  async function loadApplications(nextFilter?: string) {
-    setBusy(true);
-    setMsg(null);
+  const loadApplications = useCallback(
+    async (nextFilter?: string) => {
+      setBusy(true);
+      setMsg(null);
 
-    const token = await getAccessToken();
-    if (!token) {
-      setBusy(false);
-      setMsg("Missing access token.");
-      return;
-    }
+      try {
+        const token = await getAccessToken();
 
-    const useFilter = nextFilter ?? filter;
+        if (!token) {
+          setApplications([]);
+          setSelected(null);
+          setMsg("Missing access token.");
+          return;
+        }
 
-    const res = await fetch(
-      `/api/admin/driver-applications?status=${encodeURIComponent(useFilter)}`,
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        const useFilter = nextFilter ?? filter;
+
+        const res = await fetch(
+          `/api/admin/driver-applications?status=${encodeURIComponent(useFilter)}`,
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const json = await res.json().catch(() => null);
+
+        if (!json?.ok) {
+          setApplications([]);
+          setSelected(null);
+          setMsg(json?.error || "Failed to load applications.");
+          return;
+        }
+
+        const rows = (json.applications ?? []) as ApplicationRow[];
+        setApplications(rows);
+        setSelected((current) => {
+          if (!rows.length) return null;
+          if (current) {
+            const match = rows.find((row) => row.id === current.id);
+            if (match) return match;
+          }
+          return rows[0] ?? null;
+        });
+      } catch {
+        setApplications([]);
+        setSelected(null);
+        setMsg("Failed to load applications.");
+      } finally {
+        setBusy(false);
       }
-    );
-
-    const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      setApplications([]);
-      setSelected(null);
-      setBusy(false);
-      setMsg(json?.error || "Failed to load applications.");
-      return;
-    }
-
-    const rows = (json.applications ?? []) as ApplicationRow[];
-    setApplications(rows);
-    setSelected(rows[0] ?? null);
-    setBusy(false);
-  }
+    },
+    [filter, getAccessToken]
+  );
 
   useEffect(() => {
-    loadApplications("all");
-  }, []);
+    void loadApplications("all");
+  }, [loadApplications]);
 
   const selectedVehicle = useMemo(() => {
     if (!selected) return "—";
-    return [selected.vehicle_make, selected.vehicle_model]
-      .filter(Boolean)
-      .join(" ") || "—";
+    return [selected.vehicle_make, selected.vehicle_model].filter(Boolean).join(" ") || "—";
   }, [selected]);
 
   return (
@@ -106,7 +122,7 @@ export default function AdminDriverApplicationsPage() {
             onChange={(e) => {
               const value = e.target.value;
               setFilter(value);
-              loadApplications(value);
+              void loadApplications(value);
             }}
           >
             <option value="all">All</option>
@@ -121,7 +137,7 @@ export default function AdminDriverApplicationsPage() {
             className="rounded-xl px-5 py-3 text-white"
             style={{ background: "var(--moovu-primary)" }}
             disabled={busy}
-            onClick={() => loadApplications()}
+            onClick={() => void loadApplications()}
           >
             {busy ? "Refreshing..." : "Refresh"}
           </button>
@@ -143,6 +159,7 @@ export default function AdminDriverApplicationsPage() {
                 applications.map((app) => {
                   const name =
                     `${app.first_name ?? ""} ${app.last_name ?? ""}`.trim() || "Unnamed";
+
                   return (
                     <button
                       key={app.id}
@@ -154,7 +171,8 @@ export default function AdminDriverApplicationsPage() {
                       <div className="font-semibold">{name}</div>
                       <div className="text-sm opacity-80 mt-1">{app.phone ?? "—"}</div>
                       <div className="text-sm opacity-80 mt-1">
-                        status: {app.status ?? "—"} • verification: {app.verification_status ?? "—"}
+                        status: {app.status ?? "—"} • verification:{" "}
+                        {app.verification_status ?? "—"}
                       </div>
                     </button>
                   );
@@ -191,7 +209,9 @@ export default function AdminDriverApplicationsPage() {
 
                   <div>
                     <div className="text-sm text-gray-500">Verification</div>
-                    <div className="text-xl font-medium mt-1">{selected.verification_status ?? "—"}</div>
+                    <div className="text-xl font-medium mt-1">
+                      {selected.verification_status ?? "—"}
+                    </div>
                   </div>
 
                   <div>
@@ -201,13 +221,16 @@ export default function AdminDriverApplicationsPage() {
 
                   <div>
                     <div className="text-sm text-gray-500">Registration</div>
-                    <div className="text-xl font-medium mt-1">{selected.vehicle_registration ?? "—"}</div>
+                    <div className="text-xl font-medium mt-1">
+                      {selected.vehicle_registration ?? "—"}
+                    </div>
                   </div>
 
                   <div>
                     <div className="text-sm text-gray-500">Vehicle Details</div>
                     <div className="text-xl font-medium mt-1">
-                      {[selected.vehicle_year, selected.vehicle_color].filter(Boolean).join(" • ") || "—"}
+                      {[selected.vehicle_year, selected.vehicle_color].filter(Boolean).join(" • ") ||
+                        "—"}
                     </div>
                   </div>
 

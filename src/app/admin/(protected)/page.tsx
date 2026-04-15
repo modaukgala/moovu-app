@@ -98,9 +98,21 @@ export default function AdminDashboardPage() {
           <div className="text-sm text-gray-500">MOOVU Admin</div>
           <h1 className="text-3xl font-semibold mt-1">Operations Dashboard</h1>
           <p className="text-gray-700 mt-2">
-            Live platform intelligence for scheduling, quality and support.
+            Live platform intelligence for scheduling, quality, support, and payments.
           </p>
         </div>
+
+        <section className="flex flex-wrap gap-3">
+          <Link href="/admin/trips" className="border rounded-xl px-4 py-2 bg-white">
+            Open Trips
+          </Link>
+          <Link href="/admin/settlements" className="border rounded-xl px-4 py-2 bg-white">
+            Settlements
+          </Link>
+          <Link href="/admin/payment-reviews" className="border rounded-xl px-4 py-2 bg-white">
+            Payment Reviews
+          </Link>
+        </section>
 
         <section className="grid md:grid-cols-3 gap-4">
           <div className="border rounded-2xl p-5 bg-white shadow-sm">

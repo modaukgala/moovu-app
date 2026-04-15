@@ -9,8 +9,9 @@ const PLAN_DAYS = {
 
 type PlanType = keyof typeof PLAN_DAYS;
 
-function isPlanType(value: string): value is PlanType {
-  return value === "day" || value === "week" || value === "month";
+function num(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function addDays(base: Date, days: number) {
@@ -19,9 +20,8 @@ function addDays(base: Date, days: number) {
   return copy;
 }
 
-function num(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
+function isPlanType(value: string): value is PlanType {
+  return value === "day" || value === "week" || value === "month";
 }
 
 export async function POST(req: Request) {
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const driverId = String(body?.driverId ?? "").trim();
-    const planType = String(body?.planType ?? "").trim();
+    const planTypeRaw = String(body?.planType ?? "").trim().toLowerCase();
     const amountPaid = num(body?.amountPaid);
     const paymentMethod = String(body?.paymentMethod ?? "eft").trim() || "eft";
     const reference = String(body?.reference ?? "").trim();
@@ -52,9 +52,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!isPlanType(planType)) {
+    if (!isPlanType(planTypeRaw)) {
       return NextResponse.json(
-        { ok: false, error: "Invalid subscription plan." },
+        { ok: false, error: "Valid plan type is required." },
         { status: 400 }
       );
     }
@@ -66,10 +66,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const now = new Date();
+
     const { data: driver, error: driverError } = await supabaseAdmin
       .from("drivers")
       .select(`
         id,
+        subscription_status,
+        subscription_plan,
         subscription_expires_at,
         subscription_amount_due
       `)
@@ -90,15 +94,59 @@ export async function POST(req: Request) {
       );
     }
 
-    const now = new Date();
+    if (requestId) {
+      const { data: requestRow, error: requestError } = await supabaseAdmin
+        .from("driver_subscription_requests")
+        .select(`
+          id,
+          driver_id,
+          plan_type,
+          amount_expected,
+          payment_reference,
+          note,
+          status
+        `)
+        .eq("id", requestId)
+        .maybeSingle();
+
+      if (requestError) {
+        return NextResponse.json(
+          { ok: false, error: requestError.message },
+          { status: 500 }
+        );
+      }
+
+      if (!requestRow) {
+        return NextResponse.json(
+          { ok: false, error: "Subscription request not found." },
+          { status: 404 }
+        );
+      }
+
+      if (String(requestRow.driver_id) !== driverId) {
+        return NextResponse.json(
+          { ok: false, error: "Subscription request does not belong to this driver." },
+          { status: 400 }
+        );
+      }
+
+      if (String(requestRow.status).toLowerCase() === "confirmed") {
+        return NextResponse.json(
+          { ok: false, error: "This subscription request has already been confirmed." },
+          { status: 400 }
+        );
+      }
+    }
+
     const currentExpiry =
-      driver.subscription_expires_at && new Date(driver.subscription_expires_at).getTime() > now.getTime()
+      driver.subscription_expires_at &&
+      new Date(driver.subscription_expires_at).getTime() > now.getTime()
         ? new Date(driver.subscription_expires_at)
         : now;
 
-    const newExpiry = addDays(currentExpiry, PLAN_DAYS[planType]);
+    const newExpiry = addDays(currentExpiry, PLAN_DAYS[planTypeRaw]);
 
-    const { error: paymentInsertError } = await supabaseAdmin
+    const { error: insertPaymentError } = await supabaseAdmin
       .from("driver_subscription_payments")
       .insert({
         driver_id: driverId,
@@ -109,18 +157,18 @@ export async function POST(req: Request) {
         received_by: user.id,
       });
 
-    if (paymentInsertError) {
+    if (insertPaymentError) {
       return NextResponse.json(
-        { ok: false, error: paymentInsertError.message },
+        { ok: false, error: insertPaymentError.message },
         { status: 500 }
       );
     }
 
-    const { error: driverUpdateError } = await supabaseAdmin
+    const { error: updateDriverError } = await supabaseAdmin
       .from("drivers")
       .update({
         subscription_status: "active",
-        subscription_plan: planType,
+        subscription_plan: planTypeRaw,
         subscription_expires_at: newExpiry.toISOString(),
         subscription_amount_due: 0,
         subscription_last_paid_at: now.toISOString(),
@@ -129,32 +177,43 @@ export async function POST(req: Request) {
       })
       .eq("id", driverId);
 
-    if (driverUpdateError) {
+    if (updateDriverError) {
       return NextResponse.json(
-        { ok: false, error: driverUpdateError.message },
+        { ok: false, error: updateDriverError.message },
         { status: 500 }
       );
     }
 
     if (requestId) {
-      await supabaseAdmin
+      const { error: updateRequestError } = await supabaseAdmin
         .from("driver_subscription_requests")
         .update({
           status: "confirmed",
           confirmed_at: now.toISOString(),
-          confirmed_by: user.id,
         })
         .eq("id", requestId);
+
+      if (updateRequestError) {
+        return NextResponse.json(
+          { ok: false, error: updateRequestError.message },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({
       ok: true,
-      message: `Subscription activated successfully until ${newExpiry.toLocaleString()}.`,
+      message: "Subscription activated successfully.",
+      subscription_status: "active",
+      subscription_plan: planTypeRaw,
       subscription_expires_at: newExpiry.toISOString(),
+      subscription_amount_due: 0,
+      subscription_last_paid_at: now.toISOString(),
+      subscription_last_payment_amount: amountPaid,
     });
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Failed to activate subscription." },
+      { ok: false, error: e?.message || "Server error." },
       { status: 500 }
     );
   }
