@@ -4,6 +4,7 @@ import { offerNextEligibleDriver } from "@/lib/trip-offers";
 import { fullCustomerName } from "@/lib/customer/auth";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
+import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 function generateOtp() {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -101,12 +102,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (
-      pickupLat == null ||
-      pickupLng == null ||
-      dropoffLat == null ||
-      dropoffLng == null
-    ) {
+    if (pickupLat == null || pickupLng == null || dropoffLat == null || dropoffLng == null) {
       return NextResponse.json(
         { ok: false, error: "Pickup and destination coordinates are required." },
         { status: 400 }
@@ -215,6 +211,21 @@ export async function POST(req: Request) {
         new_status: initialStatus,
       });
     } catch {}
+
+    await notifyCustomerForTrip(
+      trip.id,
+      rideType === "scheduled" ? "Scheduled ride created" : "Ride request received",
+      rideType === "scheduled"
+        ? `Your ride has been scheduled from ${pickupAddress} to ${dropoffAddress}.`
+        : `We received your ride request from ${pickupAddress} to ${dropoffAddress}.`,
+      "/book"
+    );
+
+    await notifyAdmins(
+      rideType === "scheduled" ? "New scheduled ride" : "New ride request",
+      `${riderName} requested a ride from ${pickupAddress} to ${dropoffAddress}.`,
+      "/admin/trips"
+    );
 
     let autoOfferResult: any = null;
 

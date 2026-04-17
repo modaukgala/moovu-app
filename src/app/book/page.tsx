@@ -71,11 +71,14 @@ export default function RiderBookingPage() {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [routeVisible, setRouteVisible] = useState(false);
+  const [autoFareLoading, setAutoFareLoading] = useState(false);
 
   const pickupBoxRef = useRef<HTMLDivElement | null>(null);
   const dropoffBoxRef = useRef<HTMLDivElement | null>(null);
   const pickupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoCalcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAutoCalcKeyRef = useRef("");
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -97,10 +100,10 @@ export default function RiderBookingPage() {
   const canSubmit = useMemo(() => {
     if (!customer) return false;
     if (!canCalculate) return false;
-    if (distanceKm == null || durationMin == null) return false;
+    if (distanceKm == null || durationMin == null || fare == null) return false;
     if (rideType === "scheduled" && !scheduledFor) return false;
     return true;
-  }, [customer, canCalculate, distanceKm, durationMin, rideType, scheduledFor]);
+  }, [customer, canCalculate, distanceKm, durationMin, fare, rideType, scheduledFor]);
 
   async function getAccessToken() {
     const {
@@ -150,6 +153,7 @@ export default function RiderBookingPage() {
     setDurationMin(null);
     setFare(null);
     setRouteVisible(false);
+    lastAutoCalcKeyRef.current = "";
   }
 
   function clearPickupSelection() {
@@ -336,12 +340,9 @@ export default function RiderBookingPage() {
     setMsg(kind === "pickup" ? "Pickup selected ✅" : "Destination selected ✅");
   }
 
-  async function calculateTrip() {
-    setMsg(null);
-
+  async function calculateTrip(showSuccessMessage = false) {
     if (!pickupAddress.trim() || !dropoffAddress.trim()) {
-      setMsg("Pickup and destination are required.");
-      return;
+      return false;
     }
 
     if (
@@ -350,8 +351,7 @@ export default function RiderBookingPage() {
       dropoffLat == null ||
       dropoffLng == null
     ) {
-      setMsg("Please select valid pickup and destination addresses.");
-      return;
+      return false;
     }
 
     const payload =
@@ -378,8 +378,10 @@ export default function RiderBookingPage() {
     const json = await res.json().catch(() => null);
 
     if (!json?.ok) {
-      setMsg(json?.error || "Could not calculate trip distance.");
-      return;
+      setDistanceKm(null);
+      setDurationMin(null);
+      setFare(null);
+      return false;
     }
 
     const km = Number(json.distanceKm ?? 0);
@@ -389,7 +391,12 @@ export default function RiderBookingPage() {
     setDistanceKm(Number(km.toFixed(2)));
     setDurationMin(Math.ceil(mins));
     setFare(Math.round(estimatedFare));
-    setMsg("Fare calculated ✅");
+
+    if (showSuccessMessage) {
+      setMsg("Fare calculated ✅");
+    }
+
+    return true;
   }
 
   async function submitBooking() {
@@ -415,8 +422,8 @@ export default function RiderBookingPage() {
       return;
     }
 
-    if (distanceKm == null || durationMin == null) {
-      setMsg("Calculate fare first.");
+    if (distanceKm == null || durationMin == null || fare == null) {
+      setMsg("Trip fare is still loading. Please wait a moment.");
       return;
     }
 
@@ -601,7 +608,7 @@ export default function RiderBookingPage() {
   }
 
   useEffect(() => {
-    loadCustomer();
+    void loadCustomer();
 
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
@@ -621,6 +628,7 @@ export default function RiderBookingPage() {
       document.removeEventListener("mousedown", handleClickOutside);
       if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
       if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
+      if (autoCalcTimerRef.current) clearTimeout(autoCalcTimerRef.current);
     };
   }, [router]);
 
@@ -698,6 +706,56 @@ export default function RiderBookingPage() {
       mapInstanceRef.current.setZoom(11);
     }
   }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng]);
+
+  useEffect(() => {
+    if (!canCalculate) {
+      setAutoFareLoading(false);
+      return;
+    }
+
+    const key = [
+      pickupPlaceId || `${pickupLat},${pickupLng}`,
+      dropoffPlaceId || `${dropoffLat},${dropoffLng}`,
+      pickupAddress.trim(),
+      dropoffAddress.trim(),
+    ].join("|");
+
+    if (lastAutoCalcKeyRef.current === key) {
+      return;
+    }
+
+    if (autoCalcTimerRef.current) {
+      clearTimeout(autoCalcTimerRef.current);
+    }
+
+    setAutoFareLoading(true);
+
+    autoCalcTimerRef.current = setTimeout(() => {
+      void (async () => {
+        const ok = await calculateTrip(false);
+        if (ok) {
+          lastAutoCalcKeyRef.current = key;
+        }
+        setAutoFareLoading(false);
+      })();
+    }, 350);
+
+    return () => {
+      if (autoCalcTimerRef.current) {
+        clearTimeout(autoCalcTimerRef.current);
+      }
+    };
+  }, [
+    canCalculate,
+    pickupPlaceId,
+    dropoffPlaceId,
+    pickupLat,
+    pickupLng,
+    dropoffLat,
+    dropoffLng,
+    pickupAddress,
+    dropoffAddress,
+  ]);
 
   if (authLoading) {
     return (
@@ -883,16 +941,6 @@ export default function RiderBookingPage() {
               </div>
             )}
 
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                className="moovu-btn moovu-btn-secondary"
-                onClick={() => void calculateTrip()}
-                disabled={busy || !canCalculate}
-              >
-                Calculate fare
-              </button>
-            </div>
-
             <div className="mt-5 rounded-[28px] border border-[var(--moovu-border)] bg-[var(--moovu-bg-soft)] p-4">
               {mapError ? (
                 <div className="flex h-[320px] items-center justify-center rounded-[22px] bg-white px-6 text-center text-sm text-rose-600">
@@ -908,7 +956,9 @@ export default function RiderBookingPage() {
 
             <div className="mt-4 text-sm text-slate-500">
               {routeVisible
-                ? "Route loaded from pickup to destination."
+                ? autoFareLoading
+                  ? "Route loaded. Calculating fare..."
+                  : "Route loaded from pickup to destination."
                 : pickupLat != null && pickupLng != null
                 ? "Pickup is on the map. Add destination to draw the trip route."
                 : "Choose your pickup and destination to load the live map route."}
@@ -917,12 +967,14 @@ export default function RiderBookingPage() {
             <button
               className="mt-4 w-full rounded-[22px] bg-[var(--moovu-primary)] px-6 py-4 text-base font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => void submitBooking()}
-              disabled={busy || !canSubmit}
+              disabled={busy || autoFareLoading || !canSubmit}
             >
               {busy
                 ? rideType === "scheduled"
                   ? "Scheduling..."
                   : "Booking..."
+                : autoFareLoading
+                ? "Calculating fare..."
                 : rideType === "scheduled"
                 ? "Schedule ride"
                 : "Confirm ride"}
@@ -988,7 +1040,7 @@ export default function RiderBookingPage() {
                 </div>
 
                 <div className="rounded-2xl border border-blue-100 bg-[var(--moovu-primary-soft)] p-4 text-sm text-slate-700">
-                  Pricing model: base fare R25 + R7/km + R1.20/min.
+                  Pricing model: base fare R25 + R7/km + R1.20/min, minimum fare R40.
                 </div>
               </div>
             </div>

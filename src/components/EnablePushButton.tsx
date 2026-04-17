@@ -76,7 +76,7 @@ export default function EnablePushButton({ role, className = "" }: Props) {
         });
       }
 
-      const res = await fetch("/api/push/subscribe", {
+      const subscribeRes = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -88,14 +88,32 @@ export default function EnablePushButton({ role, className = "" }: Props) {
         }),
       });
 
-      const json = await res.json().catch(() => null);
+      const subscribeJson = await subscribeRes.json().catch(() => null);
 
-      if (!res.ok || !json?.ok) {
-        setMsg(json?.error || "Failed to enable notifications.");
+      if (!subscribeRes.ok || !subscribeJson?.ok) {
+        setMsg(subscribeJson?.error || "Failed to enable notifications.");
         return;
       }
 
-      setMsg(json?.message || "Notifications enabled successfully.");
+      const testRes = await fetch("/api/push/test-self", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ role }),
+      });
+
+      const testJson = await testRes.json().catch(() => null);
+
+      if (!testRes.ok || !testJson?.ok) {
+        setMsg(
+          `${subscribeJson?.message || "Notifications enabled."} Test notification failed.`
+        );
+        return;
+      }
+
+      setMsg("Notifications enabled successfully. A test notification was sent.");
     } catch (e: any) {
       setMsg(e?.message || "Failed to enable notifications.");
     } finally {

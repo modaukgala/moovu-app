@@ -12,6 +12,11 @@ type ApplyTripCommissionServerResult =
   | { ok: true; skipped: boolean; calc: CommissionCalc }
   | { ok: false; error: string };
 
+function num(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
 async function resolveSafeCreatedBy(createdBy?: string | null) {
   const candidate = String(createdBy ?? "").trim();
 
@@ -28,6 +33,109 @@ async function resolveSafeCreatedBy(createdBy?: string | null) {
   }
 
   return data.id as string;
+}
+
+async function ensureWallet(driverId: string) {
+  let { data: wallet, error: walletFetchError } = await supabaseAdmin
+    .from("driver_wallets")
+    .select("*")
+    .eq("driver_id", driverId)
+    .maybeSingle();
+
+  if (walletFetchError) {
+    return { wallet: null, error: walletFetchError.message };
+  }
+
+  if (!wallet) {
+    const { data: newWallet, error: walletCreateError } = await supabaseAdmin
+      .from("driver_wallets")
+      .insert({
+        driver_id: driverId,
+        balance_due: 0,
+        total_commission: 0,
+        total_driver_net: 0,
+        total_trips_completed: 0,
+        account_status: "settled",
+        updated_at: new Date().toISOString(),
+      })
+      .select("*")
+      .single();
+
+    if (walletCreateError || !newWallet) {
+      return {
+        wallet: null,
+        error: walletCreateError?.message ?? "Failed to create driver wallet.",
+      };
+    }
+
+    wallet = newWallet;
+  }
+
+  return { wallet, error: null };
+}
+
+async function recalcWallet(driverId: string, walletId: string) {
+  const [
+    { data: completedTrips, error: tripsError },
+    { data: settlements, error: settlementsError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("trips")
+      .select("id,fare_amount,commission_amount,driver_net_earnings,status")
+      .eq("driver_id", driverId)
+      .eq("status", "completed"),
+    supabaseAdmin
+      .from("driver_settlements")
+      .select("amount_paid")
+      .eq("driver_id", driverId),
+  ]);
+
+  if (tripsError) {
+    return { ok: false as const, error: tripsError.message };
+  }
+
+  if (settlementsError) {
+    return { ok: false as const, error: settlementsError.message };
+  }
+
+  const totalCommission = (completedTrips ?? []).reduce(
+    (sum: number, row: any) => sum + num(row.commission_amount),
+    0
+  );
+
+  const totalDriverNet = (completedTrips ?? []).reduce((sum: number, row: any) => {
+    if (row.driver_net_earnings != null) {
+      return sum + num(row.driver_net_earnings);
+    }
+    return sum + (num(row.fare_amount) - num(row.commission_amount));
+  }, 0);
+
+  const totalTripsCompleted = (completedTrips ?? []).length;
+
+  const totalSettled = (settlements ?? []).reduce(
+    (sum: number, row: any) => sum + num(row.amount_paid),
+    0
+  );
+
+  const balanceDue = Math.max(0, totalCommission - totalSettled);
+
+  const { error: walletUpdateError } = await supabaseAdmin
+    .from("driver_wallets")
+    .update({
+      balance_due: balanceDue,
+      total_commission: totalCommission,
+      total_driver_net: totalDriverNet,
+      total_trips_completed: totalTripsCompleted,
+      account_status: balanceDue > 0 ? "due" : "settled",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", walletId);
+
+  if (walletUpdateError) {
+    return { ok: false as const, error: walletUpdateError.message };
+  }
+
+  return { ok: true as const };
 }
 
 export async function applyTripCommissionServer(params: {
@@ -62,42 +170,12 @@ export async function applyTripCommissionServer(params: {
     return { ok: false, error: existingTxError.message };
   }
 
-  if (existingTx && existingTx.length > 0) {
-    return { ok: true, skipped: true, calc };
+  const walletResult = await ensureWallet(driverId);
+  if (walletResult.error || !walletResult.wallet) {
+    return { ok: false, error: walletResult.error ?? "Failed to prepare driver wallet." };
   }
 
-  let { data: wallet, error: walletFetchError } = await supabaseAdmin
-    .from("driver_wallets")
-    .select("*")
-    .eq("driver_id", driverId)
-    .maybeSingle();
-
-  if (walletFetchError) {
-    return { ok: false, error: walletFetchError.message };
-  }
-
-  if (!wallet) {
-    const { data: newWallet, error: walletCreateError } = await supabaseAdmin
-      .from("driver_wallets")
-      .insert({
-        driver_id: driverId,
-        balance_due: 0,
-        total_commission: 0,
-        total_driver_net: 0,
-        total_trips_completed: 0,
-      })
-      .select("*")
-      .single();
-
-    if (walletCreateError || !newWallet) {
-      return {
-        ok: false,
-        error: walletCreateError?.message ?? "Failed to create driver wallet.",
-      };
-    }
-
-    wallet = newWallet;
-  }
+  const wallet = walletResult.wallet;
 
   const { error: tripUpdateError } = await supabaseAdmin
     .from("trips")
@@ -110,6 +188,14 @@ export async function applyTripCommissionServer(params: {
 
   if (tripUpdateError) {
     return { ok: false, error: tripUpdateError.message };
+  }
+
+  if (existingTx && existingTx.length > 0) {
+    const recalcResult = await recalcWallet(driverId, wallet.id);
+    if (!recalcResult.ok) {
+      return { ok: false, error: recalcResult.error };
+    }
+    return { ok: true, skipped: true, calc };
   }
 
   const safeCreatedBy = await resolveSafeCreatedBy(createdBy);
@@ -138,19 +224,9 @@ export async function applyTripCommissionServer(params: {
     return { ok: false, error: txError.message };
   }
 
-  const { error: walletUpdateError } = await supabaseAdmin
-    .from("driver_wallets")
-    .update({
-      balance_due: Number(wallet.balance_due || 0) + calc.commissionAmount,
-      total_commission: Number(wallet.total_commission || 0) + calc.commissionAmount,
-      total_driver_net: Number(wallet.total_driver_net || 0) + calc.driverNet,
-      total_trips_completed: Number(wallet.total_trips_completed || 0) + 1,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", wallet.id);
-
-  if (walletUpdateError) {
-    return { ok: false, error: walletUpdateError.message };
+  const recalcResult = await recalcWallet(driverId, wallet.id);
+  if (!recalcResult.ok) {
+    return { ok: false, error: recalcResult.error };
   }
 
   return { ok: true, skipped: false, calc };

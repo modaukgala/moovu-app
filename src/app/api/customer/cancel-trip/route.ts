@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
+import { notifyAdmins, notifyDriverForTrip } from "@/lib/push-notify";
 
 const VALID_REASONS = [
   "Driver is taking too long",
@@ -127,6 +128,23 @@ export async function POST(req: Request) {
         new_status: "cancelled",
       });
     } catch {}
+
+    await notifyDriverForTrip(
+      tripId,
+      "Trip cancelled",
+      fee > 0
+        ? `The customer cancelled the trip. Cancellation fee applied: R${fee}.`
+        : "The customer cancelled the trip.",
+      "/driver"
+    );
+
+    await notifyAdmins(
+      "Trip cancelled by customer",
+      fee > 0
+        ? `Trip ${tripId} was cancelled by the customer. Fee applied: R${fee}.`
+        : `Trip ${tripId} was cancelled by the customer.`,
+      "/admin/trips"
+    );
 
     return NextResponse.json({
       ok: true,

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import PortalNotificationLauncher from "@/components/PortalNotificationLauncher";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://moovurides.co.za"),
@@ -23,28 +24,6 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
     shortcut: ["/icon.png"],
   },
-  openGraph: {
-    title: "MOOVU",
-    description: "Ride booking made simple.",
-    url: "https://moovurides.co.za",
-    siteName: "MOOVU",
-    images: [
-      {
-        url: "/Moovu-Black.png",
-        width: 1200,
-        height: 630,
-        alt: "MOOVU",
-      },
-    ],
-    locale: "en_ZA",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "MOOVU",
-    description: "Ride booking made simple.",
-    images: ["/Moovu-Black.png"],
-  },
 };
 
 export const viewport: Viewport = {
@@ -62,7 +41,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <PortalNotificationLauncher />
+      </body>
     </html>
   );
 }

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+function num(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -135,12 +140,89 @@ export async function GET(req: Request) {
         .limit(100),
     ]);
 
-    if (walletError) return NextResponse.json({ ok: false, error: walletError.message }, { status: 500 });
-    if (driverError) return NextResponse.json({ ok: false, error: driverError.message }, { status: 500 });
-    if (settlementsError) return NextResponse.json({ ok: false, error: settlementsError.message }, { status: 500 });
-    if (subscriptionPaymentsError) return NextResponse.json({ ok: false, error: subscriptionPaymentsError.message }, { status: 500 });
-    if (paymentRequestsError) return NextResponse.json({ ok: false, error: paymentRequestsError.message }, { status: 500 });
-    if (tripError) return NextResponse.json({ ok: false, error: tripError.message }, { status: 500 });
+    if (walletError) {
+      return NextResponse.json({ ok: false, error: walletError.message }, { status: 500 });
+    }
+    if (driverError) {
+      return NextResponse.json({ ok: false, error: driverError.message }, { status: 500 });
+    }
+    if (settlementsError) {
+      return NextResponse.json({ ok: false, error: settlementsError.message }, { status: 500 });
+    }
+    if (subscriptionPaymentsError) {
+      return NextResponse.json({ ok: false, error: subscriptionPaymentsError.message }, { status: 500 });
+    }
+    if (paymentRequestsError) {
+      return NextResponse.json({ ok: false, error: paymentRequestsError.message }, { status: 500 });
+    }
+    if (tripError) {
+      return NextResponse.json({ ok: false, error: tripError.message }, { status: 500 });
+    }
+
+    const totalCommission = (completedTrips ?? []).reduce(
+      (sum: number, trip: any) => sum + num(trip.commission_amount),
+      0
+    );
+
+    const totalDriverNet = (completedTrips ?? []).reduce((sum: number, trip: any) => {
+      if (trip.driver_net_earnings != null) {
+        return sum + num(trip.driver_net_earnings);
+      }
+      return sum + (num(trip.fare_amount) - num(trip.commission_amount));
+    }, 0);
+
+    const totalTripsCompleted = (completedTrips ?? []).length;
+
+    const totalSettled = (settlements ?? []).reduce(
+      (sum: number, row: any) => sum + num(row.amount_paid),
+      0
+    );
+
+    const balanceDue = Math.max(0, totalCommission - totalSettled);
+
+    let normalizedWallet = wallet;
+
+    if (wallet?.id) {
+      const { data: updatedWallet, error: walletUpdateError } = await supabaseAdmin
+        .from("driver_wallets")
+        .update({
+          balance_due: balanceDue,
+          total_commission: totalCommission,
+          total_driver_net: totalDriverNet,
+          total_trips_completed: totalTripsCompleted,
+          account_status: balanceDue > 0 ? "due" : "settled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", wallet.id)
+        .select("*")
+        .single();
+
+      if (walletUpdateError) {
+        return NextResponse.json({ ok: false, error: walletUpdateError.message }, { status: 500 });
+      }
+
+      normalizedWallet = updatedWallet;
+    } else {
+      const { data: createdWallet, error: createWalletError } = await supabaseAdmin
+        .from("driver_wallets")
+        .insert({
+          driver_id: driverId,
+          balance_due: balanceDue,
+          total_commission: totalCommission,
+          total_driver_net: totalDriverNet,
+          total_trips_completed: totalTripsCompleted,
+          account_status: balanceDue > 0 ? "due" : "settled",
+          updated_at: new Date().toISOString(),
+        })
+        .select("*")
+        .single();
+
+      if (createWalletError) {
+        return NextResponse.json({ ok: false, error: createWalletError.message }, { status: 500 });
+      }
+
+      normalizedWallet = createdWallet;
+    }
 
     const tripIds = (completedTrips ?? []).map((t: any) => t.id);
     const completedAtMap = new Map<string, string>();
@@ -174,7 +256,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       earnings: {
-        wallet: wallet ?? null,
+        wallet: normalizedWallet ?? null,
         driver: driver ?? null,
         settlements: settlements ?? [],
         subscription_payments: subscriptionPayments ?? [],

@@ -1,9 +1,11 @@
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
 
+type Role = "admin" | "driver" | "customer";
+
 type SendPushParams = {
   userIds?: string[];
-  role?: "admin" | "driver" | "customer";
+  role?: Role;
   title: string;
   body: string;
   url?: string;
@@ -20,8 +22,7 @@ function getSupabaseAdmin() {
 function ensureVapidConfigured() {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
   const privateKey = process.env.VAPID_PRIVATE_KEY || "";
-  const subject =
-    process.env.VAPID_SUBJECT || "mailto:admin@moovurides.co.za";
+  const subject = process.env.VAPID_SUBJECT || "mailto:admin@moovurides.co.za";
 
   if (!publicKey || !privateKey) {
     throw new Error("VAPID keys are missing.");
@@ -58,6 +59,8 @@ export async function sendPushToTargets(params: SendPushParams) {
       ok: true,
       delivered: 0,
       removed: 0,
+      failed: 0,
+      failures: [],
       message: "No matching push subscriptions were found.",
     };
   }
@@ -70,6 +73,8 @@ export async function sendPushToTargets(params: SendPushParams) {
 
   let delivered = 0;
   let removed = 0;
+  let failed = 0;
+  const failures: Array<{ endpoint: string; reason: string }> = [];
 
   for (const row of subscriptions) {
     try {
@@ -80,6 +85,24 @@ export async function sendPushToTargets(params: SendPushParams) {
       delivered += 1;
     } catch (e: any) {
       const statusCode = e?.statusCode;
+      const reason =
+        e?.body ||
+        e?.message ||
+        `Push failed with status ${String(statusCode || "unknown")}`;
+
+      failed += 1;
+      failures.push({
+        endpoint: row.endpoint,
+        reason,
+      });
+
+      console.error("[push] send failed", {
+        userId: row.user_id,
+        role: row.role,
+        endpoint: row.endpoint,
+        statusCode,
+        reason,
+      });
 
       if (statusCode === 404 || statusCode === 410) {
         await supabase
@@ -96,6 +119,34 @@ export async function sendPushToTargets(params: SendPushParams) {
     ok: true,
     delivered,
     removed,
+    failed,
+    failures,
     message: "Push send finished.",
   };
+}
+
+export async function sendPushSafe(params: SendPushParams) {
+  try {
+    const result = await sendPushToTargets(params);
+    console.log("[push] result", result);
+    return result;
+  } catch (e: any) {
+    console.error("[push] fatal error", {
+      title: params.title,
+      body: params.body,
+      url: params.url,
+      role: params.role,
+      userIds: params.userIds,
+      error: e?.message || String(e),
+    });
+
+    return {
+      ok: false,
+      delivered: 0,
+      removed: 0,
+      failed: 0,
+      failures: [{ endpoint: "fatal", reason: e?.message || "Unknown push error" }],
+      message: e?.message || "Push send failed.",
+    };
+  }
 }

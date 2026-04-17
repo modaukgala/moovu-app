@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { expirePendingOfferIfNeeded, offerNextEligibleDriver } from "@/lib/trip-offers";
+import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 async function getUserFromBearer(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -155,6 +156,19 @@ export async function POST(req: Request) {
         });
       } catch {}
 
+      await notifyCustomerForTrip(
+        tripId,
+        "Driver assigned",
+        "A driver has accepted your trip and is on the way.",
+        "/book"
+      );
+
+      await notifyAdmins(
+        "Driver accepted trip",
+        `A driver accepted trip ${tripId}.`,
+        "/admin/trips"
+      );
+
       return NextResponse.json({ ok: true, status: "assigned" });
     }
 
@@ -200,6 +214,12 @@ export async function POST(req: Request) {
         new_status: "requested",
       });
     } catch {}
+
+    await notifyAdmins(
+      "Driver rejected trip",
+      `A driver rejected trip ${tripId}. The system is finding the next eligible driver.`,
+      "/admin/trips"
+    );
 
     const next = await offerNextEligibleDriver(tripId, [driverId]);
 

@@ -1,0 +1,22 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "za.co.moovurides.app",
+      "sha256_cert_fingerprints": [
+        "A1:AF:91:28:1A:B2:1A:68:E0:20:AD:59:EC:E3:38:BC:E9:82:BC:9A:9E:15:7F:42:61:BF:3C:BF:0D:E1:95:05"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "za.co.moovurides.driver",
+      "sha256_cert_fingerprints": [
+        "81:07:5F:60:69:F3:41:AA:69:DB:2C:82:7C:7E:15:CC:94:88:93:1A:EB:5B:B0:24:75:5C:F9:1A:C8:88:E6:06"
+      ]
+    }
+  }
+]

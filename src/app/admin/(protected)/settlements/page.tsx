@@ -89,6 +89,31 @@ export default function AdminSettlementsPage() {
     setLoading(false);
   }
 
+  async function postSettlement(payload: {
+    driverId: string;
+    amountPaid: number;
+    paymentMethod: string;
+    reference: string;
+    note: string;
+  }) {
+    const token = await getToken();
+    if (!token) {
+      setMsg("You are not logged in.");
+      return { ok: false };
+    }
+
+    const res = await fetch("/api/admin/settlements/record", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return res.json().catch(() => null);
+  }
+
   async function recordSettlement() {
     if (!driverId) {
       setMsg("Select a driver.");
@@ -103,29 +128,13 @@ export default function AdminSettlementsPage() {
     setBusy(true);
     setMsg(null);
 
-    const token = await getToken();
-    if (!token) {
-      setMsg("You are not logged in.");
-      setBusy(false);
-      return;
-    }
-
-    const res = await fetch("/api/admin/settlements/record", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        driverId,
-        amountPaid: Number(amountPaid),
-        paymentMethod,
-        reference,
-        note,
-      }),
+    const json = await postSettlement({
+      driverId,
+      amountPaid: Number(amountPaid),
+      paymentMethod,
+      reference,
+      note,
     });
-
-    const json = await res.json().catch(() => null);
 
     if (!json?.ok) {
       setMsg(json?.error || "Failed to record settlement.");
@@ -141,8 +150,51 @@ export default function AdminSettlementsPage() {
     setBusy(false);
   }
 
+  async function clearFullBalance() {
+    if (!selectedDriver) {
+      setMsg("Select a driver first.");
+      return;
+    }
+
+    const fullBalance = Number(selectedDriver.wallet?.balance_due ?? 0);
+
+    if (fullBalance <= 0) {
+      setMsg("This driver does not currently owe MOOVU any commission balance.");
+      return;
+    }
+
+    setBusy(true);
+    setMsg(null);
+
+    const autoReference =
+      reference.trim() || `COMM-CLEAR-${selectedDriver.id.slice(0, 6).toUpperCase()}`;
+    const autoNote =
+      note.trim() || "Full commission balance cleared by admin after payment received.";
+
+    const json = await postSettlement({
+      driverId: selectedDriver.id,
+      amountPaid: fullBalance,
+      paymentMethod,
+      reference: autoReference,
+      note: autoNote,
+    });
+
+    if (!json?.ok) {
+      setMsg(json?.error || "Failed to clear full balance.");
+      setBusy(false);
+      return;
+    }
+
+    setMsg("Full commission balance cleared successfully.");
+    setAmountPaid("");
+    setReference("");
+    setNote("");
+    await loadData();
+    setBusy(false);
+  }
+
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   const driverOptions = useMemo(() => {
@@ -249,14 +301,24 @@ export default function AdminSettlementsPage() {
             />
           </div>
 
-          <button
-            onClick={recordSettlement}
-            disabled={busy}
-            className="rounded-xl px-4 py-3 text-white"
-            style={{ background: "var(--moovu-primary)" }}
-          >
-            {busy ? "Saving..." : "Record Settlement"}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={recordSettlement}
+              disabled={busy}
+              className="rounded-xl px-4 py-3 text-white"
+              style={{ background: "var(--moovu-primary)" }}
+            >
+              {busy ? "Saving..." : "Record Settlement"}
+            </button>
+
+            <button
+              onClick={clearFullBalance}
+              disabled={busy || !selectedDriver || Number(selectedDriver.wallet?.balance_due ?? 0) <= 0}
+              className="border rounded-xl px-4 py-3 bg-white"
+            >
+              Clear Full Balance
+            </button>
+          </div>
         </section>
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">

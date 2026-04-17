@@ -7,6 +7,7 @@ import {
   isFreshHeartbeat,
   minimumRequiredTripSeconds,
 } from "@/lib/geo/tripGuards";
+import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 export async function POST(req: Request) {
   try {
@@ -303,6 +304,19 @@ export async function POST(req: Request) {
         },
       ]);
     } catch {}
+
+    await notifyCustomerForTrip(
+      tripId,
+      "Trip completed",
+      "Your trip has been completed successfully.",
+      "/book"
+    );
+
+    await notifyAdmins(
+      "Trip completed",
+      `Trip ${tripId} was completed successfully.`,
+      "/admin/trips"
+    );
 
     return NextResponse.json({
       ok: true,

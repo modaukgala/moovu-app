@@ -5,6 +5,7 @@ import {
   haversineKm,
   isFreshHeartbeat,
 } from "@/lib/geo/tripGuards";
+import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 export async function POST(req: Request) {
   try {
@@ -180,6 +181,19 @@ export async function POST(req: Request) {
         new_status: "arrived",
       });
     } catch {}
+
+    await notifyCustomerForTrip(
+      tripId,
+      "Driver has arrived",
+      "Your driver has arrived at the pickup point.",
+      "/book"
+    );
+
+    await notifyAdmins(
+      "Driver arrived",
+      `Driver arrived for trip ${tripId}.`,
+      "/admin/trips"
+    );
 
     return NextResponse.json({
       ok: true,
