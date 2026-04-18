@@ -30,7 +30,7 @@ export default function EnablePushButton({ role, className = "" }: Props) {
   async function handleEnablePush() {
     try {
       setBusy(true);
-      setMsg("");
+      setMsg("Starting notification setup...");
 
       if (!("serviceWorker" in navigator)) {
         setMsg("This browser does not support service workers.");
@@ -47,8 +47,13 @@ export default function EnablePushButton({ role, className = "" }: Props) {
         error: sessionErr,
       } = await supabaseClient.auth.getSession();
 
-      if (sessionErr || !session?.access_token) {
-        setMsg("Please log in first.");
+      if (sessionErr) {
+        setMsg(`Session error: ${sessionErr.message}`);
+        return;
+      }
+
+      if (!session?.access_token) {
+        setMsg("No active login session found for this portal.");
         return;
       }
 
@@ -58,11 +63,15 @@ export default function EnablePushButton({ role, className = "" }: Props) {
         return;
       }
 
+      setMsg("Requesting notification permission...");
+
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setMsg("Notification permission was not granted.");
         return;
       }
+
+      setMsg("Registering service worker...");
 
       const registration = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
@@ -70,11 +79,14 @@ export default function EnablePushButton({ role, className = "" }: Props) {
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
+        setMsg("Creating device subscription...");
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
       }
+
+      setMsg("Saving subscription...");
 
       const subscribeRes = await fetch("/api/push/subscribe", {
         method: "POST",
@@ -91,9 +103,11 @@ export default function EnablePushButton({ role, className = "" }: Props) {
       const subscribeJson = await subscribeRes.json().catch(() => null);
 
       if (!subscribeRes.ok || !subscribeJson?.ok) {
-        setMsg(subscribeJson?.error || "Failed to enable notifications.");
+        setMsg(subscribeJson?.error || "Failed to save subscription.");
         return;
       }
+
+      setMsg("Sending test notification...");
 
       const testRes = await fetch("/api/push/test-self", {
         method: "POST",
@@ -108,7 +122,8 @@ export default function EnablePushButton({ role, className = "" }: Props) {
 
       if (!testRes.ok || !testJson?.ok) {
         setMsg(
-          `${subscribeJson?.message || "Notifications enabled."} Test notification failed.`
+          testJson?.error ||
+            `${subscribeJson?.message || "Subscription saved."} Test notification failed.`
         );
         return;
       }
