@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
-import EnablePushButton from "@/components/EnablePushButton";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type CustomerMe = {
@@ -730,24 +729,6 @@ export default function RiderBookingPage() {
             <button className="moovu-btn moovu-btn-secondary" onClick={logout}>
               Logout
             </button>
-          </div>
-        </div>
-
-
-        <div className="mb-5 rounded-[28px] border border-[var(--moovu-border)] bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-sm font-medium text-slate-500">Notifications</div>
-              <div className="mt-1 text-base font-semibold text-slate-950">
-                Enable booking alerts on this device
-              </div>
-              <div className="mt-1 text-sm text-slate-600">
-                Get notified when your ride is received, assigned, arrived, started, completed,
-                or cancelled.
-              </div>
-            </div>
-
-            <EnablePushButton role="customer" />
           </div>
         </div>
 

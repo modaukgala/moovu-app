@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import EnablePushButton from "@/components/EnablePushButton";
 
 type Offer = {
   id: string;
@@ -760,21 +759,6 @@ export default function DriverHomePage() {
         ) : (
           <div className="grid gap-4 xl:grid-cols-[1.22fr_0.78fr]">
             <section className="space-y-4">
-              <div className="moovu-card p-5">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="text-sm text-slate-500">Notifications</div>
-                    <div className="mt-1 text-xl font-semibold text-slate-950">
-                      Enable driver alerts on this device
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      Get notified about trip offers, assignments, and customer cancellations.
-                    </div>
-                  </div>
-
-                  <EnablePushButton role="driver" />
-                </div>
-              </div>
               <div className="moovu-card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>

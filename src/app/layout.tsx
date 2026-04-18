@@ -43,6 +43,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
+        <PortalNotificationLauncher />
       </body>
     </html>
   );

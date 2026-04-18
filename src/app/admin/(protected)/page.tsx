@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
-import EnablePushButton from "@/components/EnablePushButton";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type AnalyticsResponse = {
@@ -102,21 +101,6 @@ export default function AdminDashboardPage() {
             Live platform intelligence for scheduling, quality, support, and payments.
           </p>
         </div>
-
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-sm text-gray-500">Notifications</div>
-              <div className="mt-1 text-xl font-semibold">Enable admin alerts on this device</div>
-              <p className="mt-2 text-sm text-gray-700">
-                Get notified about new ride requests, scheduled releases, driver responses,
-                arrivals, trip starts, completions, and cancellations.
-              </p>
-            </div>
-
-            <EnablePushButton role="admin" />
-          </div>
-        </section>
 
         <section className="flex flex-wrap gap-3">
           <Link href="/admin/trips" className="border rounded-xl px-4 py-2 bg-white">

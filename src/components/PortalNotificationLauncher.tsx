@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import EnablePushButton from "@/components/EnablePushButton";
 
@@ -24,10 +24,11 @@ function getRoleFromPath(pathname: string): "admin" | "driver" | "customer" | nu
 
 export default function PortalNotificationLauncher() {
   const pathname = usePathname();
+  const [dismissed, setDismissed] = useState(false);
 
   const role = useMemo(() => getRoleFromPath(pathname), [pathname]);
 
-  if (!role) return null;
+  if (!role || dismissed) return null;
 
   const hideOnAuthOnlyScreens =
     pathname === "/driver/login" ||
@@ -38,7 +39,7 @@ export default function PortalNotificationLauncher() {
 
   return (
     <div className="fixed bottom-4 right-4 z-[9998]">
-      <EnablePushButton role={role} />
+      <EnablePushButton role={role} onEnabled={() => setDismissed(true)} />
     </div>
   );
 }

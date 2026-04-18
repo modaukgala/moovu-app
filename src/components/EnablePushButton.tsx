@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Role = "admin" | "driver" | "customer";
@@ -8,6 +8,7 @@ type Role = "admin" | "driver" | "customer";
 type Props = {
   role: Role;
   className?: string;
+  onEnabled?: () => void;
 };
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -23,14 +24,29 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
-export default function EnablePushButton({ role, className = "" }: Props) {
+export default function EnablePushButton({
+  role,
+  className = "",
+  onEnabled,
+}: Props) {
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string>("");
+  const [msg, setMsg] = useState("");
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (!("Notification" in window)) return;
+
+    if (Notification.permission === "granted") {
+      setHidden(true);
+    }
+  }, []);
 
   async function handleEnablePush() {
     try {
       setBusy(true);
-      setMsg("Starting notification setup...");
+      setMsg("");
 
       if (!("serviceWorker" in navigator)) {
         setMsg("This browser does not support service workers.");
@@ -63,15 +79,11 @@ export default function EnablePushButton({ role, className = "" }: Props) {
         return;
       }
 
-      setMsg("Requesting notification permission...");
-
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setMsg("Notification permission was not granted.");
         return;
       }
-
-      setMsg("Registering service worker...");
 
       const registration = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
@@ -79,14 +91,11 @@ export default function EnablePushButton({ role, className = "" }: Props) {
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
-        setMsg("Creating device subscription...");
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
       }
-
-      setMsg("Saving subscription...");
 
       const subscribeRes = await fetch("/api/push/subscribe", {
         method: "POST",
@@ -107,8 +116,6 @@ export default function EnablePushButton({ role, className = "" }: Props) {
         return;
       }
 
-      setMsg("Sending test notification...");
-
       const testRes = await fetch("/api/push/test-self", {
         method: "POST",
         headers: {
@@ -128,7 +135,9 @@ export default function EnablePushButton({ role, className = "" }: Props) {
         return;
       }
 
-      setMsg("Notifications enabled successfully. A test notification was sent.");
+      setMsg("Notifications enabled successfully.");
+      setHidden(true);
+      onEnabled?.();
     } catch (e: any) {
       setMsg(e?.message || "Failed to enable notifications.");
     } finally {
@@ -136,19 +145,25 @@ export default function EnablePushButton({ role, className = "" }: Props) {
     }
   }
 
+  if (hidden) return null;
+
   return (
     <div className={className}>
       <button
         type="button"
         onClick={handleEnablePush}
         disabled={busy}
-        className="rounded-xl px-4 py-2 text-white disabled:opacity-60"
+        className="rounded-full px-4 py-3 text-sm font-medium text-white shadow-lg disabled:opacity-60"
         style={{ background: "var(--moovu-primary)" }}
       >
         {busy ? "Enabling..." : "Enable push notifications"}
       </button>
 
-      {msg ? <p className="mt-2 text-sm text-gray-700">{msg}</p> : null}
+      {msg ? (
+        <p className="mt-2 max-w-[260px] rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow">
+          {msg}
+        </p>
+      ) : null}
     </div>
   );
 }
