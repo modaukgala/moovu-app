@@ -8,7 +8,15 @@ function getRoleFromPath(pathname: string): "admin" | "driver" | "customer" | nu
   if (pathname.startsWith("/admin")) return "admin";
   if (pathname.startsWith("/driver")) return "driver";
 
-  const customerPaths = ["/book", "/ride", "/customer", "/login"];
+  const customerPaths = [
+    "/book",
+    "/ride",
+    "/ride-confirm",
+    "/shared-trip",
+    "/customer",
+    "/login",
+  ];
+
   if (customerPaths.some((p) => pathname.startsWith(p))) return "customer";
 
   return null;
@@ -21,6 +29,13 @@ export default function PortalNotificationLauncher() {
   const role = useMemo(() => getRoleFromPath(pathname), [pathname]);
 
   if (!role || dismissed) return null;
+
+  const hideOnAuthOnlyScreens =
+    pathname === "/driver/login" ||
+    pathname === "/customer/auth" ||
+    pathname === "/login";
+
+  if (hideOnAuthOnlyScreens) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-[9999]">

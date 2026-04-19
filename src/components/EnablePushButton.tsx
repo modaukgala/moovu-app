@@ -23,33 +23,59 @@ function urlBase64ToUint8Array(base64String: string) {
 export default function EnablePushButton({ role, onEnabled }: Props) {
   const [busy, setBusy] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    if (typeof window !== "undefined" && Notification.permission === "granted") {
-      setHidden(true);
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "granted") {
+        setHidden(true);
+      }
     }
   }, []);
 
   async function handleClick() {
     try {
       setBusy(true);
+      setMsg("");
 
       const {
         data: { session },
+        error: sessionError,
       } = await supabaseClient.auth.getSession();
 
-      if (!session?.access_token) {
-        alert("You must be logged in.");
+      if (sessionError) {
+        setMsg(`Session error: ${sessionError.message}`);
+        return;
+      }
+
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setMsg("Missing access token. Please log in again.");
+        return;
+      }
+
+      if (!("serviceWorker" in navigator)) {
+        setMsg("This device does not support service workers.");
+        return;
+      }
+
+      if (!("PushManager" in window)) {
+        setMsg("This device does not support push notifications.");
+        return;
+      }
+
+      const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapid) {
+        setMsg("Push notifications are not configured.");
         return;
       }
 
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        alert("Permission denied.");
+        setMsg("Notification permission was not granted.");
         return;
       }
 
-      const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       const reg = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
 
@@ -57,15 +83,15 @@ export default function EnablePushButton({ role, onEnabled }: Props) {
       if (!sub) {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapid!),
+          applicationServerKey: urlBase64ToUint8Array(vapid),
         });
       }
 
-      await fetch("/api/push/subscribe", {
+      const subscribeRes = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           role,
@@ -73,19 +99,34 @@ export default function EnablePushButton({ role, onEnabled }: Props) {
         }),
       });
 
-      await fetch("/api/push/test-self", {
+      const subscribeJson = await subscribeRes.json().catch(() => null);
+
+      if (!subscribeRes.ok || !subscribeJson?.ok) {
+        setMsg(subscribeJson?.error || "Failed to save push subscription.");
+        return;
+      }
+
+      const testRes = await fetch("/api/push/test-self", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
+        body: JSON.stringify({ role }),
       });
 
+      const testJson = await testRes.json().catch(() => null);
+
+      if (!testRes.ok || !testJson?.ok) {
+        setMsg(testJson?.error || "Subscription saved, but test notification failed.");
+        return;
+      }
+
+      setMsg("Notifications enabled successfully.");
       setHidden(true);
       onEnabled?.();
-    } catch (e) {
-      console.error(e);
-      alert("Failed to enable notifications.");
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to enable notifications.");
     } finally {
       setBusy(false);
     }
@@ -94,13 +135,21 @@ export default function EnablePushButton({ role, onEnabled }: Props) {
   if (hidden) return null;
 
   return (
-    <button
-      onClick={handleClick}
-      disabled={busy}
-      className="rounded-full px-4 py-3 text-white shadow-lg"
-      style={{ background: "#0B5FFF" }}
-    >
-      {busy ? "Enabling..." : "Enable notifications"}
-    </button>
+    <div className="flex flex-col items-end gap-2">
+      <button
+        onClick={handleClick}
+        disabled={busy}
+        className="rounded-full px-4 py-3 text-white shadow-lg disabled:opacity-60"
+        style={{ background: "#0B5FFF" }}
+      >
+        {busy ? "Enabling..." : "Enable notifications"}
+      </button>
+
+      {msg ? (
+        <div className="max-w-[280px] rounded-xl bg-white px-3 py-2 text-xs text-slate-700 shadow">
+          {msg}
+        </div>
+      ) : null}
+    </div>
   );
 }
