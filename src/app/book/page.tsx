@@ -76,6 +76,7 @@ export default function RiderBookingPage() {
   const dropoffBoxRef = useRef<HTMLDivElement | null>(null);
   const pickupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCalculatedKeyRef = useRef("");
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -93,6 +94,18 @@ export default function RiderBookingPage() {
       dropoffLng != null
     );
   }, [pickupAddress, dropoffAddress, pickupLat, pickupLng, dropoffLat, dropoffLng]);
+
+  const routeKey = useMemo(() => {
+    if (!canCalculate) return "";
+    return [
+      pickupAddress.trim(),
+      dropoffAddress.trim(),
+      pickupLat,
+      pickupLng,
+      dropoffLat,
+      dropoffLng,
+    ].join("|");
+  }, [canCalculate, pickupAddress, dropoffAddress, pickupLat, pickupLng, dropoffLat, dropoffLng]);
 
   const canSubmit = useMemo(() => {
     if (!customer) return false;
@@ -150,6 +163,7 @@ export default function RiderBookingPage() {
     setDurationMin(null);
     setFare(null);
     setRouteVisible(false);
+    lastCalculatedKeyRef.current = "";
   }
 
   function clearPickupSelection() {
@@ -336,12 +350,14 @@ export default function RiderBookingPage() {
     setMsg(kind === "pickup" ? "Pickup selected ✅" : "Destination selected ✅");
   }
 
-  async function calculateTrip() {
-    setMsg(null);
+  async function calculateTrip(options?: { silent?: boolean }) {
+    const silent = options?.silent ?? false;
+
+    if (!silent) setMsg(null);
 
     if (!pickupAddress.trim() || !dropoffAddress.trim()) {
-      setMsg("Pickup and destination are required.");
-      return;
+      if (!silent) setMsg("Pickup and destination are required.");
+      return false;
     }
 
     if (
@@ -350,8 +366,8 @@ export default function RiderBookingPage() {
       dropoffLat == null ||
       dropoffLng == null
     ) {
-      setMsg("Please select valid pickup and destination addresses.");
-      return;
+      if (!silent) setMsg("Please select valid pickup and destination addresses.");
+      return false;
     }
 
     const payload =
@@ -378,8 +394,8 @@ export default function RiderBookingPage() {
     const json = await res.json().catch(() => null);
 
     if (!json?.ok) {
-      setMsg(json?.error || "Could not calculate trip distance.");
-      return;
+      if (!silent) setMsg(json?.error || "Could not calculate trip distance.");
+      return false;
     }
 
     const km = Number(json.distanceKm ?? 0);
@@ -389,7 +405,9 @@ export default function RiderBookingPage() {
     setDistanceKm(Number(km.toFixed(2)));
     setDurationMin(Math.ceil(mins));
     setFare(Math.round(estimatedFare));
-    setMsg("Fare calculated ✅");
+
+    if (!silent) setMsg("Fare calculated ✅");
+    return true;
   }
 
   async function submitBooking() {
@@ -416,8 +434,11 @@ export default function RiderBookingPage() {
     }
 
     if (distanceKm == null || durationMin == null) {
-      setMsg("Calculate fare first.");
-      return;
+      const calculated = await calculateTrip({ silent: true });
+      if (!calculated) {
+        setMsg("Waiting for fare calculation. Please try again.");
+        return;
+      }
     }
 
     if (rideType === "scheduled" && !scheduledFor) {
@@ -699,6 +720,15 @@ export default function RiderBookingPage() {
     }
   }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng]);
 
+  useEffect(() => {
+    if (!canCalculate || !routeKey) return;
+
+    if (lastCalculatedKeyRef.current === routeKey) return;
+    lastCalculatedKeyRef.current = routeKey;
+
+    void calculateTrip({ silent: true });
+  }, [canCalculate, routeKey]);
+
   if (authLoading) {
     return (
       <main className="moovu-page moovu-shell p-6 text-black">
@@ -882,16 +912,6 @@ export default function RiderBookingPage() {
                 />
               </div>
             )}
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                className="moovu-btn moovu-btn-secondary"
-                onClick={() => void calculateTrip()}
-                disabled={busy || !canCalculate}
-              >
-                Calculate fare
-              </button>
-            </div>
 
             <div className="mt-5 rounded-[28px] border border-[var(--moovu-border)] bg-[var(--moovu-bg-soft)] p-4">
               {mapError ? (
