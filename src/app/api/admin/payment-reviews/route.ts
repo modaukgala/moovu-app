@@ -1,13 +1,46 @@
 import { NextResponse } from "next/server";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/lib/auth/admin";
+import {
+  getDriverSubscriptionAmount,
+  getDriverSubscriptionDays,
+  isDriverSubscriptionPlan,
+  type DriverSubscriptionPlan,
+} from "@/lib/finance/driverPayments";
+import { sendPushSafe } from "@/lib/push-server";
 
-const PLAN_DAYS = {
-  day: 1,
-  week: 7,
-  month: 30,
-} as const;
+type PaymentType = "subscription" | "commission" | "combined";
 
-type PlanType = keyof typeof PLAN_DAYS;
+type PaymentRequestRecord = {
+  id: string;
+  driver_id: string;
+  payment_type: string | null;
+  subscription_plan: string | null;
+  amount_expected: number | null;
+  amount_submitted: number | null;
+  payment_reference: string | null;
+  note: string | null;
+  pop_file_path: string | null;
+  pop_file_url: string | null;
+  status: string | null;
+  review_note: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+};
+
+type DriverRecord = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  subscription_expires_at?: string | null;
+  subscription_amount_due?: number | null;
+};
+
+type DriverWalletRecord = {
+  id: string;
+  balance_due: number | null;
+};
 
 function num(value: unknown) {
   const n = Number(value ?? 0);
@@ -18,6 +51,33 @@ function addDays(base: Date, days: number) {
   const copy = new Date(base);
   copy.setDate(copy.getDate() + days);
   return copy;
+}
+
+function isPaymentType(value: string): value is PaymentType {
+  return value === "subscription" || value === "commission" || value === "combined";
+}
+
+async function notifyDriverPaymentReview(
+  supabaseAdmin: SupabaseClient,
+  driverId: string,
+  title: string,
+  body: string,
+) {
+  const { data: account } = await supabaseAdmin
+    .from("driver_accounts")
+    .select("user_id")
+    .eq("driver_id", driverId)
+    .maybeSingle();
+
+  const userId = account?.user_id ? String(account.user_id) : "";
+  if (!userId) return;
+
+  await sendPushSafe({
+    userIds: [userId],
+    title,
+    body,
+    url: "/driver/earnings",
+  });
 }
 
 export async function GET(req: Request) {
@@ -60,22 +120,23 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    const driverIds = Array.from(new Set((rows ?? []).map((r: any) => r.driver_id)));
+    const paymentRows = (rows ?? []) as PaymentRequestRecord[];
+    const driverIds = Array.from(new Set(paymentRows.map((row) => row.driver_id)));
     const { data: drivers } = await supabaseAdmin
       .from("drivers")
       .select("id,first_name,last_name,phone")
       .in("id", driverIds.length ? driverIds : ["00000000-0000-0000-0000-000000000000"]);
 
     const driverNameById = new Map<string, { name: string; phone: string | null }>();
-    for (const d of drivers ?? []) {
-      const name = `${(d as any).first_name ?? ""} ${(d as any).last_name ?? ""}`.trim() || (d as any).id;
-      driverNameById.set((d as any).id, {
+    for (const d of (drivers ?? []) as DriverRecord[]) {
+      const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || d.id;
+      driverNameById.set(d.id, {
         name,
-        phone: (d as any).phone ?? null,
+        phone: d.phone ?? null,
       });
     }
 
-    const decorated = (rows ?? []).map((row: any) => ({
+    const decorated = paymentRows.map((row) => ({
       ...row,
       driver_name: driverNameById.get(row.driver_id)?.name ?? row.driver_id,
       driver_phone: driverNameById.get(row.driver_id)?.phone ?? null,
@@ -85,9 +146,9 @@ export async function GET(req: Request) {
       ok: true,
       requests: decorated,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Failed to load payment reviews." },
+      { ok: false, error: error instanceof Error ? error.message : "Failed to load payment reviews." },
       { status: 500 }
     );
   }
@@ -101,11 +162,11 @@ export async function POST(req: Request) {
     }
 
     const { supabaseAdmin, user } = auth;
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
 
-    const requestId = String(body?.requestId ?? "").trim();
-    const action = String(body?.action ?? "").trim();
-    const reviewNote = String(body?.reviewNote ?? "").trim();
+    const requestId = String(body && typeof body === "object" && "requestId" in body ? body.requestId : "").trim();
+    const action = String(body && typeof body === "object" && "action" in body ? body.action : "").trim();
+    const reviewNote = String(body && typeof body === "object" && "reviewNote" in body ? body.reviewNote : "").trim();
 
     if (!requestId) {
       return NextResponse.json({ ok: false, error: "Request ID is required." }, { status: 400 });
@@ -143,6 +204,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: rejectError.message }, { status: 500 });
       }
 
+      await notifyDriverPaymentReview(
+        supabaseAdmin,
+        String(paymentRequest.driver_id),
+        "Payment rejected",
+        "Your MOOVU payment proof was rejected. Check the review note and submit again if needed.",
+      );
+
       return NextResponse.json({
         ok: true,
         message: "Payment request rejected.",
@@ -164,6 +232,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: waitingError.message }, { status: 500 });
       }
 
+      await notifyDriverPaymentReview(
+        supabaseAdmin,
+        String(paymentRequest.driver_id),
+        "Payment still under review",
+        "MOOVU marked your payment proof as waiting for confirmation.",
+      );
+
       return NextResponse.json({
         ok: true,
         message: "Payment request marked as still waiting.",
@@ -171,8 +246,16 @@ export async function POST(req: Request) {
     }
 
     const driverId = String(paymentRequest.driver_id);
-    const paymentType = String(paymentRequest.payment_type);
-    const subscriptionPlan = paymentRequest.subscription_plan as PlanType | null;
+    const paymentTypeRaw = String(paymentRequest.payment_type ?? "");
+    if (!isPaymentType(paymentTypeRaw)) {
+      return NextResponse.json({ ok: false, error: "Payment request has an invalid payment type." }, { status: 400 });
+    }
+
+    const paymentType = paymentTypeRaw;
+    const subscriptionPlanRaw = String(paymentRequest.subscription_plan ?? "");
+    const subscriptionPlan: DriverSubscriptionPlan | null = isDriverSubscriptionPlan(subscriptionPlanRaw)
+      ? subscriptionPlanRaw
+      : null;
     const amountSubmitted = num(paymentRequest.amount_submitted);
     const reference = String(paymentRequest.payment_reference ?? "").trim();
     const note = String(paymentRequest.note ?? "").trim();
@@ -187,7 +270,9 @@ export async function POST(req: Request) {
       .eq("id", driverId)
       .maybeSingle();
 
-    if (driverError || !driver) {
+    const driverRecord = driver as DriverRecord | null;
+
+    if (driverError || !driverRecord) {
       return NextResponse.json(
         { ok: false, error: driverError?.message || "Driver not found." },
         { status: 404 }
@@ -204,8 +289,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: walletError.message }, { status: 500 });
     }
 
-    const currentCommissionDue = num(wallet?.balance_due);
-    const currentSubscriptionDue = num(driver.subscription_amount_due);
+    const walletRecord = wallet as DriverWalletRecord | null;
+    const currentCommissionDue = num(walletRecord?.balance_due);
+    const currentSubscriptionDue = num(driverRecord.subscription_amount_due);
+    const selectedSubscriptionAmount = subscriptionPlan
+      ? getDriverSubscriptionAmount(subscriptionPlan)
+      : currentSubscriptionDue;
 
     let commissionPaid = 0;
     let subscriptionPaid = 0;
@@ -215,18 +304,32 @@ export async function POST(req: Request) {
     } else if (paymentType === "commission") {
       commissionPaid = amountSubmitted;
     } else {
-      subscriptionPaid = currentSubscriptionDue;
-      commissionPaid = Math.max(0, amountSubmitted - subscriptionPaid);
+      subscriptionPaid = selectedSubscriptionAmount;
+      commissionPaid = Math.min(currentCommissionDue, Math.max(0, amountSubmitted - subscriptionPaid));
+    }
+
+    if ((paymentType === "subscription" || paymentType === "combined") && !subscriptionPlan) {
+      return NextResponse.json(
+        { ok: false, error: "A valid subscription plan is required for this payment." },
+        { status: 400 },
+      );
+    }
+
+    if ((paymentType === "subscription" || paymentType === "combined") && amountSubmitted + 0.009 < selectedSubscriptionAmount) {
+      return NextResponse.json(
+        { ok: false, error: `Submitted amount is below the ${subscriptionPlan} subscription amount of R${selectedSubscriptionAmount.toFixed(2)}.` },
+        { status: 400 },
+      );
     }
 
     if (paymentType === "subscription" || paymentType === "combined") {
       const now = new Date();
       const currentExpiry =
-        driver.subscription_expires_at && new Date(driver.subscription_expires_at).getTime() > now.getTime()
-          ? new Date(driver.subscription_expires_at)
+        driverRecord.subscription_expires_at && new Date(driverRecord.subscription_expires_at).getTime() > now.getTime()
+          ? new Date(driverRecord.subscription_expires_at)
           : now;
 
-      const days = subscriptionPlan ? PLAN_DAYS[subscriptionPlan] : 0;
+      const days = subscriptionPlan ? getDriverSubscriptionDays(subscriptionPlan) : 0;
       const newExpiry = addDays(currentExpiry, days);
 
       const { error: paymentInsertError } = await supabaseAdmin
@@ -263,7 +366,7 @@ export async function POST(req: Request) {
     }
 
     if (paymentType === "commission" || paymentType === "combined") {
-      let walletId = wallet?.id ?? null;
+      let walletId = walletRecord?.id ?? null;
 
       if (!walletId) {
         const { data: newWallet, error: createWalletError } = await supabaseAdmin
@@ -337,6 +440,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: approveError.message }, { status: 500 });
     }
 
+    await notifyDriverPaymentReview(
+      supabaseAdmin,
+      driverId,
+      "Payment approved",
+      "Your MOOVU payment proof was approved.",
+    );
+
     return NextResponse.json({
       ok: true,
       message: "Payment approved successfully.",
@@ -346,9 +456,9 @@ export async function POST(req: Request) {
         commissionPaid,
       },
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Failed to review payment." },
+      { ok: false, error: error instanceof Error ? error.message : "Failed to review payment." },
       { status: 500 }
     );
   }

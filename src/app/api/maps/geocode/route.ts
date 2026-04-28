@@ -45,9 +45,9 @@ export async function POST(req: Request) {
       lng: result.geometry.location.lng,
       address: result.formatted_address,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error" },
+      { ok: false, error: error instanceof Error ? error.message : "Server error" },
       { status: 500 }
     );
   }

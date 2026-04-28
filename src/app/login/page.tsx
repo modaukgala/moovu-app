@@ -15,7 +15,8 @@ export default function LoginPage() {
     const rawNext = params.get("next");
 
     if (rawNext && rawNext.startsWith("/")) {
-      setNextPath(rawNext);
+      const timer = window.setTimeout(() => setNextPath(rawNext), 0);
+      return () => window.clearTimeout(timer);
     }
   }, []);
 

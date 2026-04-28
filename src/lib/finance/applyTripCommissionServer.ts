@@ -12,6 +12,18 @@ type ApplyTripCommissionServerResult =
   | { ok: true; skipped: boolean; calc: CommissionCalc }
   | { ok: false; error: string };
 
+type CompletedTripRow = {
+  id: string;
+  fare_amount: number | null;
+  commission_amount: number | null;
+  driver_net_earnings: number | null;
+  status: string | null;
+};
+
+type SettlementRow = {
+  amount_paid: number | null;
+};
+
 function num(value: unknown) {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
@@ -36,11 +48,13 @@ async function resolveSafeCreatedBy(createdBy?: string | null) {
 }
 
 async function ensureWallet(driverId: string) {
-  let { data: wallet, error: walletFetchError } = await supabaseAdmin
+  const walletResult = await supabaseAdmin
     .from("driver_wallets")
     .select("*")
     .eq("driver_id", driverId)
     .maybeSingle();
+  let wallet = walletResult.data;
+  const walletFetchError = walletResult.error;
 
   if (walletFetchError) {
     return { wallet: null, error: walletFetchError.message };
@@ -98,22 +112,25 @@ async function recalcWallet(driverId: string, walletId: string) {
     return { ok: false as const, error: settlementsError.message };
   }
 
-  const totalCommission = (completedTrips ?? []).reduce(
-    (sum: number, row: any) => sum + num(row.commission_amount),
+  const completedTripRows = (completedTrips ?? []) as CompletedTripRow[];
+  const settlementRows = (settlements ?? []) as SettlementRow[];
+
+  const totalCommission = completedTripRows.reduce(
+    (sum, row) => sum + num(row.commission_amount),
     0
   );
 
-  const totalDriverNet = (completedTrips ?? []).reduce((sum: number, row: any) => {
+  const totalDriverNet = completedTripRows.reduce((sum, row) => {
     if (row.driver_net_earnings != null) {
       return sum + num(row.driver_net_earnings);
     }
     return sum + (num(row.fare_amount) - num(row.commission_amount));
   }, 0);
 
-  const totalTripsCompleted = (completedTrips ?? []).length;
+  const totalTripsCompleted = completedTripRows.length;
 
-  const totalSettled = (settlements ?? []).reduce(
-    (sum: number, row: any) => sum + num(row.amount_paid),
+  const totalSettled = settlementRows.reduce(
+    (sum, row) => sum + num(row.amount_paid),
     0
   );
 

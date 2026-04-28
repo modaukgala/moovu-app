@@ -521,55 +521,141 @@ tr:last-child td {
   box-shadow: var(--moovu-shadow-md);
 }
 
-.moovu-booking-page {
-  position: relative;
-  min-height: 100svh;
-  overflow-x: hidden;
-  background: #e9f3fb;
-}
+/* ─────────────────────────────────────────────────────────────────
+   UBER-STYLE BOOKING: full-screen map + draggable bottom sheet
+───────────────────────────────────────────────────────────────── */
 
-.moovu-booking-map-shell {
+/* Keep old selectors as no-ops so other pages don't break */
+.moovu-booking-page { display: none; }
+.moovu-booking-map-shell { display: none; }
+.moovu-booking-map { width: 100%; height: 100%; }
+.moovu-booking-map-error { display: none; }
+.moovu-booking-header { display: none; }
+.moovu-booking-header > * { pointer-events: auto; }
+
+/* ── Page shell ── */
+.mbk-page {
   position: fixed;
   inset: 0;
-  background:
-    linear-gradient(180deg, rgba(246, 250, 252, 0.35), rgba(246, 250, 252, 0.08)),
-    #dbe9f2;
+  overflow: hidden;
+  background: #c8dce8;
 }
 
-.moovu-booking-map {
+/* ── Full-screen map ── */
+.mbk-map-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.mbk-map { width: 100%; height: 100%; }
+.mbk-map-error {
+  display: grid;
+  place-items: center;
   width: 100%;
   height: 100%;
-  min-height: 100svh;
-}
-
-.moovu-booking-map-error {
-  display: grid;
-  min-height: 100svh;
-  place-items: center;
   padding: 24px;
   color: #b91c1c;
   text-align: center;
-  background:
-    radial-gradient(circle at top, rgba(176, 224, 240, 0.72), transparent 36%),
-    #f6fafc;
+  font-size: 14px;
+  font-weight: 600;
+  background: radial-gradient(circle at top, rgba(176,224,240,0.72), transparent 36%), #f6fafc;
 }
 
-.moovu-booking-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 40;
+/* ── Floating top header ── */
+.mbk-header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
   pointer-events: none;
 }
+.mbk-header > * { pointer-events: auto; }
 
-.moovu-booking-header > * {
-  pointer-events: auto;
+/* ── Bottom sheet ── */
+.mbk-sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  border-radius: 28px 28px 0 0;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -16px 48px rgba(5, 5, 5, 0.18);
+  backdrop-filter: blur(20px);
+  max-height: 100svh;
+}
+
+/* ── Drag handle ── */
+.mbk-handle-wrap {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 4px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.mbk-handle-wrap:active { cursor: grabbing; }
+.mbk-handle {
+  width: 44px; height: 5px;
+  border-radius: 999px;
+  background: #c8d5e2;
+}
+
+/* ── Scroll area ── */
+.mbk-sheet-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 4px;
+}
+.mbk-sheet:not(.mbk-sheet-expanded) .mbk-sheet-scroll { overflow: hidden; }
+
+/* ── Confirm bar ── */
+.mbk-confirm-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid rgba(215, 226, 234, 0.9);
+  background: rgba(255, 255, 255, 0.99);
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+}
+
+/* ── Ride options block ── */
+.mbk-ride-options {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid #e0eaf2;
+  background: #f6fafd;
+}
+
+/* ── Loading screen ── */
+.mbk-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100svh;
+  gap: 24px;
+  background: #e9f3fb;
+}
+.mbk-loading-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(320px, 90vw);
+  padding: 20px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 32px rgba(5,5,5,0.1);
 }
 
 .moovu-brand-lockup {
@@ -615,18 +701,8 @@ tr:last-child td {
   backdrop-filter: blur(14px);
 }
 
-.moovu-booking-panel {
-  position: relative;
-  z-index: 30;
-  width: min(100%, 520px);
-  margin: min(34svh, 340px) auto 0;
-  border: 1px solid rgba(215, 226, 234, 0.98);
-  border-radius: 32px 32px 0 0;
-  background: rgba(255, 255, 255, 0.96);
-  padding: 10px 16px calc(18px + env(safe-area-inset-bottom));
-  box-shadow: 0 -18px 54px rgba(5, 5, 5, 0.14);
-  backdrop-filter: blur(18px);
-}
+/* .moovu-booking-panel replaced by .mbk-sheet — kept as no-op */
+.moovu-booking-panel { display: none; }
 
 .moovu-bottom-sheet-handle {
   width: 46px;
@@ -865,20 +941,8 @@ tr:last-child td {
   color: #244f9e;
 }
 
-.moovu-booking-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin: 14px -16px calc(-18px - env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(215, 226, 234, 0.92);
-  background: rgba(255, 255, 255, 0.98);
-  padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
-  backdrop-filter: blur(16px);
-}
+/* .moovu-booking-actions replaced by .mbk-confirm-bar */
+.moovu-booking-actions { display: none; }
 
 .moovu-confirm-button {
   min-height: 52px;
@@ -902,67 +966,36 @@ tr:last-child td {
 }
 
 @media (min-width: 900px) {
-  .moovu-booking-header {
-    padding: 22px 28px;
+  /* Desktop: sheet becomes a side panel */
+  .mbk-page { overflow: auto; position: relative; min-height: 100svh; }
+  .mbk-map-layer { position: fixed; }
+  .mbk-sheet {
+    position: fixed;
+    top: 0 !important;
+    left: auto !important;
+    right: 0;
+    bottom: 0;
+    width: 420px;
+    border-radius: 0;
+    box-shadow: -12px 0 48px rgba(5,5,5,0.12);
+    max-height: 100svh;
+    transition: none !important;
   }
-
-  .moovu-brand-lockup img {
-    width: 72px;
-  }
-
-  .moovu-booking-panel {
-    position: relative;
-    width: 430px;
-    margin: 108px 0 28px 28px;
-    border-radius: 34px;
-    padding: 20px;
-    box-shadow: 0 24px 70px rgba(5, 5, 5, 0.16);
-  }
-
-  .moovu-bottom-sheet-handle {
-    display: none;
-  }
-
-  .moovu-booking-actions {
-    margin: 16px -20px -20px;
-    border-radius: 0 0 34px 34px;
-    padding: 14px 20px 18px;
-  }
+  .mbk-sheet-scroll { overflow-y: auto; }
+  .mbk-handle-wrap { display: none; }
+  .mbk-header { right: 420px; }
 }
 
 @media (min-width: 1280px) {
-  .moovu-booking-panel {
-    width: 460px;
-    margin-left: 36px;
-  }
+  .mbk-sheet { width: 460px; }
+  .mbk-header { right: 460px; }
 }
 
 @media (max-width: 390px) {
-  .moovu-booking-header {
-    align-items: flex-start;
-  }
-
-  .moovu-brand-lockup {
-    max-width: 190px;
-  }
-
-  .moovu-icon-link {
-    min-height: 40px;
-    padding: 0 10px;
-    font-size: 12px;
-  }
-
-  .moovu-booking-panel {
-    padding-left: 14px;
-    padding-right: 14px;
-  }
-
-  .moovu-booking-actions {
-    margin-left: -14px;
-    margin-right: -14px;
-    padding-left: 14px;
-    padding-right: 14px;
-  }
+  .mbk-header { align-items: flex-start; }
+  .moovu-brand-lockup { max-width: 190px; }
+  .moovu-icon-link { min-height: 40px; padding: 0 10px; font-size: 12px; }
+  .mbk-confirm-bar { padding-left: 14px; padding-right: 14px; }
 }
 
 .moovu-app-screen {
@@ -1930,5 +1963,416 @@ tr:last-child td {
     border: 0;
     border-radius: 0;
     box-shadow: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOME PAGE — clean mobile-first layout (mhp = moovu-home-page)
+   Replaces the old overlapping map-hero approach
+═══════════════════════════════════════════════════════════════ */
+
+.mhp-screen {
+  min-height: 100svh;
+  background: #eef5fa;
+  color: #050505;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.mhp-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 12px;
+  background: #eef5fa;
+}
+
+.mhp-logo-wrap {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #d7e2ea;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 8px rgba(5,5,5,0.07);
+}
+
+.mhp-logo-wrap img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.mhp-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mhp-eyebrow {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #7a93a8;
+}
+
+.mhp-header-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #0a1929;
+  line-height: 1.15;
+  margin-top: 2px;
+  letter-spacing: -0.01em;
+}
+
+.mhp-account-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1.5px solid #d7e2ea;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0a1929;
+  box-shadow: 0 2px 8px rgba(5,5,5,0.07);
+  white-space: nowrap;
+}
+
+/* ── Hero banner ─────────────────────────────────────────────── */
+.mhp-hero {
+  margin: 0 16px 16px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #b8daf0 0%, #c5eade 100%);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+  position: relative;
+  min-height: 180px;
+}
+
+.mhp-hero-logo {
+  width: min(55vw, 200px);
+  height: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* ── Animated route bar ─────────────────────────────────────── */
+.mhp-route-bar {
+  background: rgba(255, 255, 255, 0.90);
+  border-radius: 18px;
+  border: 1px solid rgba(215, 226, 234, 0.7);
+  padding: 12px 16px;
+  backdrop-filter: blur(8px);
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+}
+
+.mhp-route-inner {
+  width: 100%;
+  transition: opacity 0.3s ease;
+}
+
+.mhp-fade-out { opacity: 0; }
+.mhp-fade-in  { opacity: 1; }
+
+.mhp-route-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mhp-route-dot {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.mhp-dot-pickup {
+  background: #1F74C9;
+}
+
+.mhp-dot-dropoff {
+  border-radius: 3px;
+  background: #0a1929;
+}
+
+.mhp-route-connector {
+  width: 2px;
+  height: 12px;
+  background: #c8d5e2;
+  margin-left: 5px;
+}
+
+.mhp-route-place {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0a1929;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Body content ────────────────────────────────────────────── */
+.mhp-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+/* ── Book card ───────────────────────────────────────────────── */
+.mhp-book-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #fff;
+  border: 1.5px solid #cfe4ff;
+  border-radius: 24px;
+  padding: 18px;
+  box-shadow: 0 2px 12px rgba(31, 116, 201, 0.08);
+  text-decoration: none;
+}
+
+.mhp-book-card-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mhp-book-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #0a1929;
+  margin-top: 4px;
+  letter-spacing: -0.01em;
+}
+
+.mhp-book-desc {
+  font-size: 13px;
+  color: #5b7282;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.mhp-go-btn {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: #1F74C9;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 18px rgba(31, 116, 201, 0.28);
+}
+
+/* ── Stats row ───────────────────────────────────────────────── */
+.mhp-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.mhp-stat {
+  background: #fff;
+  border: 1px solid #d7e2ea;
+  border-radius: 18px;
+  padding: 12px;
+  text-align: center;
+}
+
+.mhp-stat-primary {
+  background: #eaf3ff;
+  border-color: #cfe4ff;
+}
+
+.mhp-stat-green {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+}
+
+.mhp-stat-label {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7a93a8;
+}
+
+.mhp-stat-value {
+  font-size: 16px;
+  font-weight: 900;
+  color: #0a1929;
+  margin-top: 3px;
+  letter-spacing: -0.01em;
+}
+
+.mhp-stat-sub {
+  font-size: 10px;
+  color: #7a93a8;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* ── Section ─────────────────────────────────────────────────── */
+.mhp-section {
+  background: #fff;
+  border: 1px solid #d7e2ea;
+  border-radius: 24px;
+  padding: 16px;
+  box-shadow: 0 1px 6px rgba(5,5,5,0.05);
+}
+
+.mhp-section-title {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7a93a8;
+  margin-bottom: 12px;
+}
+
+/* ── Quick actions ───────────────────────────────────────────── */
+.mhp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mhp-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f6fafc;
+  border: 1px solid #e4ecf4;
+  border-radius: 16px;
+  padding: 12px;
+  text-decoration: none;
+}
+
+.mhp-action-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #e4ecf4;
+}
+
+.mhp-icon-primary { background: #1F74C9; }
+.mhp-icon-mint    { background: #2bb5a0; }
+
+.mhp-action-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0a1929;
+}
+
+.mhp-action-desc {
+  font-size: 12px;
+  color: #7a93a8;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+/* ── Driver section ──────────────────────────────────────────── */
+.mhp-driver-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mhp-driver-desc {
+  font-size: 13px;
+  color: #5b7282;
+  line-height: 1.55;
+}
+
+.mhp-driver-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mhp-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border-radius: 14px;
+  background: #1F74C9;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  text-align: center;
+}
+
+.mhp-btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border-radius: 14px;
+  border: 1.5px solid #1F74C9;
+  background: #eaf3ff;
+  color: #1F74C9;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  text-align: center;
+}
+
+/* ── Tablet / desktop tweaks ─────────────────────────────────── */
+@media (min-width: 640px) {
+  .mhp-hero {
+    flex-direction: row;
+    align-items: center;
+    min-height: 200px;
+  }
+
+  .mhp-hero-logo {
+    width: min(36vw, 240px);
+  }
+
+  .mhp-route-bar {
+    flex: 1;
+  }
+
+  .mhp-stats-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .mhp-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    align-items: start;
+  }
+
+  .mhp-book-card {
+    grid-column: 1 / -1;
+  }
+
+  .mhp-stats-row {
+    grid-column: 1 / -1;
   }
 }

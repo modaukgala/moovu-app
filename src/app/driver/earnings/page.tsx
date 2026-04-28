@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -8,6 +8,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
 
 type Wallet = {
   balance_due: number | null;
@@ -72,12 +73,6 @@ type CompletedTrip = {
   completed_at?: string | null;
 };
 
-const PLAN_PRICES = {
-  day: 45,
-  week: 100,
-  month: 250,
-} as const;
-
 const BANK_DETAILS = {
   bankName: "NEDBANK",
   accountName: "Current Account",
@@ -86,7 +81,7 @@ const BANK_DETAILS = {
 };
 
 type ModalType = "subscription" | "commission" | "combined" | null;
-type PlanType = "day" | "week" | "month";
+type PlanType = DriverSubscriptionPlan;
 
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
@@ -123,15 +118,15 @@ export default function DriverEarningsPage() {
   const [popFile, setPopFile] = useState<File | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
-  async function getToken() {
+  const getToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
 
     return session?.access_token || "";
-  }
+  }, []);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setMsg(null);
 
@@ -164,7 +159,7 @@ export default function DriverEarningsPage() {
     setSubscriptionPayments(json.earnings?.subscription_payments ?? []);
     setTrips(json.earnings?.recent_completed_trips ?? []);
     setLoading(false);
-  }
+  }, [getToken]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -172,14 +167,14 @@ export default function DriverEarningsPage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadData]);
 
   const driverName = useMemo(() => {
     return `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
   }, [driver]);
 
   const commissionDue = Number(wallet?.balance_due ?? 0);
-  const subscriptionSelectedPrice = PLAN_PRICES[selectedPlan];
+  const subscriptionSelectedPrice = DRIVER_SUBSCRIPTION_PLANS[selectedPlan].amount;
   const totalDue = modalType === "combined" ? commissionDue + subscriptionSelectedPrice : 0;
 
   const now = useMemo(() => new Date(), []);
@@ -380,19 +375,19 @@ export default function DriverEarningsPage() {
                   className={`border rounded-xl px-3 py-2 ${selectedPlan === "day" ? "font-semibold" : ""}`}
                   onClick={() => setSelectedPlan("day")}
                 >
-                  Day {money(45)}
+                  {DRIVER_SUBSCRIPTION_PLANS.day.label} {money(DRIVER_SUBSCRIPTION_PLANS.day.amount)}
                 </button>
                 <button
                   className={`border rounded-xl px-3 py-2 ${selectedPlan === "week" ? "font-semibold" : ""}`}
                   onClick={() => setSelectedPlan("week")}
                 >
-                  Week {money(100)}
+                  {DRIVER_SUBSCRIPTION_PLANS.week.label} {money(DRIVER_SUBSCRIPTION_PLANS.week.amount)}
                 </button>
                 <button
                   className={`border rounded-xl px-3 py-2 ${selectedPlan === "month" ? "font-semibold" : ""}`}
                   onClick={() => setSelectedPlan("month")}
                 >
-                  Month {money(250)}
+                  {DRIVER_SUBSCRIPTION_PLANS.month.label} {money(DRIVER_SUBSCRIPTION_PLANS.month.amount)}
                 </button>
               </div>
               <div className="text-xl font-semibold">{money(subscriptionSelectedPrice)}</div>

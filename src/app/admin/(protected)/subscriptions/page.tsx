@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
@@ -42,15 +42,15 @@ export default function AdminSubscriptionsPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
 
     return session?.access_token ?? null;
-  }
+  }, []);
 
-  async function loadDrivers() {
+  const loadDrivers = useCallback(async () => {
     setMsg(null);
 
     const token = await getAccessToken();
@@ -78,9 +78,9 @@ export default function AdminSubscriptionsPage() {
     }
 
     setDrivers(json.drivers ?? []);
-  }
+  }, [getAccessToken, q]);
 
-  async function loadHistory(driverId: string) {
+  const loadHistory = useCallback(async (driverId: string) => {
     const token = await getAccessToken();
     if (!token) {
       setHistory([]);
@@ -104,7 +104,7 @@ export default function AdminSubscriptionsPage() {
       setHistory([]);
       setMsg(json.error || "Failed to load subscription history");
     }
-  }
+  }, [getAccessToken]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -112,7 +112,7 @@ export default function AdminSubscriptionsPage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadDrivers]);
 
   const selectedLabel = useMemo(() => {
     if (!selected) return "";
@@ -256,9 +256,9 @@ export default function AdminSubscriptionsPage() {
                   onChange={(e) => setPlan(e.target.value)}
                 >
                   <option value="">Keep existing plan</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
+                  <option value="day">Daily R45</option>
+                  <option value="week">Weekly R100</option>
+                  <option value="month">Monthly R250</option>
                 </select>
               </div>
 

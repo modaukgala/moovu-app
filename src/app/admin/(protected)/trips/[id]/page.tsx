@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -46,9 +46,9 @@ export default function TripDetailPage() {
   const [events, setEvents] = useState<TripEvent[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tick, setTick] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     setLoading(true);
 
     const { data: t } = await supabaseClient.from("trips").select("*").eq("id", tripId).single();
@@ -65,31 +65,32 @@ export default function TripDetailPage() {
       .in("status", ["approved", "active"])
       .order("created_at", { ascending: false });
 
-    setTrip((t as any) ?? null);
-    setEvents((ev as any) ?? []);
-    setDrivers((dr as any) ?? []);
+    setTrip((t as Trip | null) ?? null);
+    setEvents((ev as TripEvent[] | null) ?? []);
+    setDrivers((dr as Driver[] | null) ?? []);
     setLoading(false);
-  }
-
-  useEffect(() => {
-    loadAll();
   }, [tripId]);
 
   useEffect(() => {
-    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    const initialLoad = window.setTimeout(() => {
+      void loadAll();
+    }, 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [loadAll]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const driverLabel = useMemo(() => {
-    if (!trip?.driver_id) return "Unassigned";
-    const d = drivers.find((x) => x.id === trip.driver_id);
-    return d ? `${d.first_name} ${d.last_name} (${d.phone})` : trip.driver_id;
-  }, [drivers, trip?.driver_id]);
-
-  const offerSecondsLeft = useMemo(() => {
-    if (!trip?.offer_expires_at) return null;
-    return Math.ceil((new Date(trip.offer_expires_at).getTime() - Date.now()) / 1000);
-  }, [trip?.offer_expires_at, tick]);
+  const driverId = trip?.driver_id ?? null;
+  const assignedDriver = driverId ? drivers.find((x) => x.id === driverId) : null;
+  const driverLabel = assignedDriver
+    ? `${assignedDriver.first_name} ${assignedDriver.last_name} (${assignedDriver.phone})`
+    : driverId ?? "Unassigned";
+  const offerSecondsLeft = trip?.offer_expires_at
+    ? Math.ceil((new Date(trip.offer_expires_at).getTime() - nowMs) / 1000)
+    : null;
 
   async function offerNearest(exclude: string[] = []) {
     if (!trip) return;

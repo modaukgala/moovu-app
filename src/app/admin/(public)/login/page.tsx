@@ -14,7 +14,8 @@ export default function AdminLoginPage() {
     const params = new URLSearchParams(window.location.search);
     const rawNext = params.get("next");
     if (rawNext && rawNext.startsWith("/")) {
-      setNextPath(rawNext);
+      const timer = window.setTimeout(() => setNextPath(rawNext), 0);
+      return () => window.clearTimeout(timer);
     }
   }, []);
 

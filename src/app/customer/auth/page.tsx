@@ -19,6 +19,10 @@ type CheckPhoneResponse = {
   error?: string;
 };
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function CustomerAuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,8 +84,8 @@ export default function CustomerAuthPage() {
         setLastName("");
         setStep("signup");
       }
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to check customer account.");
+    } catch (e: unknown) {
+      setMsg(errorMessage(e, "Failed to check customer account."));
     }
 
     setBusy(false);
@@ -117,8 +121,8 @@ export default function CustomerAuthPage() {
       }
 
       router.push(nextPath);
-    } catch (e: any) {
-      setMsg(e?.message || "Login failed.");
+    } catch (e: unknown) {
+      setMsg(errorMessage(e, "Login failed."));
     }
 
     setBusy(false);
@@ -179,8 +183,8 @@ export default function CustomerAuthPage() {
       }
 
       router.push(nextPath);
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to create your account.");
+    } catch (e: unknown) {
+      setMsg(errorMessage(e, "Failed to create your account."));
     }
 
     setBusy(false);

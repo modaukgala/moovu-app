@@ -16,43 +16,25 @@ import { supabaseClient } from "@/lib/supabase/client";
 
 type CustomerMe = {
   ok: boolean;
-  customer?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    phone: string;
-  };
+  customer?: { id: string; first_name: string; last_name: string; phone: string };
   error?: string;
 };
 
-type Prediction = {
-  description: string;
-  place_id: string;
-};
-
+type Prediction = { description: string; place_id: string };
 type LocationKind = "pickup" | "dropoff";
+type ResolvedLocation = { address: string; placeId: string; lat: number; lng: number };
 
-type ResolvedLocation = {
-  address: string;
-  placeId: string;
-  lat: number;
-  lng: number;
-};
-
-// TASK 4 — ride option definition
 const DEFAULT_CENTER = { lat: -26.188, lng: 28.3206 };
 
-function money(value: number | null | undefined) {
-  return value == null ? "R--" : `R${Math.round(Number(value))}`;
-}
+// Bottom-sheet snap positions (% of viewport height the sheet top sits at)
+const SNAP_COLLAPSED = 72;  // only inputs + confirm visible — map takes ~72% screen
+const SNAP_EXPANDED  = 8;   // full details — sheet nearly full screen
 
-function formatDistance(value: number | null) {
-  return value == null ? "--" : `${value} km`;
+function money(v: number | null | undefined) {
+  return v == null ? "R--" : `R${Math.round(Number(v))}`;
 }
-
-function formatDuration(value: number | null) {
-  return value == null ? "--" : `${value} min`;
-}
+function fmtDist(v: number | null) { return v == null ? "--" : `${v} km`; }
+function fmtDur(v: number | null)  { return v == null ? "--" : `${v} min`; }
 
 export default function RiderBookingPage() {
   const router = useRouter();
@@ -62,10 +44,8 @@ export default function RiderBookingPage() {
 
   const [pickupAddress, setPickupAddress] = useState("");
   const [dropoffAddress, setDropoffAddress] = useState("");
-
   const [pickupPlaceId, setPickupPlaceId] = useState("");
   const [dropoffPlaceId, setDropoffPlaceId] = useState("");
-
   const [pickupLat, setPickupLat] = useState<number | null>(null);
   const [pickupLng, setPickupLng] = useState<number | null>(null);
   const [dropoffLat, setDropoffLat] = useState<number | null>(null);
@@ -73,14 +53,11 @@ export default function RiderBookingPage() {
 
   const [pickupPredictions, setPickupPredictions] = useState<Prediction[]>([]);
   const [dropoffPredictions, setDropoffPredictions] = useState<Prediction[]>([]);
-
   const [pickupLoading, setPickupLoading] = useState(false);
   const [dropoffLoading, setDropoffLoading] = useState(false);
-
   const [showPickupDropdown, setShowPickupDropdown] = useState(false);
   const [showDropoffDropdown, setShowDropoffDropdown] = useState(false);
 
-  // TASK 2 — inline resolution states
   const [pickupError, setPickupError] = useState<string | null>(null);
   const [dropoffError, setDropoffError] = useState<string | null>(null);
   const [pickupResolving, setPickupResolving] = useState(false);
@@ -89,10 +66,7 @@ export default function RiderBookingPage() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [rideType, setRideType] = useState<"now" | "scheduled">("now");
   const [scheduledFor, setScheduledFor] = useState("");
-
-  // TASK 4 — selected ride option
-  const [selectedRideOption, setSelectedRideOption] =
-    useState<RideOptionId>(DEFAULT_RIDE_OPTION_ID);
+  const [selectedRideOption, setSelectedRideOption] = useState<RideOptionId>(DEFAULT_RIDE_OPTION_ID);
 
   const [busy, setBusy] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -100,65 +74,105 @@ export default function RiderBookingPage() {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [baseFare, setBaseFare] = useState<number | null>(null);
-
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [routeVisible, setRouteVisible] = useState(false);
+
+  // ── Bottom sheet drag state ──────────────────────────────────────
+  const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">("collapsed");
+  const [dragY, setDragY] = useState<number | null>(null); // live drag offset in px
+  const dragStartYRef = useRef<number>(0);
+  const dragStartSnapRef = useRef<"collapsed" | "expanded">("collapsed");
+  const isDraggingRef = useRef(false);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
 
   const pickupBoxRef = useRef<HTMLDivElement | null>(null);
   const dropoffBoxRef = useRef<HTMLDivElement | null>(null);
   const pickupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCalculatedKeyRef = useRef("");
-
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
 
-  // TASK 4 — fare adjusted by ride option multiplier
+  const bothLocationsSet = pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null;
+
   const fare = useMemo(() => {
     if (distanceKm == null || durationMin == null) return null;
-    return calculateTripFare({
-      distanceKm,
-      durationMin,
-      rideOptionId: selectedRideOption,
-    }).totalFare;
+    return calculateTripFare({ distanceKm, durationMin, rideOptionId: selectedRideOption }).totalFare;
   }, [distanceKm, durationMin, selectedRideOption]);
 
-  const canCalculate = useMemo(() => {
-    return (
-      !!pickupAddress.trim() &&
-      !!dropoffAddress.trim() &&
-      pickupLat != null &&
-      pickupLng != null &&
-      dropoffLat != null &&
-      dropoffLng != null
-    );
-  }, [pickupAddress, dropoffAddress, pickupLat, pickupLng, dropoffLat, dropoffLng]);
+  const canCalculate = useMemo(() => (
+    !!pickupAddress.trim() && !!dropoffAddress.trim() &&
+    pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null
+  ), [pickupAddress, dropoffAddress, pickupLat, pickupLng, dropoffLat, dropoffLng]);
 
   const routeKey = useMemo(() => {
     if (!canCalculate) return "";
     return [pickupAddress.trim(), dropoffAddress.trim(), pickupLat, pickupLng, dropoffLat, dropoffLng].join("|");
   }, [canCalculate, pickupAddress, dropoffAddress, pickupLat, pickupLng, dropoffLat, dropoffLng]);
 
-  const canSubmit = useMemo(() => {
-    if (!customer) return false;
-    if (!canCalculate) return false;
-    if (distanceKm == null || durationMin == null || fare == null) return false;
-    if (rideType === "scheduled" && !scheduledFor) return false;
-    return true;
-  }, [customer, canCalculate, distanceKm, durationMin, fare, rideType, scheduledFor]);
+  const canSubmit = useMemo(() => (
+    !!customer && canCalculate && distanceKm != null && durationMin != null && fare != null &&
+    !(rideType === "scheduled" && !scheduledFor)
+  ), [customer, canCalculate, distanceKm, durationMin, fare, rideType, scheduledFor]);
 
   const progressText = useMemo(() => {
     if (!pickupAddress.trim()) return "Set your pickup point";
     if (!dropoffAddress.trim()) return "Add your destination";
     if (!canCalculate) return "Resolving locations\u2026";
     if (fare == null) return "Calculating your fare";
-    return routeVisible ? "Route ready" : "Trip details ready";
+    return routeVisible ? "Route ready \u2014 swipe up for options" : "Trip details ready";
   }, [canCalculate, dropoffAddress, fare, pickupAddress, routeVisible]);
 
+  // ── Sheet snap position in % of window height ───────────────────
+  const sheetTopPct = sheetSnap === "collapsed" ? SNAP_COLLAPSED : SNAP_EXPANDED;
+
+  // Live top px while dragging
+  const sheetTopPx = useMemo(() => {
+    if (typeof window === "undefined") return `${sheetTopPct}vh`;
+    const basePx = (sheetTopPct / 100) * window.innerHeight;
+    return dragY != null ? `${basePx + dragY}px` : `${sheetTopPct}vh`;
+  }, [sheetTopPct, dragY]);
+
+  // ── Drag handlers ────────────────────────────────────────────────
+  function onDragStart(clientY: number) {
+    isDraggingRef.current = true;
+    dragStartYRef.current = clientY;
+    dragStartSnapRef.current = sheetSnap;
+    setDragY(0);
+  }
+
+  function onDragMove(clientY: number) {
+    if (!isDraggingRef.current) return;
+    setDragY(clientY - dragStartYRef.current);
+  }
+
+  function onDragEnd(clientY: number) {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    const delta = clientY - dragStartYRef.current;
+    setDragY(null);
+
+    // Swipe up (negative delta) → expand; swipe down → collapse
+    if (delta < -40) {
+      setSheetSnap("expanded");
+    } else if (delta > 40) {
+      setSheetSnap("collapsed");
+    }
+    // else snap back to current
+  }
+
+  // Auto-expand when both locations set and fare calculated
+  useEffect(() => {
+    if (bothLocationsSet && fare != null) {
+      setSheetSnap("expanded");
+    }
+  }, [bothLocationsSet, fare]);
+
+  // ── Auth ─────────────────────────────────────────────────────────
   async function getAccessToken() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     return session?.access_token || "";
@@ -167,23 +181,14 @@ export default function RiderBookingPage() {
   async function loadCustomer() {
     setAuthLoading(true);
     const { data: { session } } = await supabaseClient.auth.getSession();
-
-    if (!session) {
-      router.replace("/customer/auth?next=/book");
-      return;
-    }
+    if (!session) { router.replace("/customer/auth?next=/book"); return; }
 
     const res = await fetch("/api/customer/me", {
       cache: "no-store",
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
-
     const json = (await res.json()) as CustomerMe;
-
-    if (!json?.ok || !json.customer) {
-      router.replace("/customer/auth?next=/book");
-      return;
-    }
+    if (!json?.ok || !json.customer) { router.replace("/customer/auth?next=/book"); return; }
 
     setCustomer(json.customer);
     setAuthLoading(false);
@@ -194,194 +199,90 @@ export default function RiderBookingPage() {
     router.push("/customer/auth");
   }
 
+  // ── Location helpers ─────────────────────────────────────────────
   function resetRouteState() {
-    setDistanceKm(null);
-    setDurationMin(null);
-    setBaseFare(null);
-    setRouteVisible(false);
-    lastCalculatedKeyRef.current = "";
+    setDistanceKm(null); setDurationMin(null); setBaseFare(null);
+    setRouteVisible(false); lastCalculatedKeyRef.current = "";
   }
 
   function clearPickupSelection() {
-    setPickupPlaceId("");
-    setPickupLat(null);
-    setPickupLng(null);
-    setPickupError(null);
-    resetRouteState();
+    setPickupPlaceId(""); setPickupLat(null); setPickupLng(null);
+    setPickupError(null); resetRouteState();
   }
 
   function clearDropoffSelection() {
-    setDropoffPlaceId("");
-    setDropoffLat(null);
-    setDropoffLng(null);
-    setDropoffError(null);
-    resetRouteState();
+    setDropoffPlaceId(""); setDropoffLat(null); setDropoffLng(null);
+    setDropoffError(null); resetRouteState();
   }
 
-  async function reverseGeocode(lat: number, lng: number): Promise<{
-    ok: boolean;
-    address?: string;
-    error?: string;
-  } | null> {
+  async function reverseGeocode(lat: number, lng: number) {
     const res = await fetch("/api/maps/reverse-geocode", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lat, lng }),
     });
     return res.json().catch(() => null);
   }
 
   function getLocationErrorMessage(error: GeolocationPositionError) {
-    if (error.code === error.PERMISSION_DENIED) {
-      return "Location permission is blocked. Allow location access for MOOVU in your browser or app settings, then tap Use my location again.";
-    }
-
-    if (error.code === error.POSITION_UNAVAILABLE) {
-      return "MOOVU could not detect your current GPS position. Check that location services are enabled, or type your pickup address.";
-    }
-
-    if (error.code === error.TIMEOUT) {
-      return "MOOVU is taking too long to detect your location. Try again, move to an open area, or type your pickup address.";
-    }
-
-    return "MOOVU could not detect your current location. Type your pickup address or try again.";
+    if (error.code === error.PERMISSION_DENIED)
+      return "Location permission is blocked. Allow location access for MOOVU in your browser or app settings.";
+    if (error.code === error.POSITION_UNAVAILABLE)
+      return "MOOVU could not detect your GPS position. Enable location services or type your pickup.";
+    if (error.code === error.TIMEOUT)
+      return "Location detection timed out. Try again or type your pickup address.";
+    return "MOOVU could not detect your location. Type your pickup or try again.";
   }
 
-  function isGeolocationPositionError(error: unknown): error is GeolocationPositionError {
-    return (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      typeof (error as { code?: unknown }).code === "number"
-    );
+  function isGeolocationPositionError(e: unknown): e is GeolocationPositionError {
+    return typeof e === "object" && e !== null && "code" in e && typeof (e as { code?: unknown }).code === "number";
   }
 
-  function requestCurrentPosition() {
-    return new Promise<GeolocationPosition>((resolve, reject: (error: GeolocationPositionError) => void) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 60000,
-      });
-    });
-  }
-
-  // TASK 2 — resolve typed text via autocomplete + geocode, auto-selecting first result
-  async function resolveTypedLocation(
-    kind: LocationKind,
-    text: string
-  ): Promise<ResolvedLocation | null> {
+  async function resolveTypedLocation(kind: LocationKind, text: string): Promise<ResolvedLocation | null> {
     const input = text.trim();
     if (!input) return null;
 
-    if (kind === "pickup" && pickupLat != null && pickupLng != null) {
-      return {
-        address: pickupAddress.trim(),
-        placeId: pickupPlaceId,
-        lat: pickupLat,
-        lng: pickupLng,
-      };
-    }
-
-    if (kind === "dropoff" && dropoffLat != null && dropoffLng != null) {
-      return {
-        address: dropoffAddress.trim(),
-        placeId: dropoffPlaceId,
-        lat: dropoffLat,
-        lng: dropoffLng,
-      };
-    }
+    if (kind === "pickup" && pickupLat != null && pickupLng != null)
+      return { address: pickupAddress.trim(), placeId: pickupPlaceId, lat: pickupLat, lng: pickupLng };
+    if (kind === "dropoff" && dropoffLat != null && dropoffLng != null)
+      return { address: dropoffAddress.trim(), placeId: dropoffPlaceId, lat: dropoffLat, lng: dropoffLng };
 
     if (kind === "pickup") { setPickupResolving(true); setPickupError(null); }
     else { setDropoffResolving(true); setDropoffError(null); }
 
-    if (kind === "pickup") {
-      if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
-      setPickupPredictions([]);
-      setShowPickupDropdown(false);
-    } else {
-      if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
-      setDropoffPredictions([]);
-      setShowDropoffDropdown(false);
-    }
+    if (kind === "pickup") { if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current); setPickupPredictions([]); setShowPickupDropdown(false); }
+    else { if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current); setDropoffPredictions([]); setShowDropoffDropdown(false); }
 
     try {
-      // Try autocomplete -> place-details first
       const acRes = await fetch("/api/maps/autocomplete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }),
       });
       const acJson = await acRes.json().catch(() => null);
 
       if (acJson?.ok && acJson.predictions?.length > 0) {
         const first = acJson.predictions[0] as Prediction;
         const detailRes = await fetch("/api/maps/place-details", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ place_id: first.place_id }),
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ place_id: first.place_id }),
         });
         const detail = await detailRes.json().catch(() => null);
 
         if (detail?.ok && typeof detail.lat === "number" && typeof detail.lng === "number") {
-          const resolved = {
-            address: detail.formatted_address || first.description,
-            placeId: detail.place_id || first.place_id,
-            lat: detail.lat,
-            lng: detail.lng,
-          };
-
-          if (kind === "pickup") {
-            setPickupAddress(resolved.address);
-            setPickupPlaceId(resolved.placeId);
-            setPickupLat(detail.lat);
-            setPickupLng(detail.lng);
-            setPickupPredictions([]);
-            setShowPickupDropdown(false);
-          } else {
-            setDropoffAddress(resolved.address);
-            setDropoffPlaceId(resolved.placeId);
-            setDropoffLat(detail.lat);
-            setDropoffLng(detail.lng);
-            setDropoffPredictions([]);
-            setShowDropoffDropdown(false);
-          }
+          const resolved = { address: detail.formatted_address || first.description, placeId: detail.place_id || first.place_id, lat: detail.lat, lng: detail.lng };
+          if (kind === "pickup") { setPickupAddress(resolved.address); setPickupPlaceId(resolved.placeId); setPickupLat(detail.lat); setPickupLng(detail.lng); setPickupPredictions([]); setShowPickupDropdown(false); }
+          else { setDropoffAddress(resolved.address); setDropoffPlaceId(resolved.placeId); setDropoffLat(detail.lat); setDropoffLng(detail.lng); setDropoffPredictions([]); setShowDropoffDropdown(false); }
           resetRouteState();
           return resolved;
         }
       }
 
-      // Fallback to geocode endpoint
       const geoRes = await fetch("/api/maps/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ place: input }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ place: input }),
       });
       const geo = await geoRes.json().catch(() => null);
 
       if (geo?.ok && typeof geo.lat === "number" && typeof geo.lng === "number") {
-        const resolved = {
-          address: geo.address || input,
-          placeId: "",
-          lat: geo.lat,
-          lng: geo.lng,
-        };
-
-        if (kind === "pickup") {
-          setPickupAddress(resolved.address);
-          setPickupPlaceId("");
-          setPickupLat(geo.lat);
-          setPickupLng(geo.lng);
-          setPickupPredictions([]);
-          setShowPickupDropdown(false);
-        } else {
-          setDropoffAddress(resolved.address);
-          setDropoffPlaceId("");
-          setDropoffLat(geo.lat);
-          setDropoffLng(geo.lng);
-          setDropoffPredictions([]);
-          setShowDropoffDropdown(false);
-        }
+        const resolved = { address: geo.address || input, placeId: "", lat: geo.lat, lng: geo.lng };
+        if (kind === "pickup") { setPickupAddress(resolved.address); setPickupPlaceId(""); setPickupLat(geo.lat); setPickupLng(geo.lng); setPickupPredictions([]); setShowPickupDropdown(false); }
+        else { setDropoffAddress(resolved.address); setDropoffPlaceId(""); setDropoffLat(geo.lat); setDropoffLng(geo.lng); setDropoffPredictions([]); setShowDropoffDropdown(false); }
         resetRouteState();
         return resolved;
       }
@@ -396,58 +297,32 @@ export default function RiderBookingPage() {
   }
 
   async function useCurrentLocation() {
-    setMsg(null);
-    setPickupError(null);
-
-    if (typeof window === "undefined" || !navigator.geolocation) {
-      setMsg("This device/browser does not support location.");
-      return;
-    }
-
+    setMsg(null); setPickupError(null);
+    if (typeof window === "undefined" || !navigator.geolocation) { setMsg("This device does not support location."); return; }
     setLocationLoading(true);
 
     try {
-      const permission = await navigator.permissions
-        ?.query({ name: "geolocation" as PermissionName })
-        .catch(() => null);
-
+      const permission = await navigator.permissions?.query({ name: "geolocation" as PermissionName }).catch(() => null);
       if (permission?.state === "denied") {
-        const message =
-          "Location permission is blocked. Allow location access for MOOVU in your browser or app settings, then tap Use my location again.";
-        setPickupError(message);
-        setMsg(message);
+        setPickupError("Location permission is blocked. Allow it in browser settings.");
         return;
       }
 
-      const position = await requestCurrentPosition();
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-      const fallbackAddress = `Current location (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 })
+      );
 
-      setPickupLat(lat);
-      setPickupLng(lng);
-      setPickupPlaceId("");
-      setPickupPredictions([]);
-      setShowPickupDropdown(false);
-      setPickupError(null);
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      setPickupLat(lat); setPickupLng(lng); setPickupPlaceId("");
+      setPickupPredictions([]); setShowPickupDropdown(false); setPickupError(null);
       resetRouteState();
 
       const json = await reverseGeocode(lat, lng).catch(() => null);
-      const address = json?.ok && json.address ? json.address : fallbackAddress;
-
-      setPickupAddress(address);
-      setMsg(
-        json?.ok
-          ? "Current pickup location detected."
-          : "Location detected. Address name could not be resolved, but GPS is saved."
-      );
-    } catch (error) {
-      const message = isGeolocationPositionError(error)
-        ? getLocationErrorMessage(error)
-        : "MOOVU could not detect your current location. Type your pickup address or try again.";
-
-      setPickupError(message);
-      setMsg(message);
+      setPickupAddress(json?.ok && json.address ? json.address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    } catch (e) {
+      const msg = isGeolocationPositionError(e) ? getLocationErrorMessage(e) : "Could not detect location.";
+      setPickupError(msg); setMsg(msg);
     } finally {
       setLocationLoading(false);
     }
@@ -459,27 +334,18 @@ export default function RiderBookingPage() {
       else { setDropoffPredictions([]); setShowDropoffDropdown(false); setDropoffLoading(false); }
       return;
     }
-
     if (kind === "pickup") setPickupLoading(true);
     if (kind === "dropoff") setDropoffLoading(true);
 
     try {
-      const res = await fetch("/api/maps/autocomplete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input }),
-      });
-
+      const res = await fetch("/api/maps/autocomplete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }) });
       const json = await res.json().catch(() => null);
-
       if (!json?.ok) {
         if (kind === "pickup") { setPickupPredictions([]); setShowPickupDropdown(false); }
         else { setDropoffPredictions([]); setShowDropoffDropdown(false); }
         return;
       }
-
       const predictions = (json.predictions ?? []) as Prediction[];
-
       if (kind === "pickup") { setPickupPredictions(predictions); setShowPickupDropdown(predictions.length > 0); }
       else { setDropoffPredictions(predictions); setShowDropoffDropdown(predictions.length > 0); }
     } finally {
@@ -489,342 +355,196 @@ export default function RiderBookingPage() {
   }
 
   function onPickupInputChange(value: string) {
-    setPickupAddress(value);
-    clearPickupSelection();
+    setPickupAddress(value); clearPickupSelection();
     if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
     pickupTimerRef.current = setTimeout(() => { void fetchPredictions("pickup", value); }, 250);
   }
 
   function onDropoffInputChange(value: string) {
-    setDropoffAddress(value);
-    clearDropoffSelection();
+    setDropoffAddress(value); clearDropoffSelection();
     if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
     dropoffTimerRef.current = setTimeout(() => { void fetchPredictions("dropoff", value); }, 250);
   }
 
-  // TASK 2 — resolve on blur if not already resolved
   async function onPickupBlur() {
     setShowPickupDropdown(false);
-    if (pickupAddress.trim() && pickupLat == null) {
-      await resolveTypedLocation("pickup", pickupAddress);
-    }
+    if (pickupAddress.trim() && pickupLat == null) await resolveTypedLocation("pickup", pickupAddress);
   }
 
   async function onDropoffBlur() {
     setShowDropoffDropdown(false);
-    if (dropoffAddress.trim() && dropoffLat == null) {
-      await resolveTypedLocation("dropoff", dropoffAddress);
-    }
+    if (dropoffAddress.trim() && dropoffLat == null) await resolveTypedLocation("dropoff", dropoffAddress);
   }
 
   async function choosePlace(kind: "pickup" | "dropoff", placeId: string, description: string) {
     setMsg(null);
-
-    const res = await fetch("/api/maps/place-details", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ place_id: placeId }),
-    });
-
+    const res = await fetch("/api/maps/place-details", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ place_id: placeId }) });
     const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to load place details.");
-      return;
-    }
+    if (!json?.ok) { setMsg(json?.error || "Failed to load place details."); return; }
 
     if (kind === "pickup") {
-      setPickupAddress(json.formatted_address || description);
-      setPickupPlaceId(json.place_id || placeId);
-      setPickupLat(typeof json.lat === "number" ? json.lat : null);
-      setPickupLng(typeof json.lng === "number" ? json.lng : null);
-      setPickupPredictions([]);
-      setShowPickupDropdown(false);
-      setPickupError(null);
+      setPickupAddress(json.formatted_address || description); setPickupPlaceId(json.place_id || placeId);
+      setPickupLat(typeof json.lat === "number" ? json.lat : null); setPickupLng(typeof json.lng === "number" ? json.lng : null);
+      setPickupPredictions([]); setShowPickupDropdown(false); setPickupError(null);
     } else {
-      setDropoffAddress(json.formatted_address || description);
-      setDropoffPlaceId(json.place_id || placeId);
-      setDropoffLat(typeof json.lat === "number" ? json.lat : null);
-      setDropoffLng(typeof json.lng === "number" ? json.lng : null);
-      setDropoffPredictions([]);
-      setShowDropoffDropdown(false);
-      setDropoffError(null);
+      setDropoffAddress(json.formatted_address || description); setDropoffPlaceId(json.place_id || placeId);
+      setDropoffLat(typeof json.lat === "number" ? json.lat : null); setDropoffLng(typeof json.lng === "number" ? json.lng : null);
+      setDropoffPredictions([]); setShowDropoffDropdown(false); setDropoffError(null);
     }
-
     resetRouteState();
   }
 
   function currentResolvedLocation(kind: LocationKind): ResolvedLocation | null {
     if (kind === "pickup") {
       if (pickupLat == null || pickupLng == null) return null;
-      return {
-        address: pickupAddress.trim(),
-        placeId: pickupPlaceId,
-        lat: pickupLat,
-        lng: pickupLng,
-      };
+      return { address: pickupAddress.trim(), placeId: pickupPlaceId, lat: pickupLat, lng: pickupLng };
     }
-
     if (dropoffLat == null || dropoffLng == null) return null;
-    return {
-      address: dropoffAddress.trim(),
-      placeId: dropoffPlaceId,
-      lat: dropoffLat,
-      lng: dropoffLng,
-    };
+    return { address: dropoffAddress.trim(), placeId: dropoffPlaceId, lat: dropoffLat, lng: dropoffLng };
   }
 
   async function ensureResolvedRoute() {
-    const pickup =
-      currentResolvedLocation("pickup") ?? (await resolveTypedLocation("pickup", pickupAddress));
-    const dropoff =
-      currentResolvedLocation("dropoff") ?? (await resolveTypedLocation("dropoff", dropoffAddress));
-
-    if (!pickup) {
-      setPickupError("Please choose a valid pickup location.");
-      return null;
-    }
-
-    if (!dropoff) {
-      setDropoffError("Please choose a valid destination.");
-      return null;
-    }
-
+    const pickup = currentResolvedLocation("pickup") ?? (await resolveTypedLocation("pickup", pickupAddress));
+    const dropoff = currentResolvedLocation("dropoff") ?? (await resolveTypedLocation("dropoff", dropoffAddress));
+    if (!pickup) { setPickupError("Please choose a valid pickup location."); return null; }
+    if (!dropoff) { setDropoffError("Please choose a valid destination."); return null; }
     return { pickup, dropoff };
   }
 
   async function calculateTrip(options?: { silent?: boolean }) {
     const silent = options?.silent ?? false;
     if (!silent) setMsg(null);
-
-    if (!pickupAddress.trim() || !dropoffAddress.trim()) {
-      if (!silent) setMsg("Pickup and destination are required.");
-      return null;
-    }
+    if (!pickupAddress.trim() || !dropoffAddress.trim()) { if (!silent) setMsg("Pickup and destination are required."); return null; }
 
     const route = await ensureResolvedRoute();
+    if (!route) { if (!silent) setMsg("Please choose valid pickup and destination locations."); return null; }
 
-    if (!route) {
-      if (!silent) setMsg("Please choose valid pickup and destination locations.");
-      return null;
-    }
+    const payload = route.pickup.placeId && route.dropoff.placeId
+      ? { origin_place_id: route.pickup.placeId, destination_place_id: route.dropoff.placeId }
+      : { origin_lat: route.pickup.lat, origin_lng: route.pickup.lng, destination_lat: route.dropoff.lat, destination_lng: route.dropoff.lng };
 
-    const payload =
-      route.pickup.placeId && route.dropoff.placeId
-        ? { origin_place_id: route.pickup.placeId, destination_place_id: route.dropoff.placeId }
-        : {
-            origin_lat: route.pickup.lat,
-            origin_lng: route.pickup.lng,
-            destination_lat: route.dropoff.lat,
-            destination_lng: route.dropoff.lng,
-          };
-
-    const res = await fetch("/api/maps/distance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
+    const res = await fetch("/api/maps/distance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      if (!silent) setMsg(json?.error || "Could not calculate trip distance.");
-      return null;
-    }
+    if (!json?.ok) { if (!silent) setMsg(json?.error || "Could not calculate trip distance."); return null; }
 
     const km = Number(json.distanceKm ?? 0);
     const mins = Number(json.durationMin ?? 0);
-    const estimatedFare = calculateTripFare({
-      distanceKm: km,
-      durationMin: mins,
-      rideOptionId: DEFAULT_RIDE_OPTION_ID,
-    });
-
-    const roundedDistanceKm = Number(km.toFixed(2));
-    const roundedDurationMin = Math.ceil(mins);
-
-    setDistanceKm(roundedDistanceKm);
-    setDurationMin(roundedDurationMin);
-    setBaseFare(estimatedFare.totalFare);
-
-    return {
-      distanceKm: roundedDistanceKm,
-      durationMin: roundedDurationMin,
-    };
+    const est = calculateTripFare({ distanceKm: km, durationMin: mins, rideOptionId: DEFAULT_RIDE_OPTION_ID });
+    const roundedKm = Number(km.toFixed(2));
+    const roundedMins = Math.ceil(mins);
+    setDistanceKm(roundedKm); setDurationMin(roundedMins); setBaseFare(est.totalFare);
+    return { distanceKm: roundedKm, durationMin: roundedMins };
   }
 
   async function submitBooking() {
     setMsg(null);
-
     if (!customer) { setMsg("Your customer account could not be loaded."); return; }
     if (!pickupAddress.trim() || !dropoffAddress.trim()) { setMsg("Pickup and destination are required."); return; }
 
-    // TASK 2 — resolve unresolved inputs before submission
     const route = await ensureResolvedRoute();
+    if (!route) { setMsg("Please fix the location errors before confirming."); return; }
 
-    if (!route) {
-      setMsg("Please fix the location errors before confirming.");
-      return;
-    }
-
-    let bookingDistanceKm = distanceKm;
-    let bookingDurationMin = durationMin;
-
+    let bDistKm = distanceKm;
+    let bDurMin = durationMin;
     if (distanceKm == null || durationMin == null) {
-      const calculated = await calculateTrip({ silent: true });
-      if (!calculated) { setMsg("Waiting for fare calculation. Please try again."); return; }
-      bookingDistanceKm = calculated.distanceKm;
-      bookingDurationMin = calculated.durationMin;
+      const calc = await calculateTrip({ silent: true });
+      if (!calc) { setMsg("Waiting for fare calculation. Please try again."); return; }
+      bDistKm = calc.distanceKm; bDurMin = calc.durationMin;
     }
 
-    if (rideType === "scheduled" && !scheduledFor) {
-      setMsg("Please choose the scheduled pickup date and time.");
-      return;
-    }
-
+    if (rideType === "scheduled" && !scheduledFor) { setMsg("Please choose the scheduled pickup date and time."); return; }
     setBusy(true);
 
     try {
       const accessToken = await getAccessToken();
+      if (!accessToken) { router.replace("/customer/auth?next=/book"); return; }
 
-      if (!accessToken) {
-        router.replace("/customer/auth?next=/book");
-        return;
-      }
-
-      const finalFare =
-        bookingDistanceKm != null && bookingDurationMin != null
-          ? calculateTripFare({
-              distanceKm: bookingDistanceKm,
-              durationMin: bookingDurationMin,
-              rideOptionId: selectedRideOption,
-            }).totalFare
-          : fare ?? baseFare ?? 0;
+      const finalFare = bDistKm != null && bDurMin != null
+        ? calculateTripFare({ distanceKm: bDistKm, durationMin: bDurMin, rideOptionId: selectedRideOption }).totalFare
+        : fare ?? baseFare ?? 0;
       const rideOptionLabel = RIDE_OPTIONS.find((o) => o.id === selectedRideOption)?.name ?? "MOOVU Go";
 
       const res = await fetch("/api/customer/book-trip", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           pickupAddress: route.pickup.address || pickupAddress,
           dropoffAddress: route.dropoff.address || dropoffAddress,
-          pickupLat: route.pickup.lat,
-          pickupLng: route.pickup.lng,
-          dropoffLat: route.dropoff.lat,
-          dropoffLng: route.dropoff.lng,
-          paymentMethod,
-          distanceKm: bookingDistanceKm,
-          durationMin: bookingDurationMin,
-          rideType,
-          rideOption: selectedRideOption,
+          pickupLat: route.pickup.lat, pickupLng: route.pickup.lng,
+          dropoffLat: route.dropoff.lat, dropoffLng: route.dropoff.lng,
+          paymentMethod, distanceKm: bDistKm, durationMin: bDurMin,
+          rideType, rideOption: selectedRideOption,
           scheduledFor: rideType === "scheduled" ? scheduledFor : null,
-          fare_amount: finalFare,
-          notes: `Ride option: ${rideOptionLabel}`,
+          fare_amount: finalFare, notes: `Ride option: ${rideOptionLabel}`,
         }),
       });
 
       const json = await res.json().catch(() => null);
-
-      if (!json?.ok) {
-        setMsg(json?.error || "Could not create trip.");
-        setBusy(false);
-        return;
-      }
-
+      if (!json?.ok) { setMsg(json?.error || "Could not create trip."); setBusy(false); return; }
       const tripId = json?.tripId ?? json?.trip?.id;
-      if (tripId) {
-        window.location.href = `/ride/${tripId}`;
-        return;
-      }
-
-      setMsg(
-        rideType === "scheduled"
-          ? `Ride scheduled. Fare: ${money(finalFare)}`
-          : `Trip booked. Fare: ${money(finalFare)}`
-      );
+      if (tripId) { window.location.href = `/ride/${tripId}`; return; }
+      setMsg(rideType === "scheduled" ? `Ride scheduled. Fare: ${money(finalFare)}` : `Trip booked. Fare: ${money(finalFare)}`);
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : "Could not create trip.");
     }
-
     setBusy(false);
   }
 
+  // ── Map ──────────────────────────────────────────────────────────
   function clearMapVisuals() {
-    directionsRendererRef.current?.setMap(null);
-    directionsRendererRef.current = null;
+    directionsRendererRef.current?.setMap(null); directionsRendererRef.current = null;
     if (pickupMarkerRef.current) { pickupMarkerRef.current.setMap(null); pickupMarkerRef.current = null; }
     if (dropoffMarkerRef.current) { dropoffMarkerRef.current.setMap(null); dropoffMarkerRef.current = null; }
   }
 
   function ensureMap() {
     if (!mapRef.current || !window.google?.maps) return false;
-
     if (!mapInstanceRef.current) {
       mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-        center: DEFAULT_CENTER,
-        zoom: 12,
-        streetViewControl: false,
-        mapTypeControl: false,
-        fullscreenControl: false,
+        center: DEFAULT_CENTER, zoom: 12, streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
+        zoomControl: false, gestureHandling: "greedy",
       });
     }
-
     return true;
   }
 
   function renderPickupOnlyMap() {
     if (!ensureMap() || pickupLat == null || pickupLng == null) return;
     const map = mapInstanceRef.current!;
-    clearMapVisuals();
-    setRouteVisible(false);
+    clearMapVisuals(); setRouteVisible(false);
     const pickup = { lat: pickupLat, lng: pickupLng };
     pickupMarkerRef.current = new window.google.maps.Marker({ map, position: pickup, title: "Pickup" });
-    map.setCenter(pickup);
-    map.setZoom(15);
+    map.setCenter(pickup); map.setZoom(15);
   }
 
   function renderRouteMap() {
     if (!ensureMap() || pickupLat == null || pickupLng == null || dropoffLat == null || dropoffLng == null) return;
-
     const map = mapInstanceRef.current!;
     clearMapVisuals();
-
     pickupMarkerRef.current = new window.google.maps.Marker({ map, position: { lat: pickupLat, lng: pickupLng }, title: "Pickup" });
     dropoffMarkerRef.current = new window.google.maps.Marker({ map, position: { lat: dropoffLat, lng: dropoffLng }, title: "Destination" });
 
-    const directionsService = new window.google.maps.DirectionsService();
-    const directionsRenderer = new window.google.maps.DirectionsRenderer({
+    const svc = new window.google.maps.DirectionsService();
+    const renderer = new window.google.maps.DirectionsRenderer({
       suppressMarkers: true,
       polylineOptions: { strokeColor: "#1F74C9", strokeOpacity: 0.95, strokeWeight: 6 },
     });
+    renderer.setMap(map); directionsRendererRef.current = renderer;
 
-    directionsRenderer.setMap(map);
-    directionsRendererRef.current = directionsRenderer;
-
-    directionsService.route(
-      {
-        origin: { lat: pickupLat, lng: pickupLng },
-        destination: { lat: dropoffLat, lng: dropoffLng },
-        travelMode: window.google.maps.TravelMode.DRIVING,
-      },
+    svc.route(
+      { origin: { lat: pickupLat, lng: pickupLng }, destination: { lat: dropoffLat, lng: dropoffLng }, travelMode: window.google.maps.TravelMode.DRIVING },
       (result, status) => {
         if (status === window.google.maps.DirectionsStatus.OK && result) {
-          directionsRenderer.setDirections(result);
-          setRouteVisible(true);
-          return;
+          renderer.setDirections(result); setRouteVisible(true); return;
         }
         const bounds = new window.google.maps.LatLngBounds();
-        bounds.extend({ lat: pickupLat, lng: pickupLng });
-        bounds.extend({ lat: dropoffLat, lng: dropoffLng });
-        map.fitBounds(bounds);
-        setRouteVisible(false);
+        bounds.extend({ lat: pickupLat, lng: pickupLng }); bounds.extend({ lat: dropoffLat, lng: dropoffLng });
+        map.fitBounds(bounds); setRouteVisible(false);
       }
     );
   }
 
+  // ── Effects ──────────────────────────────────────────────────────
   useEffect(() => {
     loadCustomer();
 
@@ -833,9 +553,7 @@ export default function RiderBookingPage() {
       if (pickupBoxRef.current && !pickupBoxRef.current.contains(target)) setShowPickupDropdown(false);
       if (dropoffBoxRef.current && !dropoffBoxRef.current.contains(target)) setShowDropoffDropdown(false);
     }
-
     document.addEventListener("mousedown", handleClickOutside);
-
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
@@ -845,56 +563,31 @@ export default function RiderBookingPage() {
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-    if (!apiKey) {
-      setMapError("Google Maps API key is missing. Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.");
-      return;
-    }
-
+    if (!apiKey) { setMapError("Google Maps API key is missing."); return; }
     if (window.google?.maps) { setMapReady(true); setMapError(null); return; }
 
-    const existingScript = document.getElementById("google-maps-script-booking") as HTMLScriptElement | null;
-    const onLoaded = () => { setMapReady(true); setMapError(null); };
-    const onError = () => { setMapError("Google Maps failed to load on the booking page."); };
+    const existing = document.getElementById("google-maps-script-booking") as HTMLScriptElement | null;
+    const onLoad = () => { setMapReady(true); setMapError(null); };
+    const onErr = () => { setMapError("Google Maps failed to load."); };
 
-    if (existingScript) {
-      existingScript.addEventListener("load", onLoaded);
-      existingScript.addEventListener("error", onError);
-      return () => {
-        existingScript.removeEventListener("load", onLoaded);
-        existingScript.removeEventListener("error", onError);
-      };
-    }
+    if (existing) { existing.addEventListener("load", onLoad); existing.addEventListener("error", onErr); return () => { existing.removeEventListener("load", onLoad); existing.removeEventListener("error", onErr); }; }
 
     const script = document.createElement("script");
     script.id = "google-maps-script-booking";
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&loading=async`;
-    script.async = true;
-    script.defer = true;
-    script.addEventListener("load", onLoaded);
-    script.addEventListener("error", onError);
+    script.async = true; script.defer = true;
+    script.addEventListener("load", onLoad); script.addEventListener("error", onErr);
     document.head.appendChild(script);
-
-    return () => {
-      script.removeEventListener("load", onLoaded);
-      script.removeEventListener("error", onError);
-    };
+    return () => { script.removeEventListener("load", onLoad); script.removeEventListener("error", onErr); };
   }, []);
 
   useEffect(() => {
     if (!mapReady) return;
     if (!ensureMap()) return;
-
     if (pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null) { renderRouteMap(); return; }
     if (pickupLat != null && pickupLng != null) { renderPickupOnlyMap(); return; }
-
-    clearMapVisuals();
-    setRouteVisible(false);
-
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.setCenter(DEFAULT_CENTER);
-      mapInstanceRef.current.setZoom(11);
-    }
+    clearMapVisuals(); setRouteVisible(false);
+    if (mapInstanceRef.current) { mapInstanceRef.current.setCenter(DEFAULT_CENTER); mapInstanceRef.current.setZoom(11); }
   }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng]);
 
   useEffect(() => {
@@ -904,184 +597,38 @@ export default function RiderBookingPage() {
     void calculateTrip({ silent: true });
   }, [canCalculate, routeKey]);
 
+  // ── Loading screen ───────────────────────────────────────────────
   if (authLoading) {
     return (
-      <main className="moovu-booking-loading text-black">
-        <div className="moovu-loading-shell">
-          <Image src="/logo.png" alt="MOOVU Kasi Rides" width={152} height={92} priority />
-          <div className="moovu-loading-card">
-            <div className="moovu-skeleton h-4 w-36" />
-            <div className="moovu-skeleton h-10 w-full" />
-            <div className="moovu-skeleton h-20 w-full" />
-          </div>
+      <main className="mbk-loading">
+        <Image src="/logo.png" alt="MOOVU" width={120} height={72} priority />
+        <div className="mbk-loading-card">
+          <div className="moovu-skeleton h-4 w-36" />
+          <div className="moovu-skeleton h-10 w-full" />
         </div>
       </main>
     );
   }
 
-  return (
-    <main className="moovu-booking-page text-black">
-      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
-
-      <div className="moovu-booking-map-shell">
-        {mapError ? (
-          <div className="moovu-booking-map-error">{mapError}</div>
-        ) : (
-          <div ref={mapRef} className="moovu-booking-map" />
-        )}
-      </div>
-
-      {/* TASK 3 — Trips + Logout in header. Old "Ride history" button below inputs removed. */}
-      <header className="moovu-booking-header">
-        <div className="moovu-brand-lockup">
-          <Image src="/logo.png" alt="MOOVU Kasi Rides" width={96} height={58} priority />
-          <div>
-            <div className="moovu-kicker">Kasi Rides</div>
-            <div className="text-sm font-bold text-slate-950">Book a ride</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link href="/ride/history" className="moovu-icon-link" aria-label="Ride history">
-            Trips
-          </Link>
-          <button className="moovu-icon-link" onClick={logout} aria-label="Logout">
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <section className="moovu-booking-panel" aria-label="Ride booking">
-        <div className="moovu-bottom-sheet-handle" />
-
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="moovu-kicker">MOOVU Rider</div>
-            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
-              Where to?
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">{progressText}</p>
-          </div>
-
-          <div className="moovu-account-pill">
-            <span className="moovu-account-dot" />
-            <span>{customer?.first_name || "Rider"}</span>
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-[28px] border border-[var(--moovu-border)] bg-white p-3 shadow-sm">
-          {/* PICKUP */}
-          <div className="moovu-route-field" ref={pickupBoxRef}>
-            <div className="moovu-route-marker-wrap">
-              <span className="moovu-route-dot moovu-route-dot-pickup" />
-              <span className="moovu-route-line" />
-            </div>
-            <div className="min-w-0 flex-1">
-              {/* TASK 1 — inline "My location" button beside pickup label */}
-              <div className="flex items-center justify-between gap-2">
-                <label className="moovu-field-label" htmlFor="pickup-input">
-                  Pickup
-                </label>
-                <button
-                  type="button"
-                  className="moovu-loc-inline-btn"
-                  onClick={useCurrentLocation}
-                  disabled={busy || locationLoading}
-                  aria-busy={locationLoading}
-                  title="Use my current location"
-                  aria-label="Use my current location"
-                >
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="8" cy="8" r="3" fill="currentColor" />
-                    <path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  </svg>
-                  <span>{locationLoading ? "Locating..." : "My location"}</span>
-                </button>
-              </div>
-              <input
-                id="pickup-input"
-                className="moovu-route-input"
-                placeholder="Pickup location"
-                value={pickupAddress}
-                onChange={(e) => onPickupInputChange(e.target.value)}
-                onBlur={() => void onPickupBlur()}
-                onFocus={() => { if (pickupPredictions.length > 0) setShowPickupDropdown(true); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onPickupBlur(); } }}
-              />
-              {pickupLoading && <div className="moovu-field-hint">Searching pickup locations\u2026</div>}
-              {pickupResolving && <div className="moovu-field-hint">Resolving location\u2026</div>}
-              {pickupError && <div className="moovu-field-error">{pickupError}</div>}
-              {showPickupDropdown && pickupPredictions.length > 0 && (
-                <div className="moovu-place-menu">
-                  {pickupPredictions.map((item) => (
-                    <button key={item.place_id} type="button" className="moovu-place-option" onClick={() => void choosePlace("pickup", item.place_id, item.description)}>
-                      {item.description}
-                    </button>
-                  ))}
-                </div>
-              )}
+  // ── Expanded-only section (hidden when collapsed) ────────────────
+  const expandedDetails = (
+    <>
+      {/* Ride options — only shown after fare calculated */}
+      {distanceKm != null && durationMin != null && (
+        <div className="mbk-ride-options">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="moovu-field-label">Choose your ride</div>
+            <div className="text-xs font-semibold text-slate-500">
+              {fmtDist(distanceKm)} · {fmtDur(durationMin)}
             </div>
           </div>
-
-          {/* DESTINATION */}
-          <div className="moovu-route-field" ref={dropoffBoxRef}>
-            <div className="moovu-route-marker-wrap">
-              <span className="moovu-route-dot moovu-route-dot-dropoff" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <label className="moovu-field-label" htmlFor="dropoff-input">
-                Destination
-              </label>
-              <input
-                id="dropoff-input"
-                className="moovu-route-input"
-                placeholder="Where are you going?"
-                value={dropoffAddress}
-                onChange={(e) => onDropoffInputChange(e.target.value)}
-                onBlur={() => void onDropoffBlur()}
-                onFocus={() => { if (dropoffPredictions.length > 0) setShowDropoffDropdown(true); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onDropoffBlur(); } }}
-              />
-              {dropoffLoading && <div className="moovu-field-hint">Searching destinations\u2026</div>}
-              {dropoffResolving && <div className="moovu-field-hint">Resolving location\u2026</div>}
-              {dropoffError && <div className="moovu-field-error">{dropoffError}</div>}
-              {showDropoffDropdown && dropoffPredictions.length > 0 && (
-                <div className="moovu-place-menu">
-                  {dropoffPredictions.map((item) => (
-                    <button key={item.place_id} type="button" className="moovu-place-option" onClick={() => void choosePlace("dropoff", item.place_id, item.description)}>
-                      {item.description}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* TASK 4 — MOOVU Go / MOOVU Group cards (no "Standard", passenger limits shown) */}
-        {distanceKm != null && durationMin != null && (
-        <div className="moovu-ride-options-sheet mt-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="moovu-field-label">Choose your ride</div>
-              <div className="mt-1 text-sm font-semibold text-slate-600">
-                {formatDistance(distanceKm)} · {formatDuration(durationMin)}
-              </div>
-            </div>
-            <div className={routeVisible ? "moovu-status-pill-ready" : "moovu-status-pill"}>
-              {routeVisible ? "Route ready" : "Planning"}
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {RIDE_OPTIONS.map((opt) => {
               const active = selectedRideOption === opt.id;
               return (
-                <button
-                  key={opt.id}
-                  type="button"
+                <button key={opt.id} type="button"
                   className={`moovu-ride-option-card text-left${active ? " active" : ""}`}
-                  onClick={() => setSelectedRideOption(opt.id)}
-                  aria-pressed={active}
+                  onClick={() => setSelectedRideOption(opt.id)} aria-pressed={active}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -1089,13 +636,7 @@ export default function RiderBookingPage() {
                       <div className="mt-0.5 text-xs font-semibold text-slate-500">{opt.capacity}</div>
                     </div>
                     <div className="text-sm font-black text-[var(--moovu-primary)]">
-                      {money(
-                        calculateTripFare({
-                          distanceKm,
-                          durationMin,
-                          rideOptionId: opt.id,
-                        }).totalFare
-                      )}
+                      {money(calculateTripFare({ distanceKm, durationMin, rideOptionId: opt.id }).totalFare)}
                     </div>
                   </div>
                   <div className="mt-2 text-xs leading-4 text-slate-600">{opt.description}</div>
@@ -1104,113 +645,230 @@ export default function RiderBookingPage() {
             })}
           </div>
         </div>
-        )}
+      )}
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <div className="moovu-control-card">
-            <div className="moovu-field-label">When</div>
-            <div className="moovu-segmented mt-2">
-              <button type="button" className={rideType === "now" ? "moovu-segmented-active" : ""} onClick={() => setRideType("now")}>
-                Ride now
-              </button>
-              <button type="button" className={rideType === "scheduled" ? "moovu-segmented-active" : ""} onClick={() => setRideType("scheduled")}>
-                Schedule
-              </button>
-            </div>
-          </div>
-
-          <div className="moovu-control-card">
-            <div className="moovu-field-label">Payment</div>
-            <button
-              type="button"
-              className="mt-2 min-h-11 w-full rounded-2xl bg-slate-100 px-4 text-sm font-bold text-slate-950"
-              onClick={() => setPaymentMethod("cash")}
-            >
-              {paymentMethod === "cash" ? "Cash" : paymentMethod}
-            </button>
+      {/* When + Payment */}
+      <div className="mt-4 grid gap-3 grid-cols-2">
+        <div className="moovu-control-card">
+          <div className="moovu-field-label">When</div>
+          <div className="moovu-segmented mt-2">
+            <button type="button" className={rideType === "now" ? "moovu-segmented-active" : ""} onClick={() => setRideType("now")}>Ride now</button>
+            <button type="button" className={rideType === "scheduled" ? "moovu-segmented-active" : ""} onClick={() => setRideType("scheduled")}>Schedule</button>
           </div>
         </div>
-
-        {rideType === "scheduled" && (
-          <div className="mt-3">
-            <label className="moovu-field-label" htmlFor="scheduled-for">
-              Scheduled pickup
-            </label>
-            <input
-              id="scheduled-for"
-              type="datetime-local"
-              className="moovu-input mt-2"
-              value={scheduledFor}
-              onChange={(e) => setScheduledFor(e.target.value)}
-            />
-          </div>
-        )}
-
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <div className="moovu-trip-metric">
-            <span>Distance</span>
-            <strong>{formatDistance(distanceKm)}</strong>
-          </div>
-          <div className="moovu-trip-metric">
-            <span>Time</span>
-            <strong>{formatDuration(durationMin)}</strong>
-          </div>
-          <div className="moovu-trip-metric moovu-trip-metric-primary">
-            <span>Fare</span>
-            <strong>{money(fare)}</strong>
-          </div>
+        <div className="moovu-control-card">
+          <div className="moovu-field-label">Payment</div>
+          <button type="button" className="mt-2 min-h-11 w-full rounded-2xl bg-slate-100 px-4 text-sm font-bold text-slate-950" onClick={() => setPaymentMethod("cash")}>
+            {paymentMethod === "cash" ? "Cash" : paymentMethod}
+          </button>
         </div>
+      </div>
 
-        {/* TASK 5 — pricing formula hidden, customer-friendly message only */}
-        <div className="mt-3 rounded-[24px] border border-[#d7e2ea] bg-[#f6fafc] p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                Trip summary
-              </div>
-              <div className="mt-1 text-sm font-semibold text-slate-950">
-                {pickupAddress || "Set pickup"} &rarr; {dropoffAddress || "set destination"}
-              </div>
-            </div>
-            <div className={routeVisible ? "moovu-status-pill-ready" : "moovu-status-pill"}>
-              {routeVisible ? "Route ready" : "Planning"}
-            </div>
-          </div>
-          <div className="mt-3 text-xs leading-5 text-slate-500">
-            Final fare is confirmed before booking.
-          </div>
+      {rideType === "scheduled" && (
+        <div className="mt-3">
+          <label className="moovu-field-label" htmlFor="scheduled-for">Scheduled pickup</label>
+          <input id="scheduled-for" type="datetime-local" className="moovu-input mt-2" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
         </div>
+      )}
 
-        <div className="mt-3 rounded-[24px] border border-[#cfe4ff] bg-[#eef7ff] p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-bold text-slate-950">Ride updates</div>
-              <div className="mt-1 text-xs leading-5 text-slate-600">
-                Enable alerts for driver accepted, arrived, started, and completed updates.
-              </div>
-            </div>
-            <EnablePushButton role="customer" variant="inline" />
-          </div>
-        </div>
+      {/* Stats */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="moovu-trip-metric"><span>Distance</span><strong>{fmtDist(distanceKm)}</strong></div>
+        <div className="moovu-trip-metric"><span>Time</span><strong>{fmtDur(durationMin)}</strong></div>
+        <div className="moovu-trip-metric moovu-trip-metric-primary"><span>Fare</span><strong>{money(fare)}</strong></div>
+      </div>
 
-        <div className="moovu-booking-actions">
+      {/* Trip summary */}
+      <div className="mt-3 rounded-[20px] border border-[#d7e2ea] bg-[#f6fafc] p-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-              Estimated total
+            <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Trip summary</div>
+            <div className="mt-1 text-sm font-semibold text-slate-950">
+              {pickupAddress || "Set pickup"} &rarr; {dropoffAddress || "set destination"}
             </div>
-            <div className="text-2xl font-black text-slate-950">{money(fare)}</div>
+          </div>
+          <div className={routeVisible ? "moovu-status-pill-ready" : "moovu-status-pill"}>
+            {routeVisible ? "Route ready" : "Planning"}
+          </div>
+        </div>
+        <div className="mt-2 text-xs text-slate-500">Final fare is confirmed before booking.</div>
+      </div>
+
+      {/* Push notifications */}
+      <div className="mt-3 rounded-[20px] border border-[#cfe4ff] bg-[#eef7ff] p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-bold text-slate-950">Ride updates</div>
+            <div className="mt-1 text-xs text-slate-600">Enable alerts for driver accepted, arrived, started, and completed.</div>
+          </div>
+          <EnablePushButton role="customer" variant="inline" />
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <main className="mbk-page">
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
+      {/* Full-screen map behind everything */}
+      <div className="mbk-map-layer">
+        {mapError
+          ? <div className="mbk-map-error">{mapError}</div>
+          : <div ref={mapRef} className="mbk-map" />
+        }
+      </div>
+
+      {/* Floating top header */}
+      <header className="mbk-header">
+        <div className="moovu-brand-lockup">
+          <Image src="/logo.png" alt="MOOVU Kasi Rides" width={96} height={58} priority />
+          <div>
+            <div className="moovu-kicker">Kasi Rides</div>
+            <div className="text-sm font-bold text-slate-950">Book a ride</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/ride/history" className="moovu-icon-link">Trips</Link>
+          <button className="moovu-icon-link" onClick={logout}>Logout</button>
+        </div>
+      </header>
+
+      {/* ── Bottom sheet ── */}
+      <div
+        ref={sheetRef}
+        className={`mbk-sheet${sheetSnap === "expanded" ? " mbk-sheet-expanded" : ""}`}
+        style={{ top: sheetTopPx, transition: dragY != null ? "none" : "top 0.38s cubic-bezier(0.32,0.72,0,1)" }}
+        aria-label="Ride booking"
+      >
+        {/* Drag handle */}
+        <div
+          className="mbk-handle-wrap"
+          onMouseDown={(e) => onDragStart(e.clientY)}
+          onTouchStart={(e) => onDragStart(e.touches[0].clientY)}
+          onMouseMove={(e) => { if (isDraggingRef.current) onDragMove(e.clientY); }}
+          onTouchMove={(e) => { if (isDraggingRef.current) onDragMove(e.touches[0].clientY); }}
+          onMouseUp={(e) => onDragEnd(e.clientY)}
+          onTouchEnd={(e) => onDragEnd(e.changedTouches[0].clientY)}
+        >
+          <div className="mbk-handle" />
+        </div>
+
+        {/* Scrollable inner content */}
+        <div className="mbk-sheet-scroll">
+          {/* Title row */}
+          <div className="flex items-center justify-between gap-3 px-4 pb-2">
+            <div>
+              <div className="moovu-kicker">MOOVU Rider</div>
+              <h1 className="text-xl font-black tracking-tight text-slate-950">Where to?</h1>
+              <p className="mt-0.5 text-xs text-slate-500">{progressText}</p>
+            </div>
+            <div className="moovu-account-pill">
+              <span className="moovu-account-dot" />
+              <span>{customer?.first_name || "Rider"}</span>
+            </div>
+          </div>
+
+          {/* Route inputs box */}
+          <div className="mx-4 rounded-[24px] border border-[var(--moovu-border)] bg-white p-3 shadow-sm">
+            {/* PICKUP */}
+            <div className="moovu-route-field" ref={pickupBoxRef}>
+              <div className="moovu-route-marker-wrap">
+                <span className="moovu-route-dot moovu-route-dot-pickup" />
+                <span className="moovu-route-line" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="moovu-field-label" htmlFor="pickup-input">Pickup</label>
+                  <button type="button" className="moovu-loc-inline-btn" onClick={useCurrentLocation}
+                    disabled={busy || locationLoading} title="Use my current location">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="3" fill="currentColor" />
+                      <path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    <span>{locationLoading ? "Locating…" : "My location"}</span>
+                  </button>
+                </div>
+                <input id="pickup-input" className="moovu-route-input" placeholder="Pickup location"
+                  value={pickupAddress} onChange={(e) => onPickupInputChange(e.target.value)}
+                  onBlur={() => void onPickupBlur()}
+                  onFocus={() => { if (pickupPredictions.length > 0) setShowPickupDropdown(true); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onPickupBlur(); } }} />
+                {pickupLoading && <div className="moovu-field-hint">Searching…</div>}
+                {pickupResolving && <div className="moovu-field-hint">Resolving…</div>}
+                {pickupError && <div className="moovu-field-error">{pickupError}</div>}
+                {showPickupDropdown && pickupPredictions.length > 0 && (
+                  <div className="moovu-place-menu">
+                    {pickupPredictions.map((item) => (
+                      <button key={item.place_id} type="button" className="moovu-place-option"
+                        onClick={() => void choosePlace("pickup", item.place_id, item.description)}>
+                        {item.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* DESTINATION */}
+            <div className="moovu-route-field" ref={dropoffBoxRef}>
+              <div className="moovu-route-marker-wrap">
+                <span className="moovu-route-dot moovu-route-dot-dropoff" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <label className="moovu-field-label" htmlFor="dropoff-input">Destination</label>
+                <input id="dropoff-input" className="moovu-route-input" placeholder="Where are you going?"
+                  value={dropoffAddress} onChange={(e) => onDropoffInputChange(e.target.value)}
+                  onBlur={() => void onDropoffBlur()}
+                  onFocus={() => { if (dropoffPredictions.length > 0) setShowDropoffDropdown(true); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onDropoffBlur(); } }} />
+                {dropoffLoading && <div className="moovu-field-hint">Searching…</div>}
+                {dropoffResolving && <div className="moovu-field-hint">Resolving…</div>}
+                {dropoffError && <div className="moovu-field-error">{dropoffError}</div>}
+                {showDropoffDropdown && dropoffPredictions.length > 0 && (
+                  <div className="moovu-place-menu">
+                    {dropoffPredictions.map((item) => (
+                      <button key={item.place_id} type="button" className="moovu-place-option"
+                        onClick={() => void choosePlace("dropoff", item.place_id, item.description)}>
+                        {item.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Expanded details (hidden when collapsed) */}
+          {sheetSnap === "expanded" && (
+            <div className="px-4 pb-4">{expandedDetails}</div>
+          )}
+
+          {/* Swipe hint when collapsed but both locations set */}
+          {sheetSnap === "collapsed" && bothLocationsSet && fare != null && (
+            <div className="mx-4 mt-3 flex items-center justify-center gap-2 text-xs font-bold text-slate-500">
+              <span>↑ Swipe up to see ride options</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Confirm bar — always visible at bottom of sheet ── */}
+        <div className="mbk-confirm-bar">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Estimated total</div>
+            <div className="text-xl font-black text-slate-950">{money(fare)}</div>
           </div>
           <button
-            className="moovu-confirm-button"
+            className="moovu-confirm-button flex-1"
             onClick={() => void submitBooking()}
             disabled={busy || !canSubmit}
           >
             {busy
-              ? rideType === "scheduled" ? "Scheduling\u2026" : "Booking\u2026"
+              ? rideType === "scheduled" ? "Scheduling…" : "Booking…"
               : rideType === "scheduled" ? "Schedule ride" : "Confirm ride"}
           </button>
         </div>
-      </section>
+      </div>
     </main>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { waLinkZA } from "@/lib/whatsapp";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
@@ -39,9 +39,9 @@ export default function DispatchBoardPage() {
   const [rows, setRows] = useState<BoardTrip[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [, setTick] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-  async function loadBoard() {
+  const loadBoard = useCallback(async () => {
     const res = await fetch("/api/admin/dispatch/board");
     const json = await res.json();
 
@@ -53,19 +53,22 @@ export default function DispatchBoardPage() {
 
     setMsg(null);
     setRows(json.rows ?? []);
-  }
+  }, []);
 
   useEffect(() => {
-    loadBoard();
-  }, []);
+    const initialLoad = window.setTimeout(() => {
+      void loadBoard();
+    }, 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [loadBoard]);
 
   useEffect(() => {
     const t = setInterval(() => {
-      setTick((x) => x + 1);
-      loadBoard();
+      setNowMs(Date.now());
+      void loadBoard();
     }, 3000);
     return () => clearInterval(t);
-  }, []);
+  }, [loadBoard]);
 
   async function offerNext(tripId: string) {
     setBusyId(tripId);
@@ -137,16 +140,10 @@ export default function DispatchBoardPage() {
 
   function secondsLeft(expiresAt: string | null) {
     if (!expiresAt) return null;
-    return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000));
+    return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - nowMs) / 1000));
   }
 
-  function Column({
-    title,
-    items,
-  }: {
-    title: string;
-    items: BoardTrip[];
-  }) {
+  function renderColumn(title: string, items: BoardTrip[]) {
     return (
       <section className="border rounded-2xl p-4 min-h-[240px]">
         <div className="flex items-center justify-between gap-2">
@@ -284,10 +281,10 @@ export default function DispatchBoardPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="grid xl:grid-cols-4 md:grid-cols-2 gap-4">
-        <Column title="Requested" items={grouped.requested} />
-        <Column title="Offered" items={grouped.offered} />
-        <Column title="Active" items={grouped.active} />
-        <Column title="Closed" items={grouped.closed} />
+        {renderColumn("Requested", grouped.requested)}
+        {renderColumn("Offered", grouped.offered)}
+        {renderColumn("Active", grouped.active)}
+        {renderColumn("Closed", grouped.closed)}
       </div>
     </main>
   );

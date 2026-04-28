@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -44,17 +44,18 @@ export default function AdminPaymentReviewsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("pending_payment_review");
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState("all");
   const [rows, setRows] = useState<PaymentRequestRow[]>([]);
 
-  async function getToken() {
+  const getToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
 
     return session?.access_token || "";
-  }
+  }, []);
 
-  async function loadData(status = statusFilter) {
+  const loadData = useCallback(async (status: string) => {
     setLoading(true);
     setMsg(null);
 
@@ -82,7 +83,7 @@ export default function AdminPaymentReviewsPage() {
 
     setRows(json.requests ?? []);
     setLoading(false);
-  }
+  }, [getToken]);
 
   async function reviewRequest(requestId: string, action: "approve" | "reject" | "waiting") {
     const reviewNote = window.prompt("Optional review note:")?.trim() || "";
@@ -129,12 +130,16 @@ export default function AdminPaymentReviewsPage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadData, statusFilter]);
 
-  const pendingCount = rows.filter((row) => row.status === "pending_payment_review").length;
-  const approvedCount = rows.filter((row) => row.status === "approved").length;
-  const rejectedCount = rows.filter((row) => row.status === "rejected").length;
-  const submittedTotal = rows.reduce((total, row) => total + Number(row.amount_submitted ?? 0), 0);
+  const visibleRows = useMemo(() => {
+    return rows.filter((row) => paymentTypeFilter === "all" || row.payment_type === paymentTypeFilter);
+  }, [paymentTypeFilter, rows]);
+
+  const pendingCount = visibleRows.filter((row) => row.status === "pending_payment_review").length;
+  const approvedCount = visibleRows.filter((row) => row.status === "approved").length;
+  const rejectedCount = visibleRows.filter((row) => row.status === "rejected").length;
+  const submittedTotal = visibleRows.reduce((total, row) => total + Number(row.amount_submitted ?? 0), 0);
 
   if (loading) {
     return (
@@ -186,6 +191,17 @@ export default function AdminPaymentReviewsPage() {
               <option value="all">All</option>
             </select>
 
+            <select
+              className="min-h-11 rounded-2xl border border-[var(--moovu-border)] bg-white px-4 py-3 text-sm font-semibold text-slate-950"
+              value={paymentTypeFilter}
+              onChange={(e) => setPaymentTypeFilter(e.target.value)}
+            >
+              <option value="all">All payment types</option>
+              <option value="subscription">Subscriptions</option>
+              <option value="commission">Commissions</option>
+              <option value="combined">Combined</option>
+            </select>
+
             <button
               onClick={() => void loadData(statusFilter)}
               className="moovu-btn moovu-btn-primary"
@@ -196,14 +212,14 @@ export default function AdminPaymentReviewsPage() {
         </section>
 
         <section className="space-y-4">
-          {rows.length === 0 ? (
+          {visibleRows.length === 0 ? (
             <EmptyState
               title="No payment requests found"
               description="Payment proof submissions matching this filter will appear here."
             />
           ) : (
             <div className="space-y-4">
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <div key={row.id} className="moovu-card p-5 space-y-4">
                   <div className="grid md:grid-cols-6 gap-4">
                     <div>

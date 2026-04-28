@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
 export const ALLOWED_ADMIN_ROLES = ["owner", "admin", "dispatcher", "support"] as const;
+type AdminRole = (typeof ALLOWED_ADMIN_ROLES)[number];
+
+function isAllowedAdminRole(value: unknown): value is AdminRole {
+  return typeof value === "string" && ALLOWED_ADMIN_ROLES.includes(value as AdminRole);
+}
 
 export async function requireAdminUser(req: Request) {
   const authHeader = req.headers.get("authorization") || "";
@@ -42,7 +47,7 @@ export async function requireAdminUser(req: Request) {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profileError || !profile?.role || !ALLOWED_ADMIN_ROLES.includes(profile.role as any)) {
+  if (profileError || !isAllowedAdminRole(profile?.role)) {
     return { ok: false as const, status: 403, error: "Admin access required." };
   }
 

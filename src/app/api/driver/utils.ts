@@ -5,7 +5,6 @@ export async function getUserFromBearer(req: Request) {
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
   if (!token) return null;
 
-  // @ts-ignore
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error) return null;
   return data?.user ?? null;

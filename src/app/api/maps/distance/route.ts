@@ -130,9 +130,9 @@ export async function POST(req: Request) {
       originAddress: data?.origin_addresses?.[0] ?? null,
       destinationAddress: data?.destination_addresses?.[0] ?? null,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: error instanceof Error ? error.message : "Server error." },
       { status: 500 }
     );
   }

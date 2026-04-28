@@ -1,21 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
-const PLAN_PRICES = {
-  day: 45,
-  week: 100,
-  month: 250,
-} as const;
+import {
+  getDriverSubscriptionAmount,
+  isDriverSubscriptionPlan,
+  type DriverSubscriptionPlan,
+} from "@/lib/finance/driverPayments";
 
 type PaymentType = "subscription" | "commission" | "combined";
-type SubscriptionPlan = keyof typeof PLAN_PRICES;
 
 function isPaymentType(value: string): value is PaymentType {
   return value === "subscription" || value === "commission" || value === "combined";
-}
-
-function isSubscriptionPlan(value: string): value is SubscriptionPlan {
-  return value === "day" || value === "week" || value === "month";
 }
 
 function num(value: unknown) {
@@ -114,16 +108,16 @@ export async function POST(req: Request) {
     const commissionDue = num(wallet?.balance_due);
     const subscriptionDueExisting = num(driver.subscription_amount_due);
 
-    let subscriptionPlan: SubscriptionPlan | null = null;
+    let subscriptionPlan: DriverSubscriptionPlan | null = null;
     let subscriptionExpected = 0;
 
     if (paymentType === "subscription" || paymentType === "combined") {
-      if (!isSubscriptionPlan(subscriptionPlanRaw)) {
+      if (!isDriverSubscriptionPlan(subscriptionPlanRaw)) {
         return NextResponse.json({ ok: false, error: "Please choose a valid subscription plan." }, { status: 400 });
       }
 
       subscriptionPlan = subscriptionPlanRaw;
-      subscriptionExpected = PLAN_PRICES[subscriptionPlan];
+      subscriptionExpected = getDriverSubscriptionAmount(subscriptionPlan);
     }
 
     let amountExpected = 0;
@@ -236,9 +230,9 @@ export async function POST(req: Request) {
       subscriptionDueExisting,
       popFileUrl,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Failed to submit payment." },
+      { ok: false, error: error instanceof Error ? error.message : "Failed to submit payment." },
       { status: 500 }
     );
   }

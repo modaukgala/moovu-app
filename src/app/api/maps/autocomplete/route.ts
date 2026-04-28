@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 
+type PlacePrediction = {
+  description?: string;
+  place_id?: string;
+};
+
 export async function POST(req: Request) {
   try {
     const { input } = await req.json();
@@ -41,16 +46,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const predictions =
-      (data.predictions ?? []).map((p: any) => ({
-        description: p.description,
-        place_id: p.place_id,
-      })) ?? [];
+    const predictions = ((data.predictions ?? []) as PlacePrediction[]).map((prediction) => ({
+      description: prediction.description,
+      place_id: prediction.place_id,
+    }));
 
     return NextResponse.json({ ok: true, predictions });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "Server error" },
+      { ok: false, error: error instanceof Error ? error.message : "Server error" },
       { status: 500 }
     );
   }

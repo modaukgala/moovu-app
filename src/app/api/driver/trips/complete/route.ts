@@ -331,9 +331,9 @@ export async function POST(req: Request) {
         driverNet: commissionResult.calc.driverNet,
       },
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: error instanceof Error ? error.message : "Server error." },
       { status: 500 }
     );
   }

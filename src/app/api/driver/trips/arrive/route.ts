@@ -200,9 +200,9 @@ export async function POST(req: Request) {
       message: "Trip marked as arrived.",
       kmAway: Math.round(kmAway * 100) / 100,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: error instanceof Error ? error.message : "Server error." },
       { status: 500 }
     );
   }

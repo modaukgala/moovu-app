@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { isDriverSubscriptionPlan } from "@/lib/finance/driverPayments";
+
+type SubscriptionPatch = {
+  subscription_status: string;
+  subscription_expires_at: string | null;
+  subscription_plan: string | null;
+};
 
 function addDays(base: Date, days: number) {
   return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
@@ -16,14 +23,14 @@ export async function POST(req: Request) {
     }
 
     const { supabaseAdmin } = auth;
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
 
-    const driverId = String(body.driverId ?? "").trim();
-    const action = String(body.action ?? "").trim();
-    const days = body.days != null ? Number(body.days) : null;
-    const note = body.note ? String(body.note) : null;
-    const plan = body.plan ? String(body.plan) : null;
-    const expiryIso = body.expiry ? String(body.expiry) : null;
+    const driverId = String(body && typeof body === "object" && "driverId" in body ? body.driverId : "").trim();
+    const action = String(body && typeof body === "object" && "action" in body ? body.action : "").trim();
+    const days = body && typeof body === "object" && "days" in body && body.days != null ? Number(body.days) : null;
+    const note = body && typeof body === "object" && "note" in body && body.note ? String(body.note) : null;
+    const planRaw = body && typeof body === "object" && "plan" in body && body.plan ? String(body.plan) : null;
+    const expiryIso = body && typeof body === "object" && "expiry" in body && body.expiry ? String(body.expiry) : null;
 
     if (!driverId) {
       return NextResponse.json({ ok: false, error: "Missing driverId" }, { status: 400 });
@@ -46,7 +53,12 @@ export async function POST(req: Request) {
     let newExp: Date | null = oldExp;
     let newPlan = driver.subscription_plan ?? null;
 
-    if (plan) newPlan = plan;
+    if (planRaw) {
+      if (!isDriverSubscriptionPlan(planRaw)) {
+        return NextResponse.json({ ok: false, error: "Invalid subscription plan." }, { status: 400 });
+      }
+      newPlan = planRaw;
+    }
 
     if (action === "activate") {
       newStatus = "active";
@@ -76,7 +88,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
     }
 
-    const patch: any = {
+    const patch: SubscriptionPatch = {
       subscription_status: newStatus,
       subscription_expires_at: newExp ? newExp.toISOString() : null,
       subscription_plan: newPlan,
@@ -103,7 +115,7 @@ export async function POST(req: Request) {
       status: newStatus,
       expires_at: newExp ? newExp.toISOString() : null,
     });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error" }, { status: 500 });
   }
 }
