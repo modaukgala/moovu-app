@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import EmptyState from "@/components/ui/EmptyState";
+import LoadingState from "@/components/ui/LoadingState";
+import MetricCard from "@/components/ui/MetricCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type PaymentRequestRow = {
@@ -25,6 +29,14 @@ type PaymentRequestRow = {
 
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
+}
+
+function displayValue(value: string | null | undefined) {
+  return value?.trim() || "--";
+}
+
+function displayDate(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : "--";
 }
 
 export default function AdminPaymentReviewsPage() {
@@ -112,32 +124,58 @@ export default function AdminPaymentReviewsPage() {
   }
 
   useEffect(() => {
-    loadData(statusFilter);
+    const timer = window.setTimeout(() => {
+      void loadData(statusFilter);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
+  const pendingCount = rows.filter((row) => row.status === "pending_payment_review").length;
+  const approvedCount = rows.filter((row) => row.status === "approved").length;
+  const rejectedCount = rows.filter((row) => row.status === "rejected").length;
+  const submittedTotal = rows.reduce((total, row) => total + Number(row.amount_submitted ?? 0), 0);
+
+  if (loading) {
+    return (
+      <LoadingState
+        title="Loading payment reviews"
+        description="Preparing submitted proof of payment requests for admin review."
+      />
+    );
+  }
+
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="space-y-6 text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-3">
+      <div className="moovu-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="text-sm text-gray-500">MOOVU Admin</div>
-            <h1 className="text-3xl font-semibold mt-1">Payment Reviews</h1>
-            <p className="text-gray-700 mt-2">
+            <div className="moovu-section-title">MOOVU Admin</div>
+            <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Payment reviews</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
               Review subscription, commission and combined payments in one place.
             </p>
           </div>
 
-          <Link href="/admin" className="border rounded-xl px-4 py-2 bg-white">
+          <Link href="/admin" className="moovu-btn moovu-btn-secondary">
             Back to Dashboard
           </Link>
         </div>
+      </div>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+      <section className="grid gap-3 md:grid-cols-4">
+        <MetricCard label="Pending" value={String(pendingCount)} helper="Needs admin review" tone={pendingCount > 0 ? "warning" : "default"} />
+        <MetricCard label="Approved" value={String(approvedCount)} helper="Approved in this filter" tone="success" />
+        <MetricCard label="Rejected" value={String(rejectedCount)} helper="Rejected in this filter" tone={rejectedCount > 0 ? "danger" : "default"} />
+        <MetricCard label="Submitted value" value={money(submittedTotal)} helper="Visible requests" tone="primary" />
+      </section>
+
+      <section className="moovu-card p-5 sm:p-6">
           <div className="flex flex-wrap gap-3">
             <select
-              className="border rounded-xl px-4 py-3"
+              className="min-h-11 rounded-2xl border border-[var(--moovu-border)] bg-white px-4 py-3 text-sm font-semibold text-slate-950"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
@@ -149,23 +187,24 @@ export default function AdminPaymentReviewsPage() {
             </select>
 
             <button
-              onClick={() => loadData(statusFilter)}
-              className="border rounded-xl px-4 py-3 bg-white"
+              onClick={() => void loadData(statusFilter)}
+              className="moovu-btn moovu-btn-primary"
             >
               Refresh
             </button>
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          {loading ? (
-            <div>Loading payment requests...</div>
-          ) : rows.length === 0 ? (
-            <div>No payment requests found.</div>
+        <section className="space-y-4">
+          {rows.length === 0 ? (
+            <EmptyState
+              title="No payment requests found"
+              description="Payment proof submissions matching this filter will appear here."
+            />
           ) : (
             <div className="space-y-4">
               {rows.map((row) => (
-                <div key={row.id} className="border rounded-2xl p-4 space-y-4">
+                <div key={row.id} className="moovu-card p-5 space-y-4">
                   <div className="grid md:grid-cols-6 gap-4">
                     <div>
                       <div className="text-sm text-gray-500">Driver</div>
@@ -180,7 +219,7 @@ export default function AdminPaymentReviewsPage() {
 
                     <div>
                       <div className="text-sm text-gray-500">Plan</div>
-                      <div className="font-medium">{row.subscription_plan ?? "—"}</div>
+                      <div className="font-medium">{displayValue(row.subscription_plan)}</div>
                     </div>
 
                     <div>
@@ -195,7 +234,7 @@ export default function AdminPaymentReviewsPage() {
 
                     <div>
                       <div className="text-sm text-gray-500">Status</div>
-                      <div className="font-medium">{row.status}</div>
+                      <StatusBadge status={row.status} />
                     </div>
                   </div>
 
@@ -206,7 +245,7 @@ export default function AdminPaymentReviewsPage() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Submitted At</div>
-                      <div className="font-medium">{new Date(row.submitted_at).toLocaleString()}</div>
+                      <div className="font-medium">{displayDate(row.submitted_at)}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">POP</div>
@@ -268,7 +307,6 @@ export default function AdminPaymentReviewsPage() {
             </div>
           )}
         </section>
-      </div>
     </main>
   );
 }

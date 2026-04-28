@@ -12,6 +12,8 @@ const navItems = [
   { href: "/admin/trips", label: "Trips" },
   { href: "/admin/dispatch/map", label: "Dispatch Map" },
   { href: "/admin/applications", label: "Applications" },
+  { href: "/admin/receipts", label: "Receipts" },
+  { href: "/admin/payment-reviews", label: "Payments" },
   { href: "/admin/link-driver", label: "Link Driver" },
   { href: "/admin/subscriptions", label: "Subscriptions" },
   { href: "/admin/reports", label: "Earnings Report" },
@@ -99,7 +101,7 @@ export default function AdminProtectedLayout({
             <span className="moovu-chip-dot" />
             MOOVU Admin
           </div>
-          <h1 className="mt-4 text-2xl font-semibold text-slate-950">
+          <h1 className="mt-4 text-2xl font-black text-slate-950">
             Checking admin access...
           </h1>
           <p className="mt-3 text-sm text-slate-600">
@@ -114,8 +116,8 @@ export default function AdminProtectedLayout({
     <main className="min-h-screen text-black">
       <AdminTripNotifications />
 
-      <div className="grid min-h-screen lg:grid-cols-[290px_1fr]">
-        <aside className="border-r border-[var(--moovu-border)] bg-white/84 px-5 py-6 backdrop-blur-xl">
+      <div className="grid min-h-screen bg-[var(--moovu-bg)] lg:grid-cols-[290px_1fr]">
+        <aside className="border-r border-[var(--moovu-border)] bg-white/90 px-5 py-6 backdrop-blur-xl">
           <div className="sticky top-5 space-y-6">
             <div className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-5 shadow-sm">
               <div className="moovu-chip w-fit">
@@ -123,7 +125,7 @@ export default function AdminProtectedLayout({
                 MOOVU Admin
               </div>
 
-              <h1 className="mt-4 text-2xl font-semibold text-slate-950">
+              <h1 className="mt-4 text-2xl font-black text-slate-950">
                 Control center
               </h1>
 
@@ -179,8 +181,8 @@ export default function AdminProtectedLayout({
               </div>
 
               <div className="moovu-chip">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-                Grey status styling active
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                Ops live
               </div>
             </div>
           </div>

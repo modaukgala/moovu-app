@@ -8,6 +8,7 @@ type Role = "admin" | "driver" | "customer";
 type Props = {
   role: Role;
   onEnabled?: () => void;
+  variant?: "floating" | "inline";
 };
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -20,7 +21,7 @@ function urlBase64ToUint8Array(base64String: string) {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
-export default function EnablePushButton({ role, onEnabled }: Props) {
+export default function EnablePushButton({ role, onEnabled, variant = "floating" }: Props) {
   const [busy, setBusy] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [msg, setMsg] = useState("");
@@ -125,8 +126,8 @@ export default function EnablePushButton({ role, onEnabled }: Props) {
       setMsg("Notifications enabled successfully.");
       setHidden(true);
       onEnabled?.();
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to enable notifications.");
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : "Failed to enable notifications.");
     } finally {
       setBusy(false);
     }
@@ -135,18 +136,21 @@ export default function EnablePushButton({ role, onEnabled }: Props) {
   if (hidden) return null;
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className={variant === "inline" ? "flex flex-col gap-2" : "flex flex-col items-end gap-2"}>
       <button
         onClick={handleClick}
         disabled={busy}
-        className="rounded-full px-4 py-3 text-white shadow-lg disabled:opacity-60"
-        style={{ background: "#0B5FFF" }}
+        className={
+          variant === "inline"
+            ? "min-h-11 rounded-2xl bg-[var(--moovu-primary)] px-4 py-3 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+            : "rounded-full bg-[var(--moovu-primary)] px-4 py-3 text-white shadow-lg disabled:opacity-60"
+        }
       >
         {busy ? "Enabling..." : "Enable notifications"}
       </button>
 
       {msg ? (
-        <div className="max-w-[280px] rounded-xl bg-white px-3 py-2 text-xs text-slate-700 shadow">
+        <div className={variant === "inline" ? "rounded-xl bg-white/80 px-3 py-2 text-xs text-slate-700" : "max-w-[280px] rounded-xl bg-white px-3 py-2 text-xs text-slate-700 shadow"}>
           {msg}
         </div>
       ) : null}

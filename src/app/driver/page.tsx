@@ -51,6 +51,11 @@ type Driver = {
   vehicle_registration?: string | null;
 };
 
+type GpsNotice = {
+  message: string;
+  tone: "success" | "warning" | "danger" | "info";
+};
+
 declare global {
   interface Window {
     google: typeof google;
@@ -84,6 +89,56 @@ function tripStatusLabel(status: string | null | undefined) {
   }
 }
 
+function gpsNoticeClass(tone: GpsNotice["tone"]) {
+  switch (tone) {
+    case "success":
+      return "border-emerald-100 bg-emerald-50 text-emerald-700";
+    case "warning":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    case "danger":
+      return "border-red-100 bg-red-50 text-red-700";
+    default:
+      return "border-blue-100 bg-blue-50 text-blue-700";
+  }
+}
+
+function friendlyGeolocationError(err: GeolocationPositionError): GpsNotice {
+  switch (err.code) {
+    case err.PERMISSION_DENIED:
+      return {
+        tone: "warning",
+        message:
+          "Location permission is blocked. Allow location access for MOOVU in your browser or app settings, then tap Save current GPS. You can use manual location meanwhile.",
+      };
+    case err.POSITION_UNAVAILABLE:
+      return {
+        tone: "danger",
+        message:
+          "MOOVU could not read your GPS position. Check that location services are on, then try again.",
+      };
+    case err.TIMEOUT:
+      return {
+        tone: "warning",
+        message:
+          "GPS took too long to respond. Move to an open area or check your signal, then try again.",
+      };
+    default:
+      return {
+        tone: "danger",
+        message: "MOOVU could not refresh GPS. Check location access and try again.",
+      };
+  }
+}
+
+function gpsNoticeMessage(notice: GpsNotice | string) {
+  return typeof notice === "string" ? notice : notice.message;
+}
+
+function gpsNoticeTone(notice: GpsNotice | string): GpsNotice["tone"] {
+  if (typeof notice !== "string") return notice.tone;
+  return notice.toLowerCase().includes("gps live") ? "success" : "info";
+}
+
 export default function DriverHomePage() {
   const router = useRouter();
 
@@ -94,9 +149,9 @@ export default function DriverHomePage() {
   const [locationName, setLocationName] = useState("");
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
-  const [gpsInfo, setGpsInfo] = useState<string | null>(null);
+  const [gpsInfo, setGpsInfo] = useState<GpsNotice | string | null>(null);
   const [loadingDriver, setLoadingDriver] = useState(true);
-  const [tick, setTick] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [mapError, setMapError] = useState<string | null>(null);
 
   const [startOtp, setStartOtp] = useState("");
@@ -109,6 +164,7 @@ export default function DriverHomePage() {
   const offersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gpsPermissionBlockedRef = useRef(false);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -121,7 +177,7 @@ export default function DriverHomePage() {
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
 
   useEffect(() => {
-    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -248,7 +304,7 @@ export default function DriverHomePage() {
       return;
     }
 
-    setInfo(wantOnline ? "You are online ✅" : "You are offline ✅");
+    setInfo(wantOnline ? "You are online." : "You are offline.");
     await loadDriverProfile(true);
   }
 
@@ -310,7 +366,10 @@ export default function DriverHomePage() {
     const json = await res.json().catch(() => null);
 
     if (!json?.ok) {
-      setGpsInfo(json?.error || "Heartbeat failed");
+      setGpsInfo({
+        tone: "danger",
+        message: json?.error || "GPS heartbeat failed. Try refreshing your location.",
+      });
       return false;
     }
 
@@ -320,20 +379,40 @@ export default function DriverHomePage() {
 
   async function captureCurrentLocationAndSave(silent = false) {
     return new Promise<boolean>((resolve) => {
+      if (silent && gpsPermissionBlockedRef.current) {
+        resolve(false);
+        return;
+      }
+
       if (!navigator.geolocation) {
-        setGpsInfo("GPS not supported");
+        setGpsInfo({
+          tone: "warning",
+          message:
+            "GPS is not supported on this device or browser. Use manual location instead.",
+        });
         resolve(false);
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
+          gpsPermissionBlockedRef.current = false;
           const ok = await sendHeartbeat(pos.coords.latitude, pos.coords.longitude);
           await loadDriverProfile(silent);
           resolve(ok);
         },
         (err) => {
-          setGpsInfo(`GPS error: ${err.message}`);
+          const notice = friendlyGeolocationError(err);
+          setGpsInfo(notice);
+
+          if (err.code === err.PERMISSION_DENIED) {
+            gpsPermissionBlockedRef.current = true;
+            if (gpsTimerRef.current) {
+              clearInterval(gpsTimerRef.current);
+              gpsTimerRef.current = null;
+            }
+          }
+
           resolve(false);
         },
         {
@@ -343,6 +422,15 @@ export default function DriverHomePage() {
         }
       );
     });
+  }
+
+  async function retryCurrentGps() {
+    gpsPermissionBlockedRef.current = false;
+    setGpsInfo({
+      tone: "info",
+      message: "Checking GPS permission...",
+    });
+    await captureCurrentLocationAndSave(false);
   }
 
   async function respondToOffer(action: "accept" | "reject") {
@@ -379,7 +467,7 @@ export default function DriverHomePage() {
       return;
     }
 
-    setInfo(action === "accept" ? "Offer accepted ✅" : "Offer declined ✅");
+    setInfo(action === "accept" ? "Offer accepted." : "Offer declined.");
     await loadCurrentOffer();
     await loadCurrentTrip();
     await loadDriverProfile(true);
@@ -387,7 +475,7 @@ export default function DriverHomePage() {
 
   async function tripAction(
     endpoint: string,
-    payload: Record<string, any>,
+    payload: Record<string, unknown>,
     successMsg: string
   ) {
     setBusy(true);
@@ -614,12 +702,17 @@ export default function DriverHomePage() {
 
   useEffect(() => {
     if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
+    let clearGpsInfoTimer: ReturnType<typeof setTimeout> | null = null;
 
     if (!driver?.online) {
-      setGpsInfo(null);
-      return;
+      clearGpsInfoTimer = setTimeout(() => setGpsInfo(null), 0);
+      gpsPermissionBlockedRef.current = false;
+      return () => {
+        if (clearGpsInfoTimer) clearTimeout(clearGpsInfoTimer);
+      };
     }
 
+    gpsPermissionBlockedRef.current = false;
     captureCurrentLocationAndSave(true);
 
     gpsTimerRef.current = setInterval(() => {
@@ -637,8 +730,11 @@ export default function DriverHomePage() {
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
     if (!apiKey) {
-      setMapError("Google Maps API key is missing.");
-      return;
+      const timer = window.setTimeout(() => {
+        setMapError("Google Maps API key is missing.");
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     function initWhenReady() {
@@ -705,9 +801,9 @@ export default function DriverHomePage() {
     if (!offer?.offer_expires_at) return null;
     return Math.max(
       0,
-      Math.ceil((new Date(offer.offer_expires_at).getTime() - Date.now()) / 1000)
+      Math.ceil((new Date(offer.offer_expires_at).getTime() - nowMs) / 1000)
     );
-  }, [offer?.offer_expires_at, tick]);
+  }, [offer?.offer_expires_at, nowMs]);
 
   const pickupGoogle = googleMapsLink(currentTrip?.pickup_lat, currentTrip?.pickup_lng);
   const pickupWaze = wazeLink(currentTrip?.pickup_lat, currentTrip?.pickup_lng);
@@ -716,8 +812,17 @@ export default function DriverHomePage() {
 
   if (loadingDriver) {
     return (
-      <main className="moovu-page moovu-shell p-6 text-black">
-        <div className="moovu-card p-6">Loading driver dashboard...</div>
+      <main className="moovu-page text-black">
+        <div className="moovu-shell p-6">
+          <div className="moovu-card p-6">
+            <div className="moovu-section-title">MOOVU Driver</div>
+            <div className="mt-4 space-y-3">
+              <div className="moovu-skeleton h-6 w-48" />
+              <div className="moovu-skeleton h-28 w-full" />
+              <div className="moovu-skeleton h-48 w-full" />
+            </div>
+          </div>
+        </div>
       </main>
     );
   }
@@ -728,7 +833,12 @@ export default function DriverHomePage() {
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="moovu-section-title">MOOVU Driver</div>
-            <h1 className="mt-1 text-3xl font-semibold text-slate-950">Driver mission screen</h1>
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
+              Driver dashboard
+            </h1>
+            <p className="mt-2 text-sm font-medium text-slate-600">
+              Manage availability, GPS, offers, and active trips from one screen.
+            </p>
           </div>
 
           <button className="moovu-btn moovu-btn-secondary" onClick={logout}>
@@ -745,8 +855,20 @@ export default function DriverHomePage() {
             )}
 
             {gpsInfo && (
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                {gpsInfo}
+              <div
+                className={`rounded-2xl border px-4 py-3 text-sm ${gpsNoticeClass(gpsNoticeTone(gpsInfo))}`}
+              >
+                <div>{gpsNoticeMessage(gpsInfo)}</div>
+                {gpsNoticeTone(gpsInfo) !== "success" && (
+                  <button
+                    type="button"
+                    className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-bold text-slate-900 shadow-sm"
+                    onClick={() => void retryCurrentGps()}
+                    disabled={busy}
+                  >
+                    Retry GPS
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -759,15 +881,15 @@ export default function DriverHomePage() {
         ) : (
           <div className="grid gap-4 xl:grid-cols-[1.22fr_0.78fr]">
             <section className="space-y-4">
-              <div className="moovu-card p-5">
+              <div className={`moovu-driver-hero p-5 ${driver.online ? "is-online" : ""}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm text-slate-500">Status</div>
-                    <div className="mt-1 text-3xl font-semibold text-slate-950">
+                    <div className="moovu-section-title">Availability</div>
+                    <div className="mt-1 text-4xl font-black tracking-tight text-slate-950">
                       {driver.online ? "Online" : "Offline"}
                     </div>
                     <div className="mt-2 text-sm text-slate-600">
-                      {driver.first_name ?? "—"} {driver.last_name ?? ""} • {driver.phone ?? "—"}
+                      {driver.first_name ?? "--"} {driver.last_name ?? ""} · {driver.phone ?? "--"}
                     </div>
                   </div>
 
@@ -780,20 +902,20 @@ export default function DriverHomePage() {
                 <div className="mt-5 grid gap-3 md:grid-cols-4">
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <div className="text-xs text-slate-500">Approval</div>
-                    <div className="mt-1 text-sm font-semibold text-slate-900">{driver.status ?? "—"}</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">{driver.status ?? "--"}</div>
                   </div>
 
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <div className="text-xs text-slate-500">Verification</div>
                     <div className="mt-1 text-sm font-semibold text-slate-900">
-                      {driver.verification_status ?? "—"}
+                      {driver.verification_status ?? "--"}
                     </div>
                   </div>
 
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <div className="text-xs text-slate-500">Subscription</div>
                     <div className="mt-1 text-sm font-semibold text-slate-900">
-                      {driver.subscription_status ?? "—"}
+                      {driver.subscription_status ?? "--"}
                     </div>
                   </div>
 
@@ -805,9 +927,9 @@ export default function DriverHomePage() {
                   </div>
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-3">
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   <button
-                    className="moovu-btn moovu-btn-primary"
+                    className="moovu-driver-toggle-on"
                     disabled={busy}
                     onClick={() => setOnlineServer(true)}
                   >
@@ -815,7 +937,7 @@ export default function DriverHomePage() {
                   </button>
 
                   <button
-                    className="moovu-btn moovu-btn-secondary"
+                    className="moovu-driver-toggle-off"
                     disabled={busy}
                     onClick={() => setOnlineServer(false)}
                   >
@@ -1095,7 +1217,7 @@ export default function DriverHomePage() {
                     <button
                       className="moovu-btn moovu-btn-primary"
                       disabled={busy}
-                      onClick={() => captureCurrentLocationAndSave(true)}
+                      onClick={() => void retryCurrentGps()}
                     >
                       Save current GPS
                     </button>
@@ -1123,12 +1245,14 @@ export default function DriverHomePage() {
                 </div>
               </section>
 
-              <section className="moovu-card p-5">
-                <div className="text-sm font-medium text-slate-500">Offer queue</div>
+              <section className={`moovu-driver-offer-card p-5 ${offer ? "has-offer" : ""}`}>
+                <div className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                  Trip offers
+                </div>
 
                 {!offer ? (
                   <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                    No pending trip offer.
+                    Stay online to receive nearby trip requests.
                   </div>
                 ) : (
                   <div className="mt-4 space-y-4">
@@ -1184,7 +1308,7 @@ export default function DriverHomePage() {
 
                     <div className="grid grid-cols-2 gap-3">
                       <button
-                        className="moovu-btn moovu-btn-primary"
+                        className="moovu-driver-accept"
                         disabled={busy || secondsLeft === 0}
                         onClick={() => respondToOffer("accept")}
                       >
@@ -1192,7 +1316,7 @@ export default function DriverHomePage() {
                       </button>
 
                       <button
-                        className="moovu-btn moovu-btn-secondary"
+                        className="moovu-driver-decline"
                         disabled={busy || secondsLeft === 0}
                         onClick={() => respondToOffer("reject")}
                       >

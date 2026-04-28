@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import EmptyState from "@/components/ui/EmptyState";
+import LoadingState from "@/components/ui/LoadingState";
+import MetricCard from "@/components/ui/MetricCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Wallet = {
@@ -88,6 +92,18 @@ function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
 }
 
+function displayValue(value: string | null | undefined) {
+  return value?.trim() || "--";
+}
+
+function displayDate(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : "--";
+}
+
+function tripDate(trip: CompletedTrip) {
+  return trip.completed_at || trip.created_at || "";
+}
+
 export default function DriverEarningsPage() {
   const [loading, setLoading] = useState(true);
   const [submitBusy, setSubmitBusy] = useState(false);
@@ -151,7 +167,11 @@ export default function DriverEarningsPage() {
   }
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const driverName = useMemo(() => {
@@ -161,6 +181,33 @@ export default function DriverEarningsPage() {
   const commissionDue = Number(wallet?.balance_due ?? 0);
   const subscriptionSelectedPrice = PLAN_PRICES[selectedPlan];
   const totalDue = modalType === "combined" ? commissionDue + subscriptionSelectedPrice : 0;
+
+  const now = useMemo(() => new Date(), []);
+  const todayStart = useMemo(
+    () => new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(),
+    [now],
+  );
+  const weekStart = useMemo(() => todayStart - 6 * 24 * 60 * 60 * 1000, [todayStart]);
+  const monthStart = useMemo(
+    () => new Date(now.getFullYear(), now.getMonth(), 1).getTime(),
+    [now],
+  );
+
+  const earningsSummary = useMemo(() => {
+    return trips.reduce(
+      (summary, trip) => {
+        const earned = Number(trip.driver_net_earnings ?? trip.fare_amount ?? 0);
+        const dateMs = tripDate(trip) ? new Date(tripDate(trip)).getTime() : 0;
+
+        summary.total += earned;
+        if (dateMs >= todayStart) summary.today += earned;
+        if (dateMs >= weekStart) summary.week += earned;
+        if (dateMs >= monthStart) summary.month += earned;
+        return summary;
+      },
+      { today: 0, week: 0, month: 0, total: 0 },
+    );
+  }, [monthStart, todayStart, trips, weekStart]);
 
   const reference = useMemo(() => {
     if (!driver?.id) return "";
@@ -268,56 +315,62 @@ export default function DriverEarningsPage() {
   }
 
   if (loading) {
-    return <main className="p-6 text-black">Loading MOOVU payments...</main>;
+    return (
+      <LoadingState
+        title="Loading driver earnings"
+        description="Preparing earnings, commission balance, subscriptions, and payment history."
+      />
+    );
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="moovu-page text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-3">
+      <div className="moovu-shell space-y-6">
+        <div className="moovu-card p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm text-gray-500">MOOVU Driver</div>
-            <h1 className="text-3xl font-semibold mt-1">MOOVU Payments</h1>
-            <p className="text-gray-700 mt-2">
+            <div className="moovu-section-title">MOOVU Driver</div>
+            <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Earnings and payments</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
               Pay subscriptions, commission balances, or both in one place.
             </p>
           </div>
 
-          <Link href="/driver" className="border rounded-xl px-4 py-2 bg-white">
+          <Link href="/driver" className="moovu-btn moovu-btn-secondary">
             Back to Dashboard
           </Link>
+          </div>
         </div>
 
-        <section className="grid md:grid-cols-4 gap-4">
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Subscription Status</div>
-            <div className="text-2xl font-semibold mt-2">{driver?.subscription_status ?? "—"}</div>
-          </div>
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <MetricCard label="Today" value={money(earningsSummary.today)} helper="Recent completed trips" />
+          <MetricCard label="This week" value={money(earningsSummary.week)} helper="Last 7 days" />
+          <MetricCard label="This month" value={money(earningsSummary.month)} helper="Current month" />
+          <MetricCard label="Total earned" value={money(wallet?.total_driver_net ?? earningsSummary.total)} helper={`${wallet?.total_trips_completed ?? trips.length} completed trips`} tone="primary" />
+          <MetricCard label="Commission owed" value={money(commissionDue)} helper="Payable to MOOVU" tone={commissionDue > 0 ? "warning" : "success"} />
+        </section>
 
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Current Plan</div>
-            <div className="text-2xl font-semibold mt-2">{driver?.subscription_plan ?? "—"}</div>
+        <section className="grid gap-3 md:grid-cols-3">
+          <div className="moovu-card p-5">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Subscription</div>
+            <div className="mt-2"><StatusBadge status={driver?.subscription_status} /></div>
           </div>
-
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Expires</div>
-            <div className="text-lg font-semibold mt-2">
-              {driver?.subscription_expires_at
-                ? new Date(driver.subscription_expires_at).toLocaleString()
-                : "—"}
+          <div className="moovu-card p-5">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Current plan</div>
+            <div className="mt-2 text-xl font-black text-slate-950">{displayValue(driver?.subscription_plan)}</div>
+          </div>
+          <div className="moovu-card p-5">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Expires</div>
+            <div className="mt-2 text-sm font-black text-slate-950">
+              {displayDate(driver?.subscription_expires_at)}
             </div>
-          </div>
-
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Commission Due</div>
-            <div className="text-2xl font-semibold mt-2">{money(commissionDue)}</div>
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Choose What You Want to Pay</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Choose what you want to pay</h2>
 
           <div className="grid lg:grid-cols-3 gap-4">
             <div className="border rounded-2xl p-5 space-y-4">
@@ -456,11 +509,14 @@ export default function DriverEarningsPage() {
           </section>
         )}
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Submitted Payment Requests</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Submitted payment requests</h2>
 
           {paymentRequests.length === 0 ? (
-            <div>No payment requests submitted yet.</div>
+            <EmptyState
+              title="No payment requests yet"
+              description="Submitted subscription and commission proof of payment requests will appear here."
+            />
           ) : (
             <div className="space-y-3">
               {paymentRequests.map((row) => (
@@ -472,7 +528,7 @@ export default function DriverEarningsPage() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Plan</div>
-                      <div className="font-medium">{row.subscription_plan ?? "—"}</div>
+                      <div className="font-medium">{displayValue(row.subscription_plan)}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Expected</div>
@@ -488,7 +544,7 @@ export default function DriverEarningsPage() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Status</div>
-                      <div className="font-medium">{row.status}</div>
+                      <StatusBadge status={row.status} />
                     </div>
                   </div>
 
@@ -521,36 +577,42 @@ export default function DriverEarningsPage() {
         </section>
 
         <section className="grid lg:grid-cols-2 gap-6">
-          <div className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-            <h2 className="text-xl font-semibold">Commission Payment History</h2>
+          <div className="moovu-card p-5 sm:p-6 space-y-4">
+            <h2 className="text-xl font-black text-slate-950">Commission payment history</h2>
 
             {settlements.length === 0 ? (
-              <div>No commission payments recorded yet.</div>
+              <EmptyState
+                title="No commission payments"
+                description="Approved commission settlement records will appear here."
+              />
             ) : (
               <div className="space-y-3">
                 {settlements.map((row) => (
                   <div key={row.id} className="border rounded-2xl p-4">
-                    <div>{money(row.amount_paid)} • {row.payment_method}</div>
-                    <div className="text-sm text-gray-500 mt-1">{row.reference || "—"}</div>
-                    <div className="text-xs text-gray-500 mt-2">{new Date(row.created_at).toLocaleString()}</div>
+                    <div>{money(row.amount_paid)} - {row.payment_method}</div>
+                    <div className="text-sm text-gray-500 mt-1">{displayValue(row.reference)}</div>
+                    <div className="text-xs text-gray-500 mt-2">{displayDate(row.created_at)}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-            <h2 className="text-xl font-semibold">Subscription Payment History</h2>
+          <div className="moovu-card p-5 sm:p-6 space-y-4">
+            <h2 className="text-xl font-black text-slate-950">Subscription payment history</h2>
 
             {subscriptionPayments.length === 0 ? (
-              <div>No subscription payments recorded yet.</div>
+              <EmptyState
+                title="No subscription payments"
+                description="Approved subscription payments will appear here."
+              />
             ) : (
               <div className="space-y-3">
                 {subscriptionPayments.map((row) => (
                   <div key={row.id} className="border rounded-2xl p-4">
-                    <div>{money(row.amount_paid)} • {row.payment_method}</div>
-                    <div className="text-sm text-gray-500 mt-1">{row.reference || "—"}</div>
-                    <div className="text-xs text-gray-500 mt-2">{new Date(row.created_at).toLocaleString()}</div>
+                    <div>{money(row.amount_paid)} - {row.payment_method}</div>
+                    <div className="text-sm text-gray-500 mt-1">{displayValue(row.reference)}</div>
+                    <div className="text-xs text-gray-500 mt-2">{displayDate(row.created_at)}</div>
                   </div>
                 ))}
               </div>
@@ -558,11 +620,14 @@ export default function DriverEarningsPage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Recent Completed Trips</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Recent completed trips</h2>
 
           {trips.length === 0 ? (
-            <div>No completed trips yet.</div>
+            <EmptyState
+              title="No completed trips"
+              description="Completed trip earnings will appear here after your first finished ride."
+            />
           ) : (
             <div className="space-y-3">
               {trips.map((trip) => (
@@ -570,11 +635,11 @@ export default function DriverEarningsPage() {
                   <div className="grid md:grid-cols-5 gap-4">
                     <div>
                       <div className="text-sm text-gray-500">Pickup</div>
-                      <div className="font-medium">{trip.pickup_address || "—"}</div>
+                      <div className="font-medium">{displayValue(trip.pickup_address)}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Dropoff</div>
-                      <div className="font-medium">{trip.dropoff_address || "—"}</div>
+                      <div className="font-medium">{displayValue(trip.dropoff_address)}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Fare</div>
@@ -586,11 +651,7 @@ export default function DriverEarningsPage() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Completed</div>
-                      <div className="font-medium">
-                        {(trip.completed_at ?? trip.created_at)
-                          ? new Date(trip.completed_at ?? trip.created_at!).toLocaleString()
-                          : "—"}
-                      </div>
+                      <div className="font-medium">{displayDate(trip.completed_at ?? trip.created_at)}</div>
                     </div>
                   </div>
                 </div>

@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import LoadingState from "@/components/ui/LoadingState";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Trip = {
@@ -14,6 +17,8 @@ type Trip = {
   dropoff_address: string | null;
   payment_method: string | null;
   fare_amount: number | null;
+  distance_km?: number | null;
+  duration_min?: number | null;
   status: string;
   created_at: string | null;
   completed_at?: string | null;
@@ -32,20 +37,35 @@ type Driver = {
   vehicle_registration?: string | null;
 };
 
+type TripStatusResponse = {
+  ok?: boolean;
+  trip?: Trip | null;
+  driver?: Driver | null;
+  error?: string;
+};
+
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
 }
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
+function dash(value: string | null | undefined) {
+  return value?.trim() || "--";
+}
+
+function fmt(value: string | null | undefined) {
+  if (!value) return "--";
   return new Date(value).toLocaleString("en-ZA", {
     day: "2-digit",
-    month: "2-digit",
+    month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
+}
+
+function fmtNum(value: number | null | undefined, suffix: string) {
+  if (value == null) return "--";
+  return `${Number(value).toFixed(value % 1 === 0 ? 0 : 1)} ${suffix}`;
 }
 
 function buildReceiptNumber(tripId: string, issueAt: string | null | undefined) {
@@ -53,8 +73,23 @@ function buildReceiptNumber(tripId: string, issueAt: string | null | undefined) 
   const datePart = issueAt
     ? new Date(issueAt).toISOString().slice(0, 10).replace(/-/g, "")
     : "00000000";
-
   return `MV-${datePart}-${shortTrip}`;
+}
+
+function driverName(driver: Driver | null) {
+  if (!driver) return "--";
+  return [driver.first_name, driver.last_name].filter(Boolean).join(" ") || "--";
+}
+
+function statusLabel(status: string) {
+  const map: Record<string, string> = {
+    completed: "Completed",
+    cancelled: "Cancelled",
+    in_progress: "In Progress",
+    accepted: "Accepted",
+    pending: "Pending",
+  };
+  return map[status] ?? status;
 }
 
 export default function TripReceiptPage() {
@@ -67,14 +102,12 @@ export default function TripReceiptPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function loadReceipt() {
+  const loadReceipt = useCallback(async () => {
     setLoading(true);
     setMsg(null);
 
     try {
-      const {
-        data: { session },
-      } = await supabaseClient.auth.getSession();
+      const { data: { session } } = await supabaseClient.auth.getSession();
 
       if (!session) {
         router.replace(`/customer/auth?next=/ride/${tripId}/receipt`);
@@ -83,12 +116,10 @@ export default function TripReceiptPage() {
 
       const res = await fetch(`/api/customer/trip-status?tripId=${encodeURIComponent(tripId)}`, {
         cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
-      const json = await res.json().catch(() => null);
+      const json = (await res.json().catch(() => null)) as TripStatusResponse | null;
 
       if (!json?.ok) {
         setMsg(json?.error || "Could not load receipt.");
@@ -98,181 +129,213 @@ export default function TripReceiptPage() {
 
       setTrip(json.trip ?? null);
       setDriver(json.driver ?? null);
-    } catch (e: any) {
-      setMsg(e?.message || "Could not load receipt.");
+    } catch (error: unknown) {
+      setMsg(error instanceof Error ? error.message : "Could not load receipt.");
     }
 
     setLoading(false);
-  }
+  }, [router, tripId]);
 
   useEffect(() => {
-    loadReceipt();
-  }, [tripId]);
+    const timer = window.setTimeout(() => { void loadReceipt(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadReceipt]);
 
-  const totalPaid = Number(trip?.fare_amount ?? 0);
   const issueAt = trip?.completed_at ?? trip?.created_at ?? null;
-
-  const vatAmount = useMemo(() => {
-    return totalPaid - totalPaid / 1.15;
-  }, [totalPaid]);
-
-  const fareExclVat = useMemo(() => {
-    return totalPaid / 1.15;
-  }, [totalPaid]);
-
-  const receiptNumber = useMemo(() => {
-    return buildReceiptNumber(trip?.id ?? "", issueAt);
-  }, [trip?.id, issueAt]);
+  const totalPaid = Number(trip?.fare_amount ?? 0);
+  const vatAmount = useMemo(() => totalPaid - totalPaid / 1.15, [totalPaid]);
+  const fareExclVat = useMemo(() => totalPaid / 1.15, [totalPaid]);
+  const receiptNumber = useMemo(() => buildReceiptNumber(trip?.id ?? "", issueAt), [trip?.id, issueAt]);
 
   const vehicleLabel = useMemo(() => {
-    if (!driver) return "—";
-    const value = [driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(" ");
-    return value || "—";
+    if (!driver) return "--";
+    return [driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(" ") || "--";
   }, [driver]);
 
   if (loading) {
-    return <main className="p-6 text-black">Loading receipt...</main>;
+    return <LoadingState title="Loading receipt" description="Preparing your MOOVU trip receipt." />;
   }
 
   if (!trip) {
     return (
-      <main className="p-6 text-black">
+      <main className="moovu-app-screen">
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
-        Receipt not found.
+        <div className="moovu-app-container">
+          <section className="moovu-app-card p-6">
+            <div className="moovu-kicker">Receipt</div>
+            <h1 className="mt-2 text-2xl font-black text-slate-950">Receipt not found</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              We could not find a receipt for this trip. Open your ride history and try again.
+            </p>
+            <Link href="/ride/history" className="moovu-btn moovu-btn-primary mt-5">
+              Back to trips
+            </Link>
+          </section>
+        </div>
+        <CustomerBottomNav />
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#eaf2ff] px-4 py-6 text-black">
+    <main className="moovu-app-screen moovu-receipt-screen">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="mx-auto max-w-5xl space-y-4">
-        <div className="flex items-center justify-between gap-3 print:hidden">
-          <Link
-            href={`/ride/${trip.id}`}
-            className="inline-flex items-center rounded-xl border px-4 py-2 bg-white"
-          >
-            ← Back to Trip
+      <div className="moovu-app-container">
+        {/* Print controls */}
+        <div className="moovu-no-print mb-4 flex flex-wrap items-center justify-between gap-3">
+          <Link href={`/ride/${trip.id}`} className="moovu-btn moovu-btn-secondary">
+            ← Back to trip
           </Link>
-
-          <button
-            onClick={() => window.print()}
-            className="rounded-xl px-4 py-2 text-white"
-            style={{ background: "var(--moovu-primary)" }}
-          >
-            Print Receipt
+          <button type="button" onClick={() => window.print()} className="moovu-btn moovu-btn-primary">
+            Print receipt
           </button>
         </div>
 
-        <section className="mx-auto max-w-4xl rounded-[2rem] border-2 border-black bg-white p-6 shadow-lg print:rounded-none print:shadow-none">
-          <div className="flex flex-col gap-4 border-b border-black pb-6 md:flex-row md:items-start md:justify-between">
+        <div className="moovu-receipt-doc">
+          {/* ── HEADER ────────────────────────────────────────────── */}
+          <div className="moovu-receipt-doc-header">
+            <div className="moovu-receipt-logo-row">
+              <Image src="/logo.png" alt="MOOVU Kasi Rides" width={64} height={64} priority className="moovu-receipt-logo-img" />
+              <div>
+                <div className="moovu-receipt-brand">MOOVU Kasi Rides</div>
+                <div className="moovu-receipt-tagline">Safe · Fast · Trusted</div>
+              </div>
+            </div>
+            <div className="moovu-receipt-doc-meta">
+              <div className="moovu-receipt-title">TRIP RECEIPT</div>
+              <table className="moovu-receipt-meta-table">
+                <tbody>
+                  <tr>
+                    <td>Receipt No.</td>
+                    <td><strong>{receiptNumber}</strong></td>
+                  </tr>
+                  <tr>
+                    <td>Trip ID</td>
+                    <td className="moovu-receipt-mono">{trip.id}</td>
+                  </tr>
+                  <tr>
+                    <td>Issued</td>
+                    <td>{fmt(issueAt)}</td>
+                  </tr>
+                  <tr>
+                    <td>Status</td>
+                    <td>
+                      <span className={`moovu-receipt-status moovu-receipt-status-${trip.status}`}>
+                        {statusLabel(trip.status)}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="moovu-receipt-divider" />
+
+          {/* ── ROUTE ─────────────────────────────────────────────── */}
+          <div className="moovu-receipt-section-title">Route</div>
+          <div className="moovu-receipt-route">
+            <div className="moovu-receipt-route-row">
+              <div className="moovu-receipt-route-icon pickup" />
+              <div>
+                <div className="moovu-receipt-route-label">Pickup</div>
+                <div className="moovu-receipt-route-value">{dash(trip.pickup_address)}</div>
+              </div>
+            </div>
+            <div className="moovu-receipt-route-connector" />
+            <div className="moovu-receipt-route-row">
+              <div className="moovu-receipt-route-icon dropoff" />
+              <div>
+                <div className="moovu-receipt-route-label">Destination</div>
+                <div className="moovu-receipt-route-value">{dash(trip.dropoff_address)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="moovu-receipt-divider" />
+
+          {/* ── TRIP STATS ────────────────────────────────────────── */}
+          <div className="moovu-receipt-stats">
+            <div className="moovu-receipt-stat">
+              <div className="moovu-receipt-stat-label">Distance</div>
+              <div className="moovu-receipt-stat-value">{fmtNum(trip.distance_km, "km")}</div>
+            </div>
+            <div className="moovu-receipt-stat">
+              <div className="moovu-receipt-stat-label">Duration</div>
+              <div className="moovu-receipt-stat-value">{fmtNum(trip.duration_min, "min")}</div>
+            </div>
+            <div className="moovu-receipt-stat">
+              <div className="moovu-receipt-stat-label">Payment</div>
+              <div className="moovu-receipt-stat-value">{dash(trip.payment_method)}</div>
+            </div>
+          </div>
+
+          <div className="moovu-receipt-divider" />
+
+          {/* ── PEOPLE + VEHICLE ──────────────────────────────────── */}
+          <div className="moovu-receipt-people">
             <div>
-              <div className="text-4xl font-black tracking-tight">MOOVU</div>
-              <div className="text-lg font-semibold mt-1">Trip Receipt</div>
-              <div className="text-sm text-gray-600 mt-2">Safe • Fast • Trusted</div>
+              <div className="moovu-receipt-section-title">Rider</div>
+              <div className="moovu-receipt-person-name">{dash(trip.rider_name)}</div>
+              <div className="moovu-receipt-person-sub">{dash(trip.rider_phone)}</div>
             </div>
-
-            <div className="text-sm md:text-right">
-              <div>
-                <span className="font-semibold">Receipt No:</span> {receiptNumber}
-              </div>
-              <div className="mt-1">
-                <span className="font-semibold">Trip ID:</span> {trip.id}
-              </div>
-              <div className="mt-1">
-                <span className="font-semibold">Issued:</span> {formatDateTime(issueAt)}
-              </div>
-              <div className="mt-1">
-                <span className="font-semibold">Status:</span> {trip.status}
-              </div>
+            <div>
+              <div className="moovu-receipt-section-title">Driver</div>
+              <div className="moovu-receipt-person-name">{driverName(driver)}</div>
+              <div className="moovu-receipt-person-sub">{dash(driver?.phone)}</div>
             </div>
-          </div>
-
-          <div className="grid gap-8 pt-6 md:grid-cols-2">
-            <div className="space-y-5">
-              <div>
-                <div className="text-gray-500">Rider</div>
-                <div className="mt-1 text-xl">{trip.rider_name ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Rider Phone</div>
-                <div className="mt-1 text-xl">{trip.rider_phone ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Driver</div>
-                <div className="mt-1 text-xl">
-                  {driver ? `${driver.first_name ?? "—"} ${driver.last_name ?? ""}` : "—"}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Driver Phone</div>
-                <div className="mt-1 text-xl">{driver?.phone ?? "—"}</div>
-              </div>
-            </div>
-
-            <div className="space-y-5">
-              <div>
-                <div className="text-gray-500">Pickup</div>
-                <div className="mt-1 text-xl">{trip.pickup_address ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Dropoff</div>
-                <div className="mt-1 text-xl">{trip.dropoff_address ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Payment Method</div>
-                <div className="mt-1 text-xl">{trip.payment_method ?? "—"}</div>
+            <div>
+              <div className="moovu-receipt-section-title">Vehicle</div>
+              <div className="moovu-receipt-person-name">{vehicleLabel}</div>
+              <div className="moovu-receipt-person-sub">
+                {[driver?.vehicle_year, driver?.vehicle_color, driver?.vehicle_registration]
+                  .filter(Boolean)
+                  .join(" · ") || "--"}
               </div>
             </div>
           </div>
 
-          <div className="my-8 border-t border-dashed border-black" />
+          <div className="moovu-receipt-divider" />
 
-          <div className="grid gap-8 md:grid-cols-2">
-            <div className="space-y-5">
-              <div>
-                <div className="text-gray-500">Vehicle</div>
-                <div className="mt-1 text-xl">{vehicleLabel}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Registration</div>
-                <div className="mt-1 text-xl">{driver?.vehicle_registration ?? "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-gray-500">Vehicle Details</div>
-                <div className="mt-1 text-xl">
-                  {[driver?.vehicle_year, driver?.vehicle_color].filter(Boolean).join(" • ") || "—"}
-                </div>
-              </div>
+          {/* ── TIMESTAMPS ────────────────────────────────────────── */}
+          <div className="moovu-receipt-times">
+            <div>
+              <span className="moovu-receipt-time-label">Booked:</span>
+              <span>{fmt(trip.created_at)}</span>
             </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 text-xl">
-                <span className="text-gray-600">Trip Fare excl. VAT</span>
-                <span>{money(fareExclVat)}</span>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 text-xl">
-                <span className="text-gray-600">VAT (15%)</span>
-                <span>{money(vatAmount)}</span>
-              </div>
-
-              <div className="border-t border-black pt-4 flex items-center justify-between gap-4 text-2xl font-bold">
-                <span>Total Paid</span>
-                <span>{money(totalPaid)}</span>
-              </div>
+            <div>
+              <span className="moovu-receipt-time-label">Completed:</span>
+              <span>{fmt(trip.completed_at)}</span>
             </div>
           </div>
-        </section>
+
+          <div className="moovu-receipt-divider" />
+
+          {/* ── FARE TOTAL ────────────────────────────────────────── */}
+          <div className="moovu-receipt-fare-block">
+            <div className="moovu-receipt-fare-row">
+              <span>Trip fare (excl. VAT)</span>
+              <span>{money(fareExclVat)}</span>
+            </div>
+            <div className="moovu-receipt-fare-row">
+              <span>VAT (15%)</span>
+              <span>{money(vatAmount)}</span>
+            </div>
+            <div className="moovu-receipt-fare-total-row">
+              <span>TOTAL PAID</span>
+              <span>{money(totalPaid)}</span>
+            </div>
+          </div>
+
+          {/* ── FOOTER ────────────────────────────────────────────── */}
+          <div className="moovu-receipt-doc-footer">
+            Thank you for riding with MOOVU Kasi Rides.
+          </div>
+        </div>
       </div>
+
+      <CustomerBottomNav />
     </main>
   );
 }

@@ -194,7 +194,11 @@ export default function AdminSettlementsPage() {
   }
 
   useEffect(() => {
-    void loadData();
+    const timer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const driverOptions = useMemo(() => {
@@ -215,20 +219,19 @@ export default function AdminSettlementsPage() {
   const selectedDriver = driverOptions.find((d) => d.id === driverId) ?? null;
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="space-y-6 text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div>
-          <div className="text-sm text-gray-500">MOOVU Admin</div>
-          <h1 className="text-3xl font-semibold mt-1">Driver Settlements</h1>
-          <p className="text-gray-700 mt-2">
+      <div className="moovu-card p-5 sm:p-6">
+          <div className="moovu-section-title">MOOVU Admin</div>
+          <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Driver settlements</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Record driver payments and monitor outstanding balances owed to MOOVU.
           </p>
         </div>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Record Settlement</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Record settlement</h2>
 
           <select
             className="border rounded-xl p-3 w-full"
@@ -238,7 +241,7 @@ export default function AdminSettlementsPage() {
             <option value="">Select driver</option>
             {driverOptions.map((driver) => (
               <option key={driver.id} value={driver.id}>
-                {driver.label} • Balance Due: {money(driver.wallet?.balance_due)}
+                {driver.label} - Balance Due: {money(driver.wallet?.balance_due)}
               </option>
             ))}
           </select>
@@ -321,8 +324,8 @@ export default function AdminSettlementsPage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Driver Wallet Balances</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Driver wallet balances</h2>
 
           {loading ? (
             <div>Loading balances...</div>
@@ -355,8 +358,8 @@ export default function AdminSettlementsPage() {
                       <div className="text-sm text-gray-500">Last Payment</div>
                       <div className="font-medium">
                         {driver.wallet?.last_payment_at
-                          ? `${money(driver.wallet?.last_payment_amount)} • ${new Date(driver.wallet.last_payment_at).toLocaleString()}`
-                          : "—"}
+                          ? `${money(driver.wallet?.last_payment_amount)} - ${new Date(driver.wallet.last_payment_at).toLocaleString()}`
+                          : "--"}
                       </div>
                     </div>
                   </div>
@@ -366,8 +369,8 @@ export default function AdminSettlementsPage() {
           )}
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Recent Settlements</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Recent settlements</h2>
 
           {settlements.length === 0 ? (
             <div>No settlements recorded yet.</div>
@@ -390,7 +393,7 @@ export default function AdminSettlementsPage() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Reference</div>
-                      <div className="font-medium">{row.reference || "—"}</div>
+                      <div className="font-medium">{row.reference || "--"}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Date</div>
@@ -406,7 +409,6 @@ export default function AdminSettlementsPage() {
             </div>
           )}
         </section>
-      </div>
     </main>
   );
 }

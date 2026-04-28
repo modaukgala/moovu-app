@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import LoadingState from "@/components/ui/LoadingState";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type RideTrip = {
@@ -112,6 +113,14 @@ function statusLabel(status: string | null | undefined) {
 
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
+}
+
+function displayValue(value: string | null | undefined) {
+  return value?.trim() || "--";
+}
+
+function displayDate(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : "--";
 }
 
 function statusChipClass(status: string | null | undefined) {
@@ -337,16 +346,27 @@ export default function RideTrackingPage() {
   }
 
   useEffect(() => {
-    loadTrip();
-    const timer = setInterval(loadTrip, 4000);
-    return () => clearInterval(timer);
+    const firstLoadTimer = window.setTimeout(() => {
+      void loadTrip();
+    }, 0);
+    const pollTimer = window.setInterval(() => {
+      void loadTrip();
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(firstLoadTimer);
+      window.clearInterval(pollTimer);
+    };
   }, [tripId]);
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
     if (!apiKey) {
-      setMapError("Google Maps API key is missing.");
-      return;
+      const timer = window.setTimeout(() => {
+        setMapError("Google Maps API key is missing.");
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     function ready() {
@@ -418,8 +438,8 @@ export default function RideTrackingPage() {
 
       setMsg(json.message || "Trip cancelled successfully.");
       await loadTrip();
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to cancel trip.");
+    } catch (error: unknown) {
+      setMsg(error instanceof Error ? error.message : "Failed to cancel trip.");
     }
 
     setCancelBusy(false);
@@ -436,11 +456,31 @@ export default function RideTrackingPage() {
   }, [trip]);
 
   const carText = useMemo(() => {
-    if (!driver) return "—";
+    if (!driver) return "--";
     return [driver.vehicle_make, driver.vehicle_model, driver.vehicle_color]
       .filter(Boolean)
-      .join(" • ") || "—";
+      .join(" - ") || "--";
   }, [driver]);
+
+  const statusCta = useMemo(() => {
+    switch (trip?.status) {
+      case "requested":
+      case "offered":
+        return "We are finding a nearby MOOVU driver.";
+      case "assigned":
+        return "Your driver is on the way to pickup.";
+      case "arrived":
+        return "Your driver has arrived. Share the start OTP when ready.";
+      case "ongoing":
+        return "Trip in progress. Share trip details with someone you trust if needed.";
+      case "completed":
+        return "Trip complete. Your receipt is ready.";
+      case "cancelled":
+        return "This trip was cancelled.";
+      default:
+        return "Track your MOOVU trip status here.";
+    }
+  }, [trip?.status]);
 
   const topTimeline = useMemo(() => {
     const status = trip?.status;
@@ -476,7 +516,12 @@ export default function RideTrackingPage() {
   }, [trip?.status]);
 
   if (loading) {
-    return <main className="moovu-page moovu-shell p-6 text-black">Loading trip...</main>;
+    return (
+      <LoadingState
+        title="Loading your live trip"
+        description="Preparing the map, driver details, route status, and trip controls."
+      />
+    );
   }
 
   if (!trip) {
@@ -496,7 +541,8 @@ export default function RideTrackingPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="moovu-section-title">MOOVU Ride</div>
-            <h1 className="mt-1 text-3xl font-semibold text-slate-950">Track your ride</h1>
+            <h1 className="mt-1 text-3xl font-black text-slate-950">Track your ride</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{statusCta}</p>
           </div>
 
           <div className={statusChipClass(trip.status)}>
@@ -523,21 +569,36 @@ export default function RideTrackingPage() {
           ))}
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-          <section className="relative overflow-hidden rounded-[34px] border border-[var(--moovu-border)] bg-white shadow-sm">
+        <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+          <section className="relative min-h-[68vh] overflow-hidden rounded-[28px] border border-[var(--moovu-border)] bg-white shadow-sm">
             <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow">
               {tracking?.liveState || statusLabel(trip.status)}
             </div>
 
             {mapError ? (
-              <div className="flex h-[58vh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">
+              <div className="flex min-h-[68vh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">
                 {mapError}
               </div>
             ) : (
-              <div ref={mapRef} className="h-[58vh] w-full bg-slate-100" />
+              <div ref={mapRef} className="min-h-[68vh] w-full bg-slate-100" />
             )}
 
-            <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-white via-white/95 to-white/70 p-4 backdrop-blur md:p-5">
+            <div className="absolute bottom-0 left-0 right-0 z-10 rounded-t-[28px] border-t border-white/70 bg-white/95 p-4 shadow-[0_-16px_45px_rgba(15,23,42,0.14)] backdrop-blur md:p-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                    Current status
+                  </div>
+                  <div className="mt-1 text-lg font-black text-slate-950">
+                    {statusLabel(trip.status)}
+                  </div>
+                </div>
+                {trip.status === "completed" && (
+                  <Link href={`/ride/${trip.id}/receipt`} className="moovu-btn moovu-btn-primary">
+                    Receipt
+                  </Link>
+                )}
+              </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="moovu-stat-card">
                   <div className="moovu-stat-label">Fare</div>
@@ -547,14 +608,14 @@ export default function RideTrackingPage() {
                 <div className="moovu-stat-card">
                   <div className="moovu-stat-label">Payment</div>
                   <div className="moovu-stat-value capitalize">
-                    {trip.payment_method ?? "—"}
+                    {displayValue(trip.payment_method)}
                   </div>
                 </div>
 
                 <div className="moovu-stat-card">
                   <div className="moovu-stat-label">Requested</div>
                   <div className="mt-2 text-sm font-medium text-slate-900">
-                    {trip.created_at ? new Date(trip.created_at).toLocaleString() : "—"}
+                    {displayDate(trip.created_at)}
                   </div>
                 </div>
               </div>
@@ -573,7 +634,7 @@ export default function RideTrackingPage() {
               <div className="mt-4 grid gap-3">
                 <div className="rounded-2xl bg-slate-50 p-3">
                   <div className="text-xs text-slate-500">Phone</div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{driver?.phone ?? "—"}</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{displayValue(driver?.phone)}</div>
                 </div>
 
                 <div className="rounded-2xl bg-slate-50 p-3">
@@ -584,7 +645,7 @@ export default function RideTrackingPage() {
                 <div className="rounded-2xl bg-slate-50 p-3">
                   <div className="text-xs text-slate-500">Registration</div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
-                    {driver?.vehicle_registration ?? "—"}
+                    {displayValue(driver?.vehicle_registration)}
                   </div>
                 </div>
               </div>
@@ -601,7 +662,7 @@ export default function RideTrackingPage() {
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <div className="text-xs text-slate-500">Freshness</div>
                     <div className="mt-1 text-sm font-semibold text-slate-900">
-                      {tracking.freshnessSeconds ?? "—"}s
+                      {tracking.freshnessSeconds ?? "--"}s
                     </div>
                   </div>
                 </div>
@@ -617,7 +678,7 @@ export default function RideTrackingPage() {
                   <div>
                     <div className="text-xs uppercase tracking-wide text-slate-500">Pickup</div>
                     <div className="mt-1 text-sm font-medium text-slate-900">
-                      {trip.pickup_address ?? "—"}
+                      {displayValue(trip.pickup_address)}
                     </div>
                   </div>
                 </div>
@@ -629,7 +690,7 @@ export default function RideTrackingPage() {
                   <div>
                     <div className="text-xs uppercase tracking-wide text-slate-500">Dropoff</div>
                     <div className="mt-1 text-sm font-medium text-slate-900">
-                      {trip.dropoff_address ?? "—"}
+                      {displayValue(trip.dropoff_address)}
                     </div>
                   </div>
                 </div>
@@ -640,7 +701,7 @@ export default function RideTrackingPage() {
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <div className="text-xs text-slate-500">Scheduled for</div>
                     <div className="mt-1 text-sm font-medium text-slate-900">
-                      {trip.scheduled_for ? new Date(trip.scheduled_for).toLocaleString() : "—"}
+                      {displayDate(trip.scheduled_for)}
                     </div>
                   </div>
 
@@ -649,7 +710,7 @@ export default function RideTrackingPage() {
                     <div className="mt-1 text-sm font-medium text-slate-900">
                       {trip.scheduled_release_at
                         ? new Date(trip.scheduled_release_at).toLocaleString()
-                        : "—"}
+                        : "--"}
                     </div>
                   </div>
                 </div>
@@ -669,7 +730,7 @@ export default function RideTrackingPage() {
                 >
                   <div className="text-xs uppercase tracking-wide opacity-80">Start OTP</div>
                   <div className="mt-1 text-2xl font-semibold tracking-[0.25em]">
-                    {trip.start_otp ?? "—"}
+                    {trip.start_otp ?? "--"}
                   </div>
                   <div className="mt-2 text-xs">
                     {trip.start_otp_verified ? "Verified" : "Give this to driver to start trip"}
@@ -685,7 +746,7 @@ export default function RideTrackingPage() {
                 >
                   <div className="text-xs uppercase tracking-wide opacity-80">End OTP</div>
                   <div className="mt-1 text-2xl font-semibold tracking-[0.25em]">
-                    {trip.end_otp ?? "—"}
+                    {trip.end_otp ?? "--"}
                   </div>
                   <div className="mt-2 text-xs">
                     {trip.end_otp_verified ? "Verified" : "Use this when the trip ends"}
@@ -767,7 +828,7 @@ export default function RideTrackingPage() {
               <div className="mt-4 rounded-2xl bg-red-50 p-4">
                 <div className="text-sm font-semibold text-red-700">Trip cancelled</div>
                 <div className="mt-2 text-sm text-red-700">
-                  Reason: {trip.cancel_reason ?? "—"}
+                  Reason: {trip.cancel_reason ?? "--"}
                 </div>
                 {Number(trip.cancellation_fee_amount ?? 0) > 0 && (
                   <div className="mt-2 text-sm font-medium text-red-700">

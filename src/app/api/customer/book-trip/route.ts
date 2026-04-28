@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { calculateFare } from "@/lib/fare/calculateFare";
+import { getRideOption, normalizeRideOptionId } from "@/lib/domain/fare";
 import { offerNextEligibleDriver } from "@/lib/trip-offers";
 import { fullCustomerName } from "@/lib/customer/auth";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
@@ -30,6 +31,10 @@ function parseScheduledDate(value: string | null) {
   return dt;
 }
 
+function hasOkFlag(value: unknown): value is { ok?: boolean } {
+  return typeof value === "object" && value !== null && "ok" in value;
+}
+
 type BookTripBody = {
   pickupAddress?: string | null;
   pickup_address?: string | null;
@@ -53,8 +58,11 @@ type BookTripBody = {
   duration_min?: number | null;
   rideType?: string | null;
   ride_type?: string | null;
+  rideOption?: string | null;
+  ride_option?: string | null;
   scheduledFor?: string | null;
   scheduled_for?: string | null;
+  notes?: string | null;
 };
 
 export async function POST(req: Request) {
@@ -90,6 +98,10 @@ export async function POST(req: Request) {
 
     const rideTypeRaw = pickFirstString(body.rideType, body.ride_type) || "now";
     const rideType = rideTypeRaw === "scheduled" ? "scheduled" : "now";
+    const rideOptionId = normalizeRideOptionId(
+      pickFirstString(body.rideOption, body.ride_option)
+    );
+    const rideOption = getRideOption(rideOptionId);
 
     const scheduledForRaw = pickFirstString(body.scheduledFor, body.scheduled_for);
     const scheduledDate = rideType === "scheduled" ? parseScheduledDate(scheduledForRaw) : null;
@@ -146,6 +158,7 @@ export async function POST(req: Request) {
     const fare = calculateFare({
       distanceKm,
       durationMin,
+      rideOptionId,
     });
 
     const startOtp = generateOtp();
@@ -205,8 +218,8 @@ export async function POST(req: Request) {
         event_type: rideType === "scheduled" ? "scheduled_trip_created" : "trip_created",
         message:
           rideType === "scheduled"
-            ? `Scheduled trip created for ${scheduledFor}. Auto release planned for ${scheduledReleaseAt}.`
-            : "Trip requested by authenticated customer",
+            ? `Scheduled trip created for ${scheduledFor}. Auto release planned for ${scheduledReleaseAt}. Ride option: ${rideOption.name}.`
+            : `Trip requested by authenticated customer. Ride option: ${rideOption.name}.`,
         old_status: null,
         new_status: initialStatus,
       });
@@ -227,7 +240,7 @@ export async function POST(req: Request) {
       "/admin/trips"
     );
 
-    let autoOfferResult: any = null;
+    let autoOfferResult: unknown = null;
 
     if (rideType === "now") {
       try {
@@ -243,12 +256,13 @@ export async function POST(req: Request) {
       trip,
       fareBreakdown: fare,
       otp: { startOtp, endOtp },
-      autoOfferStarted: rideType === "now" ? !!autoOfferResult?.ok : false,
+      autoOfferStarted: rideType === "now" && hasOkFlag(autoOfferResult) ? !!autoOfferResult.ok : false,
       autoOfferResult,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Server error";
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error" },
+      { ok: false, error: message },
       { status: 500 }
     );
   }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import LoadingState from "@/components/ui/LoadingState";
 
 type Driver = {
   id: string;
@@ -190,8 +191,8 @@ export default function DriverCompleteProfilePage() {
 
       setDriverId(json.driverId ?? null);
       hydrateForm(json.driver ?? null, json.profile ?? null);
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to load profile.");
+    } catch (error: unknown) {
+      setMsg(error instanceof Error ? error.message : "Failed to load profile.");
     }
 
     setLoading(false);
@@ -260,7 +261,7 @@ export default function DriverCompleteProfilePage() {
         return;
       }
 
-      setMsg(submit ? "Profile submitted successfully ✅" : "Draft saved ✅");
+      setMsg(submit ? "Profile submitted successfully." : "Draft saved.");
       await loadData();
       setBusy(false);
 
@@ -269,33 +270,38 @@ export default function DriverCompleteProfilePage() {
           router.push("/driver");
         }, 900);
       }
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to save profile.");
+    } catch (error: unknown) {
+      setMsg(error instanceof Error ? error.message : "Failed to save profile.");
       setBusy(false);
     }
   }
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   if (loading) {
     return (
-      <main className="min-h-screen px-6 py-10 text-black">
-        <div className="max-w-4xl mx-auto border rounded-[2rem] p-6 bg-white shadow-sm">
-          Loading profile form...
-        </div>
-      </main>
+      <LoadingState
+        title="Loading driver profile"
+        description="Preparing saved personal, licence, and vehicle details."
+      />
     );
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div>
-          <div className="text-sm text-gray-500">Driver Onboarding</div>
-          <h1 className="text-3xl font-semibold mt-1">Complete Your Driver Profile</h1>
-          <p className="text-gray-700 mt-2">
+    <main className="moovu-page text-black">
+      <div className="moovu-shell max-w-5xl space-y-6">
+        <div className="moovu-card p-5 sm:p-6">
+          <div className="moovu-section-title">Driver onboarding</div>
+          <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">
+            Complete your driver profile
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Save as draft any time, then submit when all required details are complete.
           </p>
           {driverId && <p className="text-xs text-gray-500 mt-2">Driver ID: {driverId}</p>}
@@ -303,8 +309,8 @@ export default function DriverCompleteProfilePage() {
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Personal Details</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Personal details</h2>
 
           <div className="grid md:grid-cols-2 gap-4">
             <input
@@ -368,8 +374,8 @@ export default function DriverCompleteProfilePage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Licence Details</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Licence details</h2>
 
           <div className="grid md:grid-cols-2 gap-4">
             <input
@@ -405,8 +411,8 @@ export default function DriverCompleteProfilePage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Vehicle Details</h2>
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Vehicle details</h2>
 
           <div className="grid md:grid-cols-2 gap-4">
             <input
@@ -460,9 +466,9 @@ export default function DriverCompleteProfilePage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
+        <section className="moovu-card p-5 sm:p-6">
           <div className="text-sm text-gray-600 mb-4">
-            Required fields completed: {requiredFilled ? "Yes ✅" : "Not yet"}
+            Required fields completed: {requiredFilled ? "Yes" : "Not yet"}
           </div>
 
           <div className="flex flex-wrap gap-3">

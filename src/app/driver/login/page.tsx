@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -39,6 +40,19 @@ export default function DriverLoginPage() {
 
       <div className="moovu-auth-card">
         <div className="mb-6">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="grid h-16 w-16 place-items-center rounded-3xl border border-[var(--moovu-border)] bg-white shadow-sm">
+              <Image src="/logo.png" alt="MOOVU Kasi Rides" width={46} height={46} priority />
+            </div>
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                MOOVU Driver
+              </div>
+              <div className="mt-1 text-sm font-bold text-[var(--moovu-primary)]">
+                Work app
+              </div>
+            </div>
+          </div>
           <div className="moovu-section-title">MOOVU Driver</div>
           <h1 className="mt-3 text-3xl font-semibold text-slate-950">
             Driver access

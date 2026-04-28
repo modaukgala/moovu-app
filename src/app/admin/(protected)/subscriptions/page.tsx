@@ -107,7 +107,11 @@ export default function AdminSubscriptionsPage() {
   }
 
   useEffect(() => {
-    loadDrivers();
+    const timer = window.setTimeout(() => {
+      void loadDrivers();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const selectedLabel = useMemo(() => {
@@ -115,8 +119,8 @@ export default function AdminSubscriptionsPage() {
     const name = `${selected.first_name ?? ""} ${selected.last_name ?? ""}`.trim() || "Unnamed";
     const exp = selected.subscription_expires_at
       ? new Date(selected.subscription_expires_at).toLocaleString()
-      : "—";
-    return `${name} • ${selected.phone ?? "—"} • ${selected.subscription_status ?? "—"} • exp: ${exp}`;
+      : "--";
+    return `${name} - ${selected.phone ?? "--"} - ${selected.subscription_status ?? "--"} - exp: ${exp}`;
   }, [selected]);
 
   async function act(action: string, days?: number) {
@@ -155,7 +159,7 @@ export default function AdminSubscriptionsPage() {
       return;
     }
 
-    setMsg("✅ Subscription updated");
+    setMsg("Subscription updated.");
     await loadDrivers();
     await loadHistory(selected.id);
 
@@ -168,10 +172,11 @@ export default function AdminSubscriptionsPage() {
 
   return (
     <main className="p-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="moovu-card p-5 sm:p-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Subscription Manager</h1>
-          <p className="opacity-70 mt-1">
+          <div className="moovu-section-title">MOOVU Admin</div>
+          <h1 className="mt-2 text-2xl font-black text-slate-950">Subscription manager</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
             Only subscribed and online drivers can receive trip offers.
           </p>
         </div>
@@ -200,7 +205,7 @@ export default function AdminSubscriptionsPage() {
               const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
               const exp = d.subscription_expires_at
                 ? new Date(d.subscription_expires_at).toLocaleDateString()
-                : "—";
+                : "--";
 
               return (
                 <button
@@ -215,9 +220,9 @@ export default function AdminSubscriptionsPage() {
                   }}
                 >
                   <div className="font-medium">{name}</div>
-                  <div className="text-sm opacity-75 mt-1">{d.phone ?? "—"}</div>
+                  <div className="text-sm opacity-75 mt-1">{d.phone ?? "--"}</div>
                   <div className="text-sm opacity-75 mt-1">
-                    {d.subscription_status ?? "inactive"} • plan: {d.subscription_plan ?? "—"} • exp: {exp}
+                    {d.subscription_status ?? "inactive"} - plan: {d.subscription_plan ?? "--"} - exp: {exp}
                   </div>
                 </button>
               );
@@ -293,12 +298,12 @@ export default function AdminSubscriptionsPage() {
                         <div className="font-medium">{h.action}</div>
                         <div className="text-sm opacity-70 mt-1">
                           <span>
-                            ({h.old_status ?? "—"} → {h.new_status ?? "—"})
+                            ({h.old_status ?? "--"} to {h.new_status ?? "--"})
                           </span>
                         </div>
                         <div className="text-xs opacity-60 mt-1">
-                          exp: {h.old_expires_at ? new Date(h.old_expires_at).toLocaleString() : "—"} →{" "}
-                          {h.new_expires_at ? new Date(h.new_expires_at).toLocaleString() : "—"}
+                          exp: {h.old_expires_at ? new Date(h.old_expires_at).toLocaleString() : "--"} to{" "}
+                          {h.new_expires_at ? new Date(h.new_expires_at).toLocaleString() : "--"}
                         </div>
                         {h.note && <div className="text-xs opacity-70 mt-1">note: {h.note}</div>}
                         <div className="text-xs opacity-60 mt-1">

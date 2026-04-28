@@ -33,7 +33,8 @@ export default function PortalNotificationLauncher() {
   const hideOnAuthOnlyScreens =
     pathname === "/driver/login" ||
     pathname === "/customer/auth" ||
-    pathname === "/login";
+    pathname === "/login" ||
+    pathname === "/book";
 
   if (hideOnAuthOnlyScreens) return null;
 

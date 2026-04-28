@@ -105,15 +105,19 @@ export default function AdminReportsPage() {
       }
 
       setData(json.report ?? null);
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to load report.");
+    } catch (error: unknown) {
+      setMsg(error instanceof Error ? error.message : "Failed to load report.");
     }
 
     setBusy(false);
   }
 
   useEffect(() => {
-    runReport();
+    const timer = window.setTimeout(() => {
+      void runReport();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const totals = useMemo(() => {
@@ -210,7 +214,7 @@ export default function AdminReportsPage() {
                 <div className="font-medium">{row.driver_name}</div>
                 <div className="text-xs opacity-60 mt-1">{row.driver_id}</div>
                 <div className="text-sm opacity-70 mt-2">
-                  Trips: {row.completed_trips} • Revenue: {money(row.completed_revenue)} • Commission: {money(row.completed_commission)} • Driver Net: {money(row.completed_driver_net)}
+                  Trips: {row.completed_trips} - Revenue: {money(row.completed_revenue)} - Commission: {money(row.completed_commission)} - Driver Net: {money(row.completed_driver_net)}
                 </div>
               </div>
             ))}

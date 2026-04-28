@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import MetricCard from "@/components/ui/MetricCard";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type AnalyticsResponse = {
@@ -82,71 +83,91 @@ export default function AdminDashboardPage() {
   }
 
   useEffect(() => {
-    loadAnalytics();
+    const timer = window.setTimeout(() => {
+      void loadAnalytics();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   if (loading) {
-    return <main className="p-6 text-black">Loading admin dashboard...</main>;
+    return (
+      <main className="space-y-5">
+        <div className="moovu-card p-6">
+          <div className="moovu-section-title">MOOVU Admin</div>
+          <div className="mt-4 space-y-3">
+            <div className="moovu-skeleton h-7 w-64" />
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="moovu-skeleton h-28 w-full" />
+              <div className="moovu-skeleton h-28 w-full" />
+              <div className="moovu-skeleton h-28 w-full" />
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="space-y-6 text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div>
-          <div className="text-sm text-gray-500">MOOVU Admin</div>
-          <h1 className="text-3xl font-semibold mt-1">Operations Dashboard</h1>
-          <p className="text-gray-700 mt-2">
+      <div className="space-y-6">
+        <div className="moovu-card p-6">
+          <div className="moovu-section-title">MOOVU Admin</div>
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
+            Operations dashboard
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
             Live platform intelligence for scheduling, quality, support, and payments.
           </p>
+
+          <section className="mt-5 flex flex-wrap gap-3">
+            <Link href="/admin/trips" className="moovu-btn moovu-btn-primary">
+              Open trips
+            </Link>
+            <Link href="/admin/payment-reviews" className="moovu-btn moovu-btn-secondary">
+              Payment reviews
+            </Link>
+            <Link href="/admin/receipts" className="moovu-btn moovu-btn-secondary">
+              Receipts
+            </Link>
+            <Link href="/admin/settlements" className="moovu-btn moovu-btn-secondary">
+              Settlements
+            </Link>
+          </section>
         </div>
 
-        <section className="flex flex-wrap gap-3">
-          <Link href="/admin/trips" className="border rounded-xl px-4 py-2 bg-white">
-            Open Trips
-          </Link>
-          <Link href="/admin/settlements" className="border rounded-xl px-4 py-2 bg-white">
-            Settlements
-          </Link>
-          <Link href="/admin/payment-reviews" className="border rounded-xl px-4 py-2 bg-white">
-            Payment Reviews
-          </Link>
-        </section>
-
-        <section className="grid md:grid-cols-3 gap-4">
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Scheduled Due Next Hour</div>
-            <div className="text-2xl font-semibold mt-2">
-              {analytics?.scheduled_due_next_hour ?? 0}
-            </div>
-          </div>
-
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Scheduled Pending Total</div>
-            <div className="text-2xl font-semibold mt-2">
-              {analytics?.scheduled_total_pending ?? 0}
-            </div>
-          </div>
-
-          <div className="border rounded-2xl p-5 bg-white shadow-sm">
-            <div className="text-sm text-gray-600">Open Support Issues</div>
-            <div className="text-2xl font-semibold mt-2">
-              {analytics?.open_support_issues ?? 0}
-            </div>
-          </div>
+        <section className="grid gap-4 md:grid-cols-3">
+          <MetricCard
+            label="Due next hour"
+            value={String(analytics?.scheduled_due_next_hour ?? 0)}
+            helper="Scheduled trips needing release"
+            tone="primary"
+          />
+          <MetricCard
+            label="Scheduled pending"
+            value={String(analytics?.scheduled_total_pending ?? 0)}
+            helper="Future rides in queue"
+          />
+          <MetricCard
+            label="Open issues"
+            value={String(analytics?.open_support_issues ?? 0)}
+            helper="Support items needing attention"
+            tone={(analytics?.open_support_issues ?? 0) > 0 ? "warning" : "success"}
+          />
         </section>
 
         <section className="grid lg:grid-cols-2 gap-6">
-          <div className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-            <h2 className="text-xl font-semibold">Top Drivers</h2>
+          <div className="moovu-card space-y-4 p-6">
+            <h2 className="text-xl font-black text-slate-950">Top drivers</h2>
 
             {(analytics?.top_drivers?.length ?? 0) === 0 ? (
               <div>No quality metrics available yet.</div>
             ) : (
               <div className="space-y-3">
                 {analytics!.top_drivers.map((driver) => (
-                  <div key={driver.driver_id} className="border rounded-xl p-4">
+                  <div key={driver.driver_id} className="rounded-2xl border border-[var(--moovu-border)] p-4">
                     <div className="grid grid-cols-4 gap-3">
                       <div>
                         <div className="text-sm text-gray-500">Driver</div>
@@ -171,15 +192,15 @@ export default function AdminDashboardPage() {
             )}
           </div>
 
-          <div className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-            <h2 className="text-xl font-semibold">Low Rated Drivers</h2>
+          <div className="moovu-card space-y-4 p-6">
+            <h2 className="text-xl font-black text-slate-950">Driver quality watchlist</h2>
 
             {(analytics?.low_rated_drivers?.length ?? 0) === 0 ? (
               <div>No low-rated drivers currently flagged.</div>
             ) : (
               <div className="space-y-3">
                 {analytics!.low_rated_drivers.map((driver) => (
-                  <div key={driver.driver_id} className="border rounded-xl p-4">
+                  <div key={driver.driver_id} className="rounded-2xl border border-[var(--moovu-border)] p-4">
                     <div className="grid grid-cols-4 gap-3">
                       <div>
                         <div className="text-sm text-gray-500">Driver</div>
@@ -205,7 +226,7 @@ export default function AdminDashboardPage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-6">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl font-semibold">Recent Cancellations</h2>
             <Link href="/admin/trips" className="border rounded-xl px-4 py-2">
