@@ -2,9 +2,65 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
 
+type CustomerTripStatusRow = {
+  id: string;
+  customer_id: string;
+  rider_name: string | null;
+  rider_phone: string | null;
+  pickup_address: string | null;
+  dropoff_address: string | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  dropoff_lat: number | null;
+  dropoff_lng: number | null;
+  payment_method: string | null;
+  distance_km: number | null;
+  duration_min: number | null;
+  fare_amount: number | null;
+  status: string;
+  driver_id: string | null;
+  offer_status: string | null;
+  offer_expires_at: string | null;
+  start_otp: string | null;
+  end_otp: string | null;
+  start_otp_verified: boolean | null;
+  end_otp_verified: boolean | null;
+  created_at: string | null;
+  cancel_reason: string | null;
+  scheduled_for: string | null;
+  scheduled_release_at: string | null;
+  ride_type: string | null;
+  schedule_status: string | null;
+  cancellation_fee_amount: number | null;
+};
+
+type CustomerTripDriverRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  lat: number | null;
+  lng: number | null;
+  last_seen: string | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  vehicle_year: string | null;
+  vehicle_color: string | null;
+  vehicle_registration: string | null;
+};
+
+type TripEventRow = {
+  id: string;
+  event_type: string;
+  message: string | null;
+  old_status: string | null;
+  new_status: string | null;
+  created_at: string;
+};
+
 function buildTrackingState(params: {
-  trip: any;
-  driver: any;
+  trip: CustomerTripStatusRow;
+  driver: CustomerTripDriverRow | null;
 }) {
   const { trip, driver } = params;
 
@@ -65,6 +121,8 @@ export async function GET(req: Request) {
         dropoff_lat,
         dropoff_lng,
         payment_method,
+        distance_km,
+        duration_min,
         fare_amount,
         status,
         driver_id,
@@ -94,7 +152,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "Trip not found." }, { status: 404 });
     }
 
-    let driver: any = null;
+    const typedTrip = trip as CustomerTripStatusRow;
+    let driver: CustomerTripDriverRow | null = null;
     if (trip.driver_id) {
       const { data: driverRow } = await auth.supabaseAdmin
         .from("drivers")
@@ -115,7 +174,7 @@ export async function GET(req: Request) {
         .eq("id", trip.driver_id)
         .maybeSingle();
 
-      driver = driverRow ?? null;
+      driver = (driverRow as CustomerTripDriverRow | null) ?? null;
     }
 
     const { data: events } = await auth.supabaseAdmin
@@ -130,7 +189,8 @@ export async function GET(req: Request) {
       .eq("trip_id", tripId)
       .maybeSingle();
 
-    const completedEvent = (events ?? []).find((e: any) => e.event_type === "trip_completed");
+    const typedEvents = ((events ?? []) as TripEventRow[]);
+    const completedEvent = typedEvents.find((event) => event.event_type === "trip_completed");
 
     return NextResponse.json({
       ok: true,
@@ -139,9 +199,9 @@ export async function GET(req: Request) {
         completed_at: completedEvent?.created_at ?? null,
       },
       driver,
-      events: events ?? [],
+      events: typedEvents,
       rating: rating ?? null,
-      tracking: buildTrackingState({ trip, driver }),
+      tracking: buildTrackingState({ trip: typedTrip, driver }),
       customer: {
         id: auth.customer.id,
         first_name: auth.customer.first_name,
@@ -149,9 +209,9 @@ export async function GET(req: Request) {
         phone: auth.customer.phone,
       },
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: e instanceof Error ? e.message : "Server error." },
       { status: 500 }
     );
   }

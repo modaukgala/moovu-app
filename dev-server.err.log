@@ -1,2 +1,14 @@
-⚠ Turbopack's filesystem cache has been deleted because we previously detected an internal error in Turbopack. Builds or page loads may be slower as a result.
-⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+[legacy-auto-assign] {
+  referer: null,
+  userAgent: null,
+  secFetchDest: null,
+  secFetchMode: null,
+  secFetchSite: null
+}
+[legacy-auto-assign] {
+  referer: null,
+  userAgent: null,
+  secFetchDest: null,
+  secFetchMode: null,
+  secFetchSite: null
+}

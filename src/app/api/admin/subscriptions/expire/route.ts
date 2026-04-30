@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -30,9 +34,9 @@ export async function POST(req: Request) {
       expiredCount: result.expiredCount,
       driverIds: result.driverIds ?? [],
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(e, "Server error.") },
       { status: 500 }
     );
   }

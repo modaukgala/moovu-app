@@ -4,6 +4,10 @@ import { applyTripCommissionServer } from "@/lib/finance/applyTripCommissionServ
 
 const ALLOWED_ADMIN_ROLES = ["owner", "admin", "dispatcher", "support"];
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -186,9 +190,9 @@ export async function POST(req: Request) {
           }
         : null,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(e, "Server error.") },
       { status: 500 }
     );
   }

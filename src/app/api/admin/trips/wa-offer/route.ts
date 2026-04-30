@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -61,7 +65,7 @@ export async function GET(req: Request) {
         phone: driver.phone,
       },
     });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ ok: false, error: errorMessage(e, "Server error") }, { status: 500 });
   }
 }

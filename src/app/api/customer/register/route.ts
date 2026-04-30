@@ -140,9 +140,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: e instanceof Error ? e.message : "Server error." },
       { status: 500 }
     );
   }

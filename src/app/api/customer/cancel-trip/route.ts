@@ -11,6 +11,10 @@ const VALID_REASONS = [
   "Other",
 ];
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 function computeCancellationFee(status: string) {
   if (status === "requested" || status === "offered") {
     return { fee: 0, code: "free_window" };
@@ -155,9 +159,9 @@ export async function POST(req: Request) {
       cancellationFeeAmount: fee,
       cancellationPolicyCode: code,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error" },
+      { ok: false, error: errorMessage(e, "Server error") },
       { status: 500 }
     );
   }

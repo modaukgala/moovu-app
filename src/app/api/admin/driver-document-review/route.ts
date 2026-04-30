@@ -3,6 +3,10 @@ import { requireAdminUser } from "@/lib/auth/admin";
 
 const ALLOWED = ["pending", "approved", "rejected", "needs_reupload"] as const;
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -11,7 +15,9 @@ export async function POST(req: Request) {
     }
 
     const { supabaseAdmin } = auth;
-    const { documentId, reviewStatus } = await req.json();
+    const body = await req.json();
+    const documentId = String(body?.documentId ?? "").trim();
+    const reviewStatus = String(body?.reviewStatus ?? "").trim();
 
     if (!documentId || !reviewStatus) {
       return NextResponse.json(
@@ -20,7 +26,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!ALLOWED.includes(reviewStatus)) {
+    if (!ALLOWED.includes(reviewStatus as (typeof ALLOWED)[number])) {
       return NextResponse.json({ ok: false, error: "Invalid reviewStatus" }, { status: 400 });
     }
 
@@ -37,7 +43,7 @@ export async function POST(req: Request) {
       ok: true,
       message: `Document review updated to ${reviewStatus}`,
     });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ ok: false, error: errorMessage(e, "Server error") }, { status: 500 });
   }
 }

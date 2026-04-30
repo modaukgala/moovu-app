@@ -33,9 +33,9 @@ export async function POST(req: Request) {
       last_name: customer?.last_name ?? null,
       normalized_phone: normalizedPhone,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: e instanceof Error ? e.message : "Server error." },
       { status: 500 }
     );
   }

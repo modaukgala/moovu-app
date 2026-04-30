@@ -36,7 +36,7 @@ async function ensureCustomerProfile(params: {
   user: {
     id: string;
     email?: string | null;
-    user_metadata?: Record<string, any> | null;
+    user_metadata?: Record<string, unknown> | null;
   };
 }) {
   const { supabaseAdmin, user } = params;
@@ -44,7 +44,9 @@ async function ensureCustomerProfile(params: {
   const userMeta = user.user_metadata || {};
   const firstName = String(userMeta.first_name ?? "").trim();
   const lastName = String(userMeta.last_name ?? "").trim();
-  const phoneFromMeta = normalizePhoneZA(userMeta.phone);
+  const phoneFromMeta = normalizePhoneZA(
+    typeof userMeta.phone === "string" ? userMeta.phone : null
+  );
   const phoneFromEmail = user.email
     ? normalizePhoneZA(String(user.email).split("@")[0])
     : null;
@@ -109,7 +111,7 @@ export async function getAuthenticatedCustomer(req: Request) {
 
   const supabaseAdmin = createServiceSupabase();
 
-  let { data: customer, error: customerError } = await supabaseAdmin
+  const { data: existingCustomer, error: customerError } = await supabaseAdmin
     .from("customers")
     .select("*")
     .eq("auth_user_id", user.id)
@@ -118,6 +120,8 @@ export async function getAuthenticatedCustomer(req: Request) {
   if (customerError) {
     return { ok: false as const, status: 500, error: customerError.message };
   }
+
+  let customer = existingCustomer;
 
   if (!customer) {
     const repaired = await ensureCustomerProfile({

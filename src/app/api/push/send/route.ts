@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { sendPushToTargets } from "@/lib/push-server";
 
+const ALLOWED_ROLES = ["admin", "driver", "customer"] as const;
+type PushTargetRole = (typeof ALLOWED_ROLES)[number];
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function parsePushRole(value: unknown): PushTargetRole | undefined {
+  if (!value) return undefined;
+  const role = String(value).trim();
+  return ALLOWED_ROLES.includes(role as PushTargetRole)
+    ? (role as PushTargetRole)
+    : undefined;
+}
+
 export async function POST(req: Request) {
   try {
     const internalKey = req.headers.get("x-push-internal-key") || "";
@@ -18,7 +33,7 @@ export async function POST(req: Request) {
     const title = String(body?.title ?? "").trim();
     const messageBody = String(body?.body ?? "").trim();
     const url = String(body?.url ?? "/").trim() || "/";
-    const role = body?.role ? String(body.role).trim() : undefined;
+    const role = parsePushRole(body?.role);
     const userIds = Array.isArray(body?.userIds)
       ? body.userIds.map((x: unknown) => String(x).trim()).filter(Boolean)
       : undefined;
@@ -26,6 +41,13 @@ export async function POST(req: Request) {
     if (!title || !messageBody) {
       return NextResponse.json(
         { ok: false, error: "title and body are required." },
+        { status: 400 }
+      );
+    }
+
+    if (body?.role && !role) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid push target role." },
         { status: 400 }
       );
     }
@@ -38,7 +60,7 @@ export async function POST(req: Request) {
     }
 
     const result = await sendPushToTargets({
-      role: role as "admin" | "driver" | "customer" | undefined,
+      role,
       userIds,
       title,
       body: messageBody,
@@ -46,9 +68,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(result);
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Push send failed." },
+      { ok: false, error: errorMessage(e, "Push send failed.") },
       { status: 500 }
     );
   }

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServiceSupabase } from "@/lib/customer/server";
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -56,7 +60,7 @@ export async function GET(req: Request) {
       );
     }
 
-    let driver: any = null;
+    let driver: unknown = null;
     if (trip.driver_id) {
       const { data: driverRow } = await supabase
         .from("drivers")
@@ -82,9 +86,9 @@ export async function GET(req: Request) {
       trip,
       driver,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(e, "Server error.") },
       { status: 500 }
     );
   }

@@ -16,6 +16,10 @@ type DriverRow = {
   subscription_expires_at: string | null;
 };
 
+type TripEventMessageRow = {
+  message: string | null;
+};
+
 function distanceKm(
   lat1: number,
   lng1: number,
@@ -115,8 +119,8 @@ export async function offerNextDriver(params: {
     triedDriverIds.add(trip.driver_id);
   }
 
-  for (const row of alreadyTriedRows ?? []) {
-    const msg = String((row as any)?.message ?? "");
+  for (const row of (alreadyTriedRows ?? []) as TripEventMessageRow[]) {
+    const msg = String(row.message ?? "");
     const match = msg.match(/driver_id:([a-f0-9-]+)/i);
     if (match?.[1]) triedDriverIds.add(match[1]);
   }

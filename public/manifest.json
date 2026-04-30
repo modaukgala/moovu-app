@@ -4,8 +4,8 @@
   "description": "Smart local ride-hailing platform for riders, drivers and dispatch.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#eaf4ff",
-  "theme_color": "#2f80ed",
+  "background_color": "#f6fafc",
+  "theme_color": "#1f74c9",
   "orientation": "portrait",
   "icons": [
     {

@@ -22,7 +22,7 @@ self.addEventListener("push", (event) => {
         url: json.url || data.url,
       };
     }
-  } catch (e) {
+  } catch {
     // Ignore malformed push payloads
   }
 
