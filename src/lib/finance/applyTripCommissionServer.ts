@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { calculateCommission } from "@/lib/finance/commission";
+import { calculateCommission, MOOVU_COMMISSION_PCT } from "@/lib/finance/commission";
 
 type CommissionCalc = {
   fareAmount: number;
@@ -167,7 +167,7 @@ export async function applyTripCommissionServer(params: {
     driverId,
     fareAmount,
     createdBy = null,
-    commissionPct = 5,
+    commissionPct = MOOVU_COMMISSION_PCT,
   } = params;
 
   const calc = calculateCommission(fareAmount, commissionPct);

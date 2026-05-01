@@ -243,7 +243,6 @@ export async function POST(req: Request) {
       driverId,
       fareAmount,
       createdBy: user.id,
-      commissionPct: 5,
     });
 
     if (!commissionResult.ok) {

@@ -1,6 +1,26 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 
+type DriverApplicationRow = {
+  id: string;
+  user_id: string | null;
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  status: string | null;
+  created_at: string | null;
+};
+
+type DriverAccountRow = {
+  user_id: string;
+  driver_id: string | null;
+};
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -27,10 +47,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    const applications = apps ?? [];
-    const userIds = applications.map((a: any) => a.user_id).filter(Boolean);
+    const applications = (apps ?? []) as DriverApplicationRow[];
+    const userIds = applications
+      .map((application) => application.user_id)
+      .filter((userId): userId is string => Boolean(userId));
 
-    let linkedByUser: Record<string, string | null> = {};
+    const linkedByUser: Record<string, string | null> = {};
     if (userIds.length > 0) {
       const { data: mappings, error: mErr } = await supabaseAdmin
         .from("driver_accounts")
@@ -41,18 +63,18 @@ export async function GET(req: Request) {
         return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 });
       }
 
-      (mappings ?? []).forEach((m: any) => {
-        linkedByUser[m.user_id] = m.driver_id ?? null;
+      ((mappings ?? []) as DriverAccountRow[]).forEach((mapping) => {
+        linkedByUser[mapping.user_id] = mapping.driver_id ?? null;
       });
     }
 
-    const enriched = applications.map((a: any) => ({
-      ...a,
-      linked_driver_id: linkedByUser[a.user_id] ?? null,
+    const enriched = applications.map((application) => ({
+      ...application,
+      linked_driver_id: application.user_id ? linkedByUser[application.user_id] ?? null : null,
     }));
 
     return NextResponse.json({ ok: true, applications: enriched });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ ok: false, error: errorMessage(e, "Server error") }, { status: 500 });
   }
 }

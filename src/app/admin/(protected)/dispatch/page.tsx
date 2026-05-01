@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { waLinkZA } from "@/lib/whatsapp";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type BoardTrip = {
   id: string;
@@ -41,8 +42,28 @@ export default function DispatchBoardPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
+  const getAccessToken = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    return session?.access_token ?? null;
+  }, []);
+
   const loadBoard = useCallback(async () => {
-    const res = await fetch("/api/admin/dispatch/board");
+    const token = await getAccessToken();
+
+    if (!token) {
+      setMsg("Missing access token.");
+      setRows([]);
+      return;
+    }
+
+    const res = await fetch("/api/admin/dispatch/board", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     const json = await res.json();
 
     if (!json.ok) {
@@ -53,7 +74,7 @@ export default function DispatchBoardPage() {
 
     setMsg(null);
     setRows(json.rows ?? []);
-  }, []);
+  }, [getAccessToken]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => {
@@ -74,10 +95,19 @@ export default function DispatchBoardPage() {
     setBusyId(tripId);
     setMsg(null);
 
+    const token = await getAccessToken();
+
+    if (!token) {
+      setBusyId(null);
+      setMsg("Missing access token.");
+      return;
+    }
+
     const res = await fetch("/api/admin/trips/auto-assign", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ tripId }),
     });

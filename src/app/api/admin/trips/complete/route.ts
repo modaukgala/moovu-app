@@ -131,7 +131,6 @@ export async function POST(req: Request) {
         driverId: trip.driver_id,
         fareAmount,
         createdBy: user.id,
-        commissionPct: 5,
       });
 
       if (!commissionResult.ok) {

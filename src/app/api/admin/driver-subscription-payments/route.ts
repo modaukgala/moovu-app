@@ -6,6 +6,10 @@ function num(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -117,9 +121,9 @@ export async function POST(req: Request) {
       message: "Subscription payment recorded successfully.",
       subscriptionAmountDue: newDue,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(e, "Server error.") },
       { status: 500 }
     );
   }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type DriverMarker = {
   id: string;
@@ -57,8 +58,29 @@ export default function DispatchMapPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  async function loadBoardMap() {
-    const res = await fetch("/api/admin/dispatch/map");
+  const getAccessToken = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    return session?.access_token ?? null;
+  }, []);
+
+  const loadBoardMap = useCallback(async () => {
+    const token = await getAccessToken();
+
+    if (!token) {
+      setMsg("Missing access token.");
+      setDrivers([]);
+      setTrips([]);
+      return;
+    }
+
+    const res = await fetch("/api/admin/dispatch/map", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     const json = await res.json();
 
     if (!json.ok) {
@@ -71,7 +93,7 @@ export default function DispatchMapPage() {
     setMsg(null);
     setDrivers(json.drivers ?? []);
     setTrips(json.trips ?? []);
-  }
+  }, [getAccessToken]);
 
   function clearMarkers(arr: google.maps.Marker[]) {
     for (const m of arr) m.setMap(null);
@@ -206,7 +228,7 @@ export default function DispatchMapPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadBoardMap]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -216,11 +238,11 @@ export default function DispatchMapPage() {
 
   useEffect(() => {
     const t = setInterval(() => {
-      loadBoardMap();
+      void loadBoardMap();
     }, 5000);
 
     return () => clearInterval(t);
-  }, []);
+  }, [loadBoardMap]);
 
   const stats = useMemo(() => {
     const onlineDrivers = drivers.length;

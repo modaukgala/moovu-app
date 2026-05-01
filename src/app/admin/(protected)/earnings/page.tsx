@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { MOOVU_COMMISSION_RATE } from "@/lib/finance/commission";
 
 type CompletedTrip = {
   id: string;
@@ -49,15 +50,15 @@ export default function AdminEarningsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [earnings, setEarnings] = useState<AdminEarnings | null>(null);
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
 
     return session?.access_token ?? null;
-  }
+  }, []);
 
-  async function loadEarnings() {
+  const loadEarnings = useCallback(async () => {
     setLoading(true);
     setMsg(null);
 
@@ -93,11 +94,15 @@ export default function AdminEarningsPage() {
 
     setEarnings(json.earnings ?? null);
     setLoading(false);
-  }
+  }, [getAccessToken]);
 
   useEffect(() => {
-    loadEarnings();
-  }, []);
+    const initialLoad = window.setTimeout(() => {
+      void loadEarnings();
+    }, 0);
+
+    return () => window.clearTimeout(initialLoad);
+  }, [loadEarnings]);
 
   if (loading) {
     return (
@@ -227,7 +232,7 @@ export default function AdminEarningsPage() {
                 <div className="border rounded-2xl p-4">
                   <div className="text-sm text-gray-600">Commission Rate</div>
                   <div className="text-3xl font-semibold mt-2">
-                    {((earnings.commission_rate ?? 0.05) * 100).toFixed(0)}%
+                    {((earnings.commission_rate ?? MOOVU_COMMISSION_RATE) * 100).toFixed(0)}%
                   </div>
                 </div>
               </div>

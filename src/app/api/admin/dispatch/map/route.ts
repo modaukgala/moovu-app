@@ -1,10 +1,50 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdminUser } from "@/lib/auth/admin";
 
 const ACTIVE_TRIP_STATUSES = ["offered", "assigned", "arrived", "ongoing"];
 
-export async function GET() {
+type MapDriverRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  online: boolean | null;
+  busy: boolean | null;
+  status?: string | null;
+  subscription_status: string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
+  last_seen?: string | null;
+};
+
+type MapTripRow = {
+  id: string;
+  driver_id: string | null;
+  pickup_address: string | null;
+  dropoff_address: string | null;
+  pickup_lat: number | string;
+  pickup_lng: number | string;
+  dropoff_lat: number | string | null;
+  dropoff_lng: number | string | null;
+  fare_amount: number | null;
+  status: string;
+  offer_status: string | null;
+  created_at: string;
+};
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+export async function GET(req: Request) {
   try {
+    const auth = await requireAdminUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    }
+
+    const { supabaseAdmin } = auth;
+
     const { data: drivers, error: dErr } = await supabaseAdmin
       .from("drivers")
       .select(
@@ -36,10 +76,14 @@ export async function GET() {
     }
 
     const driverIds = Array.from(
-      new Set((trips ?? []).map((t: any) => t.driver_id).filter(Boolean))
+      new Set(
+        ((trips ?? []) as MapTripRow[])
+          .map((trip) => trip.driver_id)
+          .filter((driverId): driverId is string => Boolean(driverId))
+      )
     );
 
-    let tripDriversById: Record<string, any> = {};
+    let tripDriversById: Record<string, MapDriverRow> = {};
     if (driverIds.length > 0) {
       const { data: tripDrivers, error: tdErr } = await supabaseAdmin
         .from("drivers")
@@ -50,46 +94,48 @@ export async function GET() {
         return NextResponse.json({ ok: false, error: tdErr.message }, { status: 500 });
       }
 
-      tripDriversById = Object.fromEntries((tripDrivers ?? []).map((d: any) => [d.id, d]));
+      tripDriversById = Object.fromEntries(
+        ((tripDrivers ?? []) as MapDriverRow[]).map((driver) => [driver.id, driver])
+      );
     }
 
-    const driverRows = (drivers ?? []).map((d: any) => ({
-      id: d.id,
-      name: `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed",
-      phone: d.phone ?? null,
-      online: d.online ?? null,
-      busy: d.busy ?? null,
-      status: d.status ?? null,
-      subscription_status: d.subscription_status ?? null,
-      lat: Number(d.lat),
-      lng: Number(d.lng),
-      last_seen: d.last_seen ?? null,
+    const driverRows = ((drivers ?? []) as MapDriverRow[]).map((driver) => ({
+      id: driver.id,
+      name: `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || "Unnamed",
+      phone: driver.phone ?? null,
+      online: driver.online ?? null,
+      busy: driver.busy ?? null,
+      status: driver.status ?? null,
+      subscription_status: driver.subscription_status ?? null,
+      lat: Number(driver.lat),
+      lng: Number(driver.lng),
+      last_seen: driver.last_seen ?? null,
     }));
 
-    const tripRows = (trips ?? []).map((t: any) => ({
-      id: t.id,
-      driver_id: t.driver_id ?? null,
-      pickup_address: t.pickup_address ?? null,
-      dropoff_address: t.dropoff_address ?? null,
-      pickup_lat: Number(t.pickup_lat),
-      pickup_lng: Number(t.pickup_lng),
-      dropoff_lat: t.dropoff_lat != null ? Number(t.dropoff_lat) : null,
-      dropoff_lng: t.dropoff_lng != null ? Number(t.dropoff_lng) : null,
-      fare_amount: t.fare_amount ?? null,
-      status: t.status,
-      offer_status: t.offer_status ?? null,
-      created_at: t.created_at,
+    const tripRows = ((trips ?? []) as MapTripRow[]).map((trip) => ({
+      id: trip.id,
+      driver_id: trip.driver_id ?? null,
+      pickup_address: trip.pickup_address ?? null,
+      dropoff_address: trip.dropoff_address ?? null,
+      pickup_lat: Number(trip.pickup_lat),
+      pickup_lng: Number(trip.pickup_lng),
+      dropoff_lat: trip.dropoff_lat != null ? Number(trip.dropoff_lat) : null,
+      dropoff_lng: trip.dropoff_lng != null ? Number(trip.dropoff_lng) : null,
+      fare_amount: trip.fare_amount ?? null,
+      status: trip.status,
+      offer_status: trip.offer_status ?? null,
+      created_at: trip.created_at,
       driver:
-        t.driver_id && tripDriversById[t.driver_id]
+        trip.driver_id && tripDriversById[trip.driver_id]
           ? {
-              id: tripDriversById[t.driver_id].id,
+              id: tripDriversById[trip.driver_id].id,
               name:
-                `${tripDriversById[t.driver_id].first_name ?? ""} ${tripDriversById[t.driver_id].last_name ?? ""}`.trim() ||
+                `${tripDriversById[trip.driver_id].first_name ?? ""} ${tripDriversById[trip.driver_id].last_name ?? ""}`.trim() ||
                 "Unnamed",
-              phone: tripDriversById[t.driver_id].phone ?? null,
-              online: tripDriversById[t.driver_id].online ?? null,
-              busy: tripDriversById[t.driver_id].busy ?? null,
-              subscription_status: tripDriversById[t.driver_id].subscription_status ?? null,
+              phone: tripDriversById[trip.driver_id].phone ?? null,
+              online: tripDriversById[trip.driver_id].online ?? null,
+              busy: tripDriversById[trip.driver_id].busy ?? null,
+              subscription_status: tripDriversById[trip.driver_id].subscription_status ?? null,
             }
           : null,
     }));
@@ -99,9 +145,9 @@ export async function GET() {
       drivers: driverRows,
       trips: tripRows,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "Server error" },
+      { ok: false, error: errorMessage(e, "Server error") },
       { status: 500 }
     );
   }

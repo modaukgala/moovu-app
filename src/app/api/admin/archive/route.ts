@@ -1,6 +1,25 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 
+type ArchivedTripRow = {
+  id: string;
+  rider_name: string | null;
+  rider_phone: string | null;
+  pickup_address: string | null;
+  dropoff_address: string | null;
+  fare_amount: number | null;
+  payment_method: string | null;
+  status: string | null;
+  created_at: string | null;
+  driver_id: string | null;
+  commission_amount: number | null;
+  driver_net_earnings: number | null;
+};
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -59,11 +78,11 @@ export async function GET(req: Request) {
       );
     }
 
-    let trips = data ?? [];
+    let trips = (data ?? []) as ArchivedTripRow[];
 
     if (q) {
       const term = q.toLowerCase();
-      trips = trips.filter((trip: any) => {
+      trips = trips.filter((trip) => {
         return (
           String(trip.id ?? "").toLowerCase().includes(term) ||
           String(trip.rider_name ?? "").toLowerCase().includes(term) ||
@@ -79,9 +98,9 @@ export async function GET(req: Request) {
       ok: true,
       trips,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(e, "Server error.") },
       { status: 500 }
     );
   }

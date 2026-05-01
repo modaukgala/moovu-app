@@ -260,6 +260,13 @@ export async function POST(req: Request) {
     const reference = String(paymentRequest.payment_reference ?? "").trim();
     const note = String(paymentRequest.note ?? "").trim();
 
+    if (amountSubmitted <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Submitted amount must be greater than R0.00." },
+        { status: 400 },
+      );
+    }
+
     const { data: driver, error: driverError } = await supabaseAdmin
       .from("drivers")
       .select(`
@@ -302,10 +309,17 @@ export async function POST(req: Request) {
     if (paymentType === "subscription") {
       subscriptionPaid = amountSubmitted;
     } else if (paymentType === "commission") {
-      commissionPaid = amountSubmitted;
+      commissionPaid = Math.min(currentCommissionDue, amountSubmitted);
     } else {
       subscriptionPaid = selectedSubscriptionAmount;
       commissionPaid = Math.min(currentCommissionDue, Math.max(0, amountSubmitted - subscriptionPaid));
+    }
+
+    if (paymentType === "commission" && commissionPaid <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "This driver does not currently have commission owed." },
+        { status: 400 },
+      );
     }
 
     if ((paymentType === "subscription" || paymentType === "combined") && !subscriptionPlan) {

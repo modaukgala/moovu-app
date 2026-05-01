@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { MOOVU_COMMISSION_RATE } from "@/lib/finance/commission";
 
 type TripRow = {
   id: string;
@@ -13,6 +14,23 @@ type TripRow = {
   commission_amount?: number | null;
   driver_net_earnings?: number | null;
 };
+
+type DriverRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+};
+
+type TripEventRow = {
+  trip_id: string;
+  event_type: string;
+  created_at: string;
+};
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 function startOfToday() {
   const now = new Date();
@@ -86,9 +104,9 @@ export async function GET(req: Request) {
     }
 
     const driverNameById = new Map<string, string>();
-    for (const d of drivers ?? []) {
-      const fullName = `${(d as any).first_name ?? ""} ${(d as any).last_name ?? ""}`.trim();
-      driverNameById.set((d as any).id, fullName || (d as any).phone || (d as any).id);
+    for (const driver of (drivers ?? []) as DriverRow[]) {
+      const fullName = `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim();
+      driverNameById.set(driver.id, fullName || driver.phone || driver.id);
     }
 
     const completedTrips = (trips ?? []) as TripRow[];
@@ -104,9 +122,9 @@ export async function GET(req: Request) {
         .eq("event_type", "trip_completed")
         .order("created_at", { ascending: false });
 
-      for (const row of events ?? []) {
-        if (!completedAtMap.has((row as any).trip_id)) {
-          completedAtMap.set((row as any).trip_id, (row as any).created_at);
+      for (const row of (events ?? []) as TripEventRow[]) {
+        if (!completedAtMap.has(row.trip_id)) {
+          completedAtMap.set(row.trip_id, row.created_at);
         }
       }
     }
@@ -192,15 +210,15 @@ export async function GET(req: Request) {
         total_revenue: totalRevenue,
         total_commission: totalCommission,
         estimated_driver_payout: driverPayoutEstimate,
-        commission_rate: 0.05,
+        commission_rate: MOOVU_COMMISSION_RATE,
         total_completed_trips: normalizedTrips.length,
         by_payment_method: byPaymentMethod,
         recent_completed_trips: normalizedTrips.slice(0, 15),
       },
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(e, "Server error.") },
       { status: 500 }
     );
   }

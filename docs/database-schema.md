@@ -35,6 +35,8 @@ This document describes the Supabase objects the current MOOVU app expects. It i
   - `month`: R250 for 30 days
 - Customer ride options and fare calculation should remain centralized in the fare domain files.
 - Commission is applied through `src/lib/finance/applyTripCommissionServer.ts`.
+  New commission calculations use the shared `MOOVU_COMMISSION_PCT` constant in `src/lib/finance/commission.ts`, currently `7%`.
+  Existing completed trips keep their stored `commission_pct`, `commission_amount`, and wallet history unless a separate approved data migration is run.
 - Admin API access uses `requireAdminUser`.
 - Driver API ownership is based on `driver_accounts.user_id -> driver_id`.
 

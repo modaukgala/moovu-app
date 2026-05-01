@@ -1,3 +1,5 @@
+import { MOOVU_COMMISSION_PCT } from "@/lib/finance/commission";
+
 export type FareInput = {
   distanceKm: number;
   durationMin: number;
@@ -37,7 +39,7 @@ export const DEFAULT_FARE_RULES: FareRules = {
   perKm: 7,
   perMinute: 1.2,
   minFare: 40,
-  platformCommissionPct: 5,
+  platformCommissionPct: MOOVU_COMMISSION_PCT,
 };
 
 export const RIDE_OPTIONS: readonly RideOption[] = [
