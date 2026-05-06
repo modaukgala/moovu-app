@@ -8,19 +8,19 @@ import AdminTripNotifications from "@/components/AdminTripNotifications";
 import EnablePushButton from "@/components/EnablePushButton";
 
 const navItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/drivers", label: "Drivers" },
-  { href: "/admin/trips", label: "Trips" },
-  { href: "/admin/dispatch/map", label: "Dispatch Map" },
-  { href: "/admin/applications", label: "Applications" },
-  { href: "/admin/receipts", label: "Receipts" },
-  { href: "/admin/payment-reviews", label: "Payments" },
-  { href: "/admin/commission-payments", label: "Commissions" },
-  { href: "/admin/link-driver", label: "Link Driver" },
-  { href: "/admin/subscriptions", label: "Subscriptions" },
-  { href: "/admin/reports", label: "Earnings Report" },
-  { href: "/admin/earnings", label: "Earnings Dashboard" },
-  { href: "/admin/settlements", label: "Settlements" },
+  { href: "/admin", label: "Dashboard", group: "Operations" },
+  { href: "/admin/trips", label: "Trips", group: "Operations" },
+  { href: "/admin/dispatch/map", label: "Dispatch Map", group: "Operations" },
+  { href: "/admin/receipts", label: "Receipts", group: "Operations" },
+  { href: "/admin/drivers", label: "Drivers", group: "Drivers" },
+  { href: "/admin/applications", label: "Applications", group: "Drivers" },
+  { href: "/admin/link-driver", label: "Link Driver", group: "Drivers" },
+  { href: "/admin/payment-reviews", label: "Payments", group: "Payments" },
+  { href: "/admin/commission-payments", label: "Commissions", group: "Payments" },
+  { href: "/admin/subscriptions", label: "Subscriptions", group: "Payments" },
+  { href: "/admin/settlements", label: "Settlements", group: "Payments" },
+  { href: "/admin/reports", label: "Earnings Report", group: "Reports" },
+  { href: "/admin/earnings", label: "Earnings Dashboard", group: "Reports" },
 ];
 
 export default function AdminProtectedLayout({
@@ -95,6 +95,14 @@ export default function AdminProtectedLayout({
     return current?.label || "Admin";
   }, [pathname]);
 
+  const groupedNavItems = useMemo(() => {
+    return navItems.reduce<Record<string, typeof navItems>>((groups, item) => {
+      groups[item.group] = groups[item.group] ?? [];
+      groups[item.group].push(item);
+      return groups;
+    }, {});
+  }, []);
+
   if (checking) {
     return (
       <main className="moovu-auth-shell text-black">
@@ -142,24 +150,31 @@ export default function AdminProtectedLayout({
               </div>
 
               <div className="moovu-admin-rail">
-                {navItems.map((item) => {
-                  const active =
-                    item.href === "/admin"
-                      ? pathname === "/admin"
-                      : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                {Object.entries(groupedNavItems).map(([group, items]) => (
+                  <div key={group} className="space-y-1">
+                    <div className="px-3 pb-1 pt-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+                      {group}
+                    </div>
+                    {items.map((item) => {
+                      const active =
+                        item.href === "/admin"
+                          ? pathname === "/admin"
+                          : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`moovu-admin-link ${
-                        active ? "moovu-admin-link-active" : ""
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`moovu-admin-link ${
+                            active ? "moovu-admin-link-active" : ""
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ))}
 
                 <button
                   onClick={handleLogout}

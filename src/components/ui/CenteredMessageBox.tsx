@@ -11,19 +11,18 @@ type Props = {
 function isSuccessMessage(message: string) {
   const value = message.toLowerCase();
 
-  return (
-    value.includes("success") ||
-    value.includes("successful") ||
-    value.includes("saved") ||
-    value.includes("linked") ||
-    value.includes("unlinked") ||
-    value.includes("enabled") ||
-    value.includes("detected ✅") ||
-    value.includes("calculated ✅") ||
-    value.includes("submitted successfully") ||
-    value.includes("booked successfully") ||
-    value.includes("✅")
-  );
+  return [
+    "success",
+    "successful",
+    "saved",
+    "linked",
+    "unlinked",
+    "enabled",
+    "detected",
+    "calculated",
+    "submitted successfully",
+    "booked successfully",
+  ].some((keyword) => value.includes(keyword));
 }
 
 export default function CenteredMessageBox({
@@ -92,8 +91,9 @@ export default function CenteredMessageBox({
             type="button"
             onClick={onClose}
             className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-medium text-slate-700"
+            aria-label="Close message"
           >
-            ✕
+            X
           </button>
         </div>
 

@@ -99,32 +99,33 @@ export default function HomePage() {
 
         <div className="grid flex-1 items-start gap-5 py-4 lg:grid-cols-[minmax(0,0.88fr)_minmax(430px,1.12fr)] lg:items-center lg:gap-8 lg:py-8">
           <section className="overflow-hidden rounded-[28px] border border-[#d7e2ea] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
-            <div className="relative overflow-hidden bg-[#050505] px-5 py-6 text-white sm:px-7 sm:py-8">
-              <div className="absolute right-[-70px] top-[-90px] h-52 w-52 rounded-full bg-[#1f74c9]/35 blur-3xl" />
-              <div className="absolute bottom-[-90px] left-[-80px] h-48 w-48 rounded-full bg-[#c0f0e0]/25 blur-3xl" />
+            <div className="relative overflow-hidden bg-[linear-gradient(135deg,#f8fbff_0%,#eaf5ff_48%,#e9fff8_100%)] px-5 py-6 text-[#050505] sm:px-7 sm:py-8">
+              <div className="absolute right-[-70px] top-[-90px] h-52 w-52 rounded-full bg-[#1f74c9]/18 blur-3xl" />
+              <div className="absolute bottom-[-90px] left-[-80px] h-48 w-48 rounded-full bg-[#c0f0e0]/55 blur-3xl" />
+              <div className="absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,#cfe4ff,transparent)]" />
 
               <div className="relative z-10">
                 <div className="mb-7 flex items-center justify-between gap-4">
                   <Image
-                    src="/Moovu-White.png"
+                    src="/Moovu-Black.png"
                     alt="MOOVU Kasi Rides"
                     width={156}
                     height={62}
                     priority
                     className="h-auto w-36 object-contain"
                   />
-                  <span className="rounded-full bg-white/12 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-white/85">
+                  <span className="rounded-full bg-[#eaf3ff] px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#244f9e] shadow-sm">
                     Ready
                   </span>
                 </div>
 
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#b0e0f0]">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#244f9e]">
                   Ride with MOOVU
                 </p>
                 <h1 className="mt-3 max-w-xl text-4xl font-black leading-[0.98] tracking-normal sm:text-5xl">
                   Your local ride, ready when you are.
                 </h1>
-                <p className="mt-4 max-w-lg text-sm leading-6 text-white/76 sm:text-base">
+                <p className="mt-4 max-w-lg text-sm leading-6 text-[#5b6776] sm:text-base">
                   Book clean local trips with live driver updates, secure OTP trip starts, and receipts after every ride.
                 </p>
               </div>

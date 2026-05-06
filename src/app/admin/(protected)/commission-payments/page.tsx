@@ -27,18 +27,34 @@ type CommissionRequest = {
 };
 
 type SettlementDriver = {
-  driver: {
+  id?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  status?: string | null;
+  online?: boolean | null;
+  driver?: {
     id: string;
     first_name: string | null;
     last_name: string | null;
     phone: string | null;
   };
-  wallet: {
+  wallet?: {
     balance_due: number;
     total_commission: number;
     total_paid: number;
     last_payment_at: string | null;
     last_payment_amount: number | null;
+  };
+  wallet_summary?: {
+    balance_due: number;
+    total_commission: number;
+    total_driver_net?: number;
+    total_trips_completed?: number;
+    total_paid: number;
+    last_payment_at: string | null;
+    last_payment_amount: number | null;
+    account_status?: string | null;
   };
 };
 
@@ -51,7 +67,27 @@ function displayDate(value: string | null | undefined) {
 }
 
 function driverName(row: SettlementDriver) {
-  return `${row.driver.first_name ?? ""} ${row.driver.last_name ?? ""}`.trim() || row.driver.id;
+  const firstName = row.driver?.first_name ?? row.first_name ?? "";
+  const lastName = row.driver?.last_name ?? row.last_name ?? "";
+  return `${firstName} ${lastName}`.trim() || row.driver?.id || row.id || "Driver";
+}
+
+function driverId(row: SettlementDriver) {
+  return row.driver?.id || row.id || "";
+}
+
+function driverPhone(row: SettlementDriver) {
+  return row.driver?.phone ?? row.phone ?? null;
+}
+
+function wallet(row: SettlementDriver) {
+  return row.wallet_summary ?? row.wallet ?? {
+    balance_due: 0,
+    total_commission: 0,
+    total_paid: 0,
+    last_payment_at: null,
+    last_payment_amount: null,
+  };
 }
 
 function standing(balanceDue: number, hasPending: boolean) {
@@ -179,15 +215,22 @@ export default function AdminCommissionPaymentsPage() {
     () => new Set(pendingRequests.map((row) => row.driver_id)),
     [pendingRequests]
   );
-  const totalOwed = drivers.reduce((sum, row) => sum + Number(row.wallet.balance_due ?? 0), 0);
+  const driversWithBalances = drivers.filter((row) => Number(wallet(row).balance_due ?? 0) > 0);
+  const totalOwed = drivers.reduce((sum, row) => sum + Number(wallet(row).balance_due ?? 0), 0);
+  const totalCommissionEarned = drivers.reduce(
+    (sum, row) => sum + Number(wallet(row).total_commission ?? 0),
+    0
+  );
+  const totalPaid = drivers.reduce((sum, row) => sum + Number(wallet(row).total_paid ?? 0), 0);
   const lockedDrivers = drivers.filter(
-    (row) => Number(row.wallet.balance_due ?? 0) >= DRIVER_COMMISSION_LOCK_LIMIT
+    (row) => Number(wallet(row).balance_due ?? 0) >= DRIVER_COMMISSION_LOCK_LIMIT
   );
   const collectedThisMonth = drivers.reduce((sum, row) => {
-    const paidAt = row.wallet.last_payment_at ? new Date(row.wallet.last_payment_at) : null;
+    const driverWallet = wallet(row);
+    const paidAt = driverWallet.last_payment_at ? new Date(driverWallet.last_payment_at) : null;
     const now = new Date();
     const inMonth = paidAt && paidAt.getMonth() === now.getMonth() && paidAt.getFullYear() === now.getFullYear();
-    return sum + (inMonth ? Number(row.wallet.last_payment_amount ?? 0) : 0);
+    return sum + (inMonth ? Number(driverWallet.last_payment_amount ?? 0) : 0);
   }, 0);
 
   if (loading) {
@@ -200,7 +243,7 @@ export default function AdminCommissionPaymentsPage() {
   }
 
   return (
-    <main className="space-y-6 text-black">
+    <main className="space-y-6 text-slate-950">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       {reviewDraft && (
@@ -243,7 +286,8 @@ export default function AdminCommissionPaymentsPage() {
         </div>
       )}
 
-      <section className="moovu-card p-5 sm:p-6">
+      <section className="moovu-card overflow-hidden p-0">
+        <div className="bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-5 sm:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="moovu-section-title">MOOVU Admin</div>
@@ -251,28 +295,54 @@ export default function AdminCommissionPaymentsPage() {
               Commission payments
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Review driver commission POPs separately from subscription payments.
+              Review driver commission POPs, track locked accounts, and keep MOOVU collections clear from subscription revenue.
             </p>
           </div>
-          <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">
-            Subscription payments
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">
+              Subscription payments
+            </Link>
+            <button className="moovu-btn moovu-btn-primary" onClick={() => void loadData()}>
+              Refresh
+            </button>
+          </div>
+        </div>
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-4">
-        <MetricCard label="Total owed" value={money(totalOwed)} helper="Open commission balance" tone="warning" />
+      <section className="grid gap-3 md:grid-cols-5">
+        <MetricCard label="Total owed" value={money(totalOwed)} helper="Unpaid MOOVU commission" tone="warning" />
         <MetricCard label="Pending reviews" value={String(pendingRequests.length)} helper="Commission POPs" tone={pendingRequests.length ? "warning" : "default"} />
         <MetricCard label="Locked drivers" value={String(lockedDrivers.length)} helper={`At ${money(DRIVER_COMMISSION_LOCK_LIMIT)} or more`} tone={lockedDrivers.length ? "danger" : "success"} />
         <MetricCard label="Collected this month" value={money(collectedThisMonth)} helper="From latest wallet records" tone="success" />
+        <MetricCard label="All-time collected" value={money(totalPaid)} helper={`${money(totalCommissionEarned)} generated`} tone="primary" />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        <div className="moovu-card-interactive p-5">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">Collection rule</div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Drivers are blocked from going online once commission owed reaches {money(DRIVER_COMMISSION_LOCK_LIMIT)}.
+          </p>
+        </div>
+        <div className="moovu-card-interactive p-5">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Review order</div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Open proof, compare the bank reference, then approve, reject, or mark as waiting for bank confirmation.
+          </p>
+        </div>
+        <div className="moovu-card-interactive p-5">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Clean split</div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Commission reviews stay here. Subscription POPs stay under Subscriptions.
+          </p>
+        </div>
       </section>
 
       <section className="moovu-card p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-black text-slate-950">Pending commission reviews</h2>
-          <button className="moovu-btn moovu-btn-secondary" onClick={() => void loadData()}>
-            Refresh
-          </button>
+          <StatusBadge status={pendingRequests.length ? "pending_payment_review" : "settled"} />
         </div>
 
         <div className="mt-4 space-y-4">
@@ -280,7 +350,7 @@ export default function AdminCommissionPaymentsPage() {
             <EmptyState title="No pending commission POPs" description="Commission payment submissions will appear here for admin review." />
           ) : (
             pendingRequests.map((row) => (
-              <div key={row.id} className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-5">
+              <div key={row.id} className="moovu-card-interactive p-5">
                 <div className="grid gap-4 md:grid-cols-5">
                   <div>
                     <div className="text-sm text-slate-500">Driver</div>
@@ -340,34 +410,45 @@ export default function AdminCommissionPaymentsPage() {
       </section>
 
       <section className="moovu-card p-5 sm:p-6">
-        <h2 className="text-xl font-black text-slate-950">Drivers owing commission</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-black text-slate-950">Drivers owing commission</h2>
+          <div className="text-sm font-bold text-slate-500">{driversWithBalances.length} open balance(s)</div>
+        </div>
         <div className="mt-4 space-y-3">
-          {drivers.length === 0 ? (
+          {driversWithBalances.length === 0 ? (
             <EmptyState title="No driver balances found" description="Driver commission balances will appear after completed trips." />
           ) : (
-            drivers
-              .filter((row) => Number(row.wallet.balance_due ?? 0) > 0)
+            driversWithBalances
               .map((row) => {
-                const balance = Number(row.wallet.balance_due ?? 0);
-                const hasPending = pendingByDriver.has(row.driver.id);
+                const driverWallet = wallet(row);
+                const balance = Number(driverWallet.balance_due ?? 0);
+                const hasPending = pendingByDriver.has(driverId(row));
+                const progress = Math.min(100, Math.round((balance / DRIVER_COMMISSION_LOCK_LIMIT) * 100));
                 return (
-                  <div key={row.driver.id} className="rounded-2xl border border-[var(--moovu-border)] p-4">
+                  <div key={driverId(row)} className="rounded-3xl border border-[var(--moovu-border)] bg-gradient-to-br from-white to-slate-50 p-4">
                     <div className="grid gap-3 md:grid-cols-5">
                       <div>
                         <div className="text-sm text-slate-500">Driver</div>
                         <div className="font-black text-slate-950">{driverName(row)}</div>
+                        <div className="mt-1 text-xs text-slate-500">{driverPhone(row) || driverId(row)}</div>
                       </div>
                       <div>
                         <div className="text-sm text-slate-500">Balance owed</div>
                         <div className="font-semibold">{money(balance)}</div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full rounded-full ${balance >= DRIVER_COMMISSION_LOCK_LIMIT ? "bg-red-500" : "bg-sky-500"}`}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
                       </div>
                       <div>
                         <div className="text-sm text-slate-500">Paid</div>
-                        <div className="font-semibold">{money(row.wallet.total_paid)}</div>
+                        <div className="font-semibold">{money(driverWallet.total_paid)}</div>
                       </div>
                       <div>
                         <div className="text-sm text-slate-500">Last payment</div>
-                        <div className="font-semibold">{displayDate(row.wallet.last_payment_at)}</div>
+                        <div className="font-semibold">{displayDate(driverWallet.last_payment_at)}</div>
                       </div>
                       <div>
                         <div className="text-sm text-slate-500">Status</div>

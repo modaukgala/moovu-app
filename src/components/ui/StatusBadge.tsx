@@ -12,18 +12,31 @@ function toneForStatus(status?: string | null) {
     case "completed":
     case "approved":
     case "active":
+    case "online":
+    case "settled":
+    case "good_standing":
       return "success";
     case "cancelled":
     case "rejected":
+    case "locked":
+    case "payment_required":
+    case "suspended":
+    case "expired":
       return "danger";
     case "arrived":
     case "pending":
     case "pending_payment_review":
     case "waiting_confirmation":
+    case "warning":
+    case "due":
+    case "inactive":
+    case "expiring_soon":
       return "warning";
     case "assigned":
     case "ongoing":
     case "offered":
+    case "available":
+    case "busy":
       return "primary";
     default:
       return "neutral";
@@ -40,4 +53,3 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
     </span>
   );
 }
-

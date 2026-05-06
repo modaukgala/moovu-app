@@ -134,9 +134,9 @@ tr:last-child td {
 
 .moovu-card {
   background: var(--moovu-bg-elevated);
-  border: 1px solid var(--moovu-border);
+  border: 1px solid rgba(215, 226, 234, 0.82);
   border-radius: var(--radius-lg);
-  box-shadow: var(--moovu-shadow-sm);
+  box-shadow: 0 16px 38px rgba(31, 116, 201, 0.06);
 }
 
 .moovu-card-interactive {
@@ -148,6 +148,7 @@ tr:last-child td {
   border: 1px solid rgba(215, 226, 234, 0.92);
   border-radius: 28px;
   box-shadow: var(--moovu-shadow-sm);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .moovu-card-interactive::before {
@@ -164,16 +165,27 @@ tr:last-child td {
   opacity: 1;
 }
 
+.moovu-card-interactive:hover {
+  transform: translateY(-1px);
+  border-color: rgba(31, 116, 201, 0.22);
+  box-shadow: 0 18px 42px rgba(31, 116, 201, 0.11);
+}
+
+.moovu-card-interactive:active {
+  transform: translateY(0);
+}
+
 .moovu-hero-panel {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(203, 216, 229, 0.82);
   border-radius: 34px;
   background:
-    linear-gradient(135deg, rgba(5, 5, 5, 0.96), rgba(31, 116, 201, 0.92)),
-    #050505;
+    radial-gradient(circle at 88% 10%, rgba(192, 240, 224, 0.46), transparent 30%),
+    linear-gradient(135deg, #1f74c9 0%, #237fd7 46%, #2bb5a0 100%),
+    #1f74c9;
   color: #fff;
-  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 26px 70px rgba(31, 116, 201, 0.2);
 }
 
 .moovu-hero-panel::after {
@@ -250,16 +262,19 @@ tr:last-child td {
   font-weight: 700;
   border: 1px solid transparent;
   text-decoration: none;
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  user-select: none;
 }
 
 .moovu-btn-primary {
   background: var(--moovu-primary);
   color: #fff;
-  box-shadow: 0 10px 26px rgba(47, 128, 237, 0.18);
+  box-shadow: 0 14px 30px rgba(31, 116, 201, 0.22);
 }
 
 .moovu-btn-primary:hover {
   background: var(--moovu-primary-hover);
+  box-shadow: 0 18px 38px rgba(31, 116, 201, 0.28);
 }
 
 .moovu-btn-secondary {
@@ -268,15 +283,39 @@ tr:last-child td {
   border-color: var(--moovu-border);
 }
 
+.moovu-btn-secondary:hover {
+  border-color: rgba(31, 116, 201, 0.28);
+  background: #f8fbff;
+  box-shadow: 0 12px 26px rgba(31, 116, 201, 0.08);
+}
+
+.moovu-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+.moovu-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+.moovu-btn:focus-visible,
+.moovu-card-interactive:focus-visible,
+.moovu-sidebar-link:focus-visible,
+.moovu-customer-nav-item:focus-visible {
+  outline: 3px solid rgba(31, 116, 201, 0.24);
+  outline-offset: 3px;
+}
+
 .moovu-floating-chat-button {
   min-height: 52px;
   border: 0;
   border-radius: 999px;
   padding: 0 18px;
-  background: linear-gradient(135deg, #050505, #1f74c9);
+  background: linear-gradient(135deg, #1f74c9, #2bb5a0);
   color: #fff;
   font-weight: 900;
-  box-shadow: 0 18px 42px rgba(5, 5, 5, 0.28);
+  box-shadow: 0 18px 42px rgba(31, 116, 201, 0.28);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
 }
@@ -493,7 +532,9 @@ tr:last-child td {
 .moovu-admin-shell {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, #f8fbff 0%, #f5f8fc 52%, #eef4f8 100%);
+    radial-gradient(circle at 8% 0%, rgba(176, 224, 240, 0.42), transparent 26%),
+    radial-gradient(circle at 92% 10%, rgba(192, 240, 224, 0.4), transparent 28%),
+    linear-gradient(180deg, #fbfdff 0%, #f5fafd 48%, #eef6fa 100%);
 }
 
 .moovu-admin-sidebar {
@@ -528,7 +569,7 @@ tr:last-child td {
 
 .moovu-admin-link-active {
   border-color: #cfe4ff;
-  background: linear-gradient(135deg, #eef6ff, #ffffff);
+  background: linear-gradient(135deg, #eef8ff, #f0fffa);
   color: #0f4fb8;
   box-shadow: 0 10px 24px rgba(31, 116, 201, 0.09);
 }
@@ -617,6 +658,13 @@ tr:last-child td {
   background: #fff;
   padding: 16px;
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.moovu-dispatch-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(31, 116, 201, 0.2);
+  box-shadow: 0 18px 36px rgba(31, 116, 201, 0.09);
 }
 
 .moovu-route-line {
@@ -1465,8 +1513,11 @@ tr:last-child td {
 .moovu-app-metric {
   border: 1px solid var(--moovu-border);
   border-radius: 22px;
-  background: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(246, 250, 252, 0.92)),
+    #fff;
   padding: 15px;
+  box-shadow: 0 12px 28px rgba(31, 116, 201, 0.06);
 }
 
 .moovu-app-metric-primary {
