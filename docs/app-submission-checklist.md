@@ -18,6 +18,12 @@ Last updated: 2026-05-06
 - App matches description: ride-hailing app with customer booking, driver portal, admin operations, receipts, notifications, OTP, payments, commissions, and subscriptions.
 - Customer-driver chat: available after driver acceptance once `docs/trip-chat-migration.sql` has been reviewed and applied to local/staging/production.
 
+## Driver Location Rules
+
+- Pickup arrival/start validation is server-side and requires the driver heartbeat to be within 20m of the pickup point.
+- Trip completion validation is server-side and allows a wider 400m destination-area radius, because many operating areas do not have exact stand/house-level coordinates.
+- Driver-facing errors should explain the next action clearly and appear in the centered driver action modal.
+
 ## Manual Tests Required
 
 1. Open /privacy-policy, /terms, and /contact.

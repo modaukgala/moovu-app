@@ -1,6 +1,6 @@
 export const HEARTBEAT_MAX_AGE_MS = 90 * 1000;
-export const ARRIVAL_RADIUS_KM = 0.35;
-export const COMPLETION_RADIUS_KM = 0.8;
+export const ARRIVAL_RADIUS_KM = 0.02;
+export const COMPLETION_RADIUS_KM = 0.4;
 
 export function haversineKm(
   lat1: number,

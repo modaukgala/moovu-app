@@ -174,7 +174,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: `You are too far from pickup to start the trip. Distance is ${kmAway.toFixed(2)} km.`,
+          error: "You need to be within 20m of the pickup point.",
         },
         { status: 400 }
       );

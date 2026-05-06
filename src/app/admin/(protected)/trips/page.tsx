@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import EmptyState from "@/components/ui/EmptyState";
+import LoadingState from "@/components/ui/LoadingState";
+import MetricCard from "@/components/ui/MetricCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Trip = {
@@ -37,6 +42,14 @@ const STATUSES = [
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function money(value: number | null | undefined) {
+  return value == null ? "--" : `R${Number(value).toFixed(2)}`;
+}
+
+function displayDate(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : "--";
 }
 
 export default function TripsPage() {
@@ -82,8 +95,8 @@ export default function TripsPage() {
   }
 
   useEffect(() => {
-    loadDrivers();
-    loadTrips(status);
+    void loadDrivers();
+    void loadTrips(status);
   }, [status]);
 
   const driverNameById = useMemo(() => {
@@ -93,6 +106,16 @@ export default function TripsPage() {
     });
     return map;
   }, [drivers]);
+
+  const tripStats = useMemo(
+    () => ({
+      total: trips.length,
+      active: trips.filter((trip) => ["assigned", "arrived", "ongoing"].includes(trip.status)).length,
+      requested: trips.filter((trip) => trip.status === "requested").length,
+      revenue: trips.reduce((sum, trip) => sum + Number(trip.fare_amount ?? 0), 0),
+    }),
+    [trips],
+  );
 
   async function assignDriver(tripId: string, driverId: string) {
     setActionLoadingId(tripId);
@@ -188,153 +211,255 @@ export default function TripsPage() {
     }
   }
 
-  return (
-    <main className="p-6 space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Trips</h1>
-          <p className="opacity-70 mt-1">Dispatcher console.</p>
-        </div>
+  function renderActions(trip: Trip) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {trip.status === "assigned" && (
+          <button
+            className="moovu-btn moovu-btn-secondary"
+            disabled={actionLoadingId === trip.id}
+            onClick={() => void markArrived(trip.id)}
+          >
+            Arrived
+          </button>
+        )}
 
-        <Link className="border rounded-xl px-4 py-2" href="/admin/trips/new">
-          + New Trip
+        {trip.status === "arrived" && (
+          <Link className="moovu-btn moovu-btn-secondary" href={`/admin/trips/${trip.id}`}>
+            Verify OTP
+          </Link>
+        )}
+
+        {trip.status === "ongoing" && (
+          <Link className="moovu-btn moovu-btn-primary" href={`/admin/trips/${trip.id}`}>
+            Complete
+          </Link>
+        )}
+
+        {trip.status !== "completed" && trip.status !== "cancelled" && (
+          <button
+            className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700"
+            disabled={actionLoadingId === trip.id}
+            onClick={() => void cancelTrip(trip.id)}
+          >
+            Cancel
+          </button>
+        )}
+
+        <Link className="moovu-btn moovu-btn-secondary" href={`/admin/trips/${trip.id}`}>
+          Open
         </Link>
       </div>
+    );
+  }
 
+  if (loading) {
+    return (
+      <LoadingState
+        title="Loading trips"
+        description="Preparing trip movement, driver assignment, and dispatch actions."
+      />
+    );
+  }
+
+  return (
+    <main className="space-y-6 text-black">
       {pageError && (
-        <div className="border rounded-xl p-3 text-sm text-red-600">
-          {pageError}
-        </div>
+        <CenteredMessageBox
+          title="Trip action failed"
+          message={pageError}
+          onClose={() => setPageError(null)}
+        />
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {STATUSES.map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatus(s)}
-            className={`border rounded-full px-4 py-2 text-sm ${
-              status === s ? "bg-white/10" : ""
-            }`}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div>Loading trips...</div>
-      ) : trips.length === 0 ? (
-        <div className="opacity-70">No trips found.</div>
-      ) : (
-        <div className="border rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-12 gap-0 bg-white/5 text-sm font-medium">
-            <div className="col-span-3 p-3">Pickup → Dropoff</div>
-            <div className="col-span-2 p-3">Rider</div>
-            <div className="col-span-2 p-3">Driver</div>
-            <div className="col-span-1 p-3">Pay</div>
-            <div className="col-span-1 p-3">Fare</div>
-            <div className="col-span-1 p-3">Status</div>
-            <div className="col-span-2 p-3">Actions</div>
+      <section className="moovu-hero-panel p-5 sm:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
+              Trips console
+            </div>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-5xl">
+              Track every ride from request to receipt.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/74">
+              Filter live states, assign drivers, cancel safely, and open trip details without leaving operations flow.
+            </p>
           </div>
 
-          {trips.map((t) => (
-            <div key={t.id} className="grid grid-cols-12 gap-0 border-t text-sm">
-              <div className="col-span-3 p-3">
-                <Link
-                  className="underline underline-offset-4 hover:opacity-80"
-                  href={`/admin/trips/${t.id}`}
-                >
-                  <div className="font-medium">{t.pickup_address}</div>
-                  <div className="opacity-70 mt-1">{t.dropoff_address}</div>
-                </Link>
-              </div>
+          <Link className="moovu-btn bg-white text-slate-950" href="/admin/trips/new">
+            New trip
+          </Link>
+        </div>
+      </section>
 
-              <div className="col-span-2 p-3">
-                <div className="font-medium">{t.rider_name ?? "—"}</div>
-                <div className="opacity-70 mt-1">{t.rider_phone ?? "—"}</div>
-              </div>
+      <section className="grid gap-3 md:grid-cols-4">
+        <MetricCard label="Visible trips" value={String(tripStats.total)} helper={`Filter: ${status}`} />
+        <MetricCard label="Requested" value={String(tripStats.requested)} helper="Need dispatch" tone="primary" />
+        <MetricCard label="Active" value={String(tripStats.active)} helper="Assigned or moving" tone="success" />
+        <MetricCard label="Visible value" value={money(tripStats.revenue)} helper="Fare total in filter" tone="warning" />
+      </section>
 
-              <div className="col-span-2 p-3">
-                {t.driver_id ? (
-                  <div className="font-medium">
-                    {driverNameById.get(t.driver_id) ?? t.driver_id}
+      <section className="moovu-card p-4 sm:p-5">
+        <div className="flex flex-wrap gap-2">
+          {STATUSES.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              className={`rounded-full border px-4 py-2 text-sm font-black capitalize ${
+                status === s
+                  ? "border-[var(--moovu-primary)] bg-[var(--moovu-primary)] text-white"
+                  : "border-[var(--moovu-border)] bg-white text-slate-700"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {trips.length === 0 ? (
+        <EmptyState
+          title="No trips found"
+          description="Trips matching this status filter will appear here."
+        />
+      ) : (
+        <>
+          <section className="moovu-card hidden overflow-hidden xl:block">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] text-left text-sm">
+                <thead>
+                  <tr>
+                    <th>Route</th>
+                    <th>Rider</th>
+                    <th>Driver</th>
+                    <th>Payment</th>
+                    <th>Fare</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trips.map((trip) => (
+                    <tr key={trip.id}>
+                      <td className="max-w-[280px]">
+                        <Link href={`/admin/trips/${trip.id}`} className="font-black text-slate-950 hover:text-[var(--moovu-primary)]">
+                          {trip.pickup_address}
+                        </Link>
+                        <div className="mt-1 text-xs text-slate-500">{trip.dropoff_address}</div>
+                      </td>
+                      <td>
+                        <div className="font-bold text-slate-950">{trip.rider_name ?? "--"}</div>
+                        <div className="mt-1 text-xs text-slate-500">{trip.rider_phone ?? "--"}</div>
+                      </td>
+                      <td>
+                        {trip.driver_id ? (
+                          <div className="font-bold text-slate-950">
+                            {driverNameById.get(trip.driver_id) ?? trip.driver_id}
+                          </div>
+                        ) : (
+                          <select
+                            className="min-w-[220px] rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm"
+                            defaultValue=""
+                            disabled={actionLoadingId === trip.id}
+                            onChange={(event) => {
+                              const val = event.target.value;
+                              if (val) void assignDriver(trip.id, val);
+                            }}
+                          >
+                            <option value="" disabled>
+                              Assign driver...
+                            </option>
+                            {drivers.map((driver) => (
+                              <option key={driver.id} value={driver.id}>
+                                {driver.first_name} {driver.last_name} ({driver.phone})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+                      <td className="capitalize">{trip.payment_method}</td>
+                      <td className="font-black">{money(trip.fare_amount)}</td>
+                      <td>
+                        <StatusBadge status={trip.status} />
+                      </td>
+                      <td>{displayDate(trip.created_at)}</td>
+                      <td>{renderActions(trip)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="grid gap-3 xl:hidden">
+            {trips.map((trip) => (
+              <article key={trip.id} className="moovu-card-interactive p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      Trip {trip.id.slice(0, 8)}
+                    </div>
+                    <div className="mt-2">
+                      <StatusBadge status={trip.status} />
+                    </div>
                   </div>
-                ) : (
-                  <div className="opacity-70">Unassigned</div>
-                )}
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500">Fare</div>
+                    <div className="text-lg font-black text-slate-950">{money(trip.fare_amount)}</div>
+                  </div>
+                </div>
 
-                {!t.driver_id && (
+                <div className="mt-4 space-y-3">
+                  <div className="moovu-route-line">
+                    <div className="moovu-route-line-marker" />
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Pickup</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-950">{trip.pickup_address}</div>
+                    </div>
+                  </div>
+                  <div className="moovu-route-line">
+                    <div className="moovu-route-line-marker" />
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Dropoff</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-950">{trip.dropoff_address}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-2 rounded-3xl bg-slate-50 p-3 text-sm text-slate-700">
+                  <div>Rider: <strong>{trip.rider_name ?? "--"}</strong></div>
+                  <div>Driver: <strong>{trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}</strong></div>
+                  <div>Payment: <strong className="capitalize">{trip.payment_method}</strong></div>
+                  <div>Created: <strong>{displayDate(trip.created_at)}</strong></div>
+                </div>
+
+                {!trip.driver_id && (
                   <select
-                    className="mt-2 w-full border rounded-xl p-2 bg-transparent"
+                    className="mt-4 rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm"
                     defaultValue=""
-                    disabled={actionLoadingId === t.id}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val) assignDriver(t.id, val);
+                    disabled={actionLoadingId === trip.id}
+                    onChange={(event) => {
+                      const val = event.target.value;
+                      if (val) void assignDriver(trip.id, val);
                     }}
                   >
                     <option value="" disabled>
                       Assign driver...
                     </option>
-                    {drivers.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.first_name} {d.last_name} ({d.phone})
+                    {drivers.map((driver) => (
+                      <option key={driver.id} value={driver.id}>
+                        {driver.first_name} {driver.last_name} ({driver.phone})
                       </option>
                     ))}
                   </select>
                 )}
-              </div>
 
-              <div className="col-span-1 p-3 capitalize">{t.payment_method}</div>
-
-              <div className="col-span-1 p-3">
-                {t.fare_amount !== null ? `R${Number(t.fare_amount).toFixed(2)}` : "—"}
-              </div>
-
-              <div className="col-span-1 p-3 capitalize">{t.status}</div>
-
-              <div className="col-span-2 p-3 flex flex-wrap gap-2">
-                {t.status === "assigned" && (
-                  <button
-                    className="border rounded-lg px-3 py-1"
-                    disabled={actionLoadingId === t.id}
-                    onClick={() => markArrived(t.id)}
-                  >
-                    Arrived
-                  </button>
-                )}
-
-                {t.status === "arrived" && (
-                  <Link
-                    className="border rounded-lg px-3 py-1"
-                    href={`/admin/trips/${t.id}`}
-                  >
-                    Verify OTP & Start
-                  </Link>
-                )}
-
-                {t.status === "ongoing" && (
-                  <Link
-                    className="border rounded-lg px-3 py-1"
-                    href={`/admin/trips/${t.id}`}
-                  >
-                    Complete
-                  </Link>
-                )}
-
-                {t.status !== "completed" && t.status !== "cancelled" && (
-                  <button
-                    className="border rounded-lg px-3 py-1"
-                    disabled={actionLoadingId === t.id}
-                    onClick={() => cancelTrip(t.id)}
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+                <div className="mt-4">{renderActions(trip)}</div>
+              </article>
+            ))}
+          </section>
+        </>
       )}
     </main>
   );

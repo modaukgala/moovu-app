@@ -35,6 +35,7 @@ type Props = {
   label: string;
   disabled?: boolean;
   disabledReason?: string;
+  buttonClassName?: string;
 };
 
 const MAX_MESSAGE_LENGTH = 1000;
@@ -51,6 +52,7 @@ export default function TripChatPanel({
   label,
   disabled = false,
   disabledReason = "Chat is available after the driver accepts the trip.",
+  buttonClassName,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<TripMessage[]>([]);
@@ -200,7 +202,7 @@ export default function TripChatPanel({
     <>
       <button
         type="button"
-        className="moovu-btn moovu-btn-secondary"
+        className={buttonClassName ?? "moovu-btn moovu-btn-secondary"}
         disabled={disabled}
         title={disabled ? disabledReason : undefined}
         onClick={() => setOpen(true)}

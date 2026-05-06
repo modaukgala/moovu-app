@@ -740,11 +740,6 @@ export default function RideTrackingPage() {
                 </a>
               )}
 
-              {canOpenChat && (
-                <div className="mt-3">
-                  <TripChatPanel tripId={trip.id} label="Chat with driver" />
-                </div>
-              )}
             </section>
 
             <section className="moovu-card p-5">
@@ -849,6 +844,16 @@ export default function RideTrackingPage() {
                   >
                     Rate driver
                   </Link>
+                )}
+
+                {trip.status === "completed" && (
+                  <button
+                    type="button"
+                    onClick={() => router.push("/")}
+                    className="moovu-btn moovu-btn-primary"
+                  >
+                    Done
+                  </button>
                 )}
 
                 <Link
@@ -956,6 +961,16 @@ export default function RideTrackingPage() {
           </section>
         </div>
       </div>
+
+      {canOpenChat && (
+        <div className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-4 z-[8000]">
+          <TripChatPanel
+            tripId={trip.id}
+            label="Chat with driver"
+            buttonClassName="moovu-floating-chat-button"
+          />
+        </div>
+      )}
     </main>
   );
 }

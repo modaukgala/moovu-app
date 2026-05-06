@@ -114,23 +114,23 @@ export default function AdminProtectedLayout({
   }
 
   return (
-    <main className="min-h-screen text-black">
+    <main className="moovu-admin-shell text-black">
       <AdminTripNotifications />
 
-      <div className="grid min-h-screen bg-[var(--moovu-bg)] lg:grid-cols-[290px_1fr]">
-        <aside className="border-r border-[var(--moovu-border)] bg-white/90 px-5 py-6 backdrop-blur-xl">
+      <div className="grid min-h-screen lg:grid-cols-[300px_1fr]">
+        <aside className="moovu-admin-sidebar hidden px-5 py-6 lg:block">
           <div className="sticky top-5 space-y-6">
-            <div className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-5 shadow-sm">
+            <div className="moovu-hero-panel p-5">
               <div className="moovu-chip w-fit">
                 <span className="h-2.5 w-2.5 rounded-full bg-[var(--moovu-primary)]" />
                 MOOVU Admin
               </div>
 
-              <h1 className="mt-4 text-2xl font-black text-slate-950">
+              <h1 className="mt-4 text-2xl font-black text-white">
                 Control center
               </h1>
 
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+              <p className="mt-2 text-sm leading-6 text-white/76">
                 Manage operations, dispatch, subscriptions and trip movement from one place.
               </p>
             </div>
@@ -140,7 +140,7 @@ export default function AdminProtectedLayout({
                 Navigation
               </div>
 
-              <div className="space-y-1.5">
+              <div className="moovu-admin-rail">
                 {navItems.map((item) => {
                   const active =
                     item.href === "/admin"
@@ -151,8 +151,8 @@ export default function AdminProtectedLayout({
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`moovu-sidebar-link ${
-                        active ? "moovu-sidebar-link-active" : ""
+                      className={`moovu-admin-link ${
+                        active ? "moovu-admin-link-active" : ""
                       }`}
                     >
                       {item.label}
@@ -162,7 +162,7 @@ export default function AdminProtectedLayout({
 
                 <button
                   onClick={handleLogout}
-                  className="moovu-sidebar-link mt-2 w-full text-left text-red-600 hover:bg-red-50 hover:border-red-100"
+                  className="moovu-admin-link mt-2 w-full text-left text-red-600 hover:border-red-100 hover:bg-red-50"
                 >
                   Logout
                 </button>
@@ -190,6 +190,25 @@ export default function AdminProtectedLayout({
               </div>
             </div>
           </div>
+
+          <nav className="moovu-admin-mobile-nav lg:hidden">
+            {navItems.map((item) => {
+              const active =
+                item.href === "/admin"
+                  ? pathname === "/admin"
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={active ? "is-active" : ""}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
 
           <div className="p-4 md:p-6">{children}</div>
         </section>

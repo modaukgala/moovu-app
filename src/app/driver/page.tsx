@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Offer = {
@@ -150,6 +151,7 @@ export default function DriverHomePage() {
   const [locationName, setLocationName] = useState("");
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
+  const [driverActionError, setDriverActionError] = useState<string | null>(null);
   const [gpsInfo, setGpsInfo] = useState<GpsNotice | string | null>(null);
   const [loadingDriver, setLoadingDriver] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -179,6 +181,11 @@ export default function DriverHomePage() {
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+
+  function showDriverActionError(message: string) {
+    setDriverActionError(message);
+    setInfo(null);
+  }
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
@@ -272,15 +279,16 @@ export default function DriverHomePage() {
 
   async function setOnlineServer(wantOnline: boolean) {
     if (wantOnline && !driver?.profile_completed) {
-      setInfo("Complete your application before going online.");
+      showDriverActionError("Complete your application before going online.");
       return;
     }
 
     setBusy(true);
     setInfo(null);
+    setDriverActionError(null);
 
     if (wantOnline) {
-      await captureCurrentLocationAndSave(true);
+      await captureCurrentLocationAndSave(false);
     }
 
     const token = await getAccessToken();
@@ -303,7 +311,7 @@ export default function DriverHomePage() {
     setBusy(false);
 
     if (!json?.ok) {
-      setInfo(json?.error || "Failed to update online status");
+      showDriverActionError(json?.error || "Failed to update online status");
       await loadDriverProfile(true);
       return;
     }
@@ -389,11 +397,15 @@ export default function DriverHomePage() {
       }
 
       if (!navigator.geolocation) {
-        setGpsInfo({
+        const notice = {
           tone: "warning",
           message:
             "GPS is not supported on this device or browser. Use manual location instead.",
-        });
+        } satisfies GpsNotice;
+        setGpsInfo(notice);
+        if (!silent) {
+          showDriverActionError(notice.message);
+        }
         resolve(false);
         return;
       }
@@ -408,6 +420,9 @@ export default function DriverHomePage() {
         (err) => {
           const notice = friendlyGeolocationError(err);
           setGpsInfo(notice);
+          if (!silent) {
+            showDriverActionError(notice.message);
+          }
 
           if (err.code === err.PERMISSION_DENIED) {
             gpsPermissionBlockedRef.current = true;
@@ -442,6 +457,7 @@ export default function DriverHomePage() {
 
     setBusy(true);
     setInfo(null);
+    setDriverActionError(null);
 
     const token = await getAccessToken();
     if (!token) {
@@ -465,7 +481,7 @@ export default function DriverHomePage() {
     setBusy(false);
 
     if (!json?.ok) {
-      setInfo(json?.error || "Failed to respond to offer.");
+      showDriverActionError(json?.error || "Failed to respond to offer.");
       await loadCurrentOffer();
       await loadCurrentTrip();
       return;
@@ -484,6 +500,7 @@ export default function DriverHomePage() {
   ) {
     setBusy(true);
     setInfo(null);
+    setDriverActionError(null);
 
     const token = await getAccessToken();
     if (!token) {
@@ -504,7 +521,7 @@ export default function DriverHomePage() {
     setBusy(false);
 
     if (!json?.ok) {
-      setInfo(json?.error || "Action failed");
+      showDriverActionError(json?.error || "Action failed");
       await loadCurrentTrip();
       await loadDriverProfile(true);
       return;
@@ -845,6 +862,14 @@ export default function DriverHomePage() {
 
   return (
     <main className="moovu-page text-black">
+      {driverActionError && (
+        <CenteredMessageBox
+          title="Action needs attention"
+          message={driverActionError}
+          onClose={() => setDriverActionError(null)}
+        />
+      )}
+
       <div className="moovu-shell">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -897,7 +922,7 @@ export default function DriverHomePage() {
         ) : (
           <div className="grid gap-4 xl:grid-cols-[1.22fr_0.78fr]">
             <section className="space-y-4">
-              <div className={`moovu-driver-hero p-5 ${driver.online ? "is-online" : ""}`}>
+              <div className={`moovu-driver-cockpit p-5 ${driver.online ? "is-online" : ""}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="moovu-section-title">Availability</div>
@@ -912,6 +937,19 @@ export default function DriverHomePage() {
                   <div className={driver.online ? "moovu-chip moovu-chip-success" : "moovu-chip"}>
                     <span className="moovu-chip-dot" />
                     {driver.online ? "Ready for trips" : "Not receiving trips"}
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    <span>Driver rhythm</span>
+                    <span>{currentTrip ? tripStatusLabel(currentTrip.status) : offer ? "Offer pending" : "Standby"}</span>
+                  </div>
+                  <div className="moovu-driver-rhythm" aria-hidden="true">
+                    <span className={`moovu-driver-rhythm-step ${driver.online ? "is-active" : ""}`} />
+                    <span className={`moovu-driver-rhythm-step ${offer || currentTrip ? "is-active" : ""}`} />
+                    <span className={`moovu-driver-rhythm-step ${currentTrip?.status === "arrived" || currentTrip?.status === "ongoing" ? "is-active" : ""}`} />
+                    <span className={`moovu-driver-rhythm-step ${currentTrip?.status === "ongoing" ? "is-active" : ""}`} />
                   </div>
                 </div>
 
@@ -969,7 +1007,7 @@ export default function DriverHomePage() {
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-[34px] border border-[var(--moovu-border)] bg-white shadow-sm">
+              <div className="relative overflow-hidden rounded-[34px] border border-[var(--moovu-border)] bg-white shadow-md">
                 <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow">
                   {currentTrip ? tripStatusLabel(currentTrip.status) : offer ? "New trip offer" : "Waiting for request"}
                 </div>
@@ -1011,7 +1049,7 @@ export default function DriverHomePage() {
               </div>
 
               {currentTrip && (
-                <div className="moovu-card p-5">
+                <div className="moovu-card-interactive p-5">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium text-slate-500">Active trip</div>
@@ -1043,10 +1081,6 @@ export default function DriverHomePage() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-3">
-                    {canOpenTripChat && (
-                      <TripChatPanel tripId={currentTrip.id} label="Chat with customer" />
-                    )}
-
                     {pickupGoogle && (
                       <a
                         className="moovu-btn moovu-btn-secondary"
@@ -1214,7 +1248,7 @@ export default function DriverHomePage() {
             </section>
 
             <aside className="space-y-4">
-              <section className="moovu-card p-5">
+              <section className="moovu-card-interactive p-5">
                 <div className="text-sm font-medium text-slate-500">Location tools</div>
 
                 <div className="mt-4 space-y-3">
@@ -1245,7 +1279,7 @@ export default function DriverHomePage() {
                 </div>
               </section>
 
-              <section className="moovu-card p-5">
+              <section className="moovu-card-interactive p-5">
                 <div className="text-sm font-medium text-slate-500">Quick links</div>
 
                 <div className="mt-4 grid gap-3">
@@ -1350,6 +1384,16 @@ export default function DriverHomePage() {
           </div>
         )}
       </div>
+
+      {currentTrip && canOpenTripChat && (
+        <div className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-4 z-[8000]">
+          <TripChatPanel
+            tripId={currentTrip.id}
+            label="Chat with customer"
+            buttonClassName="moovu-floating-chat-button"
+          />
+        </div>
+      )}
     </main>
   );
 }

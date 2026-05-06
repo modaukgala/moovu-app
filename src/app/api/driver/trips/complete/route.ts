@@ -186,9 +186,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             ok: false,
-            error: `You are too far from dropoff to complete this trip. Distance is ${kmAway.toFixed(
-              2
-            )} km.`,
+            error: "You need to be within the destination area before completing this trip.",
           },
           { status: 400 }
         );

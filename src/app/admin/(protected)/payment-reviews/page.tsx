@@ -46,6 +46,11 @@ export default function AdminPaymentReviewsPage() {
   const [statusFilter, setStatusFilter] = useState("pending_payment_review");
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("all");
   const [rows, setRows] = useState<PaymentRequestRow[]>([]);
+  const [reviewDraft, setReviewDraft] = useState<{
+    requestId: string;
+    action: "approve" | "reject" | "waiting";
+    note: string;
+  } | null>(null);
 
   const getToken = useCallback(async () => {
     const {
@@ -85,9 +90,11 @@ export default function AdminPaymentReviewsPage() {
     setLoading(false);
   }, [getToken]);
 
-  async function reviewRequest(requestId: string, action: "approve" | "reject" | "waiting") {
-    const reviewNote = window.prompt("Optional review note:")?.trim() || "";
-
+  async function reviewRequest(
+    requestId: string,
+    action: "approve" | "reject" | "waiting",
+    reviewNote: string,
+  ) {
     setBusyId(requestId);
     setMsg(null);
 
@@ -120,6 +127,7 @@ export default function AdminPaymentReviewsPage() {
     }
 
     setMsg(json?.message || "Payment request updated.");
+    setReviewDraft(null);
     setBusyId(null);
     await loadData(statusFilter);
   }
@@ -153,6 +161,61 @@ export default function AdminPaymentReviewsPage() {
   return (
     <main className="space-y-6 text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
+      {reviewDraft && (
+        <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-lg rounded-[30px] bg-white p-5 shadow-2xl">
+            <div className="moovu-section-title">Payment review</div>
+            <h2 className="mt-2 text-2xl font-black text-slate-950">
+              {reviewDraft.action === "approve"
+                ? "Approve payment"
+                : reviewDraft.action === "reject"
+                ? "Reject payment"
+                : "Mark as waiting"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Add an optional note for the driver or internal review trail before applying this action.
+            </p>
+
+            <textarea
+              value={reviewDraft.note}
+              onChange={(event) =>
+                setReviewDraft((current) =>
+                  current ? { ...current, note: event.target.value } : current,
+                )
+              }
+              rows={4}
+              className="moovu-input mt-4 resize-none"
+              placeholder="Optional review note"
+            />
+
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-secondary"
+                disabled={busyId === reviewDraft.requestId}
+                onClick={() => setReviewDraft(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-primary"
+                disabled={busyId === reviewDraft.requestId}
+                onClick={() =>
+                  void reviewRequest(
+                    reviewDraft.requestId,
+                    reviewDraft.action,
+                    reviewDraft.note.trim(),
+                  )
+                }
+              >
+                {busyId === reviewDraft.requestId ? "Working..." : "Confirm"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="moovu-card p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -294,7 +357,7 @@ export default function AdminPaymentReviewsPage() {
 
                   <div className="flex flex-wrap gap-3">
                     <button
-                      onClick={() => reviewRequest(row.id, "approve")}
+                      onClick={() => setReviewDraft({ requestId: row.id, action: "approve", note: "" })}
                       disabled={busyId === row.id}
                       className="rounded-xl px-4 py-3 text-white"
                       style={{ background: "var(--moovu-primary)" }}
@@ -303,7 +366,7 @@ export default function AdminPaymentReviewsPage() {
                     </button>
 
                     <button
-                      onClick={() => reviewRequest(row.id, "waiting")}
+                      onClick={() => setReviewDraft({ requestId: row.id, action: "waiting", note: "" })}
                       disabled={busyId === row.id}
                       className="border rounded-xl px-4 py-3 bg-white"
                     >
@@ -311,7 +374,7 @@ export default function AdminPaymentReviewsPage() {
                     </button>
 
                     <button
-                      onClick={() => reviewRequest(row.id, "reject")}
+                      onClick={() => setReviewDraft({ requestId: row.id, action: "reject", note: "" })}
                       disabled={busyId === row.id}
                       className="border rounded-xl px-4 py-3 bg-white text-red-600 border-red-300"
                     >

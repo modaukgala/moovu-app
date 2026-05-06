@@ -255,42 +255,52 @@ export default function DispatchMapPage() {
 
   return (
     <main className="space-y-6 text-black">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-sm text-gray-500">Dispatch Visibility</div>
-          <h1 className="text-3xl font-semibold text-black mt-1">Live Driver Map</h1>
-          <p className="text-gray-700 mt-2">
-            Track online drivers and active trip pickups in real time.
-          </p>
+      <section className="moovu-hero-panel p-5 sm:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
+              Dispatch visibility
+            </div>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-5xl">
+              Live driver map
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/74">
+              Track online drivers and active trip pickup points in real time.
+            </p>
+          </div>
+
+          <button className="moovu-btn bg-white text-slate-950" onClick={() => void loadBoardMap()}>
+            Refresh map
+          </button>
         </div>
-      </div>
+      </section>
 
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <section className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-2xl border bg-white p-4">
-          <div className="text-sm text-gray-500">Online Drivers</div>
-          <div className="mt-2 text-3xl font-semibold">{stats.onlineDrivers}</div>
+        <div className="moovu-stat-card">
+          <div className="moovu-stat-label">Online drivers</div>
+          <div className="moovu-stat-value">{stats.onlineDrivers}</div>
         </div>
 
-        <div className="rounded-2xl border bg-white p-4">
-          <div className="text-sm text-gray-500">Busy Drivers</div>
-          <div className="mt-2 text-3xl font-semibold">{stats.busyDrivers}</div>
+        <div className="moovu-stat-card moovu-stat-card-primary">
+          <div className="moovu-stat-label">Busy drivers</div>
+          <div className="moovu-stat-value">{stats.busyDrivers}</div>
         </div>
 
-        <div className="rounded-2xl border bg-white p-4">
-          <div className="text-sm text-gray-500">Active Trips</div>
-          <div className="mt-2 text-3xl font-semibold">{stats.activeTrips}</div>
+        <div className="moovu-stat-card">
+          <div className="moovu-stat-label">Active trips</div>
+          <div className="moovu-stat-value">{stats.activeTrips}</div>
         </div>
 
-        <div className="rounded-2xl border bg-white p-4">
-          <div className="text-sm text-gray-500">Offered Trips</div>
-          <div className="mt-2 text-3xl font-semibold">{stats.offeredTrips}</div>
+        <div className="moovu-stat-card">
+          <div className="moovu-stat-label">Offered trips</div>
+          <div className="moovu-stat-value">{stats.offeredTrips}</div>
         </div>
       </section>
 
-      <section className="rounded-[2rem] border bg-white p-4 shadow-sm">
-        <div ref={mapRef} className="h-[70vh] w-full rounded-[1.5rem]" />
+      <section className="overflow-hidden rounded-[34px] border border-[var(--moovu-border)] bg-white p-3 shadow-md">
+        <div ref={mapRef} className="h-[70vh] w-full rounded-[28px] bg-slate-100" />
       </section>
     </main>
   );
