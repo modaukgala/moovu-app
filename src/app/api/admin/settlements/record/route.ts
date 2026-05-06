@@ -6,6 +6,14 @@ function num(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+type CommissionTripRow = {
+  commission_amount: number | null;
+};
+
+type ExistingSettlementRow = {
+  amount_paid: number | null;
+};
+
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -60,8 +68,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: settlementsError.message }, { status: 500 });
     }
 
-    const totalCommission = (trips ?? []).reduce((sum: number, row: any) => sum + num(row.commission_amount), 0);
-    const totalSettledBefore = (existingSettlements ?? []).reduce((sum: number, row: any) => sum + num(row.amount_paid), 0);
+    const totalCommission = ((trips ?? []) as CommissionTripRow[]).reduce(
+      (sum, row) => sum + num(row.commission_amount),
+      0,
+    );
+    const totalSettledBefore = ((existingSettlements ?? []) as ExistingSettlementRow[]).reduce(
+      (sum, row) => sum + num(row.amount_paid),
+      0,
+    );
     const currentDue = Math.max(0, totalCommission - totalSettledBefore);
 
     if (currentDue <= 0) {
@@ -78,7 +92,7 @@ export async function POST(req: Request) {
       );
     }
 
-    let { data: wallet, error: walletError } = await supabaseAdmin
+    const { data: existingWallet, error: walletError } = await supabaseAdmin
       .from("driver_wallets")
       .select("*")
       .eq("driver_id", driverId)
@@ -87,6 +101,8 @@ export async function POST(req: Request) {
     if (walletError) {
       return NextResponse.json({ ok: false, error: walletError.message }, { status: 500 });
     }
+
+    let wallet = existingWallet;
 
     if (!wallet) {
       const { data: newWallet, error: createWalletError } = await supabaseAdmin
@@ -153,9 +169,9 @@ export async function POST(req: Request) {
       message: "Driver settlement recorded successfully.",
       balanceDue: newBalance,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: error instanceof Error ? error.message : "Server error." },
       { status: 500 }
     );
   }

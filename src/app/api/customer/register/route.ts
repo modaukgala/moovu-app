@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { customerEmailFromPhone, normalizePhoneZA } from "@/lib/customer/auth";
 import { createServiceSupabase } from "@/lib/customer/server";
+import {
+  buildLegalAcceptanceMetadata,
+  legalVersionMatches,
+} from "@/lib/legal";
 
 export async function POST(req: Request) {
   try {
@@ -10,6 +14,8 @@ export async function POST(req: Request) {
     const lastName = String(body?.last_name ?? "").trim();
     const normalizedPhone = normalizePhoneZA(body?.phone);
     const password = String(body?.password ?? "");
+    const acceptedTerms = body?.acceptedTerms === true;
+    const acceptedPrivacy = body?.acceptedPrivacy === true;
 
     if (!firstName || !lastName) {
       return NextResponse.json(
@@ -32,8 +38,23 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!acceptedTerms || !acceptedPrivacy) {
+      return NextResponse.json(
+        { ok: false, error: "You must accept the MOOVU Terms of Service and Privacy Policy." },
+        { status: 400 }
+      );
+    }
+
+    if (!legalVersionMatches(body?.termsVersion) || !legalVersionMatches(body?.privacyVersion)) {
+      return NextResponse.json(
+        { ok: false, error: "Legal document version is out of date. Refresh and try again." },
+        { status: 400 }
+      );
+    }
+
     const email = customerEmailFromPhone(normalizedPhone);
     const supabase = createServiceSupabase();
+    const legalMetadata = buildLegalAcceptanceMetadata("customer_signup");
 
     const { data: existingCustomer } = await supabase
       .from("customers")
@@ -77,6 +98,7 @@ export async function POST(req: Request) {
             phone: normalizedPhone,
             first_name: firstName,
             last_name: lastName,
+            ...legalMetadata,
           },
         }
       );
@@ -98,6 +120,7 @@ export async function POST(req: Request) {
             phone: normalizedPhone,
             first_name: firstName,
             last_name: lastName,
+            ...legalMetadata,
           },
         });
 

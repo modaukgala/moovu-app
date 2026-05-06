@@ -40,27 +40,34 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification?.data?.url || "/";
+  const targetUrl = new URL(
+    event.notification?.data?.url || "/",
+    self.location.origin
+  );
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         const clientUrl = new URL(client.url);
 
-        if (clientUrl.pathname === targetUrl && "focus" in client) {
+        if (
+          clientUrl.pathname === targetUrl.pathname &&
+          clientUrl.search === targetUrl.search &&
+          "focus" in client
+        ) {
           return client.focus();
         }
       }
 
       for (const client of clients) {
         if ("navigate" in client && "focus" in client) {
-          client.navigate(targetUrl);
+          client.navigate(targetUrl.href);
           return client.focus();
         }
       }
 
       if (self.clients.openWindow) {
-        return self.clients.openWindow(targetUrl);
+        return self.clients.openWindow(targetUrl.href);
       }
     })
   );

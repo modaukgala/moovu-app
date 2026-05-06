@@ -3,6 +3,10 @@ import { requireAdminUser } from "@/lib/auth/admin";
 
 type RemoveMode = "deactivate" | "permanent";
 
+type DriverAccountRow = {
+  user_id: string | null;
+};
+
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -82,7 +86,9 @@ export async function POST(req: Request) {
     }
 
     // Remove push subscriptions tied to unlinked user ids
-    const userIds = (mappings ?? []).map((m: any) => m.user_id).filter(Boolean);
+    const userIds = ((mappings ?? []) as DriverAccountRow[])
+      .map((mapping) => mapping.user_id)
+      .filter((userId): userId is string => Boolean(userId));
     if (userIds.length > 0) {
       await supabaseAdmin
         .from("push_subscriptions")
@@ -205,9 +211,9 @@ export async function POST(req: Request) {
       message:
         "Driver permanently deleted from active account data. Trip records were preserved.",
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: error instanceof Error ? error.message : "Server error." },
       { status: 500 }
     );
   }

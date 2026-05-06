@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
@@ -69,7 +69,6 @@ function money(v: number | null | undefined) {
 
 export default function AdminDriverProfilePage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const driverId = params.id;
 
   const [profile, setProfile] = useState<DriverProfile | null>(null);
@@ -85,15 +84,15 @@ export default function AdminDriverProfilePage() {
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
 
     return session?.access_token ?? null;
-  }
+  }, []);
 
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     setBusy(true);
     setMsg(null);
 
@@ -124,7 +123,7 @@ export default function AdminDriverProfilePage() {
     setSubscriptionPayments(profileJson.subscription_payments ?? []);
     setSubscriptionRequests(profileJson.subscription_requests ?? []);
     setBusy(false);
-  }
+  }, [driverId, getAccessToken]);
 
   async function activateSubscription(requestId?: string) {
     if (!amountPaid || Number(amountPaid) <= 0) {
@@ -174,8 +173,8 @@ export default function AdminDriverProfilePage() {
   }
 
   useEffect(() => {
-    loadAll();
-  }, [driverId]);
+    void loadAll();
+  }, [loadAll]);
 
   useEffect(() => {
     setAmountPaid(String(PLAN_PRICES[planType]));

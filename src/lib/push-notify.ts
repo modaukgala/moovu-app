@@ -52,6 +52,7 @@ export async function notifyCustomerForTrip(
 
   return sendPushSafe({
     userIds: [customerUserId],
+    role: "customer",
     title,
     body,
     url,
@@ -69,6 +70,7 @@ export async function notifyDriverForTrip(
 
   return sendPushSafe({
     userIds: [driverUserId],
+    role: "driver",
     title,
     body,
     url,

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import EnablePushButton from "@/components/EnablePushButton";
 
 function getRoleFromPath(pathname: string): "admin" | "driver" | "customer" | null {
-  if (pathname.startsWith("/admin")) return "admin";
   if (pathname.startsWith("/driver")) return "driver";
 
   const customerPaths = [

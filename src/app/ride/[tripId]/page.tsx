@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import LoadingState from "@/components/ui/LoadingState";
+import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type RideTrip = {
@@ -461,6 +462,11 @@ export default function RideTrackingPage() {
     return trip.status === "ongoing" && !!trip.start_otp_verified;
   }, [trip]);
 
+  const canOpenChat = useMemo(() => {
+    if (!trip?.driver_id) return false;
+    return ["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(trip.status);
+  }, [trip]);
+
   const carText = useMemo(() => {
     if (!driver) return "--";
     return [driver.vehicle_make, driver.vehicle_model, driver.vehicle_color]
@@ -732,6 +738,12 @@ export default function RideTrackingPage() {
                 <a href={`tel:${driver.phone}`} className="moovu-btn moovu-btn-primary mt-4 w-full">
                   Call driver
                 </a>
+              )}
+
+              {canOpenChat && (
+                <div className="mt-3">
+                  <TripChatPanel tripId={trip.id} label="Chat with driver" />
+                </div>
               )}
             </section>
 

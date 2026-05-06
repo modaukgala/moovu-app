@@ -1,15 +1,38 @@
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
-
-type Role = "admin" | "driver" | "customer";
+import type { PushRole } from "@/lib/push-auth";
 
 type SendPushParams = {
   userIds?: string[];
-  role?: Role;
+  role?: PushRole;
   title: string;
   body: string;
   url?: string;
 };
+
+type PushFailure = {
+  subscriptionId: string;
+  reason: string;
+};
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function getPushErrorDetails(error: unknown) {
+  const record = typeof error === "object" && error !== null
+    ? (error as Record<string, unknown>)
+    : {};
+  const statusCode =
+    typeof record.statusCode === "number" ? record.statusCode : undefined;
+  const body = typeof record.body === "string" ? record.body : null;
+  const message = getErrorMessage(error);
+
+  return {
+    statusCode,
+    reason: body || message || `Push failed with status ${String(statusCode || "unknown")}`,
+  };
+}
 
 function getSupabaseAdmin() {
   return createClient(
@@ -42,9 +65,13 @@ export async function sendPushToTargets(params: SendPushParams) {
 
   if (params.userIds && params.userIds.length > 0) {
     query = query.in("user_id", params.userIds);
-  } else if (params.role) {
+  }
+
+  if (params.role) {
     query = query.eq("role", params.role);
-  } else {
+  }
+
+  if ((!params.userIds || params.userIds.length === 0) && !params.role) {
     throw new Error("No push target was supplied.");
   }
 
@@ -74,7 +101,7 @@ export async function sendPushToTargets(params: SendPushParams) {
   let delivered = 0;
   let removed = 0;
   let failed = 0;
-  const failures: Array<{ endpoint: string; reason: string }> = [];
+  const failures: PushFailure[] = [];
 
   for (const row of subscriptions) {
     try {
@@ -83,23 +110,19 @@ export async function sendPushToTargets(params: SendPushParams) {
         payload
       );
       delivered += 1;
-    } catch (e: any) {
-      const statusCode = e?.statusCode;
-      const reason =
-        e?.body ||
-        e?.message ||
-        `Push failed with status ${String(statusCode || "unknown")}`;
+    } catch (error: unknown) {
+      const { statusCode, reason } = getPushErrorDetails(error);
 
       failed += 1;
       failures.push({
-        endpoint: row.endpoint,
+        subscriptionId: String(row.id),
         reason,
       });
 
       console.error("[push] send failed", {
+        subscriptionId: row.id,
         userId: row.user_id,
         role: row.role,
-        endpoint: row.endpoint,
         statusCode,
         reason,
       });
@@ -130,14 +153,14 @@ export async function sendPushSafe(params: SendPushParams) {
     const result = await sendPushToTargets(params);
     console.log("[push] result", result);
     return result;
-  } catch (e: any) {
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
     console.error("[push] fatal error", {
       title: params.title,
-      body: params.body,
       url: params.url,
       role: params.role,
       userIds: params.userIds,
-      error: e?.message || String(e),
+      error: message,
     });
 
     return {
@@ -145,8 +168,8 @@ export async function sendPushSafe(params: SendPushParams) {
       delivered: 0,
       removed: 0,
       failed: 0,
-      failures: [{ endpoint: "fatal", reason: e?.message || "Unknown push error" }],
-      message: e?.message || "Push send failed.",
+      failures: [{ subscriptionId: "fatal", reason: message || "Unknown push error" }],
+      message: message || "Push send failed.",
     };
   }
 }

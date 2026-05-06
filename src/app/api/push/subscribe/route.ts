@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { ALLOWED_ADMIN_ROLES } from "@/lib/auth/admin";
-
-type Role = "admin" | "driver" | "customer";
+import {
+  isPushRole,
+  verifyPushRoleAccess,
+  type PushRole,
+} from "@/lib/push-auth";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -53,14 +55,14 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => null)) as unknown;
-    const role = isRecord(body) ? (String(body.role ?? "").trim() as Role) : ("" as Role);
+    const role = isRecord(body) ? String(body.role ?? "").trim() : "";
     const subscription = isRecord(body) ? body.subscription : null;
 
     const endpoint = readNestedString(subscription, ["endpoint"]);
     const p256dh = readNestedString(subscription, ["keys", "p256dh"]);
     const auth = readNestedString(subscription, ["keys", "auth"]);
 
-    if (!["admin", "driver", "customer"].includes(role)) {
+    if (!isPushRole(role)) {
       return NextResponse.json({ ok: false, error: "Invalid role." }, { status: 400 });
     }
 
@@ -77,34 +79,12 @@ export async function POST(req: Request) {
       { auth: { persistSession: false } },
     );
 
-    if (role === "admin") {
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (profileError || !profile?.role || !ALLOWED_ADMIN_ROLES.includes(profile.role)) {
-        return NextResponse.json(
-          { ok: false, error: "Admin notification access required." },
-          { status: 403 },
-        );
-      }
-    }
-
-    if (role === "driver") {
-      const { data: driverAccount, error: driverError } = await supabase
-        .from("driver_accounts")
-        .select("driver_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (driverError || !driverAccount?.driver_id) {
-        return NextResponse.json(
-          { ok: false, error: "Driver notification access required." },
-          { status: 403 },
-        );
-      }
+    const roleAccess = await verifyPushRoleAccess(supabase, user.id, role as PushRole);
+    if (!roleAccess.ok) {
+      return NextResponse.json(
+        { ok: false, error: roleAccess.error },
+        { status: roleAccess.status },
+      );
     }
 
     const payload = {

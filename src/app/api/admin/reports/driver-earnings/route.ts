@@ -4,11 +4,38 @@ import { requireAdminUser } from "@/lib/auth/admin";
 
 const IN_PROGRESS_STATUSES = ["requested", "offered", "assigned", "arrived", "ongoing"];
 
-function safeNumber(x: any) {
+type DriverRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  status: string | null;
+  online: boolean | null;
+  busy: boolean | null;
+  subscription_status: string | null;
+  subscription_expires_at: string | null;
+  subscription_plan: string | null;
+};
+
+type CompletedTripRow = {
+  driver_id: string | null;
+  fare_amount: number | null;
+  payment_method: string | null;
+  commission_amount: number | null;
+  driver_net_earnings: number | null;
+};
+
+type ProgressTripRow = {
+  driver_id: string | null;
+  fare_amount: number | null;
+  status: string | null;
+};
+
+function safeNumber(x: unknown) {
   return typeof x === "number" && isFinite(x) ? x : 0;
 }
 
-function normPlan(plan: any): "daily" | "weekly" | "monthly" | null {
+function normPlan(plan: unknown): "daily" | "weekly" | "monthly" | null {
   const p = String(plan ?? "").trim().toLowerCase();
   if (p === "daily") return "daily";
   if (p === "weekly") return "weekly";
@@ -87,13 +114,16 @@ export async function GET(req: Request) {
       }
     >();
 
-    for (const tr of completedTrips ?? []) {
+    const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
+    const typedProgressTrips = (progressTrips ?? []) as ProgressTripRow[];
+
+    for (const tr of typedCompletedTrips) {
       if (!tr.driver_id) continue;
       const fare = safeNumber(tr.fare_amount);
-      const commission = safeNumber((tr as any).commission_amount);
+      const commission = safeNumber(tr.commission_amount);
       const driverNet =
-        (tr as any).driver_net_earnings != null
-          ? safeNumber((tr as any).driver_net_earnings)
+        tr.driver_net_earnings != null
+          ? safeNumber(tr.driver_net_earnings)
           : fare - commission;
       const isCash = String(tr.payment_method ?? "").toLowerCase() === "cash";
 
@@ -121,7 +151,7 @@ export async function GET(req: Request) {
 
     const progressMap = new Map<string, { inProgress: number; inProgressTotal: number; byStatus: Record<string, number> }>();
 
-    for (const tr of progressTrips ?? []) {
+    for (const tr of typedProgressTrips) {
       if (!tr.driver_id) continue;
       const fare = safeNumber(tr.fare_amount);
 
@@ -137,7 +167,7 @@ export async function GET(req: Request) {
 
     const now = Date.now();
 
-    const rows = (drivers ?? []).map((d: any) => {
+    const rows = ((drivers ?? []) as DriverRow[]).map((d) => {
       const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
 
       const comp = completedMap.get(d.id) ?? {
@@ -197,22 +227,22 @@ export async function GET(req: Request) {
         (b.in_progress_trips ?? 0) - (a.in_progress_trips ?? 0)
     );
 
-    const totalTripsCompleted = (completedTrips ?? []).length;
+    const totalTripsCompleted = typedCompletedTrips.length;
     const totalEarningsAll =
-      Math.round((completedTrips ?? []).reduce((s: number, t: any) => s + safeNumber(t.fare_amount), 0) * 100) / 100;
+      Math.round(typedCompletedTrips.reduce((s, t) => s + safeNumber(t.fare_amount), 0) * 100) / 100;
     const totalCommissionAll =
-      Math.round((completedTrips ?? []).reduce((s: number, t: any) => s + safeNumber(t.commission_amount), 0) * 100) / 100;
+      Math.round(typedCompletedTrips.reduce((s, t) => s + safeNumber(t.commission_amount), 0) * 100) / 100;
     const totalDriverNetAll =
-      Math.round((completedTrips ?? []).reduce((s: number, t: any) => {
+      Math.round(typedCompletedTrips.reduce((s, t) => {
         const fare = safeNumber(t.fare_amount);
         const commission = safeNumber(t.commission_amount);
         const driverNet = t.driver_net_earnings != null ? safeNumber(t.driver_net_earnings) : fare - commission;
         return s + driverNet;
       }, 0) * 100) / 100;
 
-    const totalInProgress = (progressTrips ?? []).length;
+    const totalInProgress = typedProgressTrips.length;
     const totalInProgressAmount =
-      Math.round((progressTrips ?? []).reduce((s: number, t: any) => s + safeNumber(t.fare_amount), 0) * 100) / 100;
+      Math.round(typedProgressTrips.reduce((s, t) => s + safeNumber(t.fare_amount), 0) * 100) / 100;
 
     const totalSubDue = rows.reduce((s, r) => s + (r.subscription_amount_due ?? 0), 0);
 
@@ -231,7 +261,10 @@ export async function GET(req: Request) {
         subscription_due_total: Math.round(totalSubDue * 100) / 100,
       },
     });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Server error" },
+      { status: 500 },
+    );
   }
 }

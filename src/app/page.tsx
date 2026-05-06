@@ -266,6 +266,14 @@ export default function HomePage() {
             </div>
           </section>
         </div>
+
+        <div className="mhp-legal-footer">
+          <Link href="/privacy-policy">Privacy Policy</Link>
+          <span>|</span>
+          <Link href="/terms">Terms</Link>
+          <span>|</span>
+          <Link href="/contact">Contact</Link>
+        </div>
       </section>
 
       <CustomerBottomNav />

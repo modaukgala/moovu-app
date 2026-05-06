@@ -6,6 +6,16 @@ function num(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+type CompletedTripRow = {
+  fare_amount: number | null;
+  commission_amount: number | null;
+  driver_net_earnings: number | null;
+};
+
+type SettlementRow = {
+  amount_paid: number | null;
+};
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -101,17 +111,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: tripsErr.message }, { status: 500 });
     }
 
-    const totalCommission = (completedTrips ?? []).reduce((sum: number, row: any) => sum + num(row.commission_amount), 0);
-    const totalDriverNet = (completedTrips ?? []).reduce(
-      (sum: number, row: any) =>
+    const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
+    const typedSettlements = (settlements ?? []) as SettlementRow[];
+
+    const totalCommission = typedCompletedTrips.reduce((sum, row) => sum + num(row.commission_amount), 0);
+    const totalDriverNet = typedCompletedTrips.reduce(
+      (sum, row) =>
         sum +
         (row.driver_net_earnings != null
           ? num(row.driver_net_earnings)
           : num(row.fare_amount) - num(row.commission_amount)),
       0
     );
-    const totalTripsCompleted = (completedTrips ?? []).length;
-    const totalSettled = (settlements ?? []).reduce((sum: number, row: any) => sum + num(row.amount_paid), 0);
+    const totalTripsCompleted = typedCompletedTrips.length;
+    const totalSettled = typedSettlements.reduce((sum, row) => sum + num(row.amount_paid), 0);
     const balanceDue = Math.max(0, totalCommission - totalSettled);
 
     if (walletRow?.id) {
@@ -144,11 +157,11 @@ export async function GET(req: Request) {
       },
       transactions: txns ?? [],
       settlements: settlements ?? [],
-      recent_completed_trips: completedTrips ?? [],
+      recent_completed_trips: typedCompletedTrips,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: error instanceof Error ? error.message : "Server error." },
       { status: 500 }
     );
   }

@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
+type ExpiringDriverRow = {
+  id: string;
+};
+
 export async function expireDriverSubscriptions() {
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,7 +34,7 @@ export async function expireDriverSubscriptions() {
     };
   }
 
-  const expiredDrivers = drivers ?? [];
+  const expiredDrivers = (drivers ?? []) as ExpiringDriverRow[];
 
   if (expiredDrivers.length === 0) {
     return {
@@ -39,7 +43,7 @@ export async function expireDriverSubscriptions() {
     };
   }
 
-  const driverIds = expiredDrivers.map((d: any) => d.id);
+  const driverIds = expiredDrivers.map((driver) => driver.id);
 
   const { error: updateError } = await supabaseAdmin
     .from("drivers")

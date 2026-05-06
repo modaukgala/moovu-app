@@ -308,7 +308,7 @@ export async function POST(req: Request) {
       tripId,
       "Trip completed",
       "Your trip has been completed successfully.",
-      "/book"
+      `/ride/${tripId}`
     );
 
     await notifyAdmins(

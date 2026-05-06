@@ -12,11 +12,13 @@ import {
   calculateTripFare,
   type RideOptionId,
 } from "@/lib/domain/fare";
+import { MOOVU_LEGAL_VERSION } from "@/lib/legal";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type CustomerMe = {
   ok: boolean;
   customer?: { id: string; first_name: string; last_name: string; phone: string };
+  legalAcceptance?: { accepted: boolean };
   error?: string;
 };
 
@@ -27,8 +29,8 @@ type ResolvedLocation = { address: string; placeId: string; lat: number; lng: nu
 const DEFAULT_CENTER = { lat: -26.188, lng: 28.3206 };
 
 // Bottom-sheet snap positions (% of viewport height the sheet top sits at)
-const SNAP_COLLAPSED = 72;  // only inputs + confirm visible — map takes ~72% screen
-const SNAP_EXPANDED  = 8;   // full details — sheet nearly full screen
+const SNAP_COLLAPSED = 70;
+const SNAP_EXPANDED = 16;
 
 function money(v: number | null | undefined) {
   return v == null ? "R--" : `R${Math.round(Number(v))}`;
@@ -41,6 +43,8 @@ export default function RiderBookingPage() {
 
   const [customer, setCustomer] = useState<CustomerMe["customer"] | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [legalAcceptanceRequired, setLegalAcceptanceRequired] = useState(false);
+  const [legalAccepting, setLegalAccepting] = useState(false);
 
   const [pickupAddress, setPickupAddress] = useState("");
   const [dropoffAddress, setDropoffAddress] = useState("");
@@ -116,8 +120,8 @@ export default function RiderBookingPage() {
 
   const canSubmit = useMemo(() => (
     !!customer && canCalculate && distanceKm != null && durationMin != null && fare != null &&
-    !(rideType === "scheduled" && !scheduledFor)
-  ), [customer, canCalculate, distanceKm, durationMin, fare, rideType, scheduledFor]);
+    !legalAcceptanceRequired && !(rideType === "scheduled" && !scheduledFor)
+  ), [customer, canCalculate, distanceKm, durationMin, fare, legalAcceptanceRequired, rideType, scheduledFor]);
 
   const progressText = useMemo(() => {
     if (!pickupAddress.trim()) return "Set your pickup point";
@@ -132,9 +136,10 @@ export default function RiderBookingPage() {
 
   // Live top px while dragging
   const sheetTopPx = useMemo(() => {
-    if (typeof window === "undefined") return `${sheetTopPct}vh`;
-    const basePx = (sheetTopPct / 100) * window.innerHeight;
-    return dragY != null ? `${basePx + dragY}px` : `${sheetTopPct}vh`;
+    if (typeof window === "undefined") return `${sheetTopPct}dvh`;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const basePx = (sheetTopPct / 100) * viewportHeight;
+    return dragY != null ? `${basePx + dragY}px` : `${basePx}px`;
   }, [sheetTopPct, dragY]);
 
   // ── Drag handlers ────────────────────────────────────────────────
@@ -191,7 +196,44 @@ export default function RiderBookingPage() {
     if (!json?.ok || !json.customer) { router.replace("/customer/auth?next=/book"); return; }
 
     setCustomer(json.customer);
+    setLegalAcceptanceRequired(!json.legalAcceptance?.accepted);
     setAuthLoading(false);
+  }
+
+  async function acceptLegalTerms() {
+    setLegalAccepting(true);
+    setMsg(null);
+
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) { router.replace("/customer/auth?next=/book"); return; }
+
+      const res = await fetch("/api/customer/legal-acceptance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          acceptedTerms: true,
+          acceptedPrivacy: true,
+          termsVersion: MOOVU_LEGAL_VERSION,
+          privacyVersion: MOOVU_LEGAL_VERSION,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!json?.ok) {
+        setMsg(json?.error || "Could not save legal acceptance.");
+        return;
+      }
+
+      setLegalAcceptanceRequired(false);
+    } catch (error: unknown) {
+      setMsg(error instanceof Error ? error.message : "Could not save legal acceptance.");
+    } finally {
+      setLegalAccepting(false);
+    }
   }
 
   async function logout() {
@@ -559,6 +601,8 @@ export default function RiderBookingPage() {
       if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
       if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
     };
+    // Keep this as a mount/auth setup effect; adding helpers here restarts auth and dropdown listeners.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   useEffect(() => {
@@ -588,6 +632,8 @@ export default function RiderBookingPage() {
     if (pickupLat != null && pickupLng != null) { renderPickupOnlyMap(); return; }
     clearMapVisuals(); setRouteVisible(false);
     if (mapInstanceRef.current) { mapInstanceRef.current.setCenter(DEFAULT_CENTER); mapInstanceRef.current.setZoom(11); }
+    // Map render helpers read refs and latest coordinates; listing them recreates this effect unnecessarily.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng]);
 
   useEffect(() => {
@@ -595,6 +641,8 @@ export default function RiderBookingPage() {
     if (lastCalculatedKeyRef.current === routeKey) return;
     lastCalculatedKeyRef.current = routeKey;
     void calculateTrip({ silent: true });
+    // routeKey already captures the coordinates and addresses that should trigger fare recalculation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canCalculate, routeKey]);
 
   // ── Loading screen ───────────────────────────────────────────────
@@ -710,6 +758,31 @@ export default function RiderBookingPage() {
   return (
     <main className="mbk-page">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {legalAcceptanceRequired && (
+        <div className="legal-booking-gate" role="dialog" aria-modal="true" aria-label="MOOVU legal acceptance">
+          <div className="legal-booking-card">
+            <div className="moovu-kicker">Before booking</div>
+            <h2>Accept MOOVU terms</h2>
+            <p>
+              Please accept the MOOVU Terms of Service and Privacy Policy once before continuing
+              with ride booking.
+            </p>
+            <div className="legal-booking-links">
+              <Link href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+              <Link href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>
+              <Link href="/contact" target="_blank" rel="noopener noreferrer">Contact</Link>
+            </div>
+            <button
+              type="button"
+              className="moovu-btn moovu-btn-primary w-full"
+              disabled={legalAccepting}
+              onClick={() => void acceptLegalTerms()}
+            >
+              {legalAccepting ? "Saving..." : "I agree and want to book"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Full-screen map behind everything */}
       <div className="mbk-map-layer">
@@ -729,6 +802,7 @@ export default function RiderBookingPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/contact" className="moovu-icon-link hidden sm:inline-flex">Help</Link>
           <Link href="/ride/history" className="moovu-icon-link">Trips</Link>
           <button className="moovu-icon-link" onClick={logout}>Logout</button>
         </div>

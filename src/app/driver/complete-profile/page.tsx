@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -124,7 +124,7 @@ export default function DriverCompleteProfilePage() {
     vehicleRegistration,
   ]);
 
-  function hydrateForm(driverData?: Driver | null, profileData?: ExistingProfile | null) {
+  const hydrateForm = useCallback((driverData?: Driver | null, profileData?: ExistingProfile | null) => {
     setFirstName(profileData?.first_name ?? driverData?.first_name ?? "");
     setLastName(profileData?.last_name ?? driverData?.last_name ?? "");
     setPhone(profileData?.phone ?? driverData?.phone ?? "");
@@ -150,9 +150,9 @@ export default function DriverCompleteProfilePage() {
     setSeatingCapacity(
       driverData?.seating_capacity != null ? String(driverData.seating_capacity) : ""
     );
-  }
+  }, []);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setMsg(null);
 
@@ -196,7 +196,7 @@ export default function DriverCompleteProfilePage() {
     }
 
     setLoading(false);
-  }
+  }, [hydrateForm, router]);
 
   async function saveProfile(submit: boolean) {
     setBusy(true);
@@ -282,7 +282,7 @@ export default function DriverCompleteProfilePage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadData]);
 
   if (loading) {
     return (

@@ -12,6 +12,36 @@ const supabaseAdmin = createClient(
 
 const OFFER_EXPIRY_SECONDS = 20;
 
+type EligibleDriverRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  lat: number | null;
+  lng: number | null;
+  online: boolean | null;
+  busy: boolean | null;
+  subscription_status: string | null;
+  subscription_expires_at: string | null;
+};
+
+type DriverQualityRow = {
+  avg_rating?: number | null;
+  quality_score?: number | null;
+  acceptance_rate?: number | null;
+} | null;
+
+type DriverOfferStatsRow = {
+  offers_missed?: number | null;
+} | null;
+
+type ScoredDriverRow = EligibleDriverRow & {
+  quality: DriverQualityRow;
+  offerStats: DriverOfferStatsRow;
+  dispatchScore: number;
+  distanceKm: number;
+};
+
 async function incrementDriverOfferReceived(driverId: string) {
   try {
     const rpcResult = await supabaseAdmin.rpc("increment_driver_offer_received", {
@@ -212,7 +242,7 @@ export async function offerNextEligibleDriver(
 
   const nowMs = Date.now();
 
-  const filteredDrivers = (drivers ?? []).filter((driver: any) => {
+  const filteredDrivers = ((drivers ?? []) as EligibleDriverRow[]).filter((driver) => {
     if (blockedDriverIds.has(driver.id)) return false;
 
     const expiryMs = driver.subscription_expires_at
@@ -234,7 +264,7 @@ export async function offerNextEligibleDriver(
     };
   }
 
-  const enriched: Array<any> = [];
+  const enriched: ScoredDriverRow[] = [];
 
   for (const driver of filteredDrivers) {
     try {
@@ -324,7 +354,7 @@ export async function offerNextEligibleDriver(
     await supabaseAdmin.from("trip_events").insert({
       trip_id: trip.id,
       event_type: "offer_sent",
-      message: `Offered to driver ${chosen.id} (expires in ${OFFER_EXPIRY_SECONDS}s, ≈ ${chosen.distanceKm} km away, score ${chosen.dispatchScore})`,
+      message: `Offered to driver ${chosen.id} (expires in ${OFFER_EXPIRY_SECONDS}s, about ${chosen.distanceKm} km away, score ${chosen.dispatchScore})`,
       old_status: trip.status,
       new_status: "offered",
     });
@@ -340,8 +370,9 @@ export async function offerNextEligibleDriver(
     try {
       await sendPushToTargets({
         userIds: [driverAccount.user_id],
+        role: "driver",
         title: "New trip offer",
-        body: `Pickup at ${trip.pickup_address ?? "pickup"} • Destination ${trip.dropoff_address ?? "destination"}`,
+        body: `Pickup at ${trip.pickup_address ?? "pickup"} - Destination ${trip.dropoff_address ?? "destination"}`,
         url: "/driver",
       });
     } catch {}

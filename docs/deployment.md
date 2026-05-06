@@ -29,7 +29,17 @@ npm run build
 npm run lint
 ```
 
-Current project status: TypeScript and production build pass. Full lint still has older project-wide debt that should be reduced route by route.
+Current project status: TypeScript, production build, and full lint pass locally.
+
+## Supabase Type Generation
+
+The Supabase CLI was not available on this Windows workstation during the deployment-readiness pass. Install it before the next schema/type sync, then generate database types with:
+
+```bash
+supabase gen types typescript --project-id mvazbszenqahgqpznhhq --schema public > src/lib/supabase/database.types.ts
+```
+
+After generation, wire the typed database into the browser/admin Supabase clients in a small follow-up so existing queries can be validated without changing behavior.
 
 ## Google Maps Setup
 
@@ -45,6 +55,8 @@ Current project status: TypeScript and production build pass. Full lint still ha
   - `VAPID_SUBJECT`
 - Confirm the PWA service worker is served from `public/sw.js`.
 - Confirm `/api/push/subscribe` validates authenticated user roles before storing role-scoped subscriptions.
+- Use `/api/push/test-self` from the customer, driver, and admin UI to prove each logged-in role can receive a notification on its own device.
+- Keep `PUSH_INTERNAL_API_KEY` server-only; `/api/push/send` must not be called from public browser code.
 
 ## Supabase Storage Setup
 
@@ -53,7 +65,12 @@ Create these buckets:
 - `driver-docs`
 - `payment-proofs`
 
-Use private buckets with signed URLs where possible. If `payment-proofs` remains public for operational simplicity, avoid uploading sensitive bank statements or unrelated personal documents.
+Use private buckets with signed URLs:
+
+- `driver-docs`: private.
+- `payment-proofs`: private. New driver POP uploads store `pop_file_path`; admin payment review responses generate short-lived signed URLs for viewing proof files.
+
+Do not expose public proof-of-payment URLs in production.
 
 ## Rollback Notes
 

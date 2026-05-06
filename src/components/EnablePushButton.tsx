@@ -23,14 +23,24 @@ function urlBase64ToUint8Array(base64String: string) {
 
 export default function EnablePushButton({ role, onEnabled, variant = "floating" }: Props) {
   const [busy, setBusy] = useState(false);
-  const [hidden, setHidden] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      if (Notification.permission === "granted") {
-        setHidden(true);
-      }
+    if (typeof window === "undefined") return;
+
+    if (!("Notification" in window)) {
+      setMsg("Push notifications are not supported on this device.");
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      setMsg("Notifications are blocked. Allow MOOVU notifications in your browser or app settings, then retry.");
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      setMsg("Notifications are allowed. Tap to save this device for MOOVU updates.");
     }
   }, []);
 
@@ -55,13 +65,18 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         return;
       }
 
+      if (!("Notification" in window)) {
+        setMsg("Push notifications are not supported on this device.");
+        return;
+      }
+
       if (!("serviceWorker" in navigator)) {
-        setMsg("This device does not support service workers.");
+        setMsg("This device does not support push notifications.");
         return;
       }
 
       if (!("PushManager" in window)) {
-        setMsg("This device does not support push notifications.");
+        setMsg("Push notifications are unavailable in this browser. On iPhone, install MOOVU to the Home Screen first.");
         return;
       }
 
@@ -73,7 +88,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
 
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        setMsg("Notification permission was not granted.");
+        setMsg("Notifications are blocked. Allow MOOVU notifications in your browser or app settings, then retry.");
         return;
       }
 
@@ -124,7 +139,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
       }
 
       setMsg("Notifications enabled successfully.");
-      setHidden(true);
+      setSaved(true);
       onEnabled?.();
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : "Failed to enable notifications.");
@@ -133,7 +148,15 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
     }
   }
 
-  if (hidden) return null;
+  if (saved && variant === "floating") return null;
+
+  if (saved) {
+    return (
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+        Push enabled
+      </div>
+    );
+  }
 
   return (
     <div className={variant === "inline" ? "flex flex-col gap-2" : "flex flex-col items-end gap-2"}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -50,15 +50,15 @@ export default function AdminSettlementsPage() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function getToken() {
+  const getToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
 
     return session?.access_token || "";
-  }
+  }, []);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setMsg(null);
 
@@ -87,7 +87,7 @@ export default function AdminSettlementsPage() {
     setDrivers(json.drivers ?? []);
     setSettlements(json.settlements ?? []);
     setLoading(false);
-  }
+  }, [getToken]);
 
   async function postSettlement(payload: {
     driverId: string;
@@ -199,7 +199,7 @@ export default function AdminSettlementsPage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadData]);
 
   const driverOptions = useMemo(() => {
     return drivers.map((driver) => {

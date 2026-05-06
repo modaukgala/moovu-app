@@ -18,6 +18,12 @@ type Prediction = {
   place_id: string;
 };
 
+type PaymentMethod = "cash" | "online" | "other";
+
+function isPaymentMethod(value: string): value is PaymentMethod {
+  return value === "cash" || value === "online" || value === "other";
+}
+
 function generateOtp() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
@@ -44,7 +50,7 @@ export default function NewTripPage() {
   const [durationMin, setDurationMin] = useState("");
   const [autoFare, setAutoFare] = useState<number | null>(null);
 
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "online" | "other">("cash");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [fare, setFare] = useState<string>("");
 
   const [driverId, setDriverId] = useState<string>("");
@@ -367,7 +373,11 @@ export default function NewTripPage() {
           <select
             className="border rounded-xl p-3 bg-transparent"
             value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as any)}
+            onChange={(e) => {
+              if (isPaymentMethod(e.target.value)) {
+                setPaymentMethod(e.target.value);
+              }
+            }}
           >
             <option value="cash">Cash</option>
             <option value="online">Online</option>

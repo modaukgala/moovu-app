@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Offer = {
@@ -160,6 +161,9 @@ export default function DriverHomePage() {
   const [showEndOtp, setShowEndOtp] = useState(false);
 
   const otpEntryOpen = showStartOtp || showEndOtp;
+  const canOpenTripChat =
+    !!currentTrip?.driver_id &&
+    ["assigned", "arrived", "ongoing"].includes(currentTrip.status);
 
   const offersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -672,6 +676,8 @@ export default function DriverHomePage() {
       await loadCurrentOffer();
       await loadCurrentTrip();
     })();
+    // Initial dashboard load only; polling effects below refresh offer/trip state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -685,6 +691,8 @@ export default function DriverHomePage() {
     return () => {
       if (offersTimerRef.current) clearInterval(offersTimerRef.current);
     };
+    // Polling is keyed to online state; the loader reads the current auth session each tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driver?.online]);
 
   useEffect(() => {
@@ -698,6 +706,8 @@ export default function DriverHomePage() {
     return () => {
       if (tripTimerRef.current) clearInterval(tripTimerRef.current);
     };
+    // Polling is keyed to online/OTP state so OTP entry is not disrupted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driver?.online, otpEntryOpen]);
 
   useEffect(() => {
@@ -722,6 +732,8 @@ export default function DriverHomePage() {
     return () => {
       if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
     };
+    // GPS polling intentionally starts/stops only with online state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driver?.online]);
 
   useEffect(() => {
@@ -781,11 +793,15 @@ export default function DriverHomePage() {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
+    // Google Maps script bootstraps once; map object updates are handled by the coordinate effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!mapInitializedRef.current) return;
     updateMapObjects();
+    // updateMapObjects reads refs and the selected trip/driver fields listed below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     driver?.lat,
     driver?.lng,
@@ -1027,6 +1043,10 @@ export default function DriverHomePage() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-3">
+                    {canOpenTripChat && (
+                      <TripChatPanel tripId={currentTrip.id} label="Chat with customer" />
+                    )}
+
                     {pickupGoogle && (
                       <a
                         className="moovu-btn moovu-btn-secondary"

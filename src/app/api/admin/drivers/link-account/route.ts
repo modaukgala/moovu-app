@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/lib/auth/admin";
 
-async function getUserIdByEmail(supabaseAdmin: any, email: string): Promise<string | null> {
-  // @ts-ignore
-  if (supabaseAdmin.auth?.admin?.getUserByEmail) {
-    // @ts-ignore
-    const { data, error } = await supabaseAdmin.auth.admin.getUserByEmail(email);
-    if (error) return null;
-    return data?.user?.id ?? null;
-  }
-
-  // @ts-ignore
+async function getUserIdByEmail(supabaseAdmin: SupabaseClient, email: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000, page: 1 });
   if (error) return null;
 
   const user = (data?.users ?? []).find(
-    (u: any) => (u.email ?? "").toLowerCase() === email.toLowerCase()
+    (u: User) => (u.email ?? "").toLowerCase() === email.toLowerCase()
   );
   return user?.id ?? null;
 }
@@ -88,7 +80,10 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, message: "Linked successfully", userId, driverId });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Server error" },
+      { status: 500 },
+    );
   }
 }

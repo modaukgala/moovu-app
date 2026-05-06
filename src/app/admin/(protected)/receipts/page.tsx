@@ -121,7 +121,7 @@ export default function AdminReceiptsPage() {
                   </div>
                 </div>
 
-                <Link href={`/ride/${trip.id}/receipt`} className="moovu-btn moovu-btn-primary">
+                <Link href={`/admin/receipts/${trip.id}`} className="moovu-btn moovu-btn-primary">
                   Open
                 </Link>
               </div>

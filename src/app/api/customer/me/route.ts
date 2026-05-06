@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
+import { getLegalAcceptanceStatus } from "@/lib/legal";
 
 export async function GET(req: Request) {
   const auth = await getAuthenticatedCustomer(req);
@@ -17,5 +18,9 @@ export async function GET(req: Request) {
       phone: auth.customer.phone,
       status: auth.customer.status,
     },
+    legalAcceptance: getLegalAcceptanceStatus(
+      auth.user.user_metadata ?? {},
+      auth.customer as Record<string, unknown>,
+    ),
   });
 }

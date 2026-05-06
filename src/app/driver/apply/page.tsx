@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -139,6 +140,12 @@ export default function DriverApplyPage() {
           {busy ? "Submitting..." : "Submit Application"}
         </button>
       </section>
+
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
+        <Link href="/privacy-policy" className="hover:text-[#1f74c9]">Privacy Policy</Link>
+        <Link href="/terms" className="hover:text-[#1f74c9]">Terms</Link>
+        <Link href="/contact" className="hover:text-[#1f74c9]">Contact</Link>
+      </div>
     </main>
   );
 }

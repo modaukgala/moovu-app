@@ -6,6 +6,30 @@ function num(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+type DriverRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  online: boolean | null;
+  busy: boolean | null;
+  status: string | null;
+  verification_status: string | null;
+};
+
+type CompletedTripRow = {
+  driver_id: string | null;
+  commission_amount: number | null;
+  driver_net_earnings: number | null;
+  fare_amount: number | null;
+};
+
+type SettlementRow = {
+  driver_id: string | null;
+  amount_paid: number | null;
+  created_at: string | null;
+};
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -79,8 +103,12 @@ export async function GET(req: Request) {
       }
     >();
 
-    for (const trip of completedTrips ?? []) {
-      const driverId = String((trip as any).driver_id ?? "").trim();
+    const typedDrivers = (drivers ?? []) as DriverRow[];
+    const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
+    const typedSettlements = (settlements ?? []) as SettlementRow[];
+
+    for (const trip of typedCompletedTrips) {
+      const driverId = String(trip.driver_id ?? "").trim();
       if (!driverId) continue;
 
       const curr = tripsByDriver.get(driverId) ?? {
@@ -89,11 +117,11 @@ export async function GET(req: Request) {
         total_trips_completed: 0,
       };
 
-      curr.total_commission += num((trip as any).commission_amount);
+      curr.total_commission += num(trip.commission_amount);
       curr.total_driver_net +=
-        (trip as any).driver_net_earnings != null
-          ? num((trip as any).driver_net_earnings)
-          : num((trip as any).fare_amount) - num((trip as any).commission_amount);
+        trip.driver_net_earnings != null
+          ? num(trip.driver_net_earnings)
+          : num(trip.fare_amount) - num(trip.commission_amount);
       curr.total_trips_completed += 1;
 
       tripsByDriver.set(driverId, curr);
@@ -108,8 +136,8 @@ export async function GET(req: Request) {
       }
     >();
 
-    for (const row of settlements ?? []) {
-      const driverId = String((row as any).driver_id ?? "").trim();
+    for (const row of typedSettlements) {
+      const driverId = String(row.driver_id ?? "").trim();
       if (!driverId) continue;
 
       const curr = settlementsByDriver.get(driverId) ?? {
@@ -118,17 +146,17 @@ export async function GET(req: Request) {
         last_payment_amount: null,
       };
 
-      curr.total_paid += num((row as any).amount_paid);
+      curr.total_paid += num(row.amount_paid);
 
       if (!curr.last_payment_at) {
-        curr.last_payment_at = (row as any).created_at ?? null;
-        curr.last_payment_amount = num((row as any).amount_paid);
+        curr.last_payment_at = row.created_at ?? null;
+        curr.last_payment_amount = num(row.amount_paid);
       }
 
       settlementsByDriver.set(driverId, curr);
     }
 
-    const driverRows = (drivers ?? []).map((driver: any) => {
+    const driverRows = typedDrivers.map((driver) => {
       const tripTotals = tripsByDriver.get(driver.id) ?? {
         total_commission: 0,
         total_driver_net: 0,
@@ -166,14 +194,14 @@ export async function GET(req: Request) {
     });
 
     const driverNameById = new Map<string, string>();
-    for (const d of drivers ?? []) {
-      const fullName = `${(d as any).first_name ?? ""} ${(d as any).last_name ?? ""}`.trim();
-      driverNameById.set((d as any).id, fullName || (d as any).phone || (d as any).id);
+    for (const d of typedDrivers) {
+      const fullName = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim();
+      driverNameById.set(d.id, fullName || d.phone || d.id);
     }
 
-    const decoratedSettlements = (settlements ?? []).map((row: any) => ({
+    const decoratedSettlements = typedSettlements.map((row) => ({
       ...row,
-      driver_name: driverNameById.get(row.driver_id) ?? row.driver_id,
+      driver_name: row.driver_id ? driverNameById.get(row.driver_id) ?? row.driver_id : null,
     }));
 
     return NextResponse.json({
@@ -181,9 +209,9 @@ export async function GET(req: Request) {
       drivers: driverRows,
       settlements: decoratedSettlements,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: error instanceof Error ? error.message : "Server error." },
       { status: 500 }
     );
   }

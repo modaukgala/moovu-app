@@ -4,13 +4,18 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 const DOC_TYPES = ["id", "license", "prdp", "vehicle_reg", "insurance", "other"] as const;
+type DocType = (typeof DOC_TYPES)[number];
+
+function isDocType(value: string): value is DocType {
+  return DOC_TYPES.includes(value as DocType);
+}
 
 export default function UploadDriverDocPage() {
   const params = useParams<{ id: string }>();
   const driverId = params.id;
   const router = useRouter();
 
-  const [docType, setDocType] = useState<(typeof DOC_TYPES)[number]>("license");
+  const [docType, setDocType] = useState<DocType>("license");
   const [expiresOn, setExpiresOn] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +66,11 @@ export default function UploadDriverDocPage() {
           <select
             className="w-full border rounded-xl p-3"
             value={docType}
-            onChange={(e) => setDocType(e.target.value as any)}
+            onChange={(e) => {
+              if (isDocType(e.target.value)) {
+                setDocType(e.target.value);
+              }
+            }}
           >
             {DOC_TYPES.map((t) => (
               <option key={t} value={t}>

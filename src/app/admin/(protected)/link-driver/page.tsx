@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
@@ -25,15 +25,15 @@ export default function AdminLinkDriverAccountPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
 
     return session?.access_token ?? null;
-  }
+  }, []);
 
-  async function loadDrivers() {
+  const loadDrivers = useCallback(async () => {
     setLoadingDrivers(true);
     setMsg(null);
 
@@ -62,11 +62,15 @@ export default function AdminLinkDriverAccountPage() {
 
     setDrivers(json.drivers ?? []);
     setLoadingDrivers(false);
-  }
+  }, [getAccessToken]);
 
   useEffect(() => {
-    loadDrivers();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void loadDrivers();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadDrivers]);
 
   const driverLabel = useMemo(() => {
     const d = drivers.find((x) => x.id === driverId);

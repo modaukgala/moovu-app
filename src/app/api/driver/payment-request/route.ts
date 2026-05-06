@@ -5,6 +5,7 @@ import {
   isDriverSubscriptionPlan,
   type DriverSubscriptionPlan,
 } from "@/lib/finance/driverPayments";
+import { notifyAdmins } from "@/lib/push-notify";
 
 type PaymentType = "subscription" | "commission" | "combined";
 
@@ -153,7 +154,7 @@ export async function POST(req: Request) {
     const paymentReference = refParts.join("-");
 
     let popFilePath: string | null = null;
-    let popFileUrl: string | null = null;
+    const popFileUrl: string | null = null;
 
     if (file && file.size > 0) {
       const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -179,12 +180,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: uploadError.message }, { status: 500 });
       }
 
-      const { data: publicUrlData } = supabaseAdmin.storage
-        .from("payment-proofs")
-        .getPublicUrl(safeName);
-
       popFilePath = safeName;
-      popFileUrl = publicUrlData?.publicUrl ?? null;
     }
 
     const { error: insertError } = await supabaseAdmin
@@ -218,6 +214,19 @@ export async function POST(req: Request) {
         .eq("id", driverId);
     }
 
+    const notificationTitle =
+      paymentType === "subscription"
+        ? "Subscription payment submitted"
+        : paymentType === "commission"
+          ? "Commission payment submitted"
+          : "Driver payment submitted";
+
+    await notifyAdmins(
+      notificationTitle,
+      `Driver payment ${paymentReference} is waiting for review.`,
+      "/admin/payment-reviews"
+    );
+
     return NextResponse.json({
       ok: true,
       message: "Payment submitted successfully. Waiting for admin review.",
@@ -229,6 +238,7 @@ export async function POST(req: Request) {
       commissionDue,
       subscriptionDueExisting,
       popFileUrl,
+      popFilePath,
     });
   } catch (error: unknown) {
     return NextResponse.json(

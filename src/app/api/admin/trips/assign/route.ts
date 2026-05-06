@@ -150,6 +150,7 @@ export async function POST(req: Request) {
       try {
         await sendPushToTargets({
           userIds: [driverAccount.user_id],
+          role: "driver",
           title: "New trip offer",
           body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
           url: "/driver",

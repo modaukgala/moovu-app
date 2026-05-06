@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Server error.";
+}
+
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -86,9 +90,9 @@ export async function GET(req: Request) {
       ok: true,
       trip: trip ?? null,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(error) },
       { status: 500 }
     );
   }

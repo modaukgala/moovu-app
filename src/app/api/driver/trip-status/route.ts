@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Server error";
+}
+
 async function getUserFromBearer(req: Request) {
   const auth = req.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
 
   if (!token) return null;
 
-  // @ts-ignore
   const { data } = await supabaseAdmin.auth.getUser(token);
   return data?.user ?? null;
 }
@@ -142,9 +145,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, status: newStatus });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error" },
+      { ok: false, error: errorMessage(error) },
       { status: 500 }
     );
   }

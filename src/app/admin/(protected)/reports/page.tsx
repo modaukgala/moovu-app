@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
@@ -67,14 +67,14 @@ export default function AdminReportsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [data, setData] = useState<ReportResponse | null>(null);
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
     return session?.access_token ?? null;
-  }
+  }, []);
 
-  async function runReport() {
+  const runReport = useCallback(async () => {
     setBusy(true);
     setMsg(null);
 
@@ -110,7 +110,7 @@ export default function AdminReportsPage() {
     }
 
     setBusy(false);
-  }
+  }, [from, getAccessToken, to]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -118,7 +118,7 @@ export default function AdminReportsPage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [runReport]);
 
   const totals = useMemo(() => {
     return (

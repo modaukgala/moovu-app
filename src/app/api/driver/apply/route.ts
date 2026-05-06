@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+type ExistingDriverRow = {
+  id: string;
+  is_deleted: boolean | null;
+};
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Server error";
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -23,7 +32,7 @@ export async function POST(req: Request) {
     const firstName = parts.length > 0 ? parts[0] : "Unnamed";
     const lastName = parts.length > 1 ? parts.slice(1).join(" ") : "Driver";
 
-    let existingDriver: any = null;
+    let existingDriver: ExistingDriverRow | null = null;
 
     const { data: driverByEmail } = await supabaseAdmin
       .from("drivers")
@@ -33,7 +42,7 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (driverByEmail) {
-      existingDriver = driverByEmail;
+      existingDriver = driverByEmail as ExistingDriverRow;
     } else if (phone) {
       const { data: driverByPhone } = await supabaseAdmin
         .from("drivers")
@@ -43,7 +52,7 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (driverByPhone) {
-        existingDriver = driverByPhone;
+        existingDriver = driverByPhone as ExistingDriverRow;
       }
     }
 
@@ -195,9 +204,9 @@ export async function POST(req: Request) {
       driverId,
       message: "Application submitted successfully.",
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "Server error" },
+      { ok: false, error: errorMessage(error) },
       { status: 500 }
     );
   }

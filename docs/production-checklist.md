@@ -4,8 +4,7 @@
 
 - Run `npx tsc --noEmit`.
 - Run `npm run build`.
-- Run `npm run lint`.
-- Confirm no new lint errors exist in recently touched files.
+- Run `npm run lint`; it should pass before production testing.
 - Confirm all user roles can reach their intended dashboards.
 
 ## Vercel Environment Variables
@@ -38,7 +37,8 @@ Create and configure:
 - `driver-docs`
 - `payment-proofs`
 
-Prefer private buckets with signed URLs for sensitive documents.
+- `driver-docs`: private.
+- `payment-proofs`: private. Driver uploads should store object paths, and admin review pages should use signed URLs.
 
 ## Google Maps
 
@@ -64,7 +64,9 @@ Prefer private buckets with signed URLs for sensitive documents.
   - driver arrived
   - trip started
   - trip completed
+  - driver payment submitted to admin
   - payment approved/rejected
+  - customer-driver chat messages after driver acceptance
 
 ## Operational Smoke Test After Deploy
 
@@ -82,6 +84,8 @@ Prefer private buckets with signed URLs for sensitive documents.
 12. Admin reviews subscription payment.
 13. Admin reviews commission payment.
 14. Push notifications deliver or fail gracefully.
+15. Chat works after driver acceptance and is unavailable before acceptance.
+16. Admin proof-of-payment links open through signed URLs.
 
 ## PWA And Mobile
 

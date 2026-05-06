@@ -14,6 +14,13 @@ type TripRow = {
   driver_net_earnings?: number | null;
 };
 
+type DriverRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+};
+
 function num(v: unknown) {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
@@ -107,9 +114,9 @@ export async function GET(req: Request) {
     }
 
     const driverNameById = new Map<string, string>();
-    for (const d of drivers ?? []) {
-      const fullName = `${(d as any).first_name ?? ""} ${(d as any).last_name ?? ""}`.trim();
-      driverNameById.set((d as any).id, fullName || (d as any).phone || (d as any).id);
+    for (const d of (drivers ?? []) as DriverRow[]) {
+      const fullName = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim();
+      driverNameById.set(d.id, fullName || d.phone || d.id);
     }
 
     const completedTrips = ((completed ?? []) as TripRow[]).map((trip) => ({
@@ -176,9 +183,9 @@ export async function GET(req: Request) {
         ),
       },
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: error instanceof Error ? error.message : "Server error." },
       { status: 500 }
     );
   }

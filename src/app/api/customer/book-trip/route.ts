@@ -231,7 +231,7 @@ export async function POST(req: Request) {
       rideType === "scheduled"
         ? `Your ride has been scheduled from ${pickupAddress} to ${dropoffAddress}.`
         : `We received your ride request from ${pickupAddress} to ${dropoffAddress}.`,
-      "/book"
+      `/ride/${trip.id}`
     );
 
     await notifyAdmins(

@@ -57,6 +57,29 @@ function isPaymentType(value: string): value is PaymentType {
   return value === "subscription" || value === "commission" || value === "combined";
 }
 
+function extractPaymentProofPath(url: string | null) {
+  if (!url) return null;
+  const marker = "/storage/v1/object/public/payment-proofs/";
+  const index = url.indexOf(marker);
+  if (index < 0) return null;
+  return decodeURIComponent(url.slice(index + marker.length));
+}
+
+async function createPaymentProofSignedUrl(
+  supabaseAdmin: SupabaseClient,
+  row: PaymentRequestRecord,
+) {
+  const path = row.pop_file_path || extractPaymentProofPath(row.pop_file_url);
+  if (!path) return null;
+
+  const { data, error } = await supabaseAdmin.storage
+    .from("payment-proofs")
+    .createSignedUrl(path, 60 * 10);
+
+  if (error) return null;
+  return data.signedUrl;
+}
+
 async function notifyDriverPaymentReview(
   supabaseAdmin: SupabaseClient,
   driverId: string,
@@ -74,6 +97,7 @@ async function notifyDriverPaymentReview(
 
   await sendPushSafe({
     userIds: [userId],
+    role: "driver",
     title,
     body,
     url: "/driver/earnings",
@@ -136,11 +160,14 @@ export async function GET(req: Request) {
       });
     }
 
-    const decorated = paymentRows.map((row) => ({
-      ...row,
-      driver_name: driverNameById.get(row.driver_id)?.name ?? row.driver_id,
-      driver_phone: driverNameById.get(row.driver_id)?.phone ?? null,
-    }));
+    const decorated = await Promise.all(
+      paymentRows.map(async (row) => ({
+        ...row,
+        pop_file_url: (await createPaymentProofSignedUrl(supabaseAdmin, row)) ?? row.pop_file_url,
+        driver_name: driverNameById.get(row.driver_id)?.name ?? row.driver_id,
+        driver_phone: driverNameById.get(row.driver_id)?.phone ?? null,
+      }))
+    );
 
     return NextResponse.json({
       ok: true,

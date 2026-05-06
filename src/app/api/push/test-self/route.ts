@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendPushSafe } from "@/lib/push-server";
+import { isPushRole, verifyPushRoleAccess } from "@/lib/push-auth";
 
-type Role = "admin" | "driver" | "customer";
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 export async function POST(req: Request) {
   try {
@@ -16,10 +19,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
-    const role = String(body?.role ?? "").trim() as Role;
+    const body = (await req.json().catch(() => ({}))) as unknown;
+    const role = isRecord(body) ? String(body.role ?? "").trim() : "";
 
-    if (!["admin", "driver", "customer"].includes(role)) {
+    if (!isPushRole(role)) {
       return NextResponse.json(
         { ok: false, error: "Invalid role." },
         { status: 400 }
@@ -50,8 +53,23 @@ export async function POST(req: Request) {
       );
     }
 
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } }
+    );
+
+    const roleAccess = await verifyPushRoleAccess(supabaseAdmin, user.id, role);
+    if (!roleAccess.ok) {
+      return NextResponse.json(
+        { ok: false, error: roleAccess.error },
+        { status: roleAccess.status }
+      );
+    }
+
     const result = await sendPushSafe({
       userIds: [user.id],
+      role,
       title: "MOOVU notifications enabled",
       body: `You will now receive ${role} notifications on this device.`,
       url: role === "driver" ? "/driver" : role === "admin" ? "/admin" : "/book",
@@ -61,9 +79,9 @@ export async function POST(req: Request) {
       ok: true,
       result,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Push self-test failed." },
+      { ok: false, error: error instanceof Error ? error.message : "Push self-test failed." },
       { status: 500 }
     );
   }

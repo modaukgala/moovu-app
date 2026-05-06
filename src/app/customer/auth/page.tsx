@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 import {
@@ -9,6 +10,7 @@ import {
   fullCustomerName,
   normalizePhoneZA,
 } from "@/lib/customer/auth";
+import { MOOVU_LEGAL_VERSION } from "@/lib/legal";
 
 type CheckPhoneResponse = {
   ok: boolean;
@@ -39,6 +41,7 @@ export default function CustomerAuthPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -82,6 +85,7 @@ export default function CustomerAuthPage() {
       } else {
         setFirstName("");
         setLastName("");
+        setLegalAccepted(false);
         setStep("signup");
       }
     } catch (e: unknown) {
@@ -146,6 +150,11 @@ export default function CustomerAuthPage() {
       return;
     }
 
+    if (!legalAccepted) {
+      setMsg("Please accept the MOOVU Terms of Service and Privacy Policy to create your account.");
+      return;
+    }
+
     setBusy(true);
     setMsg(null);
 
@@ -158,6 +167,10 @@ export default function CustomerAuthPage() {
           last_name: lastName,
           phone: normalized,
           password,
+          acceptedTerms: legalAccepted,
+          acceptedPrivacy: legalAccepted,
+          termsVersion: MOOVU_LEGAL_VERSION,
+          privacyVersion: MOOVU_LEGAL_VERSION,
         }),
       });
 
@@ -312,10 +325,29 @@ export default function CustomerAuthPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
 
+              <label className="legal-consent-row">
+                <input
+                  type="checkbox"
+                  checked={legalAccepted}
+                  onChange={(e) => setLegalAccepted(e.target.checked)}
+                />
+                <span>
+                  I agree to the MOOVU{" "}
+                  <Link href="/terms" target="_blank" rel="noopener noreferrer">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy-policy" target="_blank" rel="noopener noreferrer">
+                    Privacy Policy
+                  </Link>
+                  .
+                </span>
+              </label>
+
               <div className="flex flex-wrap gap-3">
                 <button
                   className="moovu-btn moovu-btn-primary"
-                  disabled={busy}
+                  disabled={busy || !legalAccepted}
                   onClick={register}
                 >
                   {busy ? "Creating..." : "Create account"}
@@ -326,6 +358,7 @@ export default function CustomerAuthPage() {
                   onClick={() => {
                     setStep("phone");
                     setPassword("");
+                    setLegalAccepted(false);
                   }}
                 >
                   Back
@@ -334,6 +367,12 @@ export default function CustomerAuthPage() {
             </>
           )}
         </section>
+
+        <div className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
+          <Link href="/privacy-policy" className="hover:text-[#1f74c9]">Privacy Policy</Link>
+          <Link href="/terms" className="hover:text-[#1f74c9]">Terms</Link>
+          <Link href="/contact" className="hover:text-[#1f74c9]">Contact</Link>
+        </div>
       </div>
     </main>
   );

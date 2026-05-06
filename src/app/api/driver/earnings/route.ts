@@ -1,9 +1,44 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+type CompletedTripRow = {
+  id: string;
+  fare_amount: number | string | null;
+  commission_amount: number | string | null;
+  driver_net_earnings: number | string | null;
+  payment_method: string | null;
+  pickup_address: string | null;
+  dropoff_address: string | null;
+  created_at: string | null;
+  status: string | null;
+};
+
+type SettlementRow = {
+  id: string;
+  amount_paid: number | string | null;
+  payment_method: string | null;
+  reference: string | null;
+  note: string | null;
+  created_at: string | null;
+};
+
+type TripEventRow = {
+  trip_id: string;
+  event_type: string | null;
+  created_at: string;
+};
+
+type CompletedTripWithTimestamp = CompletedTripRow & {
+  completed_at: string | null;
+};
+
 function num(value: unknown) {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Server error.";
 }
 
 export async function GET(req: Request) {
@@ -159,22 +194,25 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: tripError.message }, { status: 500 });
     }
 
-    const totalCommission = (completedTrips ?? []).reduce(
-      (sum: number, trip: any) => sum + num(trip.commission_amount),
+    const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
+    const typedSettlements = (settlements ?? []) as SettlementRow[];
+
+    const totalCommission = typedCompletedTrips.reduce(
+      (sum, trip) => sum + num(trip.commission_amount),
       0
     );
 
-    const totalDriverNet = (completedTrips ?? []).reduce((sum: number, trip: any) => {
+    const totalDriverNet = typedCompletedTrips.reduce((sum, trip) => {
       if (trip.driver_net_earnings != null) {
         return sum + num(trip.driver_net_earnings);
       }
       return sum + (num(trip.fare_amount) - num(trip.commission_amount));
     }, 0);
 
-    const totalTripsCompleted = (completedTrips ?? []).length;
+    const totalTripsCompleted = typedCompletedTrips.length;
 
-    const totalSettled = (settlements ?? []).reduce(
-      (sum: number, row: any) => sum + num(row.amount_paid),
+    const totalSettled = typedSettlements.reduce(
+      (sum, row) => sum + num(row.amount_paid),
       0
     );
 
@@ -224,7 +262,7 @@ export async function GET(req: Request) {
       normalizedWallet = createdWallet;
     }
 
-    const tripIds = (completedTrips ?? []).map((t: any) => t.id);
+    const tripIds = typedCompletedTrips.map((trip) => trip.id);
     const completedAtMap = new Map<string, string>();
 
     if (tripIds.length > 0) {
@@ -235,20 +273,20 @@ export async function GET(req: Request) {
         .eq("event_type", "trip_completed")
         .order("created_at", { ascending: false });
 
-      for (const row of events ?? []) {
-        if (!completedAtMap.has((row as any).trip_id)) {
-          completedAtMap.set((row as any).trip_id, (row as any).created_at);
+      for (const row of ((events ?? []) as TripEventRow[])) {
+        if (!completedAtMap.has(row.trip_id)) {
+          completedAtMap.set(row.trip_id, row.created_at);
         }
       }
     }
 
-    const normalizedTrips = (completedTrips ?? [])
-      .map((trip: any) => ({
+    const normalizedTrips = typedCompletedTrips
+      .map<CompletedTripWithTimestamp>((trip) => ({
         ...trip,
         completed_at: completedAtMap.get(trip.id) ?? trip.created_at,
       }))
       .sort(
-        (a: any, b: any) =>
+        (a, b) =>
           new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime()
       )
       .slice(0, 50);
@@ -264,9 +302,9 @@ export async function GET(req: Request) {
         recent_completed_trips: normalizedTrips,
       },
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(error) },
       { status: 500 }
     );
   }

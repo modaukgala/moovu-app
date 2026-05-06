@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Server error.";
+}
+
 type SaveBody = {
   first_name?: string | null;
   last_name?: string | null;
@@ -260,9 +264,9 @@ export async function POST(req: Request) {
       profile_completed: nextProfileCompleted,
       verification_status: nextVerificationStatus,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Server error." },
+      { ok: false, error: errorMessage(error) },
       { status: 500 }
     );
   }

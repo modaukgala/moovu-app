@@ -35,6 +35,10 @@ const STATUSES = [
   "cancelled",
 ] as const;
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function TripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -118,8 +122,8 @@ export default function TripsPage() {
       }
 
       await loadTrips(status);
-    } catch (e: any) {
-      setPageError(e?.message || "Failed to assign driver.");
+    } catch (error: unknown) {
+      setPageError(errorMessage(error, "Failed to assign driver."));
     } finally {
       setActionLoadingId(null);
     }
@@ -156,8 +160,8 @@ export default function TripsPage() {
       }
 
       await loadTrips(status);
-    } catch (e: any) {
-      setPageError(e?.message || "Failed to cancel trip.");
+    } catch (error: unknown) {
+      setPageError(errorMessage(error, "Failed to cancel trip."));
     } finally {
       setActionLoadingId(null);
     }

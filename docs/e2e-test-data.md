@@ -45,22 +45,31 @@ The SQL creates:
 
 After seeding:
 
-1. Open `/admin/trips`.
-2. Open the seeded trip or dispatch it from `/admin/dispatch`.
-3. Trigger offer-next-driver if the trip is still `requested`.
-4. Log in as the linked test driver.
-5. Open `/driver`.
-6. Confirm the offer appears.
-7. Accept the offer.
-8. Confirm the trip status becomes `assigned`.
-9. Use the driver dashboard to mark arrived.
-10. Enter start OTP `1234`.
-11. Start the trip.
-12. Enter end OTP `5678`.
-13. Complete the trip.
-14. Confirm `/driver/earnings` shows updated commission and net earnings.
-15. Confirm `/ride/[tripId]/receipt` opens.
-16. Confirm `/admin/trips` shows the completed trip.
+1. Log in as the test customer and enable customer push notifications.
+2. Log in as the linked test driver and enable driver push notifications.
+3. Log in as an admin and enable admin push notifications.
+4. Open `/admin/trips`.
+5. Open the seeded trip or dispatch it from `/admin/dispatch`.
+6. Trigger offer-next-driver if the trip is still `requested`.
+7. Open `/driver`.
+8. Confirm the offer appears and the driver receives a new trip offer notification.
+9. Accept the offer.
+10. Confirm the trip status becomes `assigned` and the customer receives a driver-on-the-way notification.
+11. Confirm the customer sees `Chat with driver` on `/ride/[tripId]`.
+12. Confirm the driver sees `Chat with customer` on `/driver`.
+13. Send a customer chat message and confirm it appears for the driver.
+14. Send a driver chat reply and confirm it appears for the customer.
+15. Confirm chat notifications route to `/driver` for the driver and `/ride/[tripId]` for the customer.
+16. Use the driver dashboard to mark arrived.
+17. Confirm the customer receives a driver-arrived notification.
+18. Enter start OTP `1234`.
+19. Start the trip and confirm the customer receives a trip-started notification.
+20. Enter end OTP `5678`.
+21. Complete the trip and confirm the customer receives a trip-completed notification.
+22. Confirm chat becomes read-only after completion.
+23. Confirm `/driver/earnings` shows updated commission and net earnings.
+24. Confirm `/ride/[tripId]/receipt` opens.
+25. Confirm `/admin/trips` shows the completed trip.
 
 ## Payment Review Flow
 
@@ -70,10 +79,34 @@ After seeding:
 2. Filter by `Pending review`.
 3. Confirm both subscription and commission payment requests are visible.
 4. Approve the subscription request.
-5. Confirm the driver subscription is active on `/admin/subscriptions`.
-6. Approve the commission request.
-7. Confirm commission owed reduces to R0.00 if the seeded wallet balance was R50.
-8. Reject flow can be tested by reseeding or creating a fresh payment request from `/driver/earnings`.
+5. Confirm the driver receives a subscription-approved notification.
+6. Confirm the driver subscription is active on `/admin/subscriptions`.
+7. Approve the commission request.
+8. Confirm the driver receives a payment-approved notification.
+9. Confirm commission owed reduces to R0.00 if the seeded wallet balance was R50.
+10. Reject flow can be tested by reseeding or creating a fresh payment request from `/driver/earnings`.
+
+## Push Notification Readiness
+
+Notification testing needs:
+
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
+- a browser/device that supports Push API
+- iOS testing from an installed Home Screen PWA, where applicable
+
+Expected event routing:
+
+- New trip offer: driver user, `/driver`
+- Driver accepted/on the way: customer user, `/ride/[tripId]`
+- Driver arrived: customer user, `/ride/[tripId]`
+- Trip started: customer user, `/ride/[tripId]`
+- Trip completed: customer user, `/ride/[tripId]`
+- Customer chat message: driver user, `/driver`
+- Driver chat message: customer user, `/ride/[tripId]`
+- Driver payment submitted: admin role, `/admin/payment-reviews`
+- Payment approved/rejected: driver user, `/driver/earnings`
 
 ## Notes
 
