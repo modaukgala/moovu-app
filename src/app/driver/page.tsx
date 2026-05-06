@@ -1292,6 +1292,13 @@ export default function DriverHomePage() {
 
                   <button
                     className="moovu-btn moovu-btn-secondary justify-start"
+                    onClick={() => router.push("/driver/commission-payments")}
+                  >
+                    Pay MOOVU commission
+                  </button>
+
+                  <button
+                    className="moovu-btn moovu-btn-secondary justify-start"
                     onClick={() => router.push("/driver/history")}
                   >
                     Trip history

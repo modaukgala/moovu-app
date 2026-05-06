@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error";
@@ -70,6 +71,27 @@ export async function POST(req: Request) {
       if (driver.subscription_status !== "active" && driver.subscription_status !== "grace") {
         return NextResponse.json(
           { ok: false, error: "Subscription inactive" },
+          { status: 402 }
+        );
+      }
+
+      const { data: wallet, error: walletError } = await supabaseAdmin
+        .from("driver_wallets")
+        .select("balance_due")
+        .eq("driver_id", driverId)
+        .maybeSingle();
+
+      if (walletError) {
+        return NextResponse.json({ ok: false, error: walletError.message }, { status: 500 });
+      }
+
+      const commissionBalance = Number(wallet?.balance_due ?? 0);
+      if (Number.isFinite(commissionBalance) && commissionBalance >= DRIVER_COMMISSION_LOCK_LIMIT) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Your MOOVU commission balance is R${commissionBalance.toFixed(2)}. Please pay your commission balance before going online.`,
+          },
           { status: 402 }
         );
       }

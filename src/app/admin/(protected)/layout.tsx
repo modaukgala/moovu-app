@@ -15,6 +15,7 @@ const navItems = [
   { href: "/admin/applications", label: "Applications" },
   { href: "/admin/receipts", label: "Receipts" },
   { href: "/admin/payment-reviews", label: "Payments" },
+  { href: "/admin/commission-payments", label: "Commissions" },
   { href: "/admin/link-driver", label: "Link Driver" },
   { href: "/admin/subscriptions", label: "Subscriptions" },
   { href: "/admin/reports", label: "Earnings Report" },

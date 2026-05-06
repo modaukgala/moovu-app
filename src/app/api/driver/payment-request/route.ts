@@ -18,6 +18,10 @@ function num(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function yyyymmdd(value = new Date()) {
+  return value.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -109,6 +113,37 @@ export async function POST(req: Request) {
     const commissionDue = num(wallet?.balance_due);
     const subscriptionDueExisting = num(driver.subscription_amount_due);
 
+    if (paymentType === "commission" && commissionDue <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "You do not currently owe MOOVU commission." },
+        { status: 400 }
+      );
+    }
+
+    if (paymentType === "commission" || paymentType === "combined") {
+      const { data: pendingCommission, error: pendingCommissionError } = await supabaseAdmin
+        .from("driver_payment_requests")
+        .select("id,payment_reference")
+        .eq("driver_id", driverId)
+        .in("payment_type", ["commission", "combined"])
+        .in("status", ["pending_payment_review", "waiting_confirmation"])
+        .limit(1);
+
+      if (pendingCommissionError) {
+        return NextResponse.json({ ok: false, error: pendingCommissionError.message }, { status: 500 });
+      }
+
+      if (pendingCommission && pendingCommission.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `You already have a pending commission payment request (${pendingCommission[0].payment_reference}). Please wait for admin review before submitting another one.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     let subscriptionPlan: DriverSubscriptionPlan | null = null;
     let subscriptionExpected = 0;
 
@@ -145,18 +180,32 @@ export async function POST(req: Request) {
       );
     }
 
-    const refParts = [
-      paymentType === "subscription" ? "SUB" : paymentType === "commission" ? "COMM" : "ALL",
-      driverId.slice(0, 6).toUpperCase(),
-      subscriptionPlan ? subscriptionPlan.toUpperCase() : null,
-    ].filter(Boolean);
+    if (!file || file.size <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Please upload proof of payment before submitting." },
+        { status: 400 }
+      );
+    }
+
+    const requestShortId = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const driverShortId = driverId.slice(0, 6).toUpperCase();
+
+    const refParts = paymentType === "commission"
+      ? ["MOOVU", "COMM", driverShortId, requestShortId, yyyymmdd()]
+      : [
+          paymentType === "subscription" ? "MOOVU-SUB" : "MOOVU-ALL",
+          driverShortId,
+          requestShortId,
+          subscriptionPlan ? subscriptionPlan.toUpperCase() : null,
+          yyyymmdd(),
+        ].filter(Boolean);
 
     const paymentReference = refParts.join("-");
 
     let popFilePath: string | null = null;
     const popFileUrl: string | null = null;
 
-    if (file && file.size > 0) {
+    if (file.size > 0) {
       const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
       if (!allowed.includes(file.type)) {
         return NextResponse.json(

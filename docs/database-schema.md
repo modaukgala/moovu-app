@@ -37,7 +37,8 @@ This document describes the Supabase objects the current MOOVU app expects. It i
 - Customer ride options and fare calculation should remain centralized in the fare domain files.
 - Customer legal acceptance is currently stored in Supabase Auth user metadata during signup or the one-time booking prompt. Optional `customers` mirror columns are documented in `docs/legal-acceptance-migration.sql`.
 - Commission is applied through `src/lib/finance/applyTripCommissionServer.ts`.
-  New commission calculations use the shared `MOOVU_COMMISSION_PCT` constant in `src/lib/finance/commission.ts`, currently `7%`.
+  New commission calculations use the shared `MOOVU_COMMISSION_PCT` constant in `src/lib/finance/commission.ts`, currently `9.5%`.
+  Drivers are blocked from going online when `driver_wallets.balance_due` is R100 or more, while still being allowed to log in and submit commission payments.
   Existing completed trips keep their stored `commission_pct`, `commission_amount`, and wallet history unless a separate approved data migration is run.
 - Admin API access uses `requireAdminUser`.
 - Driver API ownership is based on `driver_accounts.user_id -> driver_id`.

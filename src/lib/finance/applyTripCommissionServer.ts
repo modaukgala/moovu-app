@@ -224,7 +224,7 @@ export async function applyTripCommissionServer(params: {
     tx_type: "commission",
     amount: calc.commissionAmount,
     direction: "debit",
-    description: `${calc.commissionPct}% commission charged on trip ${tripId}`,
+    description: `${calc.commissionPct}% MOOVU commission charged on trip ${tripId}`,
     meta: {
       fare_amount: calc.fareAmount,
       commission_pct: calc.commissionPct,

@@ -1,5 +1,6 @@
-export const MOOVU_COMMISSION_PCT = 7;
+export const MOOVU_COMMISSION_PCT = 9.5;
 export const MOOVU_COMMISSION_RATE = MOOVU_COMMISSION_PCT / 100;
+export const DRIVER_COMMISSION_LOCK_LIMIT = 100;
 
 export function calculateCommission(fareAmount: number, commissionPct = MOOVU_COMMISSION_PCT) {
   const fare = Number(fareAmount || 0);

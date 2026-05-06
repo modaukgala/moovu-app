@@ -336,6 +336,9 @@ export default function DriverEarningsPage() {
           <Link href="/driver" className="moovu-btn moovu-btn-secondary">
             Back to Dashboard
           </Link>
+          <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary">
+            Commission payments
+          </Link>
           </div>
         </div>
 

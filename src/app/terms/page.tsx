@@ -83,7 +83,7 @@ export default function TermsPage() {
             <p>
               MOOVU currently supports payment proof review, receipts, driver commissions, driver
               subscriptions, and admin payment approval flows. The current MOOVU driver commission is
-              7% on newly calculated completed trips. Existing historical records keep the commission
+              9.5% on newly calculated completed trips. Existing historical records keep the commission
               amount stored at the time they were created unless MOOVU approves a separate migration.
             </p>
           </section>
