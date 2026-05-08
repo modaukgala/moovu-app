@@ -73,6 +73,17 @@ type CompletedTrip = {
   completed_at?: string | null;
 };
 
+type CancellationFee = {
+  id: string;
+  trip_id: string;
+  fee_type: string;
+  fee_amount: number | null;
+  driver_amount: number | null;
+  moovu_amount: number | null;
+  reason: string | null;
+  created_at: string | null;
+};
+
 const BANK_DETAILS = {
   bankName: "NEDBANK",
   accountName: "Current Account",
@@ -110,6 +121,10 @@ export default function DriverEarningsPage() {
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [subscriptionPayments, setSubscriptionPayments] = useState<SubscriptionPayment[]>([]);
   const [trips, setTrips] = useState<CompletedTrip[]>([]);
+  const [cancellationFees, setCancellationFees] = useState<CancellationFee[]>([]);
+  const [cancellationDriverEarnings, setCancellationDriverEarnings] = useState(0);
+  const [lateCancellationDriverEarnings, setLateCancellationDriverEarnings] = useState(0);
+  const [noShowDriverEarnings, setNoShowDriverEarnings] = useState(0);
 
   const [modalType, setModalType] = useState<ModalType>(null);
   const [selectedPlan, setSelectedPlan] = useState<PlanType>("month");
@@ -158,6 +173,10 @@ export default function DriverEarningsPage() {
     setSettlements(json.earnings?.settlements ?? []);
     setSubscriptionPayments(json.earnings?.subscription_payments ?? []);
     setTrips(json.earnings?.recent_completed_trips ?? []);
+    setCancellationFees(json.earnings?.cancellation_fees ?? []);
+    setCancellationDriverEarnings(Number(json.earnings?.cancellation_driver_earnings ?? 0));
+    setLateCancellationDriverEarnings(Number(json.earnings?.late_cancellation_driver_earnings ?? 0));
+    setNoShowDriverEarnings(Number(json.earnings?.no_show_driver_earnings ?? 0));
     setLoading(false);
   }, [getToken]);
 
@@ -346,8 +365,29 @@ export default function DriverEarningsPage() {
           <MetricCard label="Today" value={money(earningsSummary.today)} helper="Recent completed trips" />
           <MetricCard label="This week" value={money(earningsSummary.week)} helper="Last 7 days" />
           <MetricCard label="This month" value={money(earningsSummary.month)} helper="Current month" />
-          <MetricCard label="Total earned" value={money(wallet?.total_driver_net ?? earningsSummary.total)} helper={`${wallet?.total_trips_completed ?? trips.length} completed trips`} tone="primary" />
+          <MetricCard label="Total earned" value={money(Number(wallet?.total_driver_net ?? earningsSummary.total) + cancellationDriverEarnings)} helper={`${wallet?.total_trips_completed ?? trips.length} completed trips + fees`} tone="primary" />
           <MetricCard label="Commission owed" value={money(commissionDue)} helper="Payable to MOOVU" tone={commissionDue > 0 ? "warning" : "success"} />
+        </section>
+
+        <section className="grid gap-3 md:grid-cols-3">
+          <MetricCard
+            label="Cancellation payouts"
+            value={money(lateCancellationDriverEarnings)}
+            helper="R10 driver payout per late cancellation"
+            tone={lateCancellationDriverEarnings > 0 ? "warning" : "default"}
+          />
+          <MetricCard
+            label="No-show payouts"
+            value={money(noShowDriverEarnings)}
+            helper="R22 driver payout per no-show"
+            tone={noShowDriverEarnings > 0 ? "primary" : "default"}
+          />
+          <MetricCard
+            label="Fee payouts total"
+            value={money(cancellationDriverEarnings)}
+            helper="Separate from MOOVU commission debt"
+            tone="success"
+          />
         </section>
 
         <section className="grid gap-3 md:grid-cols-3">
@@ -616,6 +656,46 @@ export default function DriverEarningsPage() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Cancellation and no-show payouts</h2>
+
+          {cancellationFees.length === 0 ? (
+            <EmptyState
+              title="No cancellation payouts"
+              description="Late cancellation and no-show driver payouts will appear here."
+            />
+          ) : (
+            <div className="space-y-3">
+              {cancellationFees.map((row) => (
+                <div key={row.id} className="border rounded-2xl p-4">
+                  <div className="grid gap-3 md:grid-cols-5">
+                    <div>
+                      <div className="text-sm text-gray-500">Type</div>
+                      <div className="font-medium">{row.fee_type === "no_show" ? "No-show" : "Late cancellation"}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Customer fee</div>
+                      <div className="font-medium">{money(row.fee_amount)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Your payout</div>
+                      <div className="font-medium">{money(row.driver_amount)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Reason</div>
+                      <div className="font-medium">{displayValue(row.reason)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Recorded</div>
+                      <div className="font-medium">{displayDate(row.created_at)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="moovu-card p-5 sm:p-6 space-y-4">

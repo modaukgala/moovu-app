@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
+import { calculateCustomerCancellationFee } from "@/lib/finance/cancellationFees";
 import { notifyAdmins, notifyDriverForTrip } from "@/lib/push-notify";
 
 const VALID_REASONS = [
@@ -15,20 +16,9 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function computeCancellationFee(status: string) {
-  if (status === "requested" || status === "offered") {
-    return { fee: 0, code: "free_window" };
-  }
-
-  if (status === "assigned") {
-    return { fee: 10, code: "driver_dispatched" };
-  }
-
-  if (status === "arrived") {
-    return { fee: 20, code: "driver_arrived" };
-  }
-
-  return { fee: 0, code: "standard" };
+function isMissingCancellationColumn(error: { message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() || "";
+  return message.includes("cancellation_") || message.includes("cancelled_at");
 }
 
 export async function POST(req: Request) {
@@ -60,7 +50,7 @@ export async function POST(req: Request) {
 
     const { data: trip, error: tripError } = await auth.supabaseAdmin
       .from("trips")
-      .select("id,status,customer_id")
+      .select("id,status,customer_id,driver_id,created_at")
       .eq("id", tripId)
       .eq("customer_id", auth.customer.id)
       .maybeSingle();
@@ -100,52 +90,143 @@ export async function POST(req: Request) {
       );
     }
 
-    const { fee, code } = computeCancellationFee(trip.status);
+    const fee = calculateCustomerCancellationFee({
+      status: trip.status,
+      createdAt: trip.created_at,
+    });
+    const cancelledAt = new Date().toISOString();
+
+    if (fee.feeAmount > 0) {
+      const { error: feeInsertError } = await auth.supabaseAdmin
+        .from("trip_cancellation_fees")
+        .insert({
+          trip_id: tripId,
+          customer_id: auth.customer.id,
+          driver_id: trip.driver_id,
+          fee_type: fee.type,
+          fee_amount: fee.feeAmount,
+          driver_amount: fee.driverAmount,
+          moovu_amount: fee.moovuAmount,
+          reason,
+          created_by: auth.user.id,
+        });
+
+      if (feeInsertError) {
+        console.error("[cancel-trip] paid fee insert failed", {
+          tripId,
+          customerId: auth.customer.id,
+          reason: feeInsertError.message,
+        });
+        return NextResponse.json(
+          { ok: false, error: "Cancellation fee could not be recorded. Please try again or contact support." },
+          { status: 500 }
+        );
+      }
+    }
 
     const { error: updateError } = await auth.supabaseAdmin
       .from("trips")
       .update({
         status: "cancelled",
         cancel_reason: reason,
+        cancellation_reason: reason,
+        cancellation_type: fee.type,
         cancelled_by: "customer",
-        cancellation_fee_amount: fee,
-        cancellation_policy_code: code,
+        cancelled_at: cancelledAt,
+        cancellation_fee_amount: fee.feeAmount,
+        cancellation_driver_amount: fee.driverAmount,
+        cancellation_moovu_amount: fee.moovuAmount,
+        cancellation_policy_code: fee.policyCode,
       })
       .eq("id", tripId);
 
-    if (updateError) {
+    if (updateError && isMissingCancellationColumn(updateError)) {
+      const { error: legacyUpdateError } = await auth.supabaseAdmin
+        .from("trips")
+        .update({
+          status: "cancelled",
+          cancel_reason: reason,
+          cancelled_by: "customer",
+          cancellation_fee_amount: fee.feeAmount,
+          cancellation_policy_code: fee.policyCode,
+        })
+        .eq("id", tripId);
+
+      if (legacyUpdateError) {
+        return NextResponse.json(
+          { ok: false, error: legacyUpdateError.message },
+          { status: 500 }
+        );
+      }
+    } else if (updateError) {
       return NextResponse.json(
         { ok: false, error: updateError.message },
         { status: 500 }
       );
     }
 
-    try {
-      await auth.supabaseAdmin.from("trip_events").insert({
+    if (trip.driver_id) {
+      await auth.supabaseAdmin
+        .from("drivers")
+        .update({ busy: false })
+        .eq("id", trip.driver_id);
+    }
+
+    if (fee.feeAmount === 0) {
+      const { error: freeFeeInsertError } = await auth.supabaseAdmin
+        .from("trip_cancellation_fees")
+        .insert({
+          trip_id: tripId,
+          customer_id: auth.customer.id,
+          driver_id: trip.driver_id,
+          fee_type: fee.type,
+          fee_amount: fee.feeAmount,
+          driver_amount: fee.driverAmount,
+          moovu_amount: fee.moovuAmount,
+          reason,
+          created_by: auth.user.id,
+        });
+
+      if (freeFeeInsertError) {
+        console.error("[cancel-trip] free cancellation audit insert failed", {
+          tripId,
+          customerId: auth.customer.id,
+          reason: freeFeeInsertError.message,
+        });
+      }
+    }
+
+    const { error: eventError } = await auth.supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
         event_type: "trip_cancelled",
         message:
-          fee > 0
-            ? `Trip cancelled by customer. Reason: ${reason}. Cancellation fee applied: R${fee}.`
+          fee.feeAmount > 0
+            ? `Trip cancelled by customer. Reason: ${reason}. Cancellation fee applied: R${fee.feeAmount}. Driver payout: R${fee.driverAmount}. MOOVU revenue: R${fee.moovuAmount}.`
             : `Trip cancelled by customer. Reason: ${reason}.`,
         old_status: trip.status,
         new_status: "cancelled",
       });
-    } catch {}
+
+    if (eventError) {
+      console.error("[cancel-trip] event insert failed", {
+        tripId,
+        reason: eventError.message,
+      });
+    }
 
     await notifyDriverForTrip(
       tripId,
       "Trip cancelled",
-      fee > 0
-        ? `The customer cancelled the trip. Cancellation fee applied: R${fee}.`
+      fee.feeAmount > 0
+        ? `The customer cancelled the trip. Your cancellation payout is R${fee.driverAmount}.`
         : "The customer cancelled the trip.",
       "/driver"
     );
 
     await notifyAdmins(
       "Trip cancelled by customer",
-      fee > 0
-        ? `Trip ${tripId} was cancelled by the customer. Fee applied: R${fee}.`
+      fee.feeAmount > 0
+        ? `Trip ${tripId} was cancelled by the customer. Fee applied: R${fee.feeAmount}.`
         : `Trip ${tripId} was cancelled by the customer.`,
       "/admin/trips"
     );
@@ -153,11 +234,13 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       message:
-        fee > 0
-          ? `Trip cancelled. A cancellation fee of R${fee.toFixed(2)} was applied.`
+        fee.feeAmount > 0
+          ? `Trip cancelled. A cancellation fee of R${fee.feeAmount.toFixed(2)} was applied.`
           : "Trip cancelled successfully.",
-      cancellationFeeAmount: fee,
-      cancellationPolicyCode: code,
+      cancellationFeeAmount: fee.feeAmount,
+      cancellationDriverAmount: fee.driverAmount,
+      cancellationMoovuAmount: fee.moovuAmount,
+      cancellationPolicyCode: fee.policyCode,
     });
   } catch (e: unknown) {
     return NextResponse.json(

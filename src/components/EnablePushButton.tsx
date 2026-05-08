@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getToken as getFcmToken } from "firebase/messaging";
+import { getFirebaseMessaging, hasFirebaseClientConfig } from "@/lib/firebase/client";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Role = "admin" | "driver" | "customer";
@@ -10,6 +12,25 @@ type Props = {
   onEnabled?: () => void;
   variant?: "floating" | "inline";
 };
+
+function getMoovuAppType(role: Role) {
+  if (typeof window === "undefined") {
+    return role === "driver" ? "web_driver" : role === "admin" ? "web_admin" : "web_customer";
+  }
+
+  const referrer = document.referrer || "";
+  const host = window.location.hostname;
+
+  if (referrer.includes("za.co.moovurides.driver") || host.startsWith("driver.")) {
+    return "android_driver";
+  }
+
+  if (referrer.includes("za.co.moovurides.app")) {
+    return "android_customer";
+  }
+
+  return role === "driver" ? "web_driver" : role === "admin" ? "web_admin" : "web_customer";
+}
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -26,6 +47,43 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
   const [saved, setSaved] = useState(false);
   const [msg, setMsg] = useState("");
   const [canRequest, setCanRequest] = useState(true);
+
+  async function registerFcm(accessToken: string) {
+    if (!hasFirebaseClientConfig()) return false;
+
+    const messaging = await getFirebaseMessaging();
+    if (!messaging) return false;
+
+    const swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+    const token = await getFcmToken(messaging, {
+      vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: swReg,
+    });
+
+    if (!token) return false;
+
+    const res = await fetch("/api/push/fcm/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        role,
+        token,
+        platform: getMoovuAppType(role).startsWith("android_") ? "android" : "web",
+        appType: getMoovuAppType(role),
+        deviceLabel: navigator.userAgent,
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.error || "Failed to save FCM notification token.");
+    }
+
+    return true;
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -161,6 +219,20 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
       if (permission !== "granted") {
         setCanRequest(false);
         setMsg("Notifications are blocked. Allow MOOVU notifications in your browser or app settings, then retry.");
+        return;
+      }
+
+      let fcmSaved = false;
+      try {
+        fcmSaved = await registerFcm(accessToken);
+      } catch (error) {
+        console.warn("FCM registration failed; falling back to Web Push.", error);
+      }
+
+      if (fcmSaved) {
+        setMsg("Notifications enabled successfully.");
+        setSaved(true);
+        onEnabled?.();
         return;
       }
 

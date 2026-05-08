@@ -136,6 +136,37 @@ export async function POST(req: Request) {
         await incrementOfferStat(driverId, "offers_accepted");
       } catch {}
 
+      const now = new Date().toISOString();
+      const { error: acceptedOfferError } = await supabaseAdmin
+        .from("driver_trip_offers")
+        .update({ status: "accepted", responded_at: now, updated_at: now })
+        .eq("trip_id", tripId)
+        .eq("driver_id", driverId)
+        .in("status", ["pending", "shown"]);
+
+      if (acceptedOfferError) {
+        console.error("[driver-offers] failed to mark offer accepted", {
+          tripId,
+          driverId,
+          reason: acceptedOfferError.message,
+        });
+      }
+
+      const { error: cancelOtherOffersError } = await supabaseAdmin
+        .from("driver_trip_offers")
+        .update({ status: "cancelled", responded_at: now, updated_at: now })
+        .eq("trip_id", tripId)
+        .neq("driver_id", driverId)
+        .in("status", ["pending", "shown"]);
+
+      if (cancelOtherOffersError) {
+        console.error("[driver-offers] failed to cancel competing offers", {
+          tripId,
+          driverId,
+          reason: cancelOtherOffersError.message,
+        });
+      }
+
       try {
         await supabaseAdmin.from("trip_events").insert({
           trip_id: tripId,
@@ -194,6 +225,25 @@ export async function POST(req: Request) {
     try {
       await incrementOfferStat(driverId, "offers_rejected");
     } catch {}
+
+    const { error: declinedOfferError } = await supabaseAdmin
+      .from("driver_trip_offers")
+      .update({
+        status: "declined",
+        responded_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("trip_id", tripId)
+      .eq("driver_id", driverId)
+      .in("status", ["pending", "shown"]);
+
+    if (declinedOfferError) {
+      console.error("[driver-offers] failed to mark offer declined", {
+        tripId,
+        driverId,
+        reason: declinedOfferError.message,
+      });
+    }
 
     try {
       await supabaseAdmin.from("trip_events").insert({

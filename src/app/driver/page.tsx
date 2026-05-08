@@ -13,6 +13,12 @@ type Offer = {
   offer_expires_at: string | null;
   pickup_address: string | null;
   dropoff_address: string | null;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+  dropoff_lat?: number | null;
+  dropoff_lng?: number | null;
+  distance_km?: number | null;
+  duration_min?: number | null;
   fare_amount: number | null;
   payment_method: string | null;
 };
@@ -30,6 +36,8 @@ type CurrentTrip = {
   fare_amount: number | null;
   payment_method: string | null;
   created_at: string | null;
+  driver_arrived_at?: string | null;
+  no_show_eligible_at?: string | null;
 };
 
 type Driver = {
@@ -161,6 +169,7 @@ export default function DriverHomePage() {
   const [showStartOtp, setShowStartOtp] = useState(false);
   const [endOtp, setEndOtp] = useState("");
   const [showEndOtp, setShowEndOtp] = useState(false);
+  const [navigationTarget, setNavigationTarget] = useState<"pickup" | "dropoff" | null>(null);
 
   const otpEntryOpen = showStartOtp || showEndOtp;
   const canOpenTripChat =
@@ -544,6 +553,14 @@ export default function DriverHomePage() {
     await tripAction("/api/driver/trips/complete", { tripId, otp }, "Trip completed ✅");
   }
 
+  async function markNoShow(tripId: string) {
+    await tripAction(
+      "/api/driver/trips/no-show",
+      { tripId },
+      "Customer no-show recorded."
+    );
+  }
+
   async function logout() {
     try {
       await supabaseClient.auth.signOut({ scope: "local" });
@@ -570,6 +587,7 @@ export default function DriverHomePage() {
     if (!map || !window.google?.maps || !driver) return;
 
     clearMapLayers();
+    const routePreview = currentTrip ?? offer;
 
     const bounds = new window.google.maps.LatLngBounds();
     let hasAnyPoint = false;
@@ -586,8 +604,8 @@ export default function DriverHomePage() {
       hasAnyPoint = true;
     }
 
-    if (currentTrip?.pickup_lat != null && currentTrip?.pickup_lng != null) {
-      const pickupPos = { lat: currentTrip.pickup_lat, lng: currentTrip.pickup_lng };
+    if (routePreview?.pickup_lat != null && routePreview?.pickup_lng != null) {
+      const pickupPos = { lat: routePreview.pickup_lat, lng: routePreview.pickup_lng };
       pickupMarkerRef.current = new window.google.maps.Marker({
         map,
         position: pickupPos,
@@ -598,8 +616,8 @@ export default function DriverHomePage() {
       hasAnyPoint = true;
     }
 
-    if (currentTrip?.dropoff_lat != null && currentTrip?.dropoff_lng != null) {
-      const dropoffPos = { lat: currentTrip.dropoff_lat, lng: currentTrip.dropoff_lng };
+    if (routePreview?.dropoff_lat != null && routePreview?.dropoff_lng != null) {
+      const dropoffPos = { lat: routePreview.dropoff_lat, lng: routePreview.dropoff_lng };
       dropoffMarkerRef.current = new window.google.maps.Marker({
         map,
         position: dropoffPos,
@@ -622,7 +640,7 @@ export default function DriverHomePage() {
     }
 
     const hasOrigin = driver.lat != null && driver.lng != null;
-    const goingToPickup = currentTrip?.status === "assigned";
+    const goingToPickup = currentTrip?.status === "assigned" || (!!offer && !currentTrip);
     const goingToDropoff =
       currentTrip?.status === "arrived" || currentTrip?.status === "ongoing";
 
@@ -630,8 +648,8 @@ export default function DriverHomePage() {
     let destLng: number | null = null;
 
     if (goingToPickup) {
-      destLat = currentTrip?.pickup_lat ?? null;
-      destLng = currentTrip?.pickup_lng ?? null;
+      destLat = routePreview?.pickup_lat ?? null;
+      destLng = routePreview?.pickup_lng ?? null;
     } else if (goingToDropoff) {
       destLat = currentTrip?.dropoff_lat ?? null;
       destLng = currentTrip?.dropoff_lng ?? null;
@@ -828,6 +846,11 @@ export default function DriverHomePage() {
     currentTrip?.pickup_lng,
     currentTrip?.dropoff_lat,
     currentTrip?.dropoff_lng,
+    offer?.id,
+    offer?.pickup_lat,
+    offer?.pickup_lng,
+    offer?.dropoff_lat,
+    offer?.dropoff_lng,
   ]);
 
   const secondsLeft = useMemo(() => {
@@ -842,6 +865,13 @@ export default function DriverHomePage() {
   const pickupWaze = wazeLink(currentTrip?.pickup_lat, currentTrip?.pickup_lng);
   const dropoffGoogle = googleMapsLink(currentTrip?.dropoff_lat, currentTrip?.dropoff_lng);
   const dropoffWaze = wazeLink(currentTrip?.dropoff_lat, currentTrip?.dropoff_lng);
+  const noShowSecondsLeft = useMemo(() => {
+    if (!currentTrip?.no_show_eligible_at) return null;
+    return Math.max(
+      0,
+      Math.ceil((new Date(currentTrip.no_show_eligible_at).getTime() - nowMs) / 1000)
+    );
+  }, [currentTrip?.no_show_eligible_at, nowMs]);
 
   if (loadingDriver) {
     return (
@@ -868,6 +898,54 @@ export default function DriverHomePage() {
           message={driverActionError}
           onClose={() => setDriverActionError(null)}
         />
+      )}
+
+      {navigationTarget && (
+        <div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/45 p-4">
+          <section className="w-full max-w-sm rounded-[30px] border border-[var(--moovu-border)] bg-white p-5 shadow-2xl">
+            <div className="moovu-section-title">Open navigation</div>
+            <h2 className="mt-2 text-2xl font-black text-slate-950">
+              {navigationTarget === "pickup" ? "Drive to pickup" : "Drive to destination"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Choose your preferred navigation app for this trip leg.
+            </p>
+
+            <div className="mt-5 grid gap-3">
+              {(navigationTarget === "pickup" ? pickupGoogle : dropoffGoogle) && (
+                <a
+                  className="moovu-btn moovu-btn-primary w-full"
+                  href={navigationTarget === "pickup" ? pickupGoogle ?? "#" : dropoffGoogle ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setNavigationTarget(null)}
+                >
+                  Google Maps
+                </a>
+              )}
+
+              {(navigationTarget === "pickup" ? pickupWaze : dropoffWaze) && (
+                <a
+                  className="moovu-btn moovu-btn-secondary w-full"
+                  href={navigationTarget === "pickup" ? pickupWaze ?? "#" : dropoffWaze ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setNavigationTarget(null)}
+                >
+                  Waze
+                </a>
+              )}
+
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-secondary w-full"
+                onClick={() => setNavigationTarget(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       <div className="moovu-shell">
@@ -1081,48 +1159,24 @@ export default function DriverHomePage() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-3">
-                    {pickupGoogle && (
-                      <a
-                        className="moovu-btn moovu-btn-secondary"
-                        href={pickupGoogle}
-                        target="_blank"
-                        rel="noreferrer"
+                    {currentTrip.status === "assigned" && (pickupGoogle || pickupWaze) && (
+                      <button
+                        type="button"
+                        className="moovu-btn moovu-btn-primary"
+                        onClick={() => setNavigationTarget("pickup")}
                       >
-                        Pickup Google Maps
-                      </a>
+                        Drive to pickup
+                      </button>
                     )}
 
-                    {pickupWaze && (
-                      <a
-                        className="moovu-btn moovu-btn-secondary"
-                        href={pickupWaze}
-                        target="_blank"
-                        rel="noreferrer"
+                    {currentTrip.status === "ongoing" && (dropoffGoogle || dropoffWaze) && (
+                      <button
+                        type="button"
+                        className="moovu-btn moovu-btn-primary"
+                        onClick={() => setNavigationTarget("dropoff")}
                       >
-                        Pickup Waze
-                      </a>
-                    )}
-
-                    {dropoffGoogle && (
-                      <a
-                        className="moovu-btn moovu-btn-secondary"
-                        href={dropoffGoogle}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Dropoff Google Maps
-                      </a>
-                    )}
-
-                    {dropoffWaze && (
-                      <a
-                        className="moovu-btn moovu-btn-secondary"
-                        href={dropoffWaze}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Dropoff Waze
-                      </a>
+                        Drive to destination
+                      </button>
                     )}
                   </div>
 
@@ -1187,6 +1241,28 @@ export default function DriverHomePage() {
                             </div>
                           </div>
                         )}
+
+                        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                          {noShowSecondsLeft == null ? (
+                            "No-show timer starts after the arrival event is recorded."
+                          ) : noShowSecondsLeft > 0 ? (
+                            `Customer no-show can be marked in ${Math.ceil(noShowSecondsLeft / 60)} min.`
+                          ) : (
+                            <div className="space-y-3">
+                              <p className="font-semibold">
+                                Customer no-show is now eligible. No-show fee: R30. Driver payout: R22.
+                              </p>
+                              <button
+                                type="button"
+                                className="moovu-btn bg-amber-600 text-white disabled:opacity-60"
+                                disabled={busy}
+                                onClick={() => markNoShow(currentTrip.id)}
+                              >
+                                Mark customer no-show
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -1361,6 +1437,20 @@ export default function DriverHomePage() {
                             <div className="text-xs text-slate-500">Offer status</div>
                             <div className="mt-1 text-sm font-medium text-slate-900">
                               {offer.offer_status}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl bg-white p-3">
+                            <div className="text-xs text-slate-500">Distance</div>
+                            <div className="mt-1 text-sm font-medium text-slate-900">
+                              {offer.distance_km == null ? "—" : `${Number(offer.distance_km).toFixed(1)} km`}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl bg-white p-3">
+                            <div className="text-xs text-slate-500">Duration</div>
+                            <div className="mt-1 text-sm font-medium text-slate-900">
+                              {offer.duration_min == null ? "—" : `${Math.round(Number(offer.duration_min))} min`}
                             </div>
                           </div>
                         </div>

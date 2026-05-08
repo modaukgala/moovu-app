@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
 import type { PushRole } from "@/lib/push-auth";
+import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
 
 type SendPushParams = {
   userIds?: string[];
@@ -54,10 +55,107 @@ function ensureVapidConfigured() {
   webpush.setVapidDetails(subject, publicKey, privateKey);
 }
 
-export async function sendPushToTargets(params: SendPushParams) {
-  ensureVapidConfigured();
+async function sendFcmToTargets(params: SendPushParams) {
+  const messaging = getFirebaseAdminMessaging();
+  if (!messaging) {
+    return { delivered: 0, removed: 0, failed: 0, failures: [] as PushFailure[] };
+  }
 
   const supabase = getSupabaseAdmin();
+
+  let query = supabase
+    .from("fcm_tokens")
+    .select("id,user_id,role,token")
+    .eq("is_active", true);
+
+  if (params.userIds && params.userIds.length > 0) {
+    query = query.in("user_id", params.userIds);
+  }
+
+  if (params.role) {
+    query = query.eq("role", params.role);
+  }
+
+  const { data: tokens, error } = await query;
+  if (error) {
+    console.error("[fcm] token lookup failed", { error: error.message });
+    return { delivered: 0, removed: 0, failed: 0, failures: [] as PushFailure[] };
+  }
+
+  if (!tokens || tokens.length === 0) {
+    return { delivered: 0, removed: 0, failed: 0, failures: [] as PushFailure[] };
+  }
+
+  let delivered = 0;
+  let removed = 0;
+  let failed = 0;
+  const failures: PushFailure[] = [];
+
+  for (const row of tokens) {
+    try {
+      await messaging.send({
+        token: String(row.token),
+        notification: {
+          title: params.title,
+          body: params.body,
+        },
+        data: {
+          url: params.url || "/",
+          role: params.role || String(row.role || ""),
+        },
+        webpush: {
+          fcmOptions: {
+            link: params.url || "/",
+          },
+        },
+      });
+      delivered += 1;
+    } catch (error: unknown) {
+      const reason = getErrorMessage(error);
+      failed += 1;
+      failures.push({ subscriptionId: String(row.id), reason });
+      console.error("[fcm] send failed", {
+        tokenId: row.id,
+        userId: row.user_id,
+        role: row.role,
+        reason,
+      });
+
+      if (
+        reason.includes("registration-token-not-registered") ||
+        reason.includes("invalid-registration-token")
+      ) {
+        await supabase
+          .from("fcm_tokens")
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq("id", row.id);
+        removed += 1;
+      }
+    }
+  }
+
+  return { delivered, removed, failed, failures };
+}
+
+export async function sendPushToTargets(params: SendPushParams) {
+  const supabase = getSupabaseAdmin();
+  const fcmResult = await sendFcmToTargets(params);
+
+  try {
+    ensureVapidConfigured();
+  } catch (error: unknown) {
+    if (fcmResult.delivered > 0 || fcmResult.failed > 0) {
+      return {
+        ok: true,
+        delivered: fcmResult.delivered,
+        removed: fcmResult.removed,
+        failed: fcmResult.failed,
+        failures: fcmResult.failures,
+        message: "FCM push send finished. Web push skipped because VAPID is not configured.",
+      };
+    }
+    throw error;
+  }
 
   let query = supabase
     .from("push_subscriptions")
@@ -140,10 +238,10 @@ export async function sendPushToTargets(params: SendPushParams) {
 
   return {
     ok: true,
-    delivered,
-    removed,
-    failed,
-    failures,
+    delivered: delivered + fcmResult.delivered,
+    removed: removed + fcmResult.removed,
+    failed: failed + fcmResult.failed,
+    failures: [...failures, ...fcmResult.failures],
     message: "Push send finished.",
   };
 }

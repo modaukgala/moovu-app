@@ -14,6 +14,16 @@ Use `.env.example` as the deployment checklist:
 - `VAPID_SUBJECT`
 - `PUSH_INTERNAL_API_KEY`
 - `NEXT_PUBLIC_SITE_URL`
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_FIREBASE_VAPID_KEY`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY`
 
 Never commit `.env.local` or production secrets.
 
@@ -57,6 +67,18 @@ After generation, wire the typed database into the browser/admin Supabase client
 - Confirm `/api/push/subscribe` validates authenticated user roles before storing role-scoped subscriptions.
 - Use `/api/push/test-self` from the customer, driver, and admin UI to prove each logged-in role can receive a notification on its own device.
 - Keep `PUSH_INTERNAL_API_KEY` server-only; `/api/push/send` must not be called from public browser code.
+- Firebase Cloud Messaging is supported alongside the existing web-push path. Public Firebase client variables may be exposed to the browser, but `FIREBASE_PRIVATE_KEY` and `FIREBASE_CLIENT_EMAIL` must be server-only in Vercel.
+- Apply `docs/fcm-notifications-migration.sql` on staging/production before relying on FCM token storage.
+- The Firebase private key must preserve newlines. In Vercel it can be stored with escaped `\n`; the server helper converts escaped newlines at runtime.
+- Browser/PWA push requires HTTPS in production. iOS push support depends on installed PWA behavior and current Safari limitations. Native Play Store/App Store packaging should use Capacitor with FCM/APNs for fully reliable app notifications.
+
+## Cancellation And No-Show Setup
+
+- Apply `docs/cancellation-management-migration.sql` before relying on full cancellation/no-show fee reporting tables and optional trip columns.
+- The app server calculates fees. Current policy:
+  - free cancellation during the first 2 minutes or before driver dispatch.
+  - late cancellation R15 after driver dispatch, split R10 driver and R5 MOOVU.
+  - no-show R30 after driver arrival plus 5 minutes, split R22 driver and R8 MOOVU.
 
 ## Supabase Storage Setup
 

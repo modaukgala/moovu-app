@@ -28,6 +28,10 @@ type ReportResponse = {
     completedDriverNet: number;
     inProgressTrips: number;
     inProgressValue: number;
+    lateCancellationFees?: number;
+    noShowFees?: number;
+    cancellationDriverPayouts?: number;
+    cancellationMoovuRevenue?: number;
   };
   byDriver: Array<{
     driver_id: string;
@@ -36,6 +40,7 @@ type ReportResponse = {
     completed_revenue: number;
     completed_commission: number;
     completed_driver_net: number;
+    cancellation_driver_payouts?: number;
   }>;
 };
 
@@ -129,6 +134,10 @@ export default function AdminReportsPage() {
         completedDriverNet: 0,
         inProgressTrips: 0,
         inProgressValue: 0,
+        lateCancellationFees: 0,
+        noShowFees: 0,
+        cancellationDriverPayouts: 0,
+        cancellationMoovuRevenue: 0,
       }
     );
   }, [data]);
@@ -138,7 +147,7 @@ export default function AdminReportsPage() {
       <div>
         <h1 className="text-3xl font-semibold">Driver Earnings Report</h1>
         <p className="opacity-70 mt-1">
-          Completed = cash collected by driver. In-progress = active trips not yet completed.
+          Completed trips use normal 9.5% MOOVU commission. Cancellation and no-show fees are fixed split payouts, not commission debt.
         </p>
       </div>
 
@@ -199,6 +208,26 @@ export default function AdminReportsPage() {
             <div className="text-sm opacity-70">In-progress value</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.inProgressValue)}</div>
           </div>
+
+          <div className="border rounded-2xl p-4">
+            <div className="text-sm opacity-70">Late cancel fees</div>
+            <div className="text-2xl font-semibold mt-2">{money(totals.lateCancellationFees)}</div>
+          </div>
+
+          <div className="border rounded-2xl p-4">
+            <div className="text-sm opacity-70">No-show fees</div>
+            <div className="text-2xl font-semibold mt-2">{money(totals.noShowFees)}</div>
+          </div>
+
+          <div className="border rounded-2xl p-4">
+            <div className="text-sm opacity-70">Driver fee payouts</div>
+            <div className="text-2xl font-semibold mt-2">{money(totals.cancellationDriverPayouts)}</div>
+          </div>
+
+          <div className="border rounded-2xl p-4">
+            <div className="text-sm opacity-70">MOOVU fee revenue</div>
+            <div className="text-2xl font-semibold mt-2">{money(totals.cancellationMoovuRevenue)}</div>
+          </div>
         </div>
       </section>
 
@@ -214,7 +243,7 @@ export default function AdminReportsPage() {
                 <div className="font-medium">{row.driver_name}</div>
                 <div className="text-xs opacity-60 mt-1">{row.driver_id}</div>
                 <div className="text-sm opacity-70 mt-2">
-                  Trips: {row.completed_trips} - Revenue: {money(row.completed_revenue)} - Commission: {money(row.completed_commission)} - Driver Net: {money(row.completed_driver_net)}
+                  Trips: {row.completed_trips} - Revenue: {money(row.completed_revenue)} - Commission: {money(row.completed_commission)} - Driver Net: {money(row.completed_driver_net)} - Fee Payouts: {money(row.cancellation_driver_payouts)}
                 </div>
               </div>
             ))}

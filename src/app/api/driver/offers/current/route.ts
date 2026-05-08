@@ -51,7 +51,7 @@ export async function GET(req: Request) {
 
     const { data: trips, error } = await supabaseAdmin
       .from("trips")
-      .select("id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,fare_amount,payment_method")
+      .select("id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount,payment_method")
       .eq("driver_id", driverId)
       .eq("offer_status", "pending")
       .eq("status", "offered")
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
 
     const { data: fresh, error: fErr } = await supabaseAdmin
       .from("trips")
-      .select("id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,fare_amount,payment_method")
+      .select("id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount,payment_method")
       .eq("driver_id", driverId)
       .eq("offer_status", "pending")
       .eq("status", "offered")

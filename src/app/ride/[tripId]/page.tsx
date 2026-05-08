@@ -167,6 +167,7 @@ export default function RideTrackingPage() {
   const [cancelReason, setCancelReason] =
     useState<(typeof CANCEL_REASONS)[number]>("Driver is taking too long");
   const [mapError, setMapError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -372,6 +373,14 @@ export default function RideTrackingPage() {
   }, [loadTrip]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
     if (!apiKey) {
       const timer = window.setTimeout(() => {
@@ -457,6 +466,17 @@ export default function RideTrackingPage() {
     return trip.status !== "completed" && trip.status !== "cancelled" && trip.status !== "ongoing";
   }, [trip]);
 
+  const cancellationPreview = useMemo(() => {
+    if (!trip) return { fee: 0, label: "Cancel ride for free" };
+    const createdMs = trip.created_at ? new Date(trip.created_at).getTime() : NaN;
+    const insideFreeWindow = Number.isFinite(createdMs) && nowMs - createdMs <= 2 * 60 * 1000;
+    const fee = !insideFreeWindow && (trip.status === "assigned" || trip.status === "arrived") ? 15 : 0;
+    return {
+      fee,
+      label: fee > 0 ? `Confirm cancellation fee R${fee}` : "Cancel ride for free",
+    };
+  }, [nowMs, trip]);
+
   const canShare = useMemo(() => {
     if (!trip) return false;
     return trip.status === "ongoing" && !!trip.start_otp_verified;
@@ -466,6 +486,11 @@ export default function RideTrackingPage() {
     if (!trip?.driver_id) return false;
     return ["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(trip.status);
   }, [trip]);
+
+  const canShowDriverDetails = useMemo(() => {
+    if (!driver || !trip) return false;
+    return ["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(trip.status);
+  }, [driver, trip]);
 
   const carText = useMemo(() => {
     if (!driver) return "--";
@@ -689,7 +714,9 @@ export default function RideTrackingPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-sm text-slate-500">Driver</div>
-                  <div className="mt-2 text-2xl font-black text-slate-950">{driverName}</div>
+                  <div className="mt-2 text-2xl font-black text-slate-950">
+                    {canShowDriverDetails ? driverName : "Searching for driver"}
+                  </div>
                 </div>
                 <div className={statusChipClass(trip.status)}>
                   <span className="moovu-chip-dot" />
@@ -697,24 +724,30 @@ export default function RideTrackingPage() {
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-xs text-slate-500">Phone</div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{displayValue(driver?.phone)}</div>
+              {!canShowDriverDetails ? (
+                <div className="mt-4 rounded-2xl bg-[#eaf3ff] p-4 text-sm font-semibold text-[#244f9e]">
+                  Driver details, vehicle, phone, and chat unlock after a driver accepts your trip.
                 </div>
+              ) : (
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Phone</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">{displayValue(driver?.phone)}</div>
+                  </div>
 
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-xs text-slate-500">Vehicle</div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{carText}</div>
-                </div>
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Vehicle</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">{carText}</div>
+                  </div>
 
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-xs text-slate-500">Registration</div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">
-                    {displayValue(driver?.vehicle_registration)}
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Registration</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">
+                      {displayValue(driver?.vehicle_registration)}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {tracking && (
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -734,7 +767,7 @@ export default function RideTrackingPage() {
                 </div>
               )}
 
-              {driver?.phone && (
+              {canShowDriverDetails && driver?.phone && (
                 <a href={`tel:${driver.phone}`} className="moovu-btn moovu-btn-primary mt-4 w-full">
                   Call driver
                 </a>
@@ -944,8 +977,14 @@ export default function RideTrackingPage() {
                   onClick={cancelTrip}
                   className="moovu-btn bg-red-600 text-white disabled:opacity-60"
                 >
-                  {cancelBusy ? "Cancelling..." : "Cancel trip"}
+                  {cancelBusy ? "Cancelling..." : cancellationPreview.label}
                 </button>
+
+                <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                  {cancellationPreview.fee > 0
+                    ? "A late cancellation fee applies because a driver has started travelling to your pickup."
+                    : "Cancellation is currently free under the MOOVU cancellation policy."}
+                </div>
               </div>
             )}
 

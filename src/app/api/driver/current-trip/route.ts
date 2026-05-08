@@ -1,9 +1,27 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { noShowEligibleAt } from "@/lib/finance/cancellationFees";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
 }
+
+type DriverCurrentTripResponse = {
+  id: string;
+  status: string;
+  driver_id: string | null;
+  pickup_address: string | null;
+  dropoff_address: string | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  dropoff_lat: number | null;
+  dropoff_lng: number | null;
+  fare_amount: number | null;
+  payment_method: string | null;
+  created_at: string | null;
+  driver_arrived_at?: string | null;
+  no_show_eligible_at?: string | null;
+};
 
 export async function GET(req: Request) {
   try {
@@ -86,9 +104,27 @@ export async function GET(req: Request) {
       );
     }
 
+    let enrichedTrip = (trip as DriverCurrentTripResponse | null) ?? null;
+
+    if (enrichedTrip?.id && enrichedTrip.status === "arrived") {
+      const { data: arrivedEvents } = await supabaseAdmin
+        .from("trip_events")
+        .select("created_at")
+        .eq("trip_id", enrichedTrip.id)
+        .eq("event_type", "driver_arrived")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      enrichedTrip = {
+        ...enrichedTrip,
+        driver_arrived_at: arrivedEvents?.[0]?.created_at ?? null,
+        no_show_eligible_at: noShowEligibleAt(arrivedEvents?.[0]?.created_at ?? null),
+      };
+    }
+
     return NextResponse.json({
       ok: true,
-      trip: trip ?? null,
+      trip: enrichedTrip,
     });
   } catch (error: unknown) {
     return NextResponse.json(

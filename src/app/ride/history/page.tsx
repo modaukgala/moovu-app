@@ -21,6 +21,14 @@ type RiderTrip = {
   created_at: string | null;
   driver_id: string | null;
   cancel_reason?: string | null;
+  cancellation_reason?: string | null;
+  cancellation_type?: string | null;
+  cancelled_by?: string | null;
+  cancelled_at?: string | null;
+  cancellation_fee_amount?: number | null;
+  cancellation_driver_amount?: number | null;
+  cancellation_moovu_amount?: number | null;
+  cancellation_policy_code?: string | null;
 };
 
 type TripsResponse = {
@@ -53,6 +61,18 @@ function formatDate(value: string | null | undefined) {
 
 function filterLabel(value: string) {
   return value === "all" ? "All" : value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function cancellationLabel(trip: RiderTrip) {
+  const reason = trip.cancellation_reason || trip.cancel_reason || "Cancelled";
+  const fee = Number(trip.cancellation_fee_amount ?? 0);
+  if (trip.cancellation_type === "no_show") {
+    return `No-show fee: ${money(fee)}. Reason: ${reason}.`;
+  }
+  if (fee > 0) {
+    return `Late cancellation fee: ${money(fee)}. Reason: ${reason}.`;
+  }
+  return `Cancelled for free. Reason: ${reason}.`;
 }
 
 export default function RiderHistoryPage() {
@@ -221,9 +241,14 @@ export default function RiderHistoryPage() {
                     </div>
                   </div>
 
-                  {trip.cancel_reason ? (
+                  {trip.status === "cancelled" || trip.cancel_reason || trip.cancellation_reason ? (
                     <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-3 text-sm font-semibold text-red-700">
-                      Cancellation reason: {trip.cancel_reason}
+                      {cancellationLabel(trip)}
+                      {trip.cancelled_at ? (
+                        <span className="mt-1 block text-xs text-red-600">
+                          Recorded {formatDate(trip.cancelled_at)}
+                        </span>
+                      ) : null}
                     </div>
                   ) : null}
 

@@ -6,12 +6,17 @@ import {
   legalVersionMatches,
 } from "@/lib/legal";
 
+function isMissingEmailColumn(error: { message?: string } | null | undefined) {
+  return !!error?.message?.toLowerCase().includes("email");
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
     const firstName = String(body?.first_name ?? "").trim();
     const lastName = String(body?.last_name ?? "").trim();
+    const customerEmail = String(body?.email ?? "").trim().toLowerCase();
     const normalizedPhone = normalizePhoneZA(body?.phone);
     const password = String(body?.password ?? "");
     const acceptedTerms = body?.acceptedTerms === true;
@@ -27,6 +32,13 @@ export async function POST(req: Request) {
     if (!normalizedPhone) {
       return NextResponse.json(
         { ok: false, error: "Valid cellphone number is required." },
+        { status: 400 }
+      );
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      return NextResponse.json(
+        { ok: false, error: "A valid email address is required." },
         { status: 400 }
       );
     }
@@ -79,6 +91,19 @@ export async function POST(req: Request) {
       );
     }
 
+    const existingCustomerEmailUser = existingUsers.users.find((u) => {
+      const authEmail = String(u.email ?? "").toLowerCase();
+      const metadataEmail = String(u.user_metadata?.customer_email ?? "").toLowerCase();
+      return authEmail === customerEmail || metadataEmail === customerEmail;
+    });
+
+    if (existingCustomerEmailUser) {
+      return NextResponse.json(
+        { ok: false, error: "A customer account already exists for this email address." },
+        { status: 409 }
+      );
+    }
+
     const existingAuthUser = existingUsers.users.find(
       (u) => (u.email || "").toLowerCase() === email.toLowerCase()
     );
@@ -96,6 +121,7 @@ export async function POST(req: Request) {
             ...(existingAuthUser.user_metadata || {}),
             role: "customer",
             phone: normalizedPhone,
+            customer_email: customerEmail,
             first_name: firstName,
             last_name: lastName,
             ...legalMetadata,
@@ -118,6 +144,7 @@ export async function POST(req: Request) {
           user_metadata: {
             role: "customer",
             phone: normalizedPhone,
+            customer_email: customerEmail,
             first_name: firstName,
             last_name: lastName,
             ...legalMetadata,
@@ -141,19 +168,48 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error: customerError } = await supabase.from("customers").upsert(
-      {
-        auth_user_id: authUserId,
-        first_name: firstName,
-        last_name: lastName,
-        phone: normalizedPhone,
-        normalized_phone: normalizedPhone,
-        status: "active",
-      },
-      {
-        onConflict: "auth_user_id",
+    const customerPayload = {
+      auth_user_id: authUserId,
+      first_name: firstName,
+      last_name: lastName,
+      email: customerEmail,
+      phone: normalizedPhone,
+      normalized_phone: normalizedPhone,
+      status: "active",
+    };
+
+    const { error: customerError } = await supabase.from("customers").upsert(customerPayload, {
+      onConflict: "auth_user_id",
+    });
+
+    if (customerError && isMissingEmailColumn(customerError)) {
+      const legacyPayload = {
+        auth_user_id: customerPayload.auth_user_id,
+        first_name: customerPayload.first_name,
+        last_name: customerPayload.last_name,
+        phone: customerPayload.phone,
+        normalized_phone: customerPayload.normalized_phone,
+        status: customerPayload.status,
+      };
+      const { error: legacyCustomerError } = await supabase.from("customers").upsert(
+        legacyPayload,
+        {
+          onConflict: "auth_user_id",
+        }
+      );
+
+      if (legacyCustomerError) {
+        return NextResponse.json(
+          { ok: false, error: legacyCustomerError.message },
+          { status: 500 }
+        );
       }
-    );
+
+      return NextResponse.json({
+        ok: true,
+        warning: "Customer created. Run the customer email SQL migration to persist customers.email.",
+      });
+    }
 
     if (customerError) {
       return NextResponse.json(

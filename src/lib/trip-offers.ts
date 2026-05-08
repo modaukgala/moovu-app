@@ -10,7 +10,8 @@ const supabaseAdmin = createClient(
   { auth: { persistSession: false } }
 );
 
-const OFFER_EXPIRY_SECONDS = 20;
+export const OFFER_ACCEPT_DEADLINE_SECONDS = 15;
+export const OFFER_ESCALATION_SECONDS = 6;
 
 type EligibleDriverRow = {
   id: string;
@@ -105,6 +106,11 @@ async function incrementDriverOfferMissed(driverId: string) {
   );
 }
 
+function logOfferTableError(context: string, error: { message?: string } | null | undefined) {
+  if (!error?.message) return;
+  console.error(`[dispatch] ${context}`, { reason: error.message });
+}
+
 export async function expirePendingOfferIfNeeded(tripId: string) {
   const { data: trip, error } = await supabaseAdmin
     .from("trips")
@@ -145,6 +151,19 @@ export async function expirePendingOfferIfNeeded(tripId: string) {
     try {
       await incrementDriverOfferMissed(trip.driver_id);
     } catch {}
+
+    const { error: offerUpdateError } = await supabaseAdmin
+      .from("driver_trip_offers")
+      .update({
+        status: "expired",
+        responded_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("trip_id", tripId)
+      .eq("driver_id", trip.driver_id)
+      .in("status", ["pending", "shown"]);
+
+    logOfferTableError("failed to mark offer expired", offerUpdateError);
   }
 
   const { error: updateError } = await supabaseAdmin
@@ -313,7 +332,8 @@ export async function offerNextEligibleDriver(
     };
   }
 
-  const expiresAt = new Date(Date.now() + OFFER_EXPIRY_SECONDS * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + OFFER_ACCEPT_DEADLINE_SECONDS * 1000).toISOString();
+  const escalatesAt = new Date(Date.now() + OFFER_ESCALATION_SECONDS * 1000).toISOString();
 
   const { error: markBusyError } = await supabaseAdmin
     .from("drivers")
@@ -350,11 +370,28 @@ export async function offerNextEligibleDriver(
 
   await incrementDriverOfferReceived(chosen.id);
 
+  const { error: offerInsertError } = await supabaseAdmin.from("driver_trip_offers").insert(
+    {
+      trip_id: trip.id,
+      driver_id: chosen.id,
+      status: "shown",
+      offered_at: new Date().toISOString(),
+      visible_until: escalatesAt,
+      escalates_at: escalatesAt,
+      accept_deadline_at: expiresAt,
+      distance_km: chosen.distanceKm,
+      dispatch_score: chosen.dispatchScore,
+      updated_at: new Date().toISOString(),
+    }
+  );
+
+  logOfferTableError("failed to create driver_trip_offers row", offerInsertError);
+
   try {
     await supabaseAdmin.from("trip_events").insert({
       trip_id: trip.id,
       event_type: "offer_sent",
-      message: `Offered to driver ${chosen.id} (expires in ${OFFER_EXPIRY_SECONDS}s, about ${chosen.distanceKm} km away, score ${chosen.dispatchScore})`,
+      message: `Offered to driver ${chosen.id} (accept deadline ${OFFER_ACCEPT_DEADLINE_SECONDS}s, escalation target ${OFFER_ESCALATION_SECONDS}s, about ${chosen.distanceKm} km away, score ${chosen.dispatchScore})`,
       old_status: trip.status,
       new_status: "offered",
     });

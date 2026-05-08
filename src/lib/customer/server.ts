@@ -31,6 +31,10 @@ export function readBearerToken(req: Request) {
   return authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
 }
 
+function isMissingEmailColumn(error: { message?: string } | null | undefined) {
+  return !!error?.message?.toLowerCase().includes("email");
+}
+
 async function ensureCustomerProfile(params: {
   supabaseAdmin: ReturnType<typeof createServiceSupabase>;
   user: {
@@ -44,6 +48,7 @@ async function ensureCustomerProfile(params: {
   const userMeta = user.user_metadata || {};
   const firstName = String(userMeta.first_name ?? "").trim();
   const lastName = String(userMeta.last_name ?? "").trim();
+  const customerEmail = String(userMeta.customer_email ?? "").trim().toLowerCase();
   const phoneFromMeta = normalizePhoneZA(
     typeof userMeta.phone === "string" ? userMeta.phone : null
   );
@@ -61,23 +66,59 @@ async function ensureCustomerProfile(params: {
     };
   }
 
+  const profilePayload = {
+    auth_user_id: user.id,
+    first_name: firstName,
+    last_name: lastName,
+    email: customerEmail || null,
+    phone: normalizedPhone,
+    normalized_phone: normalizedPhone,
+    status: "active",
+  };
+
   const { data: inserted, error: insertError } = await supabaseAdmin
     .from("customers")
     .upsert(
-      {
-        auth_user_id: user.id,
-        first_name: firstName,
-        last_name: lastName,
-        phone: normalizedPhone,
-        normalized_phone: normalizedPhone,
-        status: "active",
-      },
+      profilePayload,
       {
         onConflict: "auth_user_id",
       }
     )
     .select("*")
     .single();
+
+  if (insertError && isMissingEmailColumn(insertError)) {
+    const legacyProfilePayload = {
+      auth_user_id: profilePayload.auth_user_id,
+      first_name: profilePayload.first_name,
+      last_name: profilePayload.last_name,
+      phone: profilePayload.phone,
+      normalized_phone: profilePayload.normalized_phone,
+      status: profilePayload.status,
+    };
+    const { data: legacyInserted, error: legacyInsertError } = await supabaseAdmin
+      .from("customers")
+      .upsert(
+        legacyProfilePayload,
+        {
+          onConflict: "auth_user_id",
+        }
+      )
+      .select("*")
+      .single();
+
+    if (legacyInsertError || !legacyInserted) {
+      return {
+        ok: false as const,
+        error: legacyInsertError?.message || "Failed to rebuild customer profile.",
+      };
+    }
+
+    return {
+      ok: true as const,
+      customer: legacyInserted,
+    };
+  }
 
   if (insertError || !inserted) {
     return {

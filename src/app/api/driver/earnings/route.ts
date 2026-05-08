@@ -28,6 +28,17 @@ type TripEventRow = {
   created_at: string;
 };
 
+type CancellationFeeRow = {
+  id: string;
+  trip_id: string;
+  fee_type: string;
+  fee_amount: number | string | null;
+  driver_amount: number | string | null;
+  moovu_amount: number | string | null;
+  reason: string | null;
+  created_at: string | null;
+};
+
 type CompletedTripWithTimestamp = CompletedTripRow & {
   completed_at: string | null;
 };
@@ -291,6 +302,25 @@ export async function GET(req: Request) {
       )
       .slice(0, 50);
 
+    const { data: cancellationFees } = await supabaseAdmin
+      .from("trip_cancellation_fees")
+      .select("id,trip_id,fee_type,fee_amount,driver_amount,moovu_amount,reason,created_at")
+      .eq("driver_id", driverId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    const typedCancellationFees = (cancellationFees ?? []) as CancellationFeeRow[];
+    const cancellationDriverEarnings = typedCancellationFees.reduce(
+      (sum, row) => sum + num(row.driver_amount),
+      0
+    );
+    const lateCancellationDriverEarnings = typedCancellationFees
+      .filter((row) => row.fee_type === "late_cancel")
+      .reduce((sum, row) => sum + num(row.driver_amount), 0);
+    const noShowDriverEarnings = typedCancellationFees
+      .filter((row) => row.fee_type === "no_show")
+      .reduce((sum, row) => sum + num(row.driver_amount), 0);
+
     return NextResponse.json({
       ok: true,
       earnings: {
@@ -300,6 +330,10 @@ export async function GET(req: Request) {
         subscription_payments: subscriptionPayments ?? [],
         payment_requests: paymentRequests ?? [],
         recent_completed_trips: normalizedTrips,
+        cancellation_fees: typedCancellationFees,
+        cancellation_driver_earnings: cancellationDriverEarnings,
+        late_cancellation_driver_earnings: lateCancellationDriverEarnings,
+        no_show_driver_earnings: noShowDriverEarnings,
       },
     });
   } catch (error: unknown) {

@@ -63,8 +63,6 @@ export default function HomePage() {
     [isLoggedIn],
   );
 
-  const accountHref = isLoggedIn ? "/book" : "/customer/auth?next=/book";
-
   return (
     <main className="min-h-svh bg-[#f6fafc] pb-[calc(94px+env(safe-area-inset-bottom))] text-[#050505]">
       <section className="mx-auto flex min-h-svh w-full max-w-6xl flex-col px-4 pt-[calc(16px+env(safe-area-inset-top))] sm:px-6 lg:px-8">
@@ -81,20 +79,12 @@ export default function HomePage() {
             </span>
           </Link>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/ride/history"
-              className="hidden min-h-11 items-center rounded-full border border-[#d7e2ea] bg-white px-4 text-sm font-extrabold text-[#050505] shadow-sm sm:inline-flex"
-            >
-              Trips
-            </Link>
-            <Link
-              href={accountHref}
-              className="inline-flex min-h-11 items-center rounded-full border border-[#d7e2ea] bg-white px-4 text-sm font-extrabold text-[#050505] shadow-sm"
-            >
-              {isLoggedIn ? "Book" : "Sign in"}
-            </Link>
-          </div>
+          <Link
+            href="/ride/history"
+            className="inline-flex min-h-11 items-center rounded-full border border-[#d7e2ea] bg-white px-4 text-sm font-extrabold text-[#050505] shadow-sm"
+          >
+            Trips
+          </Link>
         </header>
 
         <div className="grid flex-1 items-start gap-5 py-4 lg:grid-cols-[minmax(0,0.88fr)_minmax(430px,1.12fr)] lg:items-center lg:gap-8 lg:py-8">

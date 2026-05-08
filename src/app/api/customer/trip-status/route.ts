@@ -58,6 +58,14 @@ type TripEventRow = {
   created_at: string;
 };
 
+const DRIVER_VISIBLE_STATUSES = new Set([
+  "assigned",
+  "arrived",
+  "ongoing",
+  "completed",
+  "cancelled",
+]);
+
 function buildTrackingState(params: {
   trip: CustomerTripStatusRow;
   driver: CustomerTripDriverRow | null;
@@ -154,7 +162,7 @@ export async function GET(req: Request) {
 
     const typedTrip = trip as CustomerTripStatusRow;
     let driver: CustomerTripDriverRow | null = null;
-    if (trip.driver_id) {
+    if (trip.driver_id && DRIVER_VISIBLE_STATUSES.has(trip.status)) {
       const { data: driverRow } = await auth.supabaseAdmin
         .from("drivers")
         .select(`
