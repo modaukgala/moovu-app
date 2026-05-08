@@ -35,6 +35,29 @@ function getPushErrorDetails(error: unknown) {
   };
 }
 
+function getFirebaseErrorCode(error: unknown) {
+  if (typeof error !== "object" || error === null) return "";
+  const record = error as Record<string, unknown>;
+  return typeof record.code === "string" ? record.code : "";
+}
+
+function getSiteOrigin() {
+  const configured =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "https://moovurides.co.za";
+
+  return configured.startsWith("http") ? configured : `https://${configured}`;
+}
+
+function absoluteAppUrl(pathOrUrl: string | undefined) {
+  try {
+    return new URL(pathOrUrl || "/", getSiteOrigin()).href;
+  } catch {
+    return new URL("/", getSiteOrigin()).href;
+  }
+}
+
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -92,43 +115,50 @@ async function sendFcmToTargets(params: SendPushParams) {
   const failures: PushFailure[] = [];
 
   for (const row of tokens) {
+    const relativeUrl = params.url || "/";
+    const clickUrl = absoluteAppUrl(relativeUrl);
+
     try {
       await messaging.send({
         token: String(row.token),
         data: {
           title: params.title,
           body: params.body,
-          url: params.url || "/",
+          url: relativeUrl,
           role: params.role || String(row.role || ""),
         },
         webpush: {
           notification: {
             title: params.title,
             body: params.body,
-            icon: "/icon-192.png",
-            badge: "/icon-192.png",
+            icon: absoluteAppUrl("/icon-192.png"),
+            badge: absoluteAppUrl("/icon-192.png"),
             data: {
-              url: params.url || "/",
+              url: relativeUrl,
             },
           },
           fcmOptions: {
-            link: params.url || "/",
+            link: clickUrl,
           },
         },
       });
       delivered += 1;
     } catch (error: unknown) {
       const reason = getErrorMessage(error);
+      const code = getFirebaseErrorCode(error);
       failed += 1;
       failures.push({ subscriptionId: String(row.id), reason });
       console.error("[fcm] send failed", {
         tokenId: row.id,
         userId: row.user_id,
         role: row.role,
+        code,
         reason,
       });
 
       if (
+        code === "messaging/registration-token-not-registered" ||
+        code === "messaging/invalid-registration-token" ||
         reason.includes("registration-token-not-registered") ||
         reason.includes("invalid-registration-token")
       ) {

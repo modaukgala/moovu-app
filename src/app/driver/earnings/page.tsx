@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -338,7 +339,7 @@ export default function DriverEarningsPage() {
   }
 
   return (
-    <main className="moovu-page text-black">
+    <main className="moovu-page moovu-driver-shell text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-shell space-y-6">
@@ -738,6 +739,7 @@ export default function DriverEarningsPage() {
           )}
         </section>
       </div>
+      <DriverBottomNav />
     </main>
   );
 }

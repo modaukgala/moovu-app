@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import LoadingState from "@/components/ui/LoadingState";
@@ -294,7 +295,7 @@ export default function DriverCompleteProfilePage() {
   }
 
   return (
-    <main className="moovu-page text-black">
+    <main className="moovu-page moovu-driver-shell text-black">
       <div className="moovu-shell max-w-5xl space-y-6">
         <div className="moovu-card p-5 sm:p-6">
           <div className="moovu-section-title">Driver onboarding</div>
@@ -499,6 +500,7 @@ export default function DriverCompleteProfilePage() {
           </div>
         </section>
       </div>
+      <DriverBottomNav />
     </main>
   );
 }

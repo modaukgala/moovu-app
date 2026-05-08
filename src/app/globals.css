@@ -1575,6 +1575,17 @@ tr:last-child td {
   background: var(--moovu-primary);
 }
 
+.moovu-driver-shell {
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
+}
+
+.moovu-driver-bottom-nav {
+  border-color: rgba(207, 228, 255, 0.95);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(239, 247, 255, 0.95)),
+    #fff;
+}
+
 .moovu-app-card {
   border: 1px solid var(--moovu-border);
   border-radius: 28px;

@@ -75,6 +75,19 @@ export async function POST(req: Request) {
       url: role === "driver" ? "/driver" : role === "admin" ? "/admin" : "/book",
     });
 
+    if (!result.ok || result.delivered <= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            result.message ||
+            "Notification token was saved, but no test notification was delivered.",
+          result,
+        },
+        { status: 424 }
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       result,

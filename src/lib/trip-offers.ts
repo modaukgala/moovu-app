@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { scoreDriverForTrip } from "@/lib/dispatch/driverScoring";
 import { rebuildDriverQualityMetrics } from "@/lib/quality/rebuildDriverQualityMetrics";
-import { sendPushToTargets } from "@/lib/push-server";
+import { sendPushSafe } from "@/lib/push-server";
 import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
 
 const supabaseAdmin = createClient(
@@ -404,15 +404,13 @@ export async function offerNextEligibleDriver(
     .maybeSingle();
 
   if (driverAccount?.user_id) {
-    try {
-      await sendPushToTargets({
-        userIds: [driverAccount.user_id],
-        role: "driver",
-        title: "New trip offer",
-        body: `Pickup at ${trip.pickup_address ?? "pickup"} - Destination ${trip.dropoff_address ?? "destination"}`,
-        url: "/driver",
-      });
-    } catch {}
+    await sendPushSafe({
+      userIds: [driverAccount.user_id],
+      role: "driver",
+      title: "New trip offer",
+      body: `Pickup at ${trip.pickup_address ?? "pickup"} - Destination ${trip.dropoff_address ?? "destination"}`,
+      url: "/driver",
+    });
   }
 
   return {

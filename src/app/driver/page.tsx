@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -891,7 +892,7 @@ export default function DriverHomePage() {
   }
 
   return (
-    <main className="moovu-page text-black">
+    <main className="moovu-page moovu-driver-shell text-black">
       {driverActionError && (
         <CenteredMessageBox
           title="Action needs attention"
@@ -1529,6 +1530,8 @@ export default function DriverHomePage() {
           />
         </div>
       )}
+
+      <DriverBottomNav />
     </main>
   );
 }

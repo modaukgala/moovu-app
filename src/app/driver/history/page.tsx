@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -116,7 +117,7 @@ export default function DriverHistoryPage() {
   }
 
   return (
-    <main className="moovu-page text-black">
+    <main className="moovu-page moovu-driver-shell text-black">
       <div className="moovu-shell space-y-6">
         <div className="moovu-card p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -234,6 +235,7 @@ export default function DriverHistoryPage() {
           )}
         </section>
       </div>
+      <DriverBottomNav />
     </main>
   );
 }

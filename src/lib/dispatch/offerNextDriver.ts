@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { sendPushToTargets } from "@/lib/push-server";
+import { sendPushSafe } from "@/lib/push-server";
 import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
 
 type DriverRow = {
@@ -232,15 +232,13 @@ export async function offerNextDriver(params: {
     .maybeSingle();
 
   if (driverAccount?.user_id) {
-    try {
-      await sendPushToTargets({
-        userIds: [driverAccount.user_id],
-        role: "driver",
-        title: "New trip offer",
-        body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
-        url: "/driver",
-      });
-    } catch {}
+    await sendPushSafe({
+      userIds: [driverAccount.user_id],
+      role: "driver",
+      title: "New trip offer",
+      body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
+      url: "/driver",
+    });
   }
 
   return {

@@ -64,16 +64,19 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
   const [msg, setMsg] = useState("");
   const [canRequest, setCanRequest] = useState(true);
   const appType = useMemo(() => getMoovuAppType(role), [role]);
-  const savedMarkerKey = useMemo(() => `moovu:push-enabled:${role}:${appType}`, [appType, role]);
+  const markerKeyFor = useCallback(
+    (userId: string) => `moovu:push-enabled:${userId}:${role}:${appType}`,
+    [appType, role]
+  );
 
   const markSaved = useCallback(
-    (message = "Notifications enabled successfully.") => {
-      setSavedMarker(savedMarkerKey);
+    (userId: string, message = "Notifications enabled successfully.") => {
+      setSavedMarker(markerKeyFor(userId));
       setMsg(message);
       setSaved(true);
       onEnabled?.();
     },
-    [onEnabled, savedMarkerKey]
+    [markerKeyFor, onEnabled]
   );
 
   const registerFcm = useCallback(async (accessToken: string) => {
@@ -113,6 +116,22 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
     return true;
   }, [appType, role]);
 
+  const sendSelfTest = useCallback(async (accessToken: string) => {
+    const testRes = await fetch("/api/push/test-self", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ role }),
+    });
+
+    const testJson = await testRes.json().catch(() => null);
+    if (!testRes.ok || !testJson?.ok) {
+      throw new Error(testJson?.error || "Subscription saved, but the test notification did not deliver.");
+    }
+  }, [role]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -146,20 +165,22 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
 
         const accessToken = session?.access_token;
         if (!accessToken) {
-          if (getSavedMarker(savedMarkerKey)) {
-            markSaved("Push enabled");
-            return;
-          }
-
           setMsg("Notifications are allowed. Please log in again to save this device.");
           return;
         }
 
+        const userId = session.user.id;
+        const alreadySavedForUser = getSavedMarker(markerKeyFor(userId));
         const fcmSaved = await registerFcm(accessToken).catch(() => false);
         if (cancelled) return;
 
         if (fcmSaved) {
-          markSaved("Push enabled");
+          markSaved(userId, "Push enabled");
+          return;
+        }
+
+        if (alreadySavedForUser) {
+          markSaved(userId, "Push enabled");
           return;
         }
 
@@ -196,7 +217,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         if (cancelled) return;
 
         if (subscribeRes.ok && subscribeJson?.ok) {
-          markSaved("Push enabled");
+          markSaved(userId, "Push enabled");
           return;
         }
 
@@ -213,7 +234,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
     return () => {
       cancelled = true;
     };
-  }, [markSaved, registerFcm, role, savedMarkerKey]);
+  }, [markSaved, markerKeyFor, registerFcm, role]);
 
   async function handleClick() {
     try {
@@ -235,6 +256,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         setMsg("Missing access token. Please log in again.");
         return;
       }
+      const userId = session.user.id;
 
       if (!("Notification" in window)) {
         setCanRequest(false);
@@ -263,7 +285,8 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
       }
 
       if (fcmSaved) {
-        markSaved();
+        await sendSelfTest(accessToken);
+        markSaved(userId);
         return;
       }
 
@@ -309,23 +332,9 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         return;
       }
 
-      const testRes = await fetch("/api/push/test-self", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ role }),
-      });
+      await sendSelfTest(accessToken);
 
-      const testJson = await testRes.json().catch(() => null);
-
-      if (!testRes.ok || !testJson?.ok) {
-        setMsg(testJson?.error || "Subscription saved, but test notification failed.");
-        return;
-      }
-
-      markSaved();
+      markSaved(userId);
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : "Failed to enable notifications.");
     } finally {
