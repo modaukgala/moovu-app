@@ -901,38 +901,46 @@ export default function DriverHomePage() {
       )}
 
       {navigationTarget && (
-        <div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/45 p-4">
-          <section className="w-full max-w-sm rounded-[30px] border border-[var(--moovu-border)] bg-white p-5 shadow-2xl">
+        <div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <section className="moovu-driver-nav-sheet w-full max-w-sm">
             <div className="moovu-section-title">Open navigation</div>
-            <h2 className="mt-2 text-2xl font-black text-slate-950">
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
               {navigationTarget === "pickup" ? "Drive to pickup" : "Drive to destination"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Choose your preferred navigation app for this trip leg.
+              Choose your preferred map app for this trip leg.
             </p>
 
             <div className="mt-5 grid gap-3">
               {(navigationTarget === "pickup" ? pickupGoogle : dropoffGoogle) && (
                 <a
-                  className="moovu-btn moovu-btn-primary w-full"
+                  className="moovu-nav-choice"
                   href={navigationTarget === "pickup" ? pickupGoogle ?? "#" : dropoffGoogle ?? "#"}
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setNavigationTarget(null)}
                 >
-                  Google Maps
+                  <span className="moovu-nav-choice-icon">G</span>
+                  <span>
+                    <span className="block text-sm font-black text-slate-950">Google Maps</span>
+                    <span className="block text-xs font-semibold text-slate-500">Open turn-by-turn directions</span>
+                  </span>
                 </a>
               )}
 
               {(navigationTarget === "pickup" ? pickupWaze : dropoffWaze) && (
                 <a
-                  className="moovu-btn moovu-btn-secondary w-full"
+                  className="moovu-nav-choice"
                   href={navigationTarget === "pickup" ? pickupWaze ?? "#" : dropoffWaze ?? "#"}
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setNavigationTarget(null)}
                 >
-                  Waze
+                  <span className="moovu-nav-choice-icon">W</span>
+                  <span>
+                    <span className="block text-sm font-black text-slate-950">Waze</span>
+                    <span className="block text-xs font-semibold text-slate-500">Use Waze traffic guidance</span>
+                  </span>
                 </a>
               )}
 
@@ -1127,7 +1135,7 @@ export default function DriverHomePage() {
               </div>
 
               {currentTrip && (
-                <div className="moovu-card-interactive p-5">
+                <div className="moovu-driver-active-trip p-5">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium text-slate-500">Active trip</div>
@@ -1158,25 +1166,33 @@ export default function DriverHomePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap gap-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {currentTrip.status === "assigned" && (pickupGoogle || pickupWaze) && (
                       <button
                         type="button"
-                        className="moovu-btn moovu-btn-primary"
+                        className="moovu-driver-nav-button"
                         onClick={() => setNavigationTarget("pickup")}
                       >
-                        Drive to pickup
+                        <span>Drive to pickup</span>
+                        <span className="text-xs font-bold opacity-80">Choose Google Maps or Waze</span>
                       </button>
                     )}
 
                     {currentTrip.status === "ongoing" && (dropoffGoogle || dropoffWaze) && (
                       <button
                         type="button"
-                        className="moovu-btn moovu-btn-primary"
+                        className="moovu-driver-nav-button"
                         onClick={() => setNavigationTarget("dropoff")}
                       >
-                        Drive to destination
+                        <span>Drive to destination</span>
+                        <span className="text-xs font-bold opacity-80">Choose Google Maps or Waze</span>
                       </button>
+                    )}
+
+                    {canOpenTripChat && (
+                      <div className="rounded-[22px] border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
+                        Chat is open for this trip. Use the floating chat button.
+                      </div>
                     )}
                   </div>
 
@@ -1192,14 +1208,25 @@ export default function DriverHomePage() {
                     )}
 
                     {currentTrip.status === "arrived" && (
-                      <div className="rounded-[28px] bg-slate-50 p-4">
-                        <div className="text-sm font-semibold text-slate-900">Passenger start OTP</div>
+                      <div className="moovu-driver-otp-card">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="moovu-section-title">Start trip</div>
+                            <div className="mt-1 text-xl font-black text-slate-950">
+                              Passenger start OTP
+                            </div>
+                            <p className="mt-1 text-sm leading-6 text-slate-600">
+                              Ask the customer for the start code before moving the trip to active.
+                            </p>
+                          </div>
+                          <span className="moovu-chip moovu-chip-warning">OTP required</span>
+                        </div>
 
                         {!showStartOtp ? (
                           <button
                             onClick={() => setShowStartOtp(true)}
                             disabled={busy}
-                            className="moovu-btn moovu-btn-secondary mt-3"
+                            className="moovu-btn moovu-btn-primary mt-4 w-full sm:w-auto"
                           >
                             Enter start OTP
                           </button>
@@ -1210,12 +1237,12 @@ export default function DriverHomePage() {
                               inputMode="numeric"
                               maxLength={4}
                               value={startOtp}
-                              onChange={(e) => setStartOtp(e.target.value)}
-                              placeholder="Enter passenger start OTP"
-                              className="moovu-input"
+                              onChange={(e) => setStartOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                              placeholder="0000"
+                              className="moovu-otp-input"
                             />
 
-                            <div className="flex gap-3">
+                            <div className="grid gap-3 sm:grid-cols-2">
                               <button
                                 onClick={async () => {
                                   await startTrip(currentTrip.id, startOtp);
@@ -1223,9 +1250,9 @@ export default function DriverHomePage() {
                                   setShowStartOtp(false);
                                 }}
                                 disabled={busy || startOtp.trim().length < 4}
-                                className="moovu-btn moovu-btn-primary"
+                                className="moovu-btn moovu-btn-primary w-full"
                               >
-                                Verify and start
+                                {busy ? "Checking..." : "Verify and start"}
                               </button>
 
                               <button
@@ -1234,7 +1261,7 @@ export default function DriverHomePage() {
                                   setShowStartOtp(false);
                                 }}
                                 disabled={busy}
-                                className="moovu-btn moovu-btn-secondary"
+                                className="moovu-btn moovu-btn-secondary w-full"
                               >
                                 Cancel
                               </button>
@@ -1267,14 +1294,25 @@ export default function DriverHomePage() {
                     )}
 
                     {currentTrip.status === "ongoing" && (
-                      <div className="rounded-[28px] bg-slate-50 p-4">
-                        <div className="text-sm font-semibold text-slate-900">Passenger end OTP</div>
+                      <div className="moovu-driver-otp-card is-complete">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="moovu-section-title">Complete trip</div>
+                            <div className="mt-1 text-xl font-black text-slate-950">
+                              Passenger end OTP
+                            </div>
+                            <p className="mt-1 text-sm leading-6 text-slate-600">
+                              Confirm the customer end code before closing this ride.
+                            </p>
+                          </div>
+                          <span className="moovu-chip moovu-chip-success">Ready to finish</span>
+                        </div>
 
                         {!showEndOtp ? (
                           <button
                             onClick={() => setShowEndOtp(true)}
                             disabled={busy}
-                            className="moovu-btn moovu-btn-primary mt-3"
+                            className="moovu-btn moovu-btn-primary mt-4 w-full sm:w-auto"
                           >
                             Enter end OTP
                           </button>
@@ -1285,12 +1323,12 @@ export default function DriverHomePage() {
                               inputMode="numeric"
                               maxLength={4}
                               value={endOtp}
-                              onChange={(e) => setEndOtp(e.target.value)}
-                              placeholder="Enter passenger end OTP"
-                              className="moovu-input"
+                              onChange={(e) => setEndOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                              placeholder="0000"
+                              className="moovu-otp-input"
                             />
 
-                            <div className="flex gap-3">
+                            <div className="grid gap-3 sm:grid-cols-2">
                               <button
                                 onClick={async () => {
                                   await completeTrip(currentTrip.id, endOtp);
@@ -1298,9 +1336,9 @@ export default function DriverHomePage() {
                                   setShowEndOtp(false);
                                 }}
                                 disabled={busy || endOtp.trim().length < 4}
-                                className="moovu-btn bg-emerald-600 text-white disabled:opacity-60"
+                                className="moovu-btn w-full bg-emerald-600 text-white disabled:opacity-60"
                               >
-                                Verify and complete
+                                {busy ? "Checking..." : "Verify and complete"}
                               </button>
 
                               <button
@@ -1309,7 +1347,7 @@ export default function DriverHomePage() {
                                   setShowEndOtp(false);
                                 }}
                                 disabled={busy}
-                                className="moovu-btn moovu-btn-secondary"
+                                className="moovu-btn moovu-btn-secondary w-full"
                               >
                                 Cancel
                               </button>

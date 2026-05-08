@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getToken as getFcmToken } from "firebase/messaging";
 import { getFirebaseMessaging, hasFirebaseClientConfig } from "@/lib/firebase/client";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -42,13 +42,41 @@ function urlBase64ToUint8Array(base64String: string) {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
+function getSavedMarker(key: string) {
+  try {
+    return window.localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setSavedMarker(key: string) {
+  try {
+    window.localStorage.setItem(key, "1");
+  } catch {
+    // localStorage can be unavailable in private or embedded browser modes.
+  }
+}
+
 export default function EnablePushButton({ role, onEnabled, variant = "floating" }: Props) {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [msg, setMsg] = useState("");
   const [canRequest, setCanRequest] = useState(true);
+  const appType = useMemo(() => getMoovuAppType(role), [role]);
+  const savedMarkerKey = useMemo(() => `moovu:push-enabled:${role}:${appType}`, [appType, role]);
 
-  async function registerFcm(accessToken: string) {
+  const markSaved = useCallback(
+    (message = "Notifications enabled successfully.") => {
+      setSavedMarker(savedMarkerKey);
+      setMsg(message);
+      setSaved(true);
+      onEnabled?.();
+    },
+    [onEnabled, savedMarkerKey]
+  );
+
+  const registerFcm = useCallback(async (accessToken: string) => {
     if (!hasFirebaseClientConfig()) return false;
 
     const messaging = await getFirebaseMessaging();
@@ -71,8 +99,8 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
       body: JSON.stringify({
         role,
         token,
-        platform: getMoovuAppType(role).startsWith("android_") ? "android" : "web",
-        appType: getMoovuAppType(role),
+        platform: appType.startsWith("android_") ? "android" : "web",
+        appType,
         deviceLabel: navigator.userAgent,
       }),
     });
@@ -83,7 +111,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
     }
 
     return true;
-  }
+  }, [appType, role]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -97,9 +125,9 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         return;
       }
 
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      if (!("serviceWorker" in navigator)) {
         setCanRequest(false);
-        setMsg("Push notifications are unavailable in this browser. On iPhone, install MOOVU to the Home Screen first.");
+        setMsg("This device does not support push notifications.");
         return;
       }
 
@@ -112,11 +140,35 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
       if (Notification.permission !== "granted") return;
 
       try {
+        if (getSavedMarker(savedMarkerKey)) {
+          markSaved("Push enabled");
+          return;
+        }
+
         const {
           data: { session },
         } = await supabaseClient.auth.getSession();
 
         const accessToken = session?.access_token;
+        if (!accessToken) {
+          setMsg("Notifications are allowed. Please log in again to save this device.");
+          return;
+        }
+
+        const fcmSaved = await registerFcm(accessToken).catch(() => false);
+        if (cancelled) return;
+
+        if (fcmSaved) {
+          markSaved("Push enabled");
+          return;
+        }
+
+        if (!("PushManager" in window)) {
+          setCanRequest(false);
+          setMsg("Push notifications are unavailable in this browser. On iPhone, install MOOVU to the Home Screen first.");
+          return;
+        }
+
         const reg = await navigator.serviceWorker.register("/sw.js");
         await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
@@ -125,11 +177,6 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
 
         if (!sub) {
           setMsg("Notifications are allowed. Tap to save this device for MOOVU updates.");
-          return;
-        }
-
-        if (!accessToken) {
-          setMsg("Notifications are allowed. Please log in again to save this device.");
           return;
         }
 
@@ -149,9 +196,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         if (cancelled) return;
 
         if (subscribeRes.ok && subscribeJson?.ok) {
-          setSaved(true);
-          setMsg("Push enabled");
-          onEnabled?.();
+          markSaved("Push enabled");
           return;
         }
 
@@ -168,7 +213,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
     return () => {
       cancelled = true;
     };
-  }, [onEnabled, role]);
+  }, [markSaved, registerFcm, role, savedMarkerKey]);
 
   async function handleClick() {
     try {
@@ -203,18 +248,6 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         return;
       }
 
-      if (!("PushManager" in window)) {
-        setCanRequest(false);
-        setMsg("Push notifications are unavailable in this browser. On iPhone, install MOOVU to the Home Screen first.");
-        return;
-      }
-
-      const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapid) {
-        setMsg("Push notifications are not configured.");
-        return;
-      }
-
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setCanRequest(false);
@@ -230,9 +263,19 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
       }
 
       if (fcmSaved) {
-        setMsg("Notifications enabled successfully.");
-        setSaved(true);
-        onEnabled?.();
+        markSaved();
+        return;
+      }
+
+      if (!("PushManager" in window)) {
+        setCanRequest(false);
+        setMsg("Push notifications are unavailable in this browser. On iPhone, install MOOVU to the Home Screen first.");
+        return;
+      }
+
+      const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapid) {
+        setMsg("Notifications are allowed, but push delivery is not configured. Add Firebase or Web Push VAPID env vars, then retry.");
         return;
       }
 
@@ -282,9 +325,7 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         return;
       }
 
-      setMsg("Notifications enabled successfully.");
-      setSaved(true);
-      onEnabled?.();
+      markSaved();
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : "Failed to enable notifications.");
     } finally {

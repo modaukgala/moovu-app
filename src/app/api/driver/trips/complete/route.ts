@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { applyTripCommissionServer } from "@/lib/finance/applyTripCommissionServer";
 import {
-  COMPLETION_RADIUS_KM,
   haversineKm,
   isFreshHeartbeat,
   minimumRequiredTripSeconds,
 } from "@/lib/geo/tripGuards";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
+
+function roundedKm(value: number | null) {
+  return value == null ? null : Math.round(value * 100) / 100;
+}
 
 export async function POST(req: Request) {
   try {
@@ -154,43 +157,25 @@ export async function POST(req: Request) {
       );
     }
 
+    let kmAway: number | null = null;
+    let distanceAudit = "Trip completion distance audit unavailable.";
+
     if (driver.lat == null || driver.lng == null) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Driver GPS location is missing. Please refresh location first.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!isFreshHeartbeat(driver.last_seen)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Driver location is stale. Refresh your GPS and try again.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (trip.dropoff_lat != null && trip.dropoff_lng != null) {
-      const kmAway = haversineKm(
+      distanceAudit = "Trip completed with OTP; driver GPS location was unavailable.";
+    } else if (trip.dropoff_lat == null || trip.dropoff_lng == null) {
+      distanceAudit = "Trip completed with OTP; destination coordinates were unavailable.";
+    } else {
+      kmAway = haversineKm(
         Number(driver.lat),
         Number(driver.lng),
         Number(trip.dropoff_lat),
         Number(trip.dropoff_lng)
       );
 
-      if (kmAway > COMPLETION_RADIUS_KM) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "You need to be within the destination area before completing this trip.",
-          },
-          { status: 400 }
-        );
-      }
+      const freshnessNote = isFreshHeartbeat(driver.last_seen)
+        ? ""
+        : " using last known GPS";
+      distanceAudit = `Trip completed with OTP ${kmAway.toFixed(2)} km from destination${freshnessNote}.`;
     }
 
     const { data: startEvents, error: startEventError } = await supabaseAdmin
@@ -286,7 +271,7 @@ export async function POST(req: Request) {
         {
           trip_id: tripId,
           event_type: "trip_completed",
-          message: "Trip completed successfully",
+          message: distanceAudit,
           old_status: "ongoing",
           new_status: "completed",
         },
@@ -318,6 +303,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       message: "Trip completed successfully.",
+      kmAway: roundedKm(kmAway),
+      distanceAudit,
       elapsedSeconds,
       minRequiredSeconds,
       commission: {

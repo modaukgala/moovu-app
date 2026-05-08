@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
-  ARRIVAL_RADIUS_KM,
   haversineKm,
   isFreshHeartbeat,
 } from "@/lib/geo/tripGuards";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
+
+function roundedKm(value: number | null) {
+  return value == null ? null : Math.round(value * 100) / 100;
+}
 
 export async function POST(req: Request) {
   try {
@@ -107,13 +110,6 @@ export async function POST(req: Request) {
       );
     }
 
-    if (trip.pickup_lat == null || trip.pickup_lng == null) {
-      return NextResponse.json(
-        { ok: false, error: "Trip pickup coordinates are missing." },
-        { status: 400 }
-      );
-    }
-
     const { data: driver, error: driverError } = await supabaseAdmin
       .from("drivers")
       .select("id,lat,lng,last_seen")
@@ -127,35 +123,25 @@ export async function POST(req: Request) {
       );
     }
 
+    let kmAway: number | null = null;
+    let distanceAudit = "Pickup distance audit unavailable.";
+
     if (driver.lat == null || driver.lng == null) {
-      return NextResponse.json(
-        { ok: false, error: "Driver GPS location is missing. Please refresh location first." },
-        { status: 400 }
+      distanceAudit = "Driver marked arrived; GPS location was unavailable.";
+    } else if (trip.pickup_lat == null || trip.pickup_lng == null) {
+      distanceAudit = "Driver marked arrived; pickup coordinates were unavailable.";
+    } else {
+      kmAway = haversineKm(
+        Number(driver.lat),
+        Number(driver.lng),
+        Number(trip.pickup_lat),
+        Number(trip.pickup_lng)
       );
-    }
 
-    if (!isFreshHeartbeat(driver.last_seen)) {
-      return NextResponse.json(
-        { ok: false, error: "Driver location is stale. Refresh your GPS and try again." },
-        { status: 400 }
-      );
-    }
-
-    const kmAway = haversineKm(
-      Number(driver.lat),
-      Number(driver.lng),
-      Number(trip.pickup_lat),
-      Number(trip.pickup_lng)
-    );
-
-    if (kmAway > ARRIVAL_RADIUS_KM) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "You need to be within 20m of the pickup point.",
-        },
-        { status: 400 }
-      );
+      const freshnessNote = isFreshHeartbeat(driver.last_seen)
+        ? ""
+        : " using last known GPS";
+      distanceAudit = `Driver marked arrived ${kmAway.toFixed(2)} km from pickup${freshnessNote}.`;
     }
 
     const { error: updateError } = await supabaseAdmin
@@ -176,7 +162,7 @@ export async function POST(req: Request) {
       await supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
         event_type: "driver_arrived",
-        message: `Driver arrived at pickup (${kmAway.toFixed(2)} km away)`,
+        message: distanceAudit,
         old_status: "assigned",
         new_status: "arrived",
       });
@@ -198,7 +184,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       message: "Trip marked as arrived.",
-      kmAway: Math.round(kmAway * 100) / 100,
+      kmAway: roundedKm(kmAway),
+      distanceAudit,
     });
   } catch (error: unknown) {
     return NextResponse.json(
