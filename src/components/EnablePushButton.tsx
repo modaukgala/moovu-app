@@ -140,17 +140,17 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
       if (Notification.permission !== "granted") return;
 
       try {
-        if (getSavedMarker(savedMarkerKey)) {
-          markSaved("Push enabled");
-          return;
-        }
-
         const {
           data: { session },
         } = await supabaseClient.auth.getSession();
 
         const accessToken = session?.access_token;
         if (!accessToken) {
+          if (getSavedMarker(savedMarkerKey)) {
+            markSaved("Push enabled");
+            return;
+          }
+
           setMsg("Notifications are allowed. Please log in again to save this device.");
           return;
         }

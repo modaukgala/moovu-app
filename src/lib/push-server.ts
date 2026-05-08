@@ -95,15 +95,22 @@ async function sendFcmToTargets(params: SendPushParams) {
     try {
       await messaging.send({
         token: String(row.token),
-        notification: {
+        data: {
           title: params.title,
           body: params.body,
-        },
-        data: {
           url: params.url || "/",
           role: params.role || String(row.role || ""),
         },
         webpush: {
+          notification: {
+            title: params.title,
+            body: params.body,
+            icon: "/icon-192.png",
+            badge: "/icon-192.png",
+            data: {
+              url: params.url || "/",
+            },
+          },
           fcmOptions: {
             link: params.url || "/",
           },
@@ -180,6 +187,17 @@ export async function sendPushToTargets(params: SendPushParams) {
   }
 
   if (!subscriptions || subscriptions.length === 0) {
+    if (fcmResult.delivered > 0 || fcmResult.failed > 0 || fcmResult.removed > 0) {
+      return {
+        ok: true,
+        delivered: fcmResult.delivered,
+        removed: fcmResult.removed,
+        failed: fcmResult.failed,
+        failures: fcmResult.failures,
+        message: "FCM push send finished. No matching legacy Web Push subscriptions were found.",
+      };
+    }
+
     return {
       ok: true,
       delivered: 0,

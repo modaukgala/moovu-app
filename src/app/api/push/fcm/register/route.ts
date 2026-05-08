@@ -28,6 +28,14 @@ function appTypeMatchesRole(appType: string, role: PushRole) {
   return appType === "web_customer" || appType === "android_customer";
 }
 
+function isMissingColumnError(errorMessage: string, columnName: string) {
+  return (
+    errorMessage.toLowerCase().includes(`column`) &&
+    errorMessage.toLowerCase().includes(columnName.toLowerCase()) &&
+    errorMessage.toLowerCase().includes("does not exist")
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -92,21 +100,49 @@ export async function POST(req: Request) {
 
     const now = new Date().toISOString();
 
-    const { error } = await supabase.from("fcm_tokens").upsert(
-      {
-        user_id: user.id,
-        role,
-        token: fcmToken,
-        platform: platform || null,
-        app_type: appType,
-        user_agent: req.headers.get("user-agent"),
-        device_label: deviceLabel || null,
-        is_active: true,
-        last_seen_at: now,
-        updated_at: now,
-      },
-      { onConflict: "token" }
-    );
+    const rowWithAppType = {
+      user_id: user.id,
+      role,
+      token: fcmToken,
+      platform: platform || null,
+      app_type: appType,
+      user_agent: req.headers.get("user-agent"),
+      device_label: deviceLabel || null,
+      is_active: true,
+      last_seen_at: now,
+      updated_at: now,
+    };
+
+    const { error } = await supabase.from("fcm_tokens").upsert(rowWithAppType, {
+      onConflict: "token",
+    });
+
+    if (error && isMissingColumnError(error.message, "app_type")) {
+      const rowWithoutAppType = {
+        user_id: rowWithAppType.user_id,
+        role: rowWithAppType.role,
+        token: rowWithAppType.token,
+        platform: rowWithAppType.platform,
+        user_agent: rowWithAppType.user_agent,
+        device_label: rowWithAppType.device_label,
+        is_active: rowWithAppType.is_active,
+        last_seen_at: rowWithAppType.last_seen_at,
+        updated_at: rowWithAppType.updated_at,
+      };
+      const { error: fallbackError } = await supabase.from("fcm_tokens").upsert(rowWithoutAppType, {
+        onConflict: "token",
+      });
+
+      if (fallbackError) {
+        return NextResponse.json({ ok: false, error: fallbackError.message }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        message: "FCM notifications enabled. Run the FCM migration to store app type metadata.",
+        migrationWarning: "fcm_tokens.app_type is missing",
+      });
+    }
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

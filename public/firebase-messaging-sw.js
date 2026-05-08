@@ -1,25 +1,38 @@
-importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-
-  const url = event.notification?.data?.url || "/";
-  const targetUrl = new URL(url, self.location.origin);
-
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        const clientUrl = new URL(client.url);
-        if (clientUrl.pathname === targetUrl.pathname && "focus" in client) {
-          return client.focus();
-        }
-      }
-
-      return self.clients.openWindow ? self.clients.openWindow(targetUrl.href) : undefined;
-    })
-  );
+self.addEventListener("install", () => {
+  self.skipWaiting();
 });
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+function notificationFromPayload(json) {
+  const data = json && typeof json === "object" ? json.data || {} : {};
+  const notification = json && typeof json === "object" ? json.notification || {} : {};
+  const webpushNotification =
+    json && typeof json === "object" ? json.webpush?.notification || {} : {};
+
+  return {
+    title:
+      data.title ||
+      notification.title ||
+      webpushNotification.title ||
+      json?.title ||
+      "MOOVU",
+    body:
+      data.body ||
+      notification.body ||
+      webpushNotification.body ||
+      json?.body ||
+      "You have a new MOOVU update.",
+    url:
+      data.url ||
+      notification.click_action ||
+      json?.fcmOptions?.link ||
+      json?.url ||
+      "/",
+  };
+}
 
 self.addEventListener("push", (event) => {
   let payload = {
@@ -30,14 +43,11 @@ self.addEventListener("push", (event) => {
 
   try {
     if (event.data) {
-      const json = event.data.json();
-      payload = {
-        title: json.notification?.title || json.title || payload.title,
-        body: json.notification?.body || json.body || payload.body,
-        url: json.data?.url || json.url || payload.url,
-      };
+      payload = notificationFromPayload(event.data.json());
     }
-  } catch {}
+  } catch {
+    // Keep a safe default notification when a push payload is malformed.
+  }
 
   event.waitUntil(
     self.registration.showNotification(payload.title, {
@@ -45,6 +55,43 @@ self.addEventListener("push", (event) => {
       icon: "/icon-192.png",
       badge: "/icon-192.png",
       data: { url: payload.url },
+      requireInteraction: false,
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = new URL(
+    event.notification?.data?.url || "/",
+    self.location.origin
+  );
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        const clientUrl = new URL(client.url);
+
+        if (
+          clientUrl.pathname === targetUrl.pathname &&
+          clientUrl.search === targetUrl.search &&
+          "focus" in client
+        ) {
+          return client.focus();
+        }
+      }
+
+      for (const client of clients) {
+        if ("navigate" in client && "focus" in client) {
+          client.navigate(targetUrl.href);
+          return client.focus();
+        }
+      }
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl.href);
+      }
     })
   );
 });
