@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 import { getToken as getFcmToken } from "firebase/messaging";
 import { getFirebaseMessaging, hasFirebaseClientConfig } from "@/lib/firebase/client";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -14,6 +16,10 @@ type Props = {
 };
 
 function getMoovuAppType(role: Role) {
+  if (Capacitor.getPlatform() !== "web") {
+    return role === "driver" ? "android_driver" : role === "customer" ? "android_customer" : "web_admin";
+  }
+
   if (typeof window === "undefined") {
     return role === "driver" ? "web_driver" : role === "admin" ? "web_admin" : "web_customer";
   }
@@ -58,6 +64,10 @@ function setSavedMarker(key: string) {
   }
 }
 
+function isNativePushRole(role: Role) {
+  return Capacitor.getPlatform() !== "web" && (role === "customer" || role === "driver");
+}
+
 export default function EnablePushButton({ role, onEnabled, variant = "floating" }: Props) {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -79,7 +89,85 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
     [markerKeyFor, onEnabled]
   );
 
+  const saveFcmToken = useCallback(async (accessToken: string, token: string, deviceLabel: string) => {
+    const res = await fetch("/api/push/fcm/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        role,
+        token,
+        platform: appType.startsWith("android_") ? "android" : "web",
+        appType,
+        deviceLabel,
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.error || "Failed to save FCM notification token.");
+    }
+  }, [appType, role]);
+
+  const registerNativeFcm = useCallback(async (accessToken: string, promptForPermission: boolean) => {
+    if (!isNativePushRole(role)) return false;
+
+    const currentPermission = await PushNotifications.checkPermissions();
+    let receivePermission = currentPermission.receive;
+
+    if (receivePermission !== "granted" && promptForPermission) {
+      const requestedPermission = await PushNotifications.requestPermissions();
+      receivePermission = requestedPermission.receive;
+    }
+
+    if (receivePermission !== "granted") return false;
+
+    const token = await new Promise<string>(async (resolve, reject) => {
+      let settled = false;
+      let registrationHandle: { remove: () => Promise<void> } | null = null;
+      let errorHandle: { remove: () => Promise<void> } | null = null;
+
+      const cleanup = async () => {
+        await registrationHandle?.remove().catch(() => undefined);
+        await errorHandle?.remove().catch(() => undefined);
+      };
+
+      const timeout = window.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        void cleanup();
+        reject(new Error("Timed out while registering this device for native push notifications."));
+      }, 15000);
+
+      registrationHandle = await PushNotifications.addListener("registration", (registrationToken) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        void cleanup();
+        resolve(registrationToken.value);
+      });
+
+      errorHandle = await PushNotifications.addListener("registrationError", (error) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        void cleanup();
+        reject(new Error(error.error || "Native push registration failed."));
+      });
+
+      await PushNotifications.register();
+    });
+
+    await saveFcmToken(accessToken, token, `${Capacitor.getPlatform()} native app`);
+    return true;
+  }, [role, saveFcmToken]);
+
   const registerFcm = useCallback(async (accessToken: string) => {
+    const nativeSaved = await registerNativeFcm(accessToken, false);
+    if (nativeSaved) return true;
+
     if (!hasFirebaseClientConfig()) return false;
 
     const messaging = await getFirebaseMessaging();
@@ -93,28 +181,10 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
 
     if (!token) return false;
 
-    const res = await fetch("/api/push/fcm/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        role,
-        token,
-        platform: appType.startsWith("android_") ? "android" : "web",
-        appType,
-        deviceLabel: navigator.userAgent,
-      }),
-    });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok || !json?.ok) {
-      throw new Error(json?.error || "Failed to save FCM notification token.");
-    }
+    await saveFcmToken(accessToken, token, navigator.userAgent);
 
     return true;
-  }, [appType, role]);
+  }, [registerNativeFcm, saveFcmToken]);
 
   const sendSelfTest = useCallback(async (accessToken: string) => {
     const testRes = await fetch("/api/push/test-self", {
@@ -236,6 +306,27 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
     };
   }, [markSaved, markerKeyFor, registerFcm, role]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !isNativePushRole(role)) return;
+
+    const handles: Array<{ remove: () => Promise<void> }> = [];
+
+    PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+      const url = action.notification.data?.url;
+      if (typeof url === "string" && url.length > 0) {
+        window.location.assign(url);
+      }
+    }).then((handle) => {
+      handles.push(handle);
+    }).catch(() => undefined);
+
+    return () => {
+      for (const handle of handles) {
+        void handle.remove();
+      }
+    };
+  }, [role]);
+
   async function handleClick() {
     try {
       setBusy(true);
@@ -257,6 +348,19 @@ export default function EnablePushButton({ role, onEnabled, variant = "floating"
         return;
       }
       const userId = session.user.id;
+
+      if (isNativePushRole(role)) {
+        const nativeSaved = await registerNativeFcm(accessToken, true);
+        if (!nativeSaved) {
+          setCanRequest(false);
+          setMsg("Notifications are blocked. Allow MOOVU notifications in Android app settings, then retry.");
+          return;
+        }
+
+        await sendSelfTest(accessToken);
+        markSaved(userId);
+        return;
+      }
 
       if (!("Notification" in window)) {
         setCanRequest(false);

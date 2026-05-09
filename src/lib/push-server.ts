@@ -121,11 +121,25 @@ async function sendFcmToTargets(params: SendPushParams) {
     try {
       await messaging.send({
         token: String(row.token),
+        notification: {
+          title: params.title,
+          body: params.body,
+        },
         data: {
           title: params.title,
           body: params.body,
           url: relativeUrl,
           role: params.role || String(row.role || ""),
+        },
+        android: {
+          priority: "high",
+          notification: {
+            title: params.title,
+            body: params.body,
+            icon: "ic_launcher",
+            sound: "default",
+            clickAction: "FCM_PLUGIN_ACTIVITY",
+          },
         },
         webpush: {
           notification: {
