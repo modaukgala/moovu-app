@@ -289,13 +289,13 @@ export async function POST(req: Request) {
 
     await notifyCustomerForTrip(
       tripId,
-      "Trip completed",
+      "Trip Completed",
       "Your trip has been completed successfully.",
       `/ride/${tripId}`
     );
 
     await notifyAdmins(
-      "Trip completed",
+      "Trip Completed",
       `Trip ${tripId} was completed successfully.`,
       "/admin/trips"
     );

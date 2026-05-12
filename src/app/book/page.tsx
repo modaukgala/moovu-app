@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import EnablePushButton from "@/components/EnablePushButton";
+import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import {
   DEFAULT_RIDE_OPTION_ID,
@@ -13,6 +13,7 @@ import {
   type RideOptionId,
 } from "@/lib/domain/fare";
 import { MOOVU_LEGAL_VERSION } from "@/lib/legal";
+import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type CustomerMe = {
@@ -340,19 +341,11 @@ export default function RiderBookingPage() {
 
   async function useCurrentLocation() {
     setMsg(null); setPickupError(null);
-    if (typeof window === "undefined" || !navigator.geolocation) { setMsg("This device does not support location."); return; }
+    if (typeof window === "undefined") { setMsg("This device does not support location."); return; }
     setLocationLoading(true);
 
     try {
-      const permission = await navigator.permissions?.query({ name: "geolocation" as PermissionName }).catch(() => null);
-      if (permission?.state === "denied") {
-        setPickupError("Location permission is blocked. Allow it in browser settings.");
-        return;
-      }
-
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 })
-      );
+      const pos = await getMoovuCurrentPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
 
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
@@ -749,7 +742,7 @@ export default function RiderBookingPage() {
             <div className="text-sm font-bold text-slate-950">Ride updates</div>
             <div className="mt-1 text-xs text-slate-600">Enable alerts for driver accepted, arrived, started, and completed.</div>
           </div>
-          <EnablePushButton role="customer" variant="inline" />
+          <EnableNotificationsButton role="customer" variant="inline" />
         </div>
       </div>
     </>

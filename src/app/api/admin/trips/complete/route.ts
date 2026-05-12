@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { applyTripCommissionServer } from "@/lib/finance/applyTripCommissionServer";
+import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 const ALLOWED_ADMIN_ROLES = ["owner", "admin", "dispatcher", "support"];
 
@@ -175,6 +176,19 @@ export async function POST(req: Request) {
           : []),
       ]);
     } catch {}
+
+    await notifyCustomerForTrip(
+      tripId,
+      "Trip completed",
+      "Your trip has been completed by MOOVU support.",
+      `/ride/${tripId}`
+    );
+
+    await notifyAdmins(
+      "Trip completed by admin",
+      `Trip ${tripId} was completed by admin.`,
+      "/admin/trips"
+    );
 
     return NextResponse.json({
       ok: true,

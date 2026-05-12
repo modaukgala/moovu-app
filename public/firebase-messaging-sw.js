@@ -1,3 +1,5 @@
+/* global firebase */
+
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
@@ -34,28 +36,62 @@ function notificationFromPayload(json) {
   };
 }
 
-self.addEventListener("push", (event) => {
-  let payload = {
-    title: "MOOVU",
-    body: "You have a new MOOVU update.",
-    url: "/",
-  };
+function showMoovuNotification(payload) {
+  return self.registration.showNotification(payload.title, {
+    body: payload.body,
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    data: { url: payload.url || "/" },
+    requireInteraction: false,
+  });
+}
 
-  try {
-    if (event.data) {
-      payload = notificationFromPayload(event.data.json());
+const firebaseReady = fetch("/api/push/fcm/config", { cache: "no-store" })
+  .then((response) => response.json())
+  .then((json) => {
+    const config = json?.firebaseConfig;
+    if (!config?.apiKey || !config?.projectId || !config?.messagingSenderId || !config?.appId) {
+      return null;
     }
-  } catch {
-    // Keep a safe default notification when a push payload is malformed.
-  }
 
+    importScripts("https://www.gstatic.com/firebasejs/12.13.0/firebase-app-compat.js");
+    importScripts("https://www.gstatic.com/firebasejs/12.13.0/firebase-messaging-compat.js");
+
+    firebase.initializeApp(config);
+    const messaging = firebase.messaging();
+
+    messaging.onBackgroundMessage((payload) => {
+      const notification = notificationFromPayload(payload);
+      void showMoovuNotification(notification);
+    });
+
+    return messaging;
+  })
+  .catch((error) => {
+    console.warn("[firebase-messaging-sw] Firebase messaging init skipped", error);
+    return null;
+  });
+
+self.addEventListener("push", (event) => {
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: { url: payload.url },
-      requireInteraction: false,
+    firebaseReady.then((messaging) => {
+      if (messaging) return undefined;
+
+      let payload = {
+        title: "MOOVU",
+        body: "You have a new MOOVU update.",
+        url: "/",
+      };
+
+      try {
+        if (event.data) {
+          payload = notificationFromPayload(event.data.json());
+        }
+      } catch {
+        // Keep a safe default notification when a push payload is malformed.
+      }
+
+      return showMoovuNotification(payload);
     })
   );
 });

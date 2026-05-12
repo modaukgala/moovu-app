@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
-import { expirePendingOfferIfNeeded, offerNextEligibleDriver } from "@/lib/trip-offers";
+import { advanceDriverOfferIfNeeded } from "@/lib/trip-offers";
+
+const TRIP_SELECT =
+  "id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount";
 
 export async function POST(req: Request) {
   try {
@@ -39,37 +42,60 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, offers: [], info: "Subscription inactive" });
     }
 
-    // Fetch pending offers for this driver
-    const { data: trips, error } = await supabaseAdmin
-      .from("trips")
-      .select("id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount")
+    const { data: activeRows, error } = await supabaseAdmin
+      .from("driver_trip_offers")
+      .select("trip_id")
       .eq("driver_id", driverId)
-      .eq("offer_status", "pending")
-      .eq("status", "offered")
-      .order("created_at", { ascending: false })
-      .limit(5);
+      .in("status", ["pending", "shown"])
+      .limit(10);
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-    // Expire overdue offers and auto re-offer next
-    for (const t of trips ?? []) {
-      const expired = await expirePendingOfferIfNeeded(t.id);
-      if (expired.expired) {
-        await offerNextEligibleDriver(t.id, [driverId]);
+    for (const row of activeRows ?? []) {
+      if (row.trip_id) {
+        await advanceDriverOfferIfNeeded(row.trip_id, driverId);
       }
     }
 
-    // Re-fetch after expiry cleanup
-    const { data: fresh, error: fErr } = await supabaseAdmin
-      .from("trips")
-      .select("id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount")
+    const nowIso = new Date().toISOString();
+    const { data: offers, error: offerErr } = await supabaseAdmin
+      .from("driver_trip_offers")
+      .select("trip_id,accept_deadline_at,offered_at")
       .eq("driver_id", driverId)
-      .eq("offer_status", "pending")
-      .eq("status", "offered")
-      .order("created_at", { ascending: false })
+      .in("status", ["pending", "shown"])
+      .gt("accept_deadline_at", nowIso)
+      .order("offered_at", { ascending: false })
       .limit(5);
 
+    if (offerErr) {
+      return NextResponse.json({ ok: false, error: offerErr.message }, { status: 500 });
+    }
+
+    const tripIds = Array.from(new Set((offers ?? []).map((offer) => offer.trip_id).filter(Boolean)));
+
+    if (tripIds.length === 0) {
+      return NextResponse.json({ ok: true, offers: [] });
+    }
+
+    const { data: trips, error: fErr } = await supabaseAdmin
+      .from("trips")
+      .select(TRIP_SELECT)
+      .in("id", tripIds)
+      .eq("offer_status", "pending")
+      .eq("status", "offered");
+
     if (fErr) return NextResponse.json({ ok: false, error: fErr.message }, { status: 500 });
+
+    const deadlineByTripId = new Map(
+      (offers ?? []).map((offer) => [offer.trip_id, offer.accept_deadline_at])
+    );
+
+    const fresh = (trips ?? [])
+      .map((trip) => ({
+        ...trip,
+        offer_expires_at: deadlineByTripId.get(trip.id) ?? trip.offer_expires_at,
+      }))
+      .sort((a, b) => tripIds.indexOf(a.id) - tripIds.indexOf(b.id));
 
     return NextResponse.json({ ok: true, offers: fresh ?? [] });
   } catch (error: unknown) {

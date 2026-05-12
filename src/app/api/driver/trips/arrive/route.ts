@@ -170,13 +170,13 @@ export async function POST(req: Request) {
 
     await notifyCustomerForTrip(
       tripId,
-      "Driver has arrived",
+      "Driver Arrived",
       "Your driver has arrived at the pickup point.",
       `/ride/${tripId}`
     );
 
     await notifyAdmins(
-      "Driver arrived",
+      "Driver Arrived",
       `Driver arrived for trip ${tripId}.`,
       "/admin/trips"
     );

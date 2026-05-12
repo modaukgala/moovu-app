@@ -203,13 +203,13 @@ export async function POST(req: Request) {
 
     await notifyCustomerForTrip(
       tripId,
-      "Trip started",
+      "Trip Started",
       "Your ride is now in progress.",
       `/ride/${tripId}`
     );
 
     await notifyAdmins(
-      "Trip started",
+      "Trip Started",
       `Trip ${tripId} has started.`,
       "/admin/trips"
     );

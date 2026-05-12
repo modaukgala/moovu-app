@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import AdminTripNotifications from "@/components/AdminTripNotifications";
-import EnablePushButton from "@/components/EnablePushButton";
+import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", group: "Operations" },
@@ -21,6 +21,7 @@ const navItems = [
   { href: "/admin/settlements", label: "Settlements", group: "Payments" },
   { href: "/admin/reports", label: "Earnings Report", group: "Reports" },
   { href: "/admin/earnings", label: "Earnings Dashboard", group: "Reports" },
+  { href: "/admin/notifications", label: "Notifications", group: "System" },
 ];
 
 export default function AdminProtectedLayout({
@@ -198,7 +199,7 @@ export default function AdminProtectedLayout({
               </div>
 
               <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-                <EnablePushButton role="admin" variant="inline" />
+                <EnableNotificationsButton role="admin" variant="inline" />
                 <div className="moovu-chip">
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                   Ops live

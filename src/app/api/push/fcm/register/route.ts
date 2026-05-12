@@ -18,6 +18,8 @@ const VALID_APP_TYPES = new Set([
   "android_driver",
 ]);
 
+const VALID_PLATFORMS = new Set(["android", "ios", "web", "unknown"]);
+
 function defaultAppType(role: PushRole) {
   return role === "driver" ? "web_driver" : role === "admin" ? "web_admin" : "web_customer";
 }
@@ -34,6 +36,46 @@ function isMissingColumnError(errorMessage: string, columnName: string) {
     errorMessage.toLowerCase().includes(columnName.toLowerCase()) &&
     errorMessage.toLowerCase().includes("does not exist")
   );
+}
+
+function missingColumnName(errorMessage: string, row: Record<string, unknown>) {
+  const lower = errorMessage.toLowerCase();
+  if (!lower.includes("column") || !lower.includes("does not exist")) return null;
+
+  return Object.keys(row).find((key) => lower.includes(key.toLowerCase())) ?? null;
+}
+
+async function upsertFcmToken(
+  supabase: unknown,
+  row: Record<string, unknown>,
+) {
+  const nextRow = { ...row };
+  const removedColumns: string[] = [];
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const table = (supabase as { from: (table: string) => unknown }).from("fcm_tokens") as {
+      upsert: (
+        values: Record<string, unknown>,
+        options: { onConflict: string },
+      ) => Promise<{ error: { message: string } | null }>;
+    };
+    const { error } = await table.upsert(nextRow, {
+      onConflict: "token",
+    });
+
+    if (!error) return { ok: true as const, removedColumns };
+
+    const missingColumn = missingColumnName(error.message, nextRow);
+    if (!missingColumn) return { ok: false as const, error };
+
+    delete nextRow[missingColumn];
+    removedColumns.push(missingColumn);
+  }
+
+  return {
+    ok: false as const,
+    error: { message: "Could not save FCM token because the fcm_tokens schema is missing required columns." },
+  };
 }
 
 export async function POST(req: Request) {
@@ -63,8 +105,11 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as unknown;
     const role = isRecord(body) ? String(body.role ?? "").trim() : "";
     const fcmToken = isRecord(body) ? String(body.token ?? "").trim() : "";
-    const platform = isRecord(body) ? String(body.platform ?? "").trim() : "";
+    const rawPlatform = isRecord(body) ? String(body.platform ?? "").trim() : "";
+    const platform = VALID_PLATFORMS.has(rawPlatform) ? rawPlatform : "unknown";
     const requestedAppType = isRecord(body) ? String(body.appType ?? "").trim() : "";
+    const appSource = isRecord(body) ? String(body.appSource ?? "").trim() : "";
+    const deviceId = isRecord(body) ? String(body.deviceId ?? "").trim() : "";
     const deviceLabel = isRecord(body) ? String(body.deviceLabel ?? "").trim() : "";
 
     if (!isPushRole(role)) {
@@ -84,6 +129,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Notification app type does not match role." }, { status: 400 });
     }
 
+    if (appSource && !appSource.endsWith(`_${pushRole}`)) {
+      return NextResponse.json({ ok: false, error: "Notification app source does not match role." }, { status: 400 });
+    }
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -100,52 +149,34 @@ export async function POST(req: Request) {
 
     const now = new Date().toISOString();
 
-    const rowWithAppType = {
+    const tokenRow: Record<string, unknown> = {
       user_id: user.id,
       role,
       token: fcmToken,
-      platform: platform || null,
+      platform,
       app_type: appType,
+      app_source: appSource || appType,
+      device_id: deviceId || null,
       user_agent: req.headers.get("user-agent"),
       device_label: deviceLabel || null,
       is_active: true,
+      last_used_at: now,
       last_seen_at: now,
       updated_at: now,
     };
 
-    const { error } = await supabase.from("fcm_tokens").upsert(rowWithAppType, {
-      onConflict: "token",
-    });
+    const result = await upsertFcmToken(supabase, tokenRow);
 
-    if (error && isMissingColumnError(error.message, "app_type")) {
-      const rowWithoutAppType = {
-        user_id: rowWithAppType.user_id,
-        role: rowWithAppType.role,
-        token: rowWithAppType.token,
-        platform: rowWithAppType.platform,
-        user_agent: rowWithAppType.user_agent,
-        device_label: rowWithAppType.device_label,
-        is_active: rowWithAppType.is_active,
-        last_seen_at: rowWithAppType.last_seen_at,
-        updated_at: rowWithAppType.updated_at,
-      };
-      const { error: fallbackError } = await supabase.from("fcm_tokens").upsert(rowWithoutAppType, {
-        onConflict: "token",
-      });
-
-      if (fallbackError) {
-        return NextResponse.json({ ok: false, error: fallbackError.message }, { status: 500 });
-      }
-
-      return NextResponse.json({
-        ok: true,
-        message: "FCM notifications enabled. Run the FCM migration to store app type metadata.",
-        migrationWarning: "fcm_tokens.app_type is missing",
-      });
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, error: result.error.message }, { status: 500 });
     }
 
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    if (result.removedColumns.length > 0 || isMissingColumnError(result.removedColumns.join(","), "app_type")) {
+      return NextResponse.json({
+        ok: true,
+        message: "FCM notifications enabled. Run the FCM migration to store all device metadata.",
+        migrationWarning: `fcm_tokens missing columns: ${result.removedColumns.join(", ")}`,
+      });
     }
 
     return NextResponse.json({ ok: true, message: "FCM notifications enabled." });

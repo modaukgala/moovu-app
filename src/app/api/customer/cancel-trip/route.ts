@@ -21,6 +21,78 @@ function isMissingCancellationColumn(error: { message?: string } | null | undefi
   return message.includes("cancellation_") || message.includes("cancelled_at");
 }
 
+function isMissingCancellationFeeTable(error: { message?: string; code?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() || "";
+  return (
+    error?.code === "PGRST205" ||
+    message.includes("trip_cancellation_fees") ||
+    (message.includes("could not find the table") && message.includes("cancellation"))
+  );
+}
+
+async function recordCancellationFee(params: {
+  supabaseAdmin: typeof import("@/lib/supabase/admin").supabaseAdmin;
+  tripId: string;
+  customerId: string;
+  driverId: string | null;
+  feeType: string;
+  feeAmount: number;
+  driverAmount: number;
+  moovuAmount: number;
+  reason: string;
+  createdBy: string;
+}) {
+  const { data: existing, error: lookupError } = await params.supabaseAdmin
+    .from("trip_cancellation_fees")
+    .select("id")
+    .eq("trip_id", params.tripId)
+    .limit(1);
+
+  if (lookupError) {
+    if (isMissingCancellationFeeTable(lookupError)) {
+      console.error("[cancel-trip] trip_cancellation_fees table missing. Run docs/cancellation-management-migration.sql.", {
+        tripId: params.tripId,
+        reason: lookupError.message,
+      });
+      return { ok: true, skipped: true, warning: "Cancellation fee audit table is missing." };
+    }
+
+    return { ok: false, error: lookupError.message };
+  }
+
+  if (existing && existing.length > 0) {
+    return { ok: true, skipped: true };
+  }
+
+  const { error: feeInsertError } = await params.supabaseAdmin
+    .from("trip_cancellation_fees")
+    .insert({
+      trip_id: params.tripId,
+      customer_id: params.customerId,
+      driver_id: params.driverId,
+      fee_type: params.feeType,
+      fee_amount: params.feeAmount,
+      driver_amount: params.driverAmount,
+      moovu_amount: params.moovuAmount,
+      reason: params.reason,
+      created_by: params.createdBy,
+    });
+
+  if (feeInsertError) {
+    if (isMissingCancellationFeeTable(feeInsertError)) {
+      console.error("[cancel-trip] trip_cancellation_fees table missing. Run docs/cancellation-management-migration.sql.", {
+        tripId: params.tripId,
+        reason: feeInsertError.message,
+      });
+      return { ok: true, skipped: true, warning: "Cancellation fee audit table is missing." };
+    }
+
+    return { ok: false, error: feeInsertError.message };
+  }
+
+  return { ok: true, skipped: false };
+}
+
 export async function POST(req: Request) {
   try {
     const auth = await getAuthenticatedCustomer(req);
@@ -96,32 +168,29 @@ export async function POST(req: Request) {
     });
     const cancelledAt = new Date().toISOString();
 
-    if (fee.feeAmount > 0) {
-      const { error: feeInsertError } = await auth.supabaseAdmin
-        .from("trip_cancellation_fees")
-        .insert({
-          trip_id: tripId,
-          customer_id: auth.customer.id,
-          driver_id: trip.driver_id,
-          fee_type: fee.type,
-          fee_amount: fee.feeAmount,
-          driver_amount: fee.driverAmount,
-          moovu_amount: fee.moovuAmount,
-          reason,
-          created_by: auth.user.id,
-        });
+    const feeAudit = await recordCancellationFee({
+      supabaseAdmin: auth.supabaseAdmin,
+      tripId,
+      customerId: auth.customer.id,
+      driverId: trip.driver_id,
+      feeType: fee.type,
+      feeAmount: fee.feeAmount,
+      driverAmount: fee.driverAmount,
+      moovuAmount: fee.moovuAmount,
+      reason,
+      createdBy: auth.user.id,
+    });
 
-      if (feeInsertError) {
-        console.error("[cancel-trip] paid fee insert failed", {
-          tripId,
-          customerId: auth.customer.id,
-          reason: feeInsertError.message,
-        });
-        return NextResponse.json(
-          { ok: false, error: "Cancellation fee could not be recorded. Please try again or contact support." },
-          { status: 500 }
-        );
-      }
+    if (!feeAudit.ok) {
+      console.error("[cancel-trip] fee audit insert failed", {
+        tripId,
+        customerId: auth.customer.id,
+        reason: feeAudit.error,
+      });
+      return NextResponse.json(
+        { ok: false, error: "Cancellation fee could not be recorded. Please try again or contact support." },
+        { status: 500 }
+      );
     }
 
     const { error: updateError } = await auth.supabaseAdmin
@@ -172,30 +241,6 @@ export async function POST(req: Request) {
         .eq("id", trip.driver_id);
     }
 
-    if (fee.feeAmount === 0) {
-      const { error: freeFeeInsertError } = await auth.supabaseAdmin
-        .from("trip_cancellation_fees")
-        .insert({
-          trip_id: tripId,
-          customer_id: auth.customer.id,
-          driver_id: trip.driver_id,
-          fee_type: fee.type,
-          fee_amount: fee.feeAmount,
-          driver_amount: fee.driverAmount,
-          moovu_amount: fee.moovuAmount,
-          reason,
-          created_by: auth.user.id,
-        });
-
-      if (freeFeeInsertError) {
-        console.error("[cancel-trip] free cancellation audit insert failed", {
-          tripId,
-          customerId: auth.customer.id,
-          reason: freeFeeInsertError.message,
-        });
-      }
-    }
-
     const { error: eventError } = await auth.supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
         event_type: "trip_cancelled",
@@ -241,6 +286,7 @@ export async function POST(req: Request) {
       cancellationDriverAmount: fee.driverAmount,
       cancellationMoovuAmount: fee.moovuAmount,
       cancellationPolicyCode: fee.policyCode,
+      cancellationAuditWarning: "warning" in feeAudit ? feeAudit.warning : null,
     });
   } catch (e: unknown) {
     return NextResponse.json(

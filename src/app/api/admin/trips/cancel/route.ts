@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { notifyAdmins, notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -99,6 +100,26 @@ export async function POST(req: Request) {
         created_by: user.id,
       });
     } catch {}
+
+    await notifyCustomerForTrip(
+      tripId,
+      "Trip cancelled",
+      `MOOVU cancelled your trip. Reason: ${reason}`,
+      `/ride/${tripId}`
+    );
+
+    await notifyDriverForTrip(
+      tripId,
+      "Trip cancelled",
+      `MOOVU cancelled trip ${tripId}.`,
+      "/driver"
+    );
+
+    await notifyAdmins(
+      "Trip cancelled by admin",
+      `Trip ${tripId} was cancelled. Reason: ${reason}`,
+      "/admin/trips"
+    );
 
     return NextResponse.json({
       ok: true,

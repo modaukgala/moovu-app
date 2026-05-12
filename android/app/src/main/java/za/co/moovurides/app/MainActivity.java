@@ -1,4 +1,4 @@
-package za.co.moovu.app;
+package za.co.moovurides.app;
 
 import com.getcapacitor.BridgeActivity;
 

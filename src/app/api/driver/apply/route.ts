@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notifyAdmins } from "@/lib/push-notify";
 
 type ExistingDriverRow = {
   id: string;
@@ -198,6 +199,12 @@ export async function POST(req: Request) {
         );
       }
     }
+
+    await notifyAdmins(
+      "New driver application",
+      `${fullName} submitted a driver application.`,
+      "/admin/applications"
+    );
 
     return NextResponse.json({
       ok: true,

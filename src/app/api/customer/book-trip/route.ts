@@ -235,7 +235,7 @@ export async function POST(req: Request) {
     );
 
     await notifyAdmins(
-      rideType === "scheduled" ? "New scheduled ride" : "New ride request",
+      rideType === "scheduled" ? "New scheduled ride" : "New Ride Request",
       `${riderName} requested a ride from ${pickupAddress} to ${dropoffAddress}.`,
       "/admin/trips"
     );

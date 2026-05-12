@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">MOOVU</string>
     <string name="title_activity_main">MOOVU</string>
-    <string name="package_name">za.co.moovu.app</string>
-    <string name="custom_url_scheme">za.co.moovu.app</string>
+    <string name="package_name">za.co.moovurides.app</string>
+    <string name="custom_url_scheme">za.co.moovurides.app</string>
 </resources>

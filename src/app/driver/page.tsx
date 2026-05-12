@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
+import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Offer = {
@@ -406,21 +408,11 @@ export default function DriverHomePage() {
         return;
       }
 
-      if (!navigator.geolocation) {
-        const notice = {
-          tone: "warning",
-          message:
-            "GPS is not supported on this device or browser. Use manual location instead.",
-        } satisfies GpsNotice;
-        setGpsInfo(notice);
-        if (!silent) {
-          showDriverActionError(notice.message);
-        }
-        resolve(false);
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
+      getMoovuCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000,
+      }).then(
         async (pos) => {
           gpsPermissionBlockedRef.current = false;
           const ok = await sendHeartbeat(pos.coords.latitude, pos.coords.longitude);
@@ -428,13 +420,13 @@ export default function DriverHomePage() {
           resolve(ok);
         },
         (err) => {
-          const notice = friendlyGeolocationError(err);
+          const notice = friendlyGeolocationError(err as GeolocationPositionError);
           setGpsInfo(notice);
           if (!silent) {
             showDriverActionError(notice.message);
           }
 
-          if (err.code === err.PERMISSION_DENIED) {
+          if ((err as GeolocationPositionError).code === 1) {
             gpsPermissionBlockedRef.current = true;
             if (gpsTimerRef.current) {
               clearInterval(gpsTimerRef.current);
@@ -443,11 +435,6 @@ export default function DriverHomePage() {
           }
 
           resolve(false);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 5000,
         }
       );
     });
@@ -969,9 +956,12 @@ export default function DriverHomePage() {
             </p>
           </div>
 
-          <button className="moovu-btn moovu-btn-secondary" onClick={logout}>
-            Logout
-          </button>
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <EnableNotificationsButton role="driver" variant="inline" />
+            <button className="moovu-btn moovu-btn-secondary" onClick={logout}>
+              Logout
+            </button>
+          </div>
         </div>
 
         {(info || gpsInfo) && (

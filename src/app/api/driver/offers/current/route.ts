@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
-import { expirePendingOfferIfNeeded, offerNextEligibleDriver } from "@/lib/trip-offers";
+import { advanceDriverOfferIfNeeded } from "@/lib/trip-offers";
+
+const TRIP_SELECT =
+  "id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount,payment_method";
 
 export async function GET(req: Request) {
   try {
@@ -49,41 +52,58 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, offer: null, info: "Subscription inactive" });
     }
 
-    const { data: trips, error } = await supabaseAdmin
-      .from("trips")
-      .select("id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount,payment_method")
+    const { data: activeRows, error } = await supabaseAdmin
+      .from("driver_trip_offers")
+      .select("trip_id")
       .eq("driver_id", driverId)
-      .eq("offer_status", "pending")
-      .eq("status", "offered")
-      .order("created_at", { ascending: false })
-      .limit(5);
+      .in("status", ["pending", "shown"])
+      .limit(10);
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    for (const t of trips ?? []) {
-      const expired = await expirePendingOfferIfNeeded(t.id);
-      if (expired.expired) {
-        await offerNextEligibleDriver(t.id, [driverId]);
+    for (const row of activeRows ?? []) {
+      if (row.trip_id) {
+        await advanceDriverOfferIfNeeded(row.trip_id, driverId);
       }
     }
 
-    const { data: fresh, error: fErr } = await supabaseAdmin
-      .from("trips")
-      .select("id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount,payment_method")
+    const nowIso = new Date().toISOString();
+    const { data: offers, error: offerErr } = await supabaseAdmin
+      .from("driver_trip_offers")
+      .select("trip_id,accept_deadline_at,offered_at")
       .eq("driver_id", driverId)
-      .eq("offer_status", "pending")
-      .eq("status", "offered")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .in("status", ["pending", "shown"])
+      .gt("accept_deadline_at", nowIso)
+      .order("offered_at", { ascending: false })
+      .limit(1);
 
-    if (fErr) {
-      return NextResponse.json({ ok: false, error: fErr.message }, { status: 500 });
+    if (offerErr) {
+      return NextResponse.json({ ok: false, error: offerErr.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, offer: fresh ?? null });
+    const offerRow = offers?.[0] ?? null;
+    if (!offerRow?.trip_id) {
+      return NextResponse.json({ ok: true, offer: null });
+    }
+
+    const { data: trip, error: tripErr } = await supabaseAdmin
+      .from("trips")
+      .select(TRIP_SELECT)
+      .eq("id", offerRow.trip_id)
+      .eq("offer_status", "pending")
+      .eq("status", "offered")
+      .maybeSingle();
+
+    if (tripErr) {
+      return NextResponse.json({ ok: false, error: tripErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      offer: trip ? { ...trip, offer_expires_at: offerRow.accept_deadline_at } : null,
+    });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error" }, { status: 500 });
   }

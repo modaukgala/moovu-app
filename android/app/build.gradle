@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "za.co.moovu.app"
+    namespace = "za.co.moovurides.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "za.co.moovu.app"
+        applicationId "za.co.moovurides.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

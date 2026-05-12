@@ -8,6 +8,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { requestNativeCameraPermissions } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
 
@@ -507,7 +508,8 @@ export default function DriverEarningsPage() {
               <input
                 className="border rounded-xl p-3"
                 type="file"
-                accept=".jpg,.jpeg,.png,.webp,.pdf"
+                accept="image/*,.pdf"
+                onClick={() => void requestNativeCameraPermissions()}
                 onChange={(e) => setPopFile(e.target.files?.[0] ?? null)}
               />
             </div>

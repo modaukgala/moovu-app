@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "894538889395",
+    "project_id": "moovu-rides",
+    "storage_bucket": "moovu-rides.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:894538889395:android:ea526fd4d5c565c39e18c6",
+        "android_client_info": {
+          "package_name": "za.co.moovurides.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABUgQ_MlQXYoPog5pzv6oJinTRmXgXcVs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

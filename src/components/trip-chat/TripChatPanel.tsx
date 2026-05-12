@@ -22,6 +22,7 @@ type MessagesResponse = {
   role?: TripChatRole;
   canSend?: boolean;
   readOnlyReason?: string | null;
+  unreadCount?: number;
 };
 
 type SendResponse = {
@@ -62,6 +63,7 @@ export default function TripChatPanel({
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const remaining = MAX_MESSAGE_LENGTH - text.length;
@@ -94,7 +96,7 @@ export default function TripChatPanel({
         return;
       }
 
-      const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages`, {
+      const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages?markRead=1`, {
         cache: "no-store",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -112,6 +114,7 @@ export default function TripChatPanel({
       setMessages(json.messages ?? []);
       setRole(json.role ?? null);
       setCanSend(Boolean(json.canSend));
+      setUnreadCount(0);
       setLoading(false);
     },
     [getAccessToken, open, tripId],
@@ -154,6 +157,59 @@ export default function TripChatPanel({
       void supabaseClient.removeChannel(channel);
     };
   }, [loadMessages, open, tripId]);
+
+  const loadUnreadCount = useCallback(async () => {
+    if (open || disabled) return;
+
+    const token = await getAccessToken();
+    if (!token) return;
+
+    const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages`, {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const json = (await res.json().catch(() => null)) as MessagesResponse | null;
+    if (!res.ok || !json?.ok) return;
+
+    setUnreadCount(Number(json.unreadCount ?? 0));
+  }, [disabled, getAccessToken, open, tripId]);
+
+  useEffect(() => {
+    if (open || disabled) return;
+
+    const timer = window.setTimeout(() => {
+      void loadUnreadCount();
+    }, 0);
+
+    const interval = window.setInterval(() => {
+      void loadUnreadCount();
+    }, 7000);
+
+    const channel = supabaseClient
+      .channel(`trip-chat-badge-${tripId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "trip_messages",
+          filter: `trip_id=eq.${tripId}`,
+        },
+        () => {
+          void loadUnreadCount();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [disabled, loadUnreadCount, open, tripId]);
 
   useEffect(() => {
     if (!open || !listRef.current) return;
@@ -207,7 +263,14 @@ export default function TripChatPanel({
         title={disabled ? disabledReason : undefined}
         onClick={() => setOpen(true)}
       >
-        {label}
+        <span className="relative inline-flex items-center gap-2">
+          <span>{label}</span>
+          {unreadCount > 0 && (
+            <span className="grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1.5 text-[11px] font-black leading-none text-white">
+              {unreadCount}
+            </span>
+          )}
+        </span>
       </button>
 
       {open && (

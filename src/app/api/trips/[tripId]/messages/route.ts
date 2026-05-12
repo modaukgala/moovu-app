@@ -27,6 +27,27 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
 
+    const url = new URL(req.url);
+    const shouldMarkRead = url.searchParams.get("markRead") === "1";
+
+    if (shouldMarkRead) {
+      const otherRole = auth.access.role === "customer" ? "driver" : "customer";
+      const { error: readError } = await auth.access.supabaseAdmin
+        .from("trip_messages")
+        .update({ read_at: new Date().toISOString() })
+        .eq("trip_id", tripId)
+        .eq("sender_role", otherRole)
+        .is("read_at", null);
+
+      if (readError) {
+        console.error("[trip-chat] failed to mark messages read", {
+          tripId,
+          role: auth.access.role,
+          reason: readError.message,
+        });
+      }
+    }
+
     const { data, error } = await auth.access.supabaseAdmin
       .from("trip_messages")
       .select("id,trip_id,sender_user_id,sender_role,body,created_at,read_at")
@@ -38,11 +59,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
+    const messages = (data ?? []) as TripChatMessage[];
+    const unreadCount = messages.filter(
+      (message) => message.sender_role !== auth.access.role && !message.read_at,
+    ).length;
+
     return NextResponse.json({
       ok: true,
-      messages: (data ?? []) as TripChatMessage[],
+      messages,
       role: auth.access.role,
       canSend: auth.access.canSend,
+      unreadCount,
       readOnlyReason: auth.access.canSend
         ? null
         : "Chat is read-only after a trip is completed or cancelled.",

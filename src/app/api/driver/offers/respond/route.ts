@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
-import { expirePendingOfferIfNeeded, offerNextEligibleDriver } from "@/lib/trip-offers";
+import { advanceDriverOfferIfNeeded, offerNextEligibleDriver } from "@/lib/trip-offers";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 async function incrementOfferStat(driverId: string, field: "offers_accepted" | "offers_rejected") {
@@ -85,51 +85,77 @@ export async function POST(req: Request) {
       );
     }
 
-    if (trip.driver_id !== driverId || trip.offer_status !== "pending" || trip.status !== "offered") {
+    if (trip.offer_status !== "pending" || trip.status !== "offered") {
       return NextResponse.json(
         { ok: false, error: "No pending offer for your account" },
         { status: 400 }
       );
     }
 
-    const expiryResult = await expirePendingOfferIfNeeded(tripId);
+    const { data: activeOffer, error: activeOfferError } = await supabaseAdmin
+      .from("driver_trip_offers")
+      .select("id,accept_deadline_at")
+      .eq("trip_id", tripId)
+      .eq("driver_id", driverId)
+      .in("status", ["pending", "shown"])
+      .maybeSingle();
 
-    if (!expiryResult.ok) {
+    if (activeOfferError) {
       return NextResponse.json(
-        { ok: false, error: expiryResult.error || "Failed to validate offer expiry." },
+        { ok: false, error: activeOfferError.message },
         { status: 500 }
       );
     }
 
-    if (expiryResult.expired) {
-      const next = await offerNextEligibleDriver(tripId, [driverId]);
+    if (!activeOffer) {
+      return NextResponse.json(
+        { ok: false, error: "No pending offer for your account" },
+        { status: 400 }
+      );
+    }
+
+    const deadlineMs = activeOffer.accept_deadline_at
+      ? new Date(activeOffer.accept_deadline_at).getTime()
+      : null;
+
+    if (!deadlineMs || Date.now() > deadlineMs) {
+      const expiryResult = await advanceDriverOfferIfNeeded(tripId, driverId);
 
       return NextResponse.json({
         ok: false,
-        error: next.ok
-          ? "Offer expired before your response. It has been passed to the next eligible driver."
+        error: expiryResult.reoffered
+          ? "Offer expired before your response. The system has sent a fresh offer."
           : "Offer expired before your response.",
         expired: true,
-        reoffered: !!next.ok,
-        nextDriverId: next.ok ? next.driverId : null,
+        reoffered: !!expiryResult.reoffered,
+        nextDriverId: expiryResult.nextDriverId ?? null,
       });
     }
 
     if (action === "accept") {
-      const { error: acceptError } = await supabaseAdmin
+      const { data: acceptedTrip, error: acceptError } = await supabaseAdmin
         .from("trips")
         .update({
           status: "assigned",
           offer_status: "accepted",
           offer_expires_at: null,
+          driver_id: driverId,
         })
         .eq("id", tripId)
         .eq("status", "offered")
         .eq("offer_status", "pending")
-        .eq("driver_id", driverId);
+        .select("id")
+        .maybeSingle();
 
       if (acceptError) {
         return NextResponse.json({ ok: false, error: acceptError.message }, { status: 500 });
+      }
+
+      if (!acceptedTrip) {
+        return NextResponse.json(
+          { ok: false, error: "This trip was already accepted or is no longer available." },
+          { status: 409 }
+        );
       }
 
       try {
@@ -137,6 +163,17 @@ export async function POST(req: Request) {
       } catch {}
 
       const now = new Date().toISOString();
+      const { data: competingOffers } = await supabaseAdmin
+        .from("driver_trip_offers")
+        .select("driver_id")
+        .eq("trip_id", tripId)
+        .neq("driver_id", driverId)
+        .in("status", ["pending", "shown"]);
+
+      const competingDriverIds = Array.from(
+        new Set((competingOffers ?? []).map((offer) => offer.driver_id).filter(Boolean))
+      );
+
       const { error: acceptedOfferError } = await supabaseAdmin
         .from("driver_trip_offers")
         .update({ status: "accepted", responded_at: now, updated_at: now })
@@ -167,6 +204,10 @@ export async function POST(req: Request) {
         });
       }
 
+      if (competingDriverIds.length > 0) {
+        await supabaseAdmin.from("drivers").update({ busy: false }).in("id", competingDriverIds);
+      }
+
       try {
         await supabaseAdmin.from("trip_events").insert({
           trip_id: tripId,
@@ -179,7 +220,7 @@ export async function POST(req: Request) {
 
       await notifyCustomerForTrip(
         tripId,
-        "Driver on the way",
+        "Driver Accepted Your Ride",
         "A driver has accepted your trip and is on the way.",
         `/ride/${tripId}`
       );
@@ -200,26 +241,6 @@ export async function POST(req: Request) {
 
     if (freeDriverError) {
       return NextResponse.json({ ok: false, error: freeDriverError.message }, { status: 500 });
-    }
-
-    const attemptedDriverIds = Array.from(
-      new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
-    );
-
-    const { error: rejectError } = await supabaseAdmin
-      .from("trips")
-      .update({
-        driver_id: null,
-        status: "requested",
-        offer_status: "rejected",
-        offer_expires_at: null,
-        offer_attempted_driver_ids: attemptedDriverIds,
-      })
-      .eq("id", tripId)
-      .eq("driver_id", driverId);
-
-    if (rejectError) {
-      return NextResponse.json({ ok: false, error: rejectError.message }, { status: 500 });
     }
 
     try {
@@ -245,6 +266,34 @@ export async function POST(req: Request) {
       });
     }
 
+    let next:
+      | Awaited<ReturnType<typeof offerNextEligibleDriver>>
+      | { ok: false; driverId?: null } = { ok: false };
+
+    if (trip.driver_id === driverId) {
+      const attemptedDriverIds = Array.from(
+        new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
+      );
+
+      const { error: rejectError } = await supabaseAdmin
+        .from("trips")
+        .update({
+          driver_id: null,
+          status: "requested",
+          offer_status: "rejected",
+          offer_expires_at: null,
+          offer_attempted_driver_ids: attemptedDriverIds,
+        })
+        .eq("id", tripId)
+        .eq("driver_id", driverId);
+
+      if (rejectError) {
+        return NextResponse.json({ ok: false, error: rejectError.message }, { status: 500 });
+      }
+
+      next = await offerNextEligibleDriver(tripId, [driverId]);
+    }
+
     try {
       await supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
@@ -260,8 +309,6 @@ export async function POST(req: Request) {
       `A driver rejected trip ${tripId}. The system is finding the next eligible driver.`,
       "/admin/trips"
     );
-
-    const next = await offerNextEligibleDriver(tripId, [driverId]);
 
     return NextResponse.json({
       ok: true,

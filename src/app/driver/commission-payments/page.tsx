@@ -9,6 +9,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
+import { requestNativeCameraPermissions } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Wallet = {
@@ -352,7 +353,8 @@ export default function DriverCommissionPaymentsPage() {
               <input
                 className="moovu-input"
                 type="file"
-                accept=".jpg,.jpeg,.png,.webp,.pdf"
+                accept="image/*,.pdf"
+                onClick={() => void requestNativeCameraPermissions()}
                 onChange={(event) => setPopFile(event.target.files?.[0] ?? null)}
               />
               <textarea

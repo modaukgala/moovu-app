@@ -43,6 +43,12 @@ type ScoredDriverRow = EligibleDriverRow & {
   distanceKm: number;
 };
 
+type OfferNextOptions = {
+  excludePreviouslyAttempted?: boolean;
+  allowBusyDriverIds?: string[];
+  resendToDriverId?: string | null;
+};
+
 async function incrementDriverOfferReceived(driverId: string) {
   try {
     const rpcResult = await supabaseAdmin.rpc("increment_driver_offer_received", {
@@ -201,7 +207,8 @@ export async function expirePendingOfferIfNeeded(tripId: string) {
 
 export async function offerNextEligibleDriver(
   tripId: string,
-  excludedDriverIds: string[] = []
+  excludedDriverIds: string[] = [],
+  options: OfferNextOptions = {}
 ) {
   await expireDriverSubscriptions().catch(() => {});
 
@@ -230,9 +237,14 @@ export async function offerNextEligibleDriver(
     };
   }
 
+  const attemptedDriverIds =
+    options.excludePreviouslyAttempted === false
+      ? []
+      : ((trip.offer_attempted_driver_ids ?? []) as string[]);
+
   const blockedDriverIds = new Set<string>([
     ...(excludedDriverIds ?? []),
-    ...((trip.offer_attempted_driver_ids ?? []) as string[]),
+    ...attemptedDriverIds,
   ]);
 
   const { data: drivers, error: driverError } = await supabaseAdmin
@@ -249,8 +261,7 @@ export async function offerNextEligibleDriver(
       subscription_status,
       subscription_expires_at
     `)
-    .eq("online", true)
-    .eq("busy", false);
+    .eq("online", true);
 
   if (driverError) {
     return {
@@ -260,9 +271,12 @@ export async function offerNextEligibleDriver(
   }
 
   const nowMs = Date.now();
+  const allowBusyDriverIds = new Set(options.allowBusyDriverIds ?? []);
 
   const filteredDrivers = ((drivers ?? []) as EligibleDriverRow[]).filter((driver) => {
+    if (options.resendToDriverId && driver.id !== options.resendToDriverId) return false;
     if (blockedDriverIds.has(driver.id)) return false;
+    if (driver.busy && !allowBusyDriverIds.has(driver.id)) return false;
 
     const expiryMs = driver.subscription_expires_at
       ? new Date(driver.subscription_expires_at).getTime()
@@ -338,8 +352,7 @@ export async function offerNextEligibleDriver(
   const { error: markBusyError } = await supabaseAdmin
     .from("drivers")
     .update({ busy: true })
-    .eq("id", chosen.id)
-    .eq("busy", false);
+    .eq("id", chosen.id);
 
   if (markBusyError) {
     return {
@@ -370,22 +383,35 @@ export async function offerNextEligibleDriver(
 
   await incrementDriverOfferReceived(chosen.id);
 
-  const { error: offerInsertError } = await supabaseAdmin.from("driver_trip_offers").insert(
-    {
-      trip_id: trip.id,
-      driver_id: chosen.id,
-      status: "shown",
-      offered_at: new Date().toISOString(),
-      visible_until: escalatesAt,
-      escalates_at: escalatesAt,
-      accept_deadline_at: expiresAt,
-      distance_km: chosen.distanceKm,
-      dispatch_score: chosen.dispatchScore,
-      updated_at: new Date().toISOString(),
-    }
-  );
+  const offerPayload = {
+    trip_id: trip.id,
+    driver_id: chosen.id,
+    status: "shown",
+    offered_at: new Date().toISOString(),
+    visible_until: escalatesAt,
+    escalates_at: escalatesAt,
+    accept_deadline_at: expiresAt,
+    distance_km: chosen.distanceKm,
+    dispatch_score: chosen.dispatchScore,
+    updated_at: new Date().toISOString(),
+  };
 
-  logOfferTableError("failed to create driver_trip_offers row", offerInsertError);
+  const { data: existingOffer } = await supabaseAdmin
+    .from("driver_trip_offers")
+    .select("id")
+    .eq("trip_id", trip.id)
+    .eq("driver_id", chosen.id)
+    .in("status", ["pending", "shown"])
+    .maybeSingle();
+
+  const offerWrite = existingOffer?.id
+    ? await supabaseAdmin
+        .from("driver_trip_offers")
+        .update(offerPayload)
+        .eq("id", existingOffer.id)
+    : await supabaseAdmin.from("driver_trip_offers").insert(offerPayload);
+
+  logOfferTableError("failed to write driver_trip_offers row", offerWrite.error);
 
   try {
     await supabaseAdmin.from("trip_events").insert({
@@ -407,7 +433,7 @@ export async function offerNextEligibleDriver(
     await sendPushSafe({
       userIds: [driverAccount.user_id],
       role: "driver",
-      title: "New trip offer",
+      title: "New Ride Request",
       body: `Pickup at ${trip.pickup_address ?? "pickup"} - Destination ${trip.dropoff_address ?? "destination"}`,
       url: "/driver",
     });
@@ -419,5 +445,134 @@ export async function offerNextEligibleDriver(
     expiresAt,
     distanceKm: chosen.distanceKm,
     dispatchScore: chosen.dispatchScore,
+  };
+}
+
+export async function advanceDriverOfferIfNeeded(tripId: string, driverId: string) {
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  const { data: offer, error: offerError } = await supabaseAdmin
+    .from("driver_trip_offers")
+    .select("id,trip_id,driver_id,status,escalates_at,accept_deadline_at")
+    .eq("trip_id", tripId)
+    .eq("driver_id", driverId)
+    .in("status", ["pending", "shown"])
+    .maybeSingle();
+
+  if (offerError || !offer) {
+    return {
+      ok: !offerError,
+      changed: false,
+      error: offerError?.message,
+    };
+  }
+
+  const { data: trip, error: tripError } = await supabaseAdmin
+    .from("trips")
+    .select("id,status,driver_id,offer_status,offer_expires_at,offer_attempted_driver_ids")
+    .eq("id", tripId)
+    .maybeSingle();
+
+  if (tripError || !trip) {
+    return {
+      ok: false,
+      changed: false,
+      error: tripError?.message || "Trip not found.",
+    };
+  }
+
+  if (trip.status !== "offered" || trip.offer_status !== "pending") {
+    await supabaseAdmin
+      .from("driver_trip_offers")
+      .update({ status: "cancelled", responded_at: nowIso, updated_at: nowIso })
+      .eq("id", offer.id);
+    return { ok: true, changed: true, cancelled: true };
+  }
+
+  const deadlineMs = offer.accept_deadline_at
+    ? new Date(offer.accept_deadline_at).getTime()
+    : null;
+
+  if (deadlineMs && now.getTime() > deadlineMs) {
+    await supabaseAdmin
+      .from("driver_trip_offers")
+      .update({ status: "expired", responded_at: nowIso, updated_at: nowIso })
+      .eq("id", offer.id);
+
+    try {
+      await incrementDriverOfferMissed(driverId);
+    } catch {}
+
+    await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", driverId);
+
+    if (trip.driver_id !== driverId) {
+      return { ok: true, changed: true, expired: true };
+    }
+
+    const attemptedDriverIds = Array.from(
+      new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
+    );
+
+    const { error: updateTripError } = await supabaseAdmin
+      .from("trips")
+      .update({
+        driver_id: null,
+        status: "requested",
+        offer_status: "expired",
+        offer_expires_at: null,
+        offer_attempted_driver_ids: attemptedDriverIds,
+      })
+      .eq("id", tripId)
+      .eq("driver_id", driverId);
+
+    if (updateTripError) {
+      return { ok: false, changed: false, error: updateTripError.message };
+    }
+
+    const next = await offerNextEligibleDriver(tripId, [driverId]);
+    if (next.ok) {
+      return { ok: true, changed: true, expired: true, reoffered: true, nextDriverId: next.driverId };
+    }
+
+    const repeat = await offerNextEligibleDriver(tripId, [], {
+      excludePreviouslyAttempted: false,
+      resendToDriverId: driverId,
+    });
+
+    return {
+      ok: true,
+      changed: true,
+      expired: true,
+      reoffered: repeat.ok,
+      nextDriverId: repeat.ok ? repeat.driverId : null,
+    };
+  }
+
+  const escalatesAtMs = offer.escalates_at ? new Date(offer.escalates_at).getTime() : null;
+  if (!escalatesAtMs || now.getTime() <= escalatesAtMs) {
+    return { ok: true, changed: false };
+  }
+
+  const { data: competingOffers } = await supabaseAdmin
+    .from("driver_trip_offers")
+    .select("id")
+    .eq("trip_id", tripId)
+    .neq("driver_id", driverId)
+    .in("status", ["pending", "shown"])
+    .gt("accept_deadline_at", nowIso)
+    .limit(1);
+
+  if ((competingOffers ?? []).length > 0) {
+    return { ok: true, changed: false };
+  }
+
+  const next = await offerNextEligibleDriver(tripId, [driverId]);
+
+  return {
+    ok: true,
+    changed: next.ok,
+    escalated: next.ok,
+    nextDriverId: next.ok ? next.driverId : null,
   };
 }
