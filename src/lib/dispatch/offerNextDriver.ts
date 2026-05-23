@@ -237,7 +237,12 @@ export async function offerNextDriver(params: {
       role: "driver",
       title: "New trip offer",
       body: `You have a trip offer from ${trip.pickup_address ?? "pickup"} to ${trip.dropoff_address ?? "destination"}.`,
-      url: "/driver",
+      url: `/driver?offerTripId=${trip.id}`,
+      data: {
+        nativeActionType: "trip_offer",
+        tripId: trip.id,
+        driverId: driver.id,
+      },
     });
   }
 

@@ -40,6 +40,17 @@ type AnalyticsResponse = {
   error?: string;
 };
 
+type PaymentFlagRow = {
+  payment_type?: string | null;
+  status?: string | null;
+};
+
+type PaymentFlags = {
+  subscription: number;
+  commission: number;
+  waiting: number;
+};
+
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
 }
@@ -52,6 +63,11 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsResponse["analytics"] | null>(null);
+  const [paymentFlags, setPaymentFlags] = useState<PaymentFlags>({
+    subscription: 0,
+    commission: 0,
+    waiting: 0,
+  });
 
   async function loadAnalytics() {
     setLoading(true);
@@ -86,9 +102,37 @@ export default function AdminDashboardPage() {
     setLoading(false);
   }
 
+  async function loadPaymentFlags() {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    if (!session) return;
+
+    const res = await fetch("/api/admin/payment-reviews?status=all", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const json = (await res.json().catch(() => null)) as
+      | { ok?: boolean; requests?: PaymentFlagRow[] }
+      | null;
+
+    if (!json?.ok) return;
+
+    const active = (json.requests ?? []).filter((row) =>
+      ["pending_payment_review", "waiting_confirmation"].includes(String(row.status ?? ""))
+    );
+    setPaymentFlags({
+      subscription: active.filter((row) => row.payment_type === "subscription").length,
+      commission: active.filter((row) => row.payment_type === "commission").length,
+      waiting: active.filter((row) => row.status === "waiting_confirmation").length,
+    });
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadAnalytics();
+      void loadPaymentFlags();
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -180,6 +224,30 @@ export default function AdminDashboardPage() {
           helper="Support items needing attention"
           tone={(analytics?.open_support_issues ?? 0) > 0 ? "warning" : "success"}
         />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        <Link href="/admin/subscriptions" className="moovu-card-interactive p-5">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
+            Subscription POPs
+          </div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.subscription}</div>
+          <p className="mt-2 text-sm text-slate-600">Persistent pending subscription reviews.</p>
+        </Link>
+        <Link href="/admin/commission-payments" className="moovu-card-interactive p-5">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+            Commission POPs
+          </div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.commission}</div>
+          <p className="mt-2 text-sm text-slate-600">Persistent pending commission reviews.</p>
+        </Link>
+        <Link href="/admin/payment-reviews" className="moovu-card-interactive p-5">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
+            Waiting for bank
+          </div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.waiting}</div>
+          <p className="mt-2 text-sm text-slate-600">Requests marked waiting for confirmation.</p>
+        </Link>
       </section>
 
       <section className="moovu-admin-command-grid">

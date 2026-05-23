@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -58,57 +59,61 @@ export default function RateTripPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="moovu-page pb-28 text-slate-950">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm text-gray-500">MOOVU Rating</div>
-            <h1 className="text-3xl font-semibold mt-1">Rate Your Driver</h1>
+      <div className="moovu-shell max-w-2xl space-y-6 py-6">
+        <section className="moovu-card overflow-hidden p-0">
+          <div className="bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="moovu-section-title">MOOVU Rating</div>
+                <h1 className="mt-2 text-3xl font-black">Rate your driver</h1>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Your feedback helps MOOVU keep trips reliable, respectful, and safe.
+                </p>
+              </div>
+              <Link href={`/ride/${params.tripId}`} className="moovu-btn moovu-btn-secondary">
+                Back
+              </Link>
+            </div>
           </div>
+        </section>
 
-          <Link href={`/ride/${params.tripId}`} className="border rounded-xl px-4 py-2">
-            Back
-          </Link>
-        </div>
+        <section className="moovu-card p-5 sm:p-6">
+          <div className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-sm font-black text-slate-700">Rating</span>
+              <select
+                className="moovu-input bg-white"
+                value={rating}
+                onChange={(e) => setRating(Number(e.target.value))}
+              >
+                <option value={5}>5 - Excellent</option>
+                <option value={4}>4 - Good</option>
+                <option value={3}>3 - Average</option>
+                <option value={2}>2 - Poor</option>
+                <option value={1}>1 - Very poor</option>
+              </select>
+            </label>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">Rating</label>
-            <select
-              className="w-full border rounded-xl p-3 bg-white"
-              value={rating}
-              onChange={(e) => setRating(Number(e.target.value))}
-            >
-              <option value={5}>5 - Excellent</option>
-              <option value={4}>4 - Good</option>
-              <option value={3}>3 - Average</option>
-              <option value={2}>2 - Poor</option>
-              <option value={1}>1 - Very Poor</option>
-            </select>
+            <label className="block">
+              <span className="mb-2 block text-sm font-black text-slate-700">Comment</span>
+              <textarea
+                className="moovu-input min-h-[140px] resize-none"
+                placeholder="Optional feedback"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+              />
+            </label>
+
+            <button onClick={submitRating} disabled={busy} className="moovu-btn moovu-btn-primary w-full justify-center">
+              {busy ? "Submitting..." : "Submit rating"}
+            </button>
           </div>
-
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">Comment</label>
-            <textarea
-              className="w-full border rounded-xl p-3 min-h-[140px]"
-              placeholder="Optional feedback"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-          </div>
-
-          <button
-            onClick={submitRating}
-            disabled={busy}
-            className="rounded-xl px-4 py-3 text-white"
-            style={{ background: "var(--moovu-primary)" }}
-          >
-            {busy ? "Submitting..." : "Submit Rating"}
-          </button>
         </section>
       </div>
+      <CustomerBottomNav />
     </main>
   );
 }

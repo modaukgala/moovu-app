@@ -315,37 +315,37 @@ export default function DriverCompleteProfilePage() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="First name"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Last name"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Alternative phone"
               value={altPhone}
               onChange={(e) => setAltPhone(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="ID number"
               value={idNumber}
               onChange={(e) => setIdNumber(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Area / Township"
               value={areaName}
               onChange={(e) => setAreaName(e.target.value)}
@@ -353,7 +353,7 @@ export default function DriverCompleteProfilePage() {
           </div>
 
           <input
-            className="border rounded-xl p-3 w-full"
+            className="moovu-input w-full"
             placeholder="Home address"
             value={homeAddress}
             onChange={(e) => setHomeAddress(e.target.value)}
@@ -361,13 +361,13 @@ export default function DriverCompleteProfilePage() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Emergency contact name"
               value={emergencyContactName}
               onChange={(e) => setEmergencyContactName(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Emergency contact phone"
               value={emergencyContactPhone}
               onChange={(e) => setEmergencyContactPhone(e.target.value)}
@@ -380,31 +380,31 @@ export default function DriverCompleteProfilePage() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="License number"
               value={licenseNumber}
               onChange={(e) => setLicenseNumber(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="License code"
               value={licenseCode}
               onChange={(e) => setLicenseCode(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               type="date"
               value={licenseExpiry}
               onChange={(e) => setLicenseExpiry(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="PDP number"
               value={pdpNumber}
               onChange={(e) => setPdpNumber(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               type="date"
               value={pdpExpiry}
               onChange={(e) => setPdpExpiry(e.target.value)}
@@ -417,49 +417,49 @@ export default function DriverCompleteProfilePage() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Vehicle make"
               value={vehicleMake}
               onChange={(e) => setVehicleMake(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Vehicle model"
               value={vehicleModel}
               onChange={(e) => setVehicleModel(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Vehicle year"
               value={vehicleYear}
               onChange={(e) => setVehicleYear(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Vehicle color"
               value={vehicleColor}
               onChange={(e) => setVehicleColor(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Vehicle registration"
               value={vehicleRegistration}
               onChange={(e) => setVehicleRegistration(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Vehicle VIN"
               value={vehicleVin}
               onChange={(e) => setVehicleVin(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Engine number"
               value={vehicleEngineNumber}
               onChange={(e) => setVehicleEngineNumber(e.target.value)}
             />
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Seating capacity"
               value={seatingCapacity}
               onChange={(e) => setSeatingCapacity(e.target.value)}
@@ -468,13 +468,19 @@ export default function DriverCompleteProfilePage() {
         </section>
 
         <section className="moovu-card p-5 sm:p-6">
-          <div className="text-sm text-gray-600 mb-4">
+          <div className="mb-4 h-3 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-[var(--moovu-primary)] transition-all"
+              style={{ width: requiredFilled ? "100%" : "58%" }}
+            />
+          </div>
+          <div className="text-sm font-semibold text-slate-600 mb-4">
             Required fields completed: {requiredFilled ? "Yes" : "Not yet"}
           </div>
 
           <div className="flex flex-wrap gap-3">
             <button
-              className="border rounded-xl px-4 py-2"
+              className="moovu-btn moovu-btn-secondary"
               disabled={busy}
               onClick={() => saveProfile(false)}
             >
@@ -482,8 +488,7 @@ export default function DriverCompleteProfilePage() {
             </button>
 
             <button
-              className="rounded-xl px-4 py-2 text-white"
-              style={{ background: "var(--moovu-primary)" }}
+              className="moovu-btn moovu-btn-primary"
               disabled={busy || !requiredFilled}
               onClick={() => saveProfile(true)}
             >
@@ -491,7 +496,7 @@ export default function DriverCompleteProfilePage() {
             </button>
 
             <button
-              className="border rounded-xl px-4 py-2"
+              className="moovu-btn moovu-btn-secondary"
               disabled={busy}
               onClick={() => router.push("/driver")}
             >

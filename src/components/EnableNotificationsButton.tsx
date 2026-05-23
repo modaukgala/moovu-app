@@ -153,7 +153,7 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
         return;
       }
 
-      setStatusLabel("Token Saved");
+      markSaved(session.user.id, "Notifications enabled on this device.");
 
       const testResponse = await fetch("/api/push/test-self", {
         method: "POST",
@@ -166,12 +166,12 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
 
       const testJson = await testResponse.json().catch(() => null);
       if (!testResponse.ok || !testJson?.ok) {
-        setStatusLabel("Token Saved");
-        setMessage(testJson?.error || "Token saved, but the test notification did not deliver.");
+        console.warn("[push-registration] self-test did not deliver", {
+          role,
+          error: testJson?.error || "Token saved, but the test notification did not deliver.",
+        });
         return;
       }
-
-      markSaved(session.user.id);
     } finally {
       setBusy(false);
       if (!saved) {

@@ -144,6 +144,30 @@ export async function POST(req: Request) {
       }
     }
 
+    if (paymentType === "subscription") {
+      const { data: pendingSubscription, error: pendingSubscriptionError } = await supabaseAdmin
+        .from("driver_payment_requests")
+        .select("id,payment_reference")
+        .eq("driver_id", driverId)
+        .eq("payment_type", "subscription")
+        .in("status", ["pending_payment_review", "waiting_confirmation"])
+        .limit(1);
+
+      if (pendingSubscriptionError) {
+        return NextResponse.json({ ok: false, error: pendingSubscriptionError.message }, { status: 500 });
+      }
+
+      if (pendingSubscription && pendingSubscription.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `You already have a pending subscription payment request (${pendingSubscription[0].payment_reference}). Please wait for admin review before submitting another one.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     let subscriptionPlan: DriverSubscriptionPlan | null = null;
     let subscriptionExpected = 0;
 
@@ -183,6 +207,13 @@ export async function POST(req: Request) {
     if (!file || file.size <= 0) {
       return NextResponse.json(
         { ok: false, error: "Please upload proof of payment before submitting." },
+        { status: 400 }
+      );
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json(
+        { ok: false, error: "POP file must be 5MB or smaller." },
         { status: 400 }
       );
     }

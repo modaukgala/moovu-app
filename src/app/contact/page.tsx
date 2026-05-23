@@ -41,8 +41,19 @@ export default function ContactPage() {
           <div className="legal-badge">Support</div>
         </div>
 
-        <h1 className="legal-title">Contact MOOVU</h1>
-        <p className="legal-meta">Support email: {MOOVU_SUPPORT_EMAIL}</p>
+        <section className="legal-hero" aria-labelledby="contact-title">
+          <p className="legal-kicker">MOOVU Help</p>
+          <h1 className="legal-title" id="contact-title">Contact MOOVU</h1>
+          <p className="legal-meta">Support email: {MOOVU_SUPPORT_EMAIL}</p>
+        </section>
+
+        <nav className="legal-toc legal-toc-compact" aria-label="MOOVU legal pages">
+          <Link href="/privacy-policy">Privacy Policy</Link>
+          <Link href="/terms">Terms of Service</Link>
+          <a href={`mailto:${MOOVU_SUPPORT_EMAIL}?subject=${encodeURIComponent("MOOVU Support")}`}>
+            Email Support
+          </a>
+        </nav>
 
         <div className="legal-body">
           <div className="contact-cards">

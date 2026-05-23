@@ -368,6 +368,12 @@ export default function AdminCommissionPaymentsPage() {
                   <div>
                     <div className="text-sm text-slate-500">Reference</div>
                     <div className="font-semibold break-words">{row.payment_reference}</div>
+                    <Link
+                      href={`/admin/payment-receipts/${row.id}`}
+                      className="mt-1 inline-flex text-xs font-black text-[var(--moovu-primary)]"
+                    >
+                      Open receipt
+                    </Link>
                   </div>
                   <div>
                     <div className="text-sm text-slate-500">POP</div>

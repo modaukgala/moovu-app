@@ -85,6 +85,7 @@ async function notifyDriverPaymentReview(
   driverId: string,
   title: string,
   body: string,
+  url = "/driver/earnings",
 ) {
   const { data: account } = await supabaseAdmin
     .from("driver_accounts")
@@ -100,7 +101,7 @@ async function notifyDriverPaymentReview(
     role: "driver",
     title,
     body,
-    url: "/driver/earnings",
+    url,
   });
 }
 
@@ -236,6 +237,7 @@ export async function POST(req: Request) {
         String(paymentRequest.driver_id),
         "Payment rejected",
         "Your MOOVU payment proof was rejected. Check the review note and submit again if needed.",
+        `/driver/payment-receipts/${requestId}`,
       );
 
       return NextResponse.json({
@@ -264,6 +266,7 @@ export async function POST(req: Request) {
         String(paymentRequest.driver_id),
         "Payment still under review",
         "MOOVU marked your payment proof as waiting for confirmation.",
+        `/driver/payment-receipts/${requestId}`,
       );
 
       return NextResponse.json({
@@ -484,8 +487,11 @@ export async function POST(req: Request) {
     await notifyDriverPaymentReview(
       supabaseAdmin,
       driverId,
-      "Payment approved",
-      "Your MOOVU payment proof was approved.",
+      paymentType === "subscription" ? "Subscription payment approved" : "Commission payment approved",
+      paymentType === "subscription"
+        ? "Your MOOVU subscription payment was approved. Your driver access has been updated."
+        : "Your MOOVU commission payment was approved. Your commission balance has been updated.",
+      `/driver/payment-receipts/${requestId}`,
     );
 
     return NextResponse.json({

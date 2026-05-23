@@ -1,5 +1,5 @@
 export const MOOVU_SUPPORT_EMAIL = "admin@moovurides.co.za";
-export const MOOVU_LEGAL_VERSION = "2026-05-05";
+export const MOOVU_LEGAL_VERSION = "2026-05-12";
 export const MOOVU_WEBSITE_URL = "https://moovurides.co.za";
 
 export type LegalAcceptanceStatus = {

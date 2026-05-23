@@ -98,59 +98,34 @@ export default function AdminReceiptDetailPage() {
     setLoading(true);
     setMsg(null);
 
-    const { data: tripRow, error: tripError } = await supabaseClient
-      .from("trips")
-      .select(`
-        id,
-        rider_name,
-        rider_phone,
-        pickup_address,
-        dropoff_address,
-        payment_method,
-        fare_amount,
-        distance_km,
-        duration_min,
-        status,
-        created_at,
-        completed_at,
-        driver_id
-      `)
-      .eq("id", tripId)
-      .maybeSingle();
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
 
-    if (tripError) {
-      setMsg(tripError.message);
+    if (!session?.access_token) {
+      setMsg("Please sign in as an admin to view this receipt.");
       setTrip(null);
       setDriver(null);
       setLoading(false);
       return;
     }
 
-    const typedTrip = (tripRow as ReceiptTrip | null) ?? null;
-    setTrip(typedTrip);
+    const res = await fetch(`/api/admin/receipts/${encodeURIComponent(tripId)}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
+    });
+    const json = await res.json().catch(() => null);
 
-    if (typedTrip?.driver_id) {
-      const { data: driverRow } = await supabaseClient
-        .from("drivers")
-        .select(`
-          id,
-          first_name,
-          last_name,
-          phone,
-          vehicle_make,
-          vehicle_model,
-          vehicle_year,
-          vehicle_color,
-          vehicle_registration
-        `)
-        .eq("id", typedTrip.driver_id)
-        .maybeSingle();
-
-      setDriver((driverRow as ReceiptDriver | null) ?? null);
-    } else {
+    if (!res.ok || !json?.ok) {
+      setMsg(json?.error || "Could not load receipt. Please refresh or contact admin support.");
+      setTrip(null);
       setDriver(null);
+      setLoading(false);
+      return;
     }
 
+    setTrip((json.trip as ReceiptTrip | null) ?? null);
+    setDriver((json.driver as ReceiptDriver | null) ?? null);
     setLoading(false);
   }, [tripId]);
 

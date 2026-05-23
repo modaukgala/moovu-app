@@ -139,14 +139,22 @@ export async function POST(req: Request) {
           tripId,
           "New MOOVU message",
           preview,
-          "/driver",
+          `/driver?chat=1&tripId=${tripId}`,
+          {
+            nativeActionType: "chat_reply",
+            tripId,
+          },
         );
       } else {
         await notifyCustomerForTrip(
           tripId,
           "New MOOVU message",
           preview,
-          `/ride/${tripId}`,
+          `/ride/${tripId}?chat=1`,
+          {
+            nativeActionType: "chat_reply",
+            tripId,
+          },
         );
       }
     } catch (pushError: unknown) {

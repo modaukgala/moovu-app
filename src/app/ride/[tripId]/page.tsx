@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import LoadingState from "@/components/ui/LoadingState";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
+import { notifyInApp } from "@/lib/in-app-notifications";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type RideTrip = {
@@ -152,6 +153,7 @@ function statusChipClass(status: string | null | undefined) {
 
 export default function RideTrackingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams<{ tripId: string }>();
   const tripId = params.tripId;
 
@@ -168,6 +170,7 @@ export default function RideTrackingPage() {
     useState<(typeof CANCEL_REASONS)[number]>("Driver is taking too long");
   const [mapError, setMapError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -175,6 +178,11 @@ export default function RideTrackingPage() {
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const previousTripSnapshotRef = useRef<{
+    status: string | null;
+    startOtpVerified: boolean;
+    endOtpVerified: boolean;
+  } | null>(null);
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -379,6 +387,78 @@ export default function RideTrackingPage() {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!trip) return;
+
+    const previous = previousTripSnapshotRef.current;
+    const current = {
+      status: trip.status,
+      startOtpVerified: Boolean(trip.start_otp_verified),
+      endOtpVerified: Boolean(trip.end_otp_verified),
+    };
+
+    previousTripSnapshotRef.current = current;
+    if (!previous) return;
+
+    if (previous.status !== trip.status) {
+      if (trip.status === "assigned") {
+        notifyInApp({
+          title: "Driver accepted the trip",
+          body: "Your MOOVU driver is on the way to pickup.",
+          tone: "success",
+          loud: true,
+        });
+      }
+
+      if (trip.status === "arrived") {
+        notifyInApp({
+          title: "Driver arrived",
+          body: "Share the start OTP only when you are ready to leave.",
+          tone: "offer",
+          loud: true,
+        });
+      }
+
+      if (trip.status === "ongoing") {
+        notifyInApp({
+          title: "Trip started",
+          body: "Start OTP verified. Your ride is now in progress.",
+          tone: "success",
+          loud: true,
+        });
+      }
+
+      if (trip.status === "completed") {
+        notifyInApp({
+          title: "Trip completed",
+          body: "End OTP verified. Your receipt is ready.",
+          tone: "success",
+          loud: true,
+        });
+
+        const promptKey = `moovu:completion-prompt:${trip.id}`;
+        if (!rating && window.localStorage.getItem(promptKey) !== "1") {
+          window.localStorage.setItem(promptKey, "1");
+          window.setTimeout(() => setShowCompletionPrompt(true), 0);
+        }
+      }
+    } else if (!previous.startOtpVerified && current.startOtpVerified) {
+      notifyInApp({
+        title: "Start OTP verified",
+        body: "The trip has started securely.",
+        tone: "success",
+        loud: true,
+      });
+    } else if (!previous.endOtpVerified && current.endOtpVerified) {
+      notifyInApp({
+        title: "End OTP verified",
+        body: "The trip has been completed securely.",
+        tone: "success",
+        loud: true,
+      });
+    }
+  }, [rating, trip]);
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
@@ -611,6 +691,36 @@ export default function RideTrackingPage() {
   return (
     <main className="moovu-page text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {showCompletionPrompt && trip.status === "completed" && !rating && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+          <section className="w-full max-w-md rounded-[30px] border border-emerald-100 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.22)]">
+            <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
+              Trip completed
+            </div>
+            <h2 className="mt-4 text-2xl font-black text-slate-950">
+              How was your MOOVU ride?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Your receipt is ready. You can rate the driver now or close this message and come back later.
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Link
+                href={`/ride/${trip.id}/rate`}
+                className="moovu-btn moovu-btn-primary justify-center"
+              >
+                Rate trip
+              </Link>
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-secondary"
+                onClick={() => setShowCompletionPrompt(false)}
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="moovu-shell">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1007,6 +1117,7 @@ export default function RideTrackingPage() {
             tripId={trip.id}
             label="Chat with driver"
             buttonClassName="moovu-floating-chat-button"
+            initialOpen={searchParams.get("chat") === "1"}
           />
         </div>
       )}

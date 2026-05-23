@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -81,35 +82,39 @@ export default function ShareTripPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="moovu-page pb-28 text-slate-950">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm text-gray-500">MOOVU Share</div>
-            <h1 className="text-3xl font-semibold mt-1">Share Your Trip</h1>
-            <p className="text-gray-700 mt-2">
-              Sharing is only available after the trip has started and the start OTP has been verified.
-            </p>
+      <div className="moovu-shell max-w-3xl space-y-6 py-6">
+        <section className="moovu-card overflow-hidden p-0">
+          <div className="bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="moovu-section-title">MOOVU Share</div>
+                <h1 className="mt-2 text-3xl font-black">Share your trip</h1>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                  Sharing becomes available after the start OTP is verified. Send live trip context to someone you trust.
+                </p>
+              </div>
+              <Link href={`/ride/${params.tripId}`} className="moovu-btn moovu-btn-secondary">
+                Back
+              </Link>
+            </div>
           </div>
+        </section>
 
-          <Link href={`/ride/${params.tripId}`} className="border rounded-xl px-4 py-2">
-            Back
-          </Link>
-        </div>
-
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card p-5 sm:p-6">
+          <div className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Friend or family member name"
               value={friendName}
               onChange={(e) => setFriendName(e.target.value)}
             />
 
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Friend or family cellphone number"
               value={friendPhone}
               onChange={(e) => setFriendPhone(e.target.value)}
@@ -119,24 +124,22 @@ export default function ShareTripPage() {
           <button
             onClick={prepareShare}
             disabled={busy}
-            className="rounded-xl px-4 py-3 text-white"
-            style={{ background: "var(--moovu-primary)" }}
+            className="moovu-btn moovu-btn-primary w-full justify-center"
           >
-            {busy ? "Preparing..." : "Prepare Share Message"}
+            {busy ? "Preparing..." : "Prepare share message"}
           </button>
 
           {shareMessage && (
             <>
-              <div className="border rounded-xl p-4 bg-gray-50">
-                <div className="text-sm text-gray-500 mb-2">Message preview</div>
+              <div className="rounded-3xl bg-slate-50 p-4">
+                <div className="mb-2 text-sm font-black text-slate-500">Message preview</div>
                 <div className="text-sm leading-7 whitespace-pre-wrap">{shareMessage}</div>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={shareNow}
-                  className="rounded-xl px-4 py-3 text-white"
-                  style={{ background: "var(--moovu-primary)" }}
+                  className="moovu-btn moovu-btn-primary"
                 >
                   Open Share Sheet / Copy
                 </button>
@@ -146,7 +149,7 @@ export default function ShareTripPage() {
                     href={whatsappUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="border rounded-xl px-4 py-3"
+                    className="moovu-btn moovu-btn-secondary"
                   >
                     Send via WhatsApp
                   </a>
@@ -155,7 +158,7 @@ export default function ShareTripPage() {
                 {smsUrl && (
                   <a
                     href={smsUrl}
-                    className="border rounded-xl px-4 py-3"
+                    className="moovu-btn moovu-btn-secondary"
                   >
                     Send via SMS
                   </a>
@@ -163,15 +166,17 @@ export default function ShareTripPage() {
               </div>
 
               {shareUrl && (
-                <div className="border rounded-xl p-4 bg-gray-50">
-                  <div className="text-sm text-gray-500 mb-2">Live shared trip link</div>
+                <div className="rounded-3xl bg-slate-50 p-4">
+                  <div className="mb-2 text-sm font-black text-slate-500">Live shared trip link</div>
                   <div className="break-all text-sm">{shareUrl}</div>
                 </div>
               )}
             </>
           )}
+          </div>
         </section>
       </div>
+      <CustomerBottomNav />
     </main>
   );
 }

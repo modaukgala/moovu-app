@@ -117,6 +117,15 @@ function logOfferTableError(context: string, error: { message?: string } | null 
   console.error(`[dispatch] ${context}`, { reason: error.message });
 }
 
+export function isMissingOfferTableError(error: { message?: string; code?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() || "";
+  return (
+    error?.code === "PGRST205" ||
+    message.includes("driver_trip_offers") ||
+    (message.includes("could not find the table") && message.includes("offer"))
+  );
+}
+
 export async function expirePendingOfferIfNeeded(tripId: string) {
   const { data: trip, error } = await supabaseAdmin
     .from("trips")
@@ -283,7 +292,7 @@ export async function offerNextEligibleDriver(
       : null;
 
     const subscriptionValid =
-      driver.subscription_status === "active" &&
+      (driver.subscription_status === "active" || driver.subscription_status === "grace") &&
       expiryMs != null &&
       expiryMs > nowMs;
 
@@ -411,7 +420,15 @@ export async function offerNextEligibleDriver(
         .eq("id", existingOffer.id)
     : await supabaseAdmin.from("driver_trip_offers").insert(offerPayload);
 
-  logOfferTableError("failed to write driver_trip_offers row", offerWrite.error);
+  if (offerWrite.error && isMissingOfferTableError(offerWrite.error)) {
+    console.error("[dispatch] driver_trip_offers table missing. Run docs/dispatch-offer-cycle-migration.sql to enable staged multi-driver offer rows.", {
+      tripId: trip.id,
+      driverId: chosen.id,
+      reason: offerWrite.error.message,
+    });
+  } else {
+    logOfferTableError("failed to write driver_trip_offers row", offerWrite.error);
+  }
 
   try {
     await supabaseAdmin.from("trip_events").insert({
@@ -435,7 +452,12 @@ export async function offerNextEligibleDriver(
       role: "driver",
       title: "New Ride Request",
       body: `Pickup at ${trip.pickup_address ?? "pickup"} - Destination ${trip.dropoff_address ?? "destination"}`,
-      url: "/driver",
+      url: `/driver?offerTripId=${trip.id}`,
+      data: {
+        nativeActionType: "trip_offer",
+        tripId: trip.id,
+        driverId: chosen.id,
+      },
     });
   }
 

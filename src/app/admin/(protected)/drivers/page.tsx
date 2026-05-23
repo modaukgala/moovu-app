@@ -6,6 +6,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Driver = {
@@ -26,24 +27,43 @@ export default function DriversPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  const getAccessToken = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+    return session?.access_token ?? null;
+  }, []);
 
   const loadDrivers = useCallback(async () => {
     setLoading(true);
+    setPageError(null);
 
-    const { data, error } = await supabaseClient
-      .from("drivers")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    const token = await getAccessToken();
+    if (!token) {
+      setPageError("Please sign in as an admin to view drivers.");
       setDrivers([]);
       setLoading(false);
       return;
     }
 
-    setDrivers((data ?? []) as Driver[]);
+    const res = await fetch("/api/admin/drivers/list", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok || !json?.ok) {
+      setDrivers([]);
+      setPageError(json?.error || "Could not load drivers. Please refresh or contact admin support.");
+      setLoading(false);
+      return;
+    }
+
+    setDrivers((json.drivers ?? []) as Driver[]);
     setLoading(false);
-  }, []);
+  }, [getAccessToken]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -54,7 +74,28 @@ export default function DriversPage() {
   }, [loadDrivers]);
 
   async function updateStatus(id: string, status: string) {
-    await supabaseClient.from("drivers").update({ status }).eq("id", id);
+    setPageError(null);
+    const token = await getAccessToken();
+    if (!token) {
+      setPageError("Please sign in as an admin to update drivers.");
+      return;
+    }
+
+    const res = await fetch("/api/admin/drivers/status", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ driverId: id, status }),
+    });
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok || !json?.ok) {
+      setPageError(json?.error || "Could not update driver status. Please try again.");
+      return;
+    }
+
     await loadDrivers();
   }
 
@@ -85,6 +126,14 @@ export default function DriversPage() {
 
   return (
     <main className="space-y-6 text-black">
+      {pageError && (
+        <CenteredMessageBox
+          title="Driver action failed"
+          message={pageError}
+          onClose={() => setPageError(null)}
+        />
+      )}
+
       <div className="moovu-card p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>

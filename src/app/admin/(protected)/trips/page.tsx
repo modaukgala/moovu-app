@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -60,44 +60,73 @@ export default function TripsPage() {
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
   const [pageError, setPageError] = useState<string | null>(null);
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
     return session?.access_token ?? null;
-  }
+  }, []);
 
-  async function loadDrivers() {
-    const { data } = await supabaseClient
-      .from("drivers")
-      .select("id, first_name, last_name, phone, status")
-      .in("status", ["approved", "active"])
-      .order("created_at", { ascending: false });
-
-    setDrivers((data as Driver[]) ?? []);
-  }
-
-  async function loadTrips(currentStatus: string) {
-    setLoading(true);
-
-    let q = supabaseClient
-      .from("trips")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (currentStatus !== "all") {
-      q = q.eq("status", currentStatus);
+  const loadDrivers = useCallback(async () => {
+    const token = await getAccessToken();
+    if (!token) {
+      setDrivers([]);
+      setPageError("Please sign in as an admin to load drivers.");
+      return;
     }
 
-    const { data } = await q;
-    setTrips((data as Trip[]) ?? []);
+    const res = await fetch("/api/admin/drivers/options", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok || !json?.ok) {
+      setDrivers([]);
+      setPageError(json?.error || "Could not load drivers. Please refresh or contact admin support.");
+      return;
+    }
+
+    const rows = ((json.drivers ?? []) as Driver[]).filter((driver) =>
+      ["approved", "active"].includes(driver.status)
+    );
+    setDrivers(rows);
+  }, [getAccessToken]);
+
+  const loadTrips = useCallback(async (currentStatus: string) => {
+    setLoading(true);
+    setPageError(null);
+
+    const token = await getAccessToken();
+    if (!token) {
+      setTrips([]);
+      setPageError("Please sign in as an admin to load trips.");
+      setLoading(false);
+      return;
+    }
+
+    const res = await fetch("/api/admin/trips/list", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok || !json?.ok) {
+      setTrips([]);
+      setPageError(json?.error || "Could not load trips. Please refresh or contact admin support.");
+      setLoading(false);
+      return;
+    }
+
+    const rows = (json.trips ?? []) as Trip[];
+    setTrips(currentStatus === "all" ? rows : rows.filter((trip) => trip.status === currentStatus));
     setLoading(false);
-  }
+  }, [getAccessToken]);
 
   useEffect(() => {
     void loadDrivers();
     void loadTrips(status);
-  }, [status]);
+  }, [loadDrivers, loadTrips, status]);
 
   const driverNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -195,13 +224,24 @@ export default function TripsPage() {
     setPageError(null);
 
     try {
-      const { error } = await supabaseClient
-        .from("trips")
-        .update({ status: "arrived" })
-        .eq("id", tripId);
+      const token = await getAccessToken();
+      if (!token) {
+        setPageError("Please sign in as an admin to update trips.");
+        return;
+      }
 
-      if (error) {
-        setPageError(error.message);
+      const res = await fetch(`/api/admin/trips/${encodeURIComponent(tripId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: "arrived" }),
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        setPageError(json?.error || "Could not update trip. Please try again.");
         return;
       }
 

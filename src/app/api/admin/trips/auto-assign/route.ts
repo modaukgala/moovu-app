@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { offerNextDriver } from "@/lib/dispatch/offerNextDriver";
+import { offerNextEligibleDriver } from "@/lib/trip-offers";
 
 export async function POST(req: Request) {
   try {
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await offerNextDriver({ tripId });
+    const result = await offerNextEligibleDriver(tripId);
 
     if (!result.ok) {
       return NextResponse.json(
@@ -64,27 +64,17 @@ export async function POST(req: Request) {
       await supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
         event_type: "auto_assign_attempt",
-        message: result.reassigned
-          ? `Auto-assign offered trip to driver ${result.driverId}`
-          : result.message,
+        message: `Auto-assign offered trip to driver ${result.driverId}`,
         old_status: trip.status,
-        new_status: result.reassigned ? "offered" : trip.status,
+        new_status: "offered",
         created_by: user.id,
       });
     } catch {}
-
-    if (!result.reassigned) {
-      return NextResponse.json(
-        { ok: false, error: result.message },
-        { status: 404 }
-      );
-    }
 
     return NextResponse.json({
       ok: true,
       message: "Nearest driver offered successfully.",
       driverId: result.driverId,
-      driverName: result.driverName,
       expiresAt: result.expiresAt,
     });
   } catch (e: unknown) {

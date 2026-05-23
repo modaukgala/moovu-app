@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
-import { advanceDriverOfferIfNeeded, offerNextEligibleDriver } from "@/lib/trip-offers";
+import {
+  advanceDriverOfferIfNeeded,
+  expirePendingOfferIfNeeded,
+  isMissingOfferTableError,
+  offerNextEligibleDriver,
+} from "@/lib/trip-offers";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 async function incrementOfferStat(driverId: string, field: "offers_accepted" | "offers_rejected") {
@@ -100,35 +105,75 @@ export async function POST(req: Request) {
       .in("status", ["pending", "shown"])
       .maybeSingle();
 
+    const offerTableMissing = isMissingOfferTableError(activeOfferError);
+
     if (activeOfferError) {
-      return NextResponse.json(
-        { ok: false, error: activeOfferError.message },
-        { status: 500 }
-      );
+      if (!offerTableMissing) {
+        return NextResponse.json(
+          { ok: false, error: activeOfferError.message },
+          { status: 500 }
+        );
+      }
     }
 
-    if (!activeOffer) {
+    if (!offerTableMissing && !activeOffer) {
       return NextResponse.json(
         { ok: false, error: "No pending offer for your account" },
         { status: 400 }
       );
     }
 
-    const deadlineMs = activeOffer.accept_deadline_at
-      ? new Date(activeOffer.accept_deadline_at).getTime()
-      : null;
+    if (offerTableMissing && trip.driver_id !== driverId) {
+      return NextResponse.json(
+        { ok: false, error: "No pending offer for your account" },
+        { status: 400 }
+      );
+    }
+
+    const deadlineSource = offerTableMissing ? trip.offer_expires_at : activeOffer?.accept_deadline_at;
+    const deadlineMs = deadlineSource ? new Date(deadlineSource).getTime() : null;
 
     if (!deadlineMs || Date.now() > deadlineMs) {
-      const expiryResult = await advanceDriverOfferIfNeeded(tripId, driverId);
+      const expiryResult = offerTableMissing
+        ? await expirePendingOfferIfNeeded(tripId)
+        : await advanceDriverOfferIfNeeded(tripId, driverId);
+
+      if (offerTableMissing && expiryResult.expired) {
+        const next = await offerNextEligibleDriver(tripId, [driverId]);
+        if (!next.ok) {
+          const repeat = await offerNextEligibleDriver(tripId, [], {
+            excludePreviouslyAttempted: false,
+            resendToDriverId: driverId,
+          });
+
+          return NextResponse.json({
+            ok: false,
+            error: repeat.ok
+              ? "Offer expired before your response. A fresh offer was sent to you."
+              : "Offer expired before your response.",
+            expired: true,
+            reoffered: repeat.ok,
+            nextDriverId: repeat.ok ? repeat.driverId : null,
+          });
+        }
+
+        return NextResponse.json({
+          ok: false,
+          error: "Offer expired before your response. It has been passed to another eligible driver.",
+          expired: true,
+          reoffered: true,
+          nextDriverId: next.driverId,
+        });
+      }
 
       return NextResponse.json({
         ok: false,
-        error: expiryResult.reoffered
+        error: "reoffered" in expiryResult && expiryResult.reoffered
           ? "Offer expired before your response. The system has sent a fresh offer."
           : "Offer expired before your response.",
         expired: true,
-        reoffered: !!expiryResult.reoffered,
-        nextDriverId: expiryResult.nextDriverId ?? null,
+        reoffered: "reoffered" in expiryResult ? !!expiryResult.reoffered : false,
+        nextDriverId: "nextDriverId" in expiryResult ? expiryResult.nextDriverId ?? null : null,
       });
     }
 
@@ -163,23 +208,27 @@ export async function POST(req: Request) {
       } catch {}
 
       const now = new Date().toISOString();
-      const { data: competingOffers } = await supabaseAdmin
-        .from("driver_trip_offers")
-        .select("driver_id")
-        .eq("trip_id", tripId)
-        .neq("driver_id", driverId)
-        .in("status", ["pending", "shown"]);
+      const { data: competingOffers } = offerTableMissing
+        ? { data: [] }
+        : await supabaseAdmin
+            .from("driver_trip_offers")
+            .select("driver_id")
+            .eq("trip_id", tripId)
+            .neq("driver_id", driverId)
+            .in("status", ["pending", "shown"]);
 
       const competingDriverIds = Array.from(
         new Set((competingOffers ?? []).map((offer) => offer.driver_id).filter(Boolean))
       );
 
-      const { error: acceptedOfferError } = await supabaseAdmin
-        .from("driver_trip_offers")
-        .update({ status: "accepted", responded_at: now, updated_at: now })
-        .eq("trip_id", tripId)
-        .eq("driver_id", driverId)
-        .in("status", ["pending", "shown"]);
+      const { error: acceptedOfferError } = offerTableMissing
+        ? { error: null }
+        : await supabaseAdmin
+            .from("driver_trip_offers")
+            .update({ status: "accepted", responded_at: now, updated_at: now })
+            .eq("trip_id", tripId)
+            .eq("driver_id", driverId)
+            .in("status", ["pending", "shown"]);
 
       if (acceptedOfferError) {
         console.error("[driver-offers] failed to mark offer accepted", {
@@ -189,12 +238,14 @@ export async function POST(req: Request) {
         });
       }
 
-      const { error: cancelOtherOffersError } = await supabaseAdmin
-        .from("driver_trip_offers")
-        .update({ status: "cancelled", responded_at: now, updated_at: now })
-        .eq("trip_id", tripId)
-        .neq("driver_id", driverId)
-        .in("status", ["pending", "shown"]);
+      const { error: cancelOtherOffersError } = offerTableMissing
+        ? { error: null }
+        : await supabaseAdmin
+            .from("driver_trip_offers")
+            .update({ status: "cancelled", responded_at: now, updated_at: now })
+            .eq("trip_id", tripId)
+            .neq("driver_id", driverId)
+            .in("status", ["pending", "shown"]);
 
       if (cancelOtherOffersError) {
         console.error("[driver-offers] failed to cancel competing offers", {
@@ -247,16 +298,18 @@ export async function POST(req: Request) {
       await incrementOfferStat(driverId, "offers_rejected");
     } catch {}
 
-    const { error: declinedOfferError } = await supabaseAdmin
-      .from("driver_trip_offers")
-      .update({
-        status: "declined",
-        responded_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("trip_id", tripId)
-      .eq("driver_id", driverId)
-      .in("status", ["pending", "shown"]);
+    const { error: declinedOfferError } = offerTableMissing
+      ? { error: null }
+      : await supabaseAdmin
+          .from("driver_trip_offers")
+          .update({
+            status: "declined",
+            responded_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("trip_id", tripId)
+          .eq("driver_id", driverId)
+          .in("status", ["pending", "shown"]);
 
     if (declinedOfferError) {
       console.error("[driver-offers] failed to mark offer declined", {

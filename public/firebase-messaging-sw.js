@@ -36,7 +36,24 @@ function notificationFromPayload(json) {
   };
 }
 
-function showMoovuNotification(payload) {
+async function sendToVisibleClient(payload) {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const visibleClient = clients.find((client) => client.focused || client.visibilityState === "visible");
+
+  if (!visibleClient) return false;
+
+  visibleClient.postMessage({
+    type: "MOOVU_PUSH",
+    title: payload.title,
+    body: payload.body,
+    url: payload.url || "/",
+  });
+  return true;
+}
+
+async function showMoovuNotification(payload) {
+  if (await sendToVisibleClient(payload)) return undefined;
+
   return self.registration.showNotification(payload.title, {
     body: payload.body,
     icon: "/icon-192.png",

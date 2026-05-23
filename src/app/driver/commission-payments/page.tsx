@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
@@ -72,6 +73,7 @@ function paymentStatus(balanceDue: number) {
 
 export default function DriverCommissionPaymentsPage() {
   const [loading, setLoading] = useState(true);
+  const [authRequired, setAuthRequired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -97,10 +99,12 @@ export default function DriverCommissionPaymentsPage() {
 
     const token = await getToken();
     if (!token) {
-      setMsg("You are not logged in.");
+      setAuthRequired(true);
       setLoading(false);
       return;
     }
+
+    setAuthRequired(false);
 
     const res = await fetch("/api/driver/earnings", {
       cache: "no-store",
@@ -211,6 +215,10 @@ export default function DriverCommissionPaymentsPage() {
         description="Checking your MOOVU commission balance and payment history."
       />
     );
+  }
+
+  if (authRequired) {
+    return <DriverAuthRequired description="Sign in to manage your MOOVU commission payments." />;
   }
 
   return (
@@ -389,6 +397,12 @@ export default function DriverCommissionPaymentsPage() {
                       <div>
                         <div className="font-black text-slate-950">{row.payment_reference}</div>
                         <div className="text-sm text-slate-600">{displayDate(row.submitted_at)}</div>
+                        <Link
+                          href={`/driver/payment-receipts/${row.id}`}
+                          className="mt-1 inline-flex text-xs font-black text-[var(--moovu-primary)]"
+                        >
+                          Open receipt
+                        </Link>
                       </div>
                       <StatusBadge status={row.status} />
                     </div>

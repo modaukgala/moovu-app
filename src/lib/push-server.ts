@@ -2,6 +2,7 @@ import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
 import type { PushRole } from "@/lib/push-auth";
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
+import { createNativeNotificationActionToken } from "@/lib/native-notification-actions";
 
 type SendPushParams = {
   userIds?: string[];
@@ -35,6 +36,8 @@ type PushDatabase = {
           user_id: string | null;
           role: PushRole | null;
           token: string;
+          platform?: string | null;
+          app_type?: string | null;
         };
         Insert: Record<string, unknown>;
         Update: Record<string, unknown>;
@@ -54,6 +57,12 @@ type PushDatabase = {
           endpoint: string;
           subscription: unknown;
         };
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
+      notification_action_tokens: {
+        Row: Record<string, unknown>;
         Insert: Record<string, unknown>;
         Update: Record<string, unknown>;
         Relationships: [];
@@ -100,11 +109,40 @@ function getSiteOrigin() {
   return configured.startsWith("http") ? configured : `https://${configured}`;
 }
 
+function getRoleSiteOrigin(role: PushRole | null | undefined) {
+  if (role === "driver") {
+    const configured = process.env.NEXT_PUBLIC_DRIVER_SITE_URL || "https://driver.moovurides.co.za";
+    return configured.startsWith("http") ? configured : `https://${configured}`;
+  }
+
+  if (role === "admin") {
+    const configured = process.env.NEXT_PUBLIC_ADMIN_SITE_URL || "https://admin.moovurides.co.za";
+    return configured.startsWith("http") ? configured : `https://${configured}`;
+  }
+
+  return getSiteOrigin();
+}
+
 function absoluteAppUrl(pathOrUrl: string | undefined) {
   try {
     return new URL(pathOrUrl || "/", getSiteOrigin()).href;
   } catch {
     return new URL("/", getSiteOrigin()).href;
+  }
+}
+
+function absoluteRoleAppUrl(pathOrUrl: string | undefined, role: PushRole | null | undefined) {
+  try {
+    const url = new URL(pathOrUrl || "/", getRoleSiteOrigin(role));
+    if (role === "driver" && url.hostname === "moovurides.co.za") {
+      url.hostname = "driver.moovurides.co.za";
+    }
+    if (role === "admin" && url.hostname === "moovurides.co.za") {
+      url.hostname = "admin.moovurides.co.za";
+    }
+    return url.href;
+  } catch {
+    return new URL("/", getRoleSiteOrigin(role)).href;
   }
 }
 
@@ -117,6 +155,54 @@ function stringData(data: PushData | undefined, fallback: Record<string, string>
   }
 
   return result;
+}
+
+function isAndroidNativeToken(row: { platform?: string | null; app_type?: string | null }) {
+  const platform = String(row.platform ?? "").toLowerCase();
+  const appType = String(row.app_type ?? "").toLowerCase();
+  return platform === "android" || appType.startsWith("android");
+}
+
+async function withNativeActionData(params: {
+  supabase: AdminSupabaseClient;
+  row: { user_id: string | null; role: PushRole | null };
+  data: Record<string, string>;
+}) {
+  const actionType = params.data.nativeActionType;
+  const tripId = params.data.tripId;
+
+  if (
+    !params.row.user_id ||
+    !params.row.role ||
+    !tripId ||
+    (actionType !== "trip_offer" && actionType !== "chat_reply")
+  ) {
+    return params.data;
+  }
+
+  const token = await createNativeNotificationActionToken({
+    supabase: params.supabase,
+    userId: params.row.user_id,
+    role: params.row.role,
+    actionType,
+    tripId,
+    metadata: {
+      title: params.data.title,
+      body: params.data.body,
+      url: params.data.url,
+    },
+  });
+
+  if (!token) return params.data;
+
+  return {
+    ...params.data,
+    nativeActionToken: token,
+    nativeActionApiUrl: absoluteAppUrl("/api/notifications/native-action"),
+    nativeClickUrl: absoluteRoleAppUrl(params.data.url || "/", params.row.role),
+    nativeSound: "moovu_alert",
+    androidChannelId: "moovu_critical_v2",
+  };
 }
 
 function getSupabaseAdmin(): AdminSupabaseClient {
@@ -201,7 +287,7 @@ async function sendFcmToTargets(params: SendPushParams) {
 
   let query = supabase
     .from("fcm_tokens")
-    .select("id,user_id,role,token")
+    .select("id,user_id,role,token,platform,app_type")
     .eq("is_active", true);
 
   if (params.userIds && params.userIds.length > 0) {
@@ -246,29 +332,47 @@ async function sendFcmToTargets(params: SendPushParams) {
     const clickUrl = absoluteAppUrl(relativeUrl);
 
     try {
-      const data = stringData(params.data, {
+      const baseData = stringData(params.data, {
         title: params.title,
         body: params.body,
         url: relativeUrl,
         role: params.role || String(row.role || ""),
       });
+      const androidNativeToken = isAndroidNativeToken(row);
+      const data = androidNativeToken
+        ? await withNativeActionData({
+            supabase,
+            row,
+            data: baseData,
+          })
+        : baseData;
+      const useNativeAndroidNotification = androidNativeToken && !!data.nativeActionToken;
 
       await messaging.send({
         token: String(row.token),
-        notification: {
-          title: params.title,
-          body: params.body,
-        },
+        ...(useNativeAndroidNotification
+          ? {}
+          : {
+              notification: {
+                title: params.title,
+                body: params.body,
+              },
+            }),
         data,
         android: {
           priority: "high",
-          notification: {
-            title: params.title,
-            body: params.body,
-            icon: "ic_launcher",
-            sound: "default",
-            clickAction: "FCM_PLUGIN_ACTIVITY",
-          },
+          ...(useNativeAndroidNotification
+            ? {}
+            : {
+                notification: {
+                  title: params.title,
+                  body: params.body,
+                  icon: "ic_launcher",
+                  sound: "moovu_alert",
+                  channelId: "moovu_critical_v2",
+                  clickAction: "FCM_PLUGIN_ACTIVITY",
+                },
+              }),
         },
         webpush: {
           notification: {
@@ -380,7 +484,8 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
             title: payload.title,
             body: payload.body,
             icon: "ic_launcher",
-            sound: "default",
+            sound: "moovu_alert",
+            channelId: "moovu_critical_v2",
             clickAction: "FCM_PLUGIN_ACTIVITY",
           },
         },

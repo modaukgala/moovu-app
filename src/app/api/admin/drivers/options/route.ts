@@ -34,7 +34,11 @@ export async function GET(req: Request) {
       .order("first_name", { ascending: true });
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      console.error("[admin-driver-options] failed to load drivers", error);
+      return NextResponse.json(
+        { ok: false, error: "Could not load drivers. Please refresh or contact admin support." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({

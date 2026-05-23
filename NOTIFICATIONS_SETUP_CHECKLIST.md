@@ -3,7 +3,7 @@
 ## Firebase project
 
 - Create or confirm a Firebase project for MOOVU.
-- Add an Android Firebase app with package name `za.co.moovu.app`.
+- Add Android Firebase apps with package names `za.co.moovurides.app` for MOOVU customer and `za.co.moovurides.driver` for MOOVU Driver.
 - Download `google-services.json` and place it at `android/app/google-services.json`.
 - Create a Firebase Web app and copy its public config values into `.env.local` and Vercel.
 - Create a Firebase service account key for server sending.
@@ -43,7 +43,9 @@ NEXT_PUBLIC_SITE_URL=https://moovurides.co.za
 ## Supabase table
 
 - Review and run `docs/fcm-notifications-migration.sql` in Supabase SQL editor or your migration workflow.
+- Review and run `docs/native-notification-actions-migration.sql` so Android notification shade actions can securely accept/decline trip offers and send chat replies.
 - Confirm `public.fcm_tokens` exists.
+- Confirm `public.notification_action_tokens` exists.
 - Confirm these columns exist: `user_id`, `role`, `token`, `platform`, `device_id`, `app_source`, `is_active`, `last_used_at`, `created_at`, `updated_at`.
 - Confirm RLS is enabled.
 - Confirm users can read/delete their own rows and writes happen through the server API.
@@ -52,9 +54,11 @@ NEXT_PUBLIC_SITE_URL=https://moovurides.co.za
 ## Android
 
 - Confirm `android/app/google-services.json` exists.
-- Confirm Android package name is `za.co.moovu.app` in Firebase and `android/app/build.gradle`.
+- Confirm Android package name is `za.co.moovurides.app` in Firebase and `android/app/build.gradle`.
+- For the separated driver app, confirm Android package name is `za.co.moovurides.driver` and `driver/android/app/google-services.json` belongs to that Firebase Android app.
 - Confirm `@capacitor/push-notifications` is installed.
 - Confirm `android.permission.POST_NOTIFICATIONS` exists in `android/app/src/main/AndroidManifest.xml`.
+- Confirm `android/app/src/main/res/raw/moovu_alert.wav` exists for MOOVU's custom notification sound.
 - Run:
 
 ```bash
@@ -99,6 +103,9 @@ npx cap open ios
 8. Tap **Enable notifications** and use the role test sender.
 9. Create a customer booking and confirm the selected/eligible driver receives **New Ride Request**.
 10. Accept, arrive, start, complete, cancel, and chat on a trip. Confirm the affected user receives the expected push.
+11. Tap a chat notification and confirm it opens the trip chat.
+12. Tap a trip-offer notification and confirm it opens the driver offer screen.
+13. Use Android notification shade actions: reply to chat, accept a trip offer, and decline a trip offer.
 
 ## Common errors
 
@@ -108,3 +115,5 @@ npx cap open ios
 - Permission denied: enable notifications in Android app settings or browser settings.
 - Token saves but no delivery: check Firebase service account env vars, `fcm_tokens.is_active`, and Vercel runtime logs.
 - Migration warning about missing columns: run `docs/fcm-notifications-migration.sql`.
+- Notification buttons are missing from Android shade: run `docs/native-notification-actions-migration.sql`, rebuild the APK/AAB, reinstall the app, and send a new notification.
+- Custom sound does not change: uninstall/reinstall the app or clear the existing Android notification channel settings, because Android can keep old channel sound settings after an app update.

@@ -33,6 +33,18 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <service
+            android:name=".MoovuFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".MoovuNotificationActionReceiver"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->

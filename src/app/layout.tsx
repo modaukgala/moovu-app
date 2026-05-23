@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import CapacitorBackButtonHandler from "@/components/CapacitorBackButtonHandler";
+import InAppNotificationBar from "@/components/InAppNotificationBar";
 import PortalNotificationLauncher from "@/components/PortalNotificationLauncher";
 
 export const metadata: Metadata = {
@@ -44,6 +45,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
+        <InAppNotificationBar />
         <CapacitorBackButtonHandler />
         <PortalNotificationLauncher />
       </body>

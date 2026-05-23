@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 export default function NewDriverPage() {
 
@@ -12,23 +13,51 @@ export default function NewDriverPage() {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function createDriver(e: React.FormEvent) {
     e.preventDefault();
+    setBusy(true);
+    setError(null);
 
-    await supabaseClient.from("drivers").insert({
-      first_name: firstName,
-      last_name: lastName,
-      phone: phone,
-      email: email,
-      status: "pending"
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    if (!session?.access_token) {
+      setError("Please sign in as an admin to create drivers.");
+      setBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/admin/drivers/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        phone,
+        email,
+      }),
     });
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok || !json?.ok) {
+      setError(json?.error || "Could not create driver. Please check the details and try again.");
+      setBusy(false);
+      return;
+    }
 
     router.push("/admin/drivers");
   }
 
   return (
     <main className="p-6">
+      {error && <CenteredMessageBox title="Create driver failed" message={error} onClose={() => setError(null)} />}
 
       <h1 className="text-2xl font-semibold mb-6">Add Driver</h1>
 
@@ -62,8 +91,8 @@ export default function NewDriverPage() {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <button className="border rounded-xl px-4 py-2">
-          Create Driver
+        <button disabled={busy} className="border rounded-xl px-4 py-2">
+          {busy ? "Creating..." : "Create Driver"}
         </button>
 
       </form>

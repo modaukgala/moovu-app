@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { sendPushToTargets } from "@/lib/push-server";
+import { OFFER_ESCALATION_SECONDS, isMissingOfferTableError } from "@/lib/trip-offers";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -91,6 +92,7 @@ export async function POST(req: Request) {
     }
 
     const expiresAt = new Date(Date.now() + 30 * 1000).toISOString();
+    const escalatesAt = new Date(Date.now() + OFFER_ESCALATION_SECONDS * 1000).toISOString();
 
     const { error: busyError } = await supabaseAdmin
       .from("drivers")
@@ -128,6 +130,27 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    try {
+      const { error: offerRowError } = await supabaseAdmin.from("driver_trip_offers").insert({
+        trip_id: tripId,
+        driver_id: driverId,
+        status: "shown",
+        offered_at: new Date().toISOString(),
+        visible_until: escalatesAt,
+        escalates_at: escalatesAt,
+        accept_deadline_at: expiresAt,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (offerRowError && !isMissingOfferTableError(offerRowError)) {
+        console.error("[admin-assign] failed to create driver offer row", {
+          tripId,
+          driverId,
+          reason: offerRowError.message,
+        });
+      }
+    } catch {}
 
     try {
       await supabaseAdmin.from("trip_events").insert({

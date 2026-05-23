@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server";
+import {
+  findKnownPlace,
+  googleLocationParam,
+  knownPlacePrediction,
+  MOOVU_SEARCH_RADIUS_METERS,
+} from "@/lib/maps/moovuPlaces";
 
 type PlacePrediction = {
   description?: string;
@@ -28,6 +34,8 @@ export async function POST(req: Request) {
       "https://maps.googleapis.com/maps/api/place/autocomplete/json" +
       `?input=${encodeURIComponent(input)}` +
       `&components=country:za` +
+      `&location=${encodeURIComponent(googleLocationParam())}` +
+      `&radius=${MOOVU_SEARCH_RADIUS_METERS}` +
       `&language=en` +
       `&key=${encodeURIComponent(key)}`;
 
@@ -50,6 +58,18 @@ export async function POST(req: Request) {
       description: prediction.description,
       place_id: prediction.place_id,
     }));
+
+    const knownPlace = findKnownPlace(String(input));
+    if (knownPlace) {
+      const knownPrediction = knownPlacePrediction(knownPlace);
+      const withoutDuplicate = predictions.filter(
+        (prediction) => prediction.description !== knownPrediction.description
+      );
+      return NextResponse.json({
+        ok: true,
+        predictions: [knownPrediction, ...withoutDuplicate].slice(0, 8),
+      });
+    }
 
     return NextResponse.json({ ok: true, predictions });
   } catch (error: unknown) {

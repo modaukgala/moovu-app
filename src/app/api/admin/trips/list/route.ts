@@ -43,8 +43,9 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false });
 
     if (error) {
+      console.error("[admin-trips-list] failed to load trips", error);
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { ok: false, error: "Could not load trips. Please refresh or contact admin support." },
         { status: 500 }
       );
     }

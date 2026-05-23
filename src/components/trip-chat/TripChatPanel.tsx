@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { notifyInApp } from "@/lib/in-app-notifications";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type TripChatRole = "customer" | "driver";
@@ -37,6 +38,7 @@ type Props = {
   disabled?: boolean;
   disabledReason?: string;
   buttonClassName?: string;
+  initialOpen?: boolean;
 };
 
 const MAX_MESSAGE_LENGTH = 1000;
@@ -54,8 +56,9 @@ export default function TripChatPanel({
   disabled = false,
   disabledReason = "Chat is available after the driver accepts the trip.",
   buttonClassName,
+  initialOpen = false,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen && !disabled);
   const [messages, setMessages] = useState<TripMessage[]>([]);
   const [role, setRole] = useState<TripChatRole | null>(null);
   const [canSend, setCanSend] = useState(false);
@@ -65,6 +68,7 @@ export default function TripChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const lastUnreadCountRef = useRef(0);
 
   const remaining = MAX_MESSAGE_LENGTH - text.length;
 
@@ -174,8 +178,20 @@ export default function TripChatPanel({
     const json = (await res.json().catch(() => null)) as MessagesResponse | null;
     if (!res.ok || !json?.ok) return;
 
-    setUnreadCount(Number(json.unreadCount ?? 0));
-  }, [disabled, getAccessToken, open, tripId]);
+    const nextUnreadCount = Number(json.unreadCount ?? 0);
+    if (nextUnreadCount > lastUnreadCountRef.current) {
+      const otherParticipant = label.toLowerCase().includes("customer") ? "customer" : "driver";
+      notifyInApp({
+        title: `New message from ${otherParticipant}`,
+        body: "Open trip chat to reply.",
+        tone: "message",
+        loud: true,
+      });
+    }
+
+    lastUnreadCountRef.current = nextUnreadCount;
+    setUnreadCount(nextUnreadCount);
+  }, [disabled, getAccessToken, label, open, tripId]);
 
   useEffect(() => {
     if (open || disabled) return;

@@ -168,7 +168,7 @@ export default function AdminSubscriptionsPage() {
 
     setRequests(
       (json.requests ?? []).filter((row: SubscriptionRequest) =>
-        row.payment_type === "subscription" || row.payment_type === "combined"
+        row.payment_type === "subscription"
       )
     );
   }, [getAccessToken]);
@@ -454,6 +454,12 @@ export default function AdminSubscriptionsPage() {
                 <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">
                   <span className="font-bold text-slate-950">Reference:</span> {row.payment_reference || "--"}
                   {row.note ? <span className="ml-2">Note: {row.note}</span> : null}
+                  <Link
+                    href={`/admin/payment-receipts/${row.id}`}
+                    className="ml-3 font-black text-[var(--moovu-primary)]"
+                  >
+                    Receipt
+                  </Link>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-3">

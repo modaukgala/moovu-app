@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { calculateKasiFare } from "@/lib/pricing/kasiPricing";
@@ -22,10 +22,6 @@ type PaymentMethod = "cash" | "online" | "other";
 
 function isPaymentMethod(value: string): value is PaymentMethod {
   return value === "cash" || value === "online" || value === "other";
-}
-
-function generateOtp() {
-  return String(Math.floor(1000 + Math.random() * 9000));
 }
 
 export default function NewTripPage() {
@@ -62,17 +58,40 @@ export default function NewTripPage() {
   const [calcBusy, setCalcBusy] = useState(false);
   const [calcInfo, setCalcInfo] = useState<string | null>(null);
 
+  const getAccessToken = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+    return session?.access_token ?? null;
+  }, []);
+
   useEffect(() => {
     (async () => {
-      const { data } = await supabaseClient
-        .from("drivers")
-        .select("id, first_name, last_name, phone, status")
-        .in("status", ["approved", "active"])
-        .order("created_at", { ascending: false });
+      const token = await getAccessToken();
+      if (!token) {
+        setDrivers([]);
+        setErr("Please sign in as an admin to load drivers.");
+        return;
+      }
 
-      setDrivers((data as Driver[]) ?? []);
+      const res = await fetch("/api/admin/drivers/options", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        setDrivers([]);
+        setErr(json?.error || "Could not load drivers. Please refresh or contact admin support.");
+        return;
+      }
+
+      const rows = ((json.drivers ?? []) as Driver[]).filter((driver) =>
+        ["approved", "active"].includes(driver.status)
+      );
+      setDrivers(rows);
     })();
-  }, []);
+  }, [getAccessToken]);
 
   async function fetchPredictions(input: string): Promise<Prediction[]> {
     const res = await fetch("/api/maps/autocomplete", {
@@ -169,55 +188,37 @@ export default function NewTripPage() {
 
     setBusy(true);
 
-    const { data: userData } = await supabaseClient.auth.getUser();
-    const createdBy = userData.user?.id ?? null;
-    const initialStatus = driverId ? "assigned" : "requested";
-    const completionOtp = generateOtp();
-
-    const { data: trip, error } = await supabaseClient
-      .from("trips")
-      .insert({
-        created_by: createdBy,
-        rider_name: riderName || null,
-        rider_phone: riderPhone || null,
-        pickup_address: pickup.trim(),
-        dropoff_address: dropoff.trim(),
-        payment_method: paymentMethod,
-        fare_amount: finalFare,
-        distance_km: km,
-        duration_min: durationMin ? Number(durationMin) : null,
-        status: initialStatus,
-        driver_id: driverId || null,
-        completion_otp: completionOtp,
-        otp_verified: false,
-      })
-      .select("*")
-      .single();
-
-    if (error || !trip) {
+    const token = await getAccessToken();
+    if (!token) {
       setBusy(false);
-      setErr(error?.message ?? "Failed to create trip");
+      setErr("Please sign in as an admin to create trips.");
       return;
     }
 
-    await supabaseClient.from("trip_events").insert({
-      trip_id: trip.id,
-      event_type: "created",
-      message: `Trip created. Rider OTP: ${completionOtp}`,
-      old_status: null,
-      new_status: trip.status,
-      created_by: createdBy,
+    const res = await fetch("/api/admin/trips/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        riderName,
+        riderPhone,
+        pickup: pickup.trim(),
+        dropoff: dropoff.trim(),
+        paymentMethod,
+        fare: finalFare,
+        distanceKm: km,
+        durationMin,
+        driverId,
+      }),
     });
+    const json = await res.json().catch(() => null);
 
-    if (driverId) {
-      await supabaseClient.from("trip_events").insert({
-        trip_id: trip.id,
-        event_type: "assignment",
-        message: `Assigned driver ${driverId}`,
-        old_status: "requested",
-        new_status: "assigned",
-        created_by: createdBy,
-      });
+    if (!res.ok || !json?.ok) {
+      setBusy(false);
+      setErr(json?.error || "Could not create trip. Please check the details and try again.");
+      return;
     }
 
     setBusy(false);

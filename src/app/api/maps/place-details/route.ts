@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { knownPlaceFromSyntheticId } from "@/lib/maps/moovuPlaces";
 
 export async function POST(req: Request) {
   try {
@@ -6,6 +7,18 @@ export async function POST(req: Request) {
 
     if (!place_id) {
       return NextResponse.json({ ok: false, error: "Missing place_id" }, { status: 400 });
+    }
+
+    const knownPlace = knownPlaceFromSyntheticId(String(place_id));
+    if (knownPlace) {
+      return NextResponse.json({
+        ok: true,
+        place_id,
+        formatted_address: knownPlace.formattedAddress,
+        name: knownPlace.name,
+        lat: knownPlace.lat,
+        lng: knownPlace.lng,
+      });
     }
 
     const key =

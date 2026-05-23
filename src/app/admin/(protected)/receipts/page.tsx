@@ -35,23 +35,31 @@ export default function AdminReceiptsPage() {
     setLoading(true);
     setMsg(null);
 
-    const { data, error } = await supabaseClient
-      .from("trips")
-      .select(
-        "id, rider_name, pickup_address, dropoff_address, fare_amount, payment_method, status, created_at, completed_at"
-      )
-      .in("status", ["completed", "cancelled"])
-      .order("created_at", { ascending: false })
-      .limit(100);
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
 
-    if (error) {
-      setMsg(error.message);
+    if (!session?.access_token) {
+      setMsg("Please sign in as an admin to view receipts.");
       setTrips([]);
       setLoading(false);
       return;
     }
 
-    setTrips((data ?? []) as ReceiptTrip[]);
+    const res = await fetch("/api/admin/receipts", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
+    });
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok || !json?.ok) {
+      setMsg(json?.error || "Could not load receipts. Please refresh or contact admin support.");
+      setTrips([]);
+      setLoading(false);
+      return;
+    }
+
+    setTrips((json.receipts ?? []) as ReceiptTrip[]);
     setLoading(false);
   }
 

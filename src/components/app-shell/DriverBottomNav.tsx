@@ -7,6 +7,7 @@ const items = [
   { href: "/driver", label: "Home" },
   { href: "/driver/history", label: "Trips" },
   { href: "/driver/earnings", label: "Earnings" },
+  { href: "/driver/subscriptions", label: "Subs" },
   { href: "/driver/complete-profile", label: "Account" },
 ] as const;
 

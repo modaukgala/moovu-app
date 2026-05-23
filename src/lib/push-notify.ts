@@ -45,7 +45,8 @@ export async function notifyCustomerForTrip(
   tripId: string,
   title: string,
   body: string,
-  url = "/book"
+  url = "/book",
+  data?: Record<string, string | number | boolean | null | undefined>
 ) {
   const { customerUserId } = await getTripNotificationTargets(tripId);
   if (!customerUserId) return null;
@@ -56,6 +57,7 @@ export async function notifyCustomerForTrip(
     title,
     body,
     url,
+    data,
   });
 }
 
@@ -63,7 +65,8 @@ export async function notifyDriverForTrip(
   tripId: string,
   title: string,
   body: string,
-  url = "/driver"
+  url = "/driver",
+  data?: Record<string, string | number | boolean | null | undefined>
 ) {
   const { driverUserId } = await getTripNotificationTargets(tripId);
   if (!driverUserId) return null;
@@ -74,6 +77,7 @@ export async function notifyDriverForTrip(
     title,
     body,
     url,
+    data,
   });
 }
 

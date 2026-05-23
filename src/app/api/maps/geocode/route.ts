@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  findKnownPlace,
+  googleBoundsParam,
+  localizedSearchQueries,
+} from "@/lib/maps/moovuPlaces";
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +14,16 @@ export async function POST(req: Request) {
         { ok: false, error: "Missing place name" },
         { status: 400 }
       );
+    }
+
+    const knownPlace = findKnownPlace(String(place));
+    if (knownPlace) {
+      return NextResponse.json({
+        ok: true,
+        lat: knownPlace.lat,
+        lng: knownPlace.lng,
+        address: knownPlace.formattedAddress,
+      });
     }
 
     const key =
@@ -22,22 +37,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const url =
-      "https://maps.googleapis.com/maps/api/geocode/json" +
-      `?address=${encodeURIComponent(`${place}, South Africa`)}` +
-      `&key=${encodeURIComponent(key)}`;
+    let result = null;
+    let lastStatus = "";
 
-    const res = await fetch(url, { cache: "no-store" });
-    const data = await res.json();
+    for (const query of localizedSearchQueries(String(place))) {
+      const url =
+        "https://maps.googleapis.com/maps/api/geocode/json" +
+        `?address=${encodeURIComponent(query)}` +
+        `&components=country:ZA` +
+        `&bounds=${encodeURIComponent(googleBoundsParam())}` +
+        `&region=za` +
+        `&key=${encodeURIComponent(key)}`;
 
-    if (data.status !== "OK" || !data.results?.length) {
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      lastStatus = data.status;
+
+      if (data.status === "OK" && data.results?.length) {
+        result = data.results[0];
+        break;
+      }
+    }
+
+    if (!result) {
       return NextResponse.json(
-        { ok: false, error: "Location not found" },
+        { ok: false, error: "Location not found", status: lastStatus },
         { status: 404 }
       );
     }
-
-    const result = data.results[0];
 
     return NextResponse.json({
       ok: true,

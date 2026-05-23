@@ -26,15 +26,28 @@ self.addEventListener("push", (event) => {
     // Ignore malformed push payloads
   }
 
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const visibleClient = clients.find((client) => client.focused || client.visibilityState === "visible");
+
+    if (visibleClient) {
+      visibleClient.postMessage({
+        type: "MOOVU_PUSH",
+        title: data.title,
+        body: data.body,
+        url: data.url,
+      });
+      return;
+    }
+
+    return self.registration.showNotification(data.title, {
       body: data.body,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
       data: { url: data.url },
       requireInteraction: false,
-    })
-  );
+    });
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {

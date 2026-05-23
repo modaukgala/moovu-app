@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Trip = {
@@ -47,27 +48,43 @@ export default function TripDetailPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [pageError, setPageError] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
+    setPageError(null);
 
-    const { data: t } = await supabaseClient.from("trips").select("*").eq("id", tripId).single();
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
 
-    const { data: ev } = await supabaseClient
-      .from("trip_events")
-      .select("*")
-      .eq("trip_id", tripId)
-      .order("created_at", { ascending: false });
+    if (!session?.access_token) {
+      setTrip(null);
+      setEvents([]);
+      setDrivers([]);
+      setPageError("Please sign in as an admin to view trip details.");
+      setLoading(false);
+      return;
+    }
 
-    const { data: dr } = await supabaseClient
-      .from("drivers")
-      .select("id, first_name, last_name, phone, status, online, busy")
-      .in("status", ["approved", "active"])
-      .order("created_at", { ascending: false });
+    const res = await fetch(`/api/admin/trips/${encodeURIComponent(tripId)}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
+    });
+    const json = await res.json().catch(() => null);
 
-    setTrip((t as Trip | null) ?? null);
-    setEvents((ev as TripEvent[] | null) ?? []);
-    setDrivers((dr as Driver[] | null) ?? []);
+    if (!res.ok || !json?.ok) {
+      setTrip(null);
+      setEvents([]);
+      setDrivers([]);
+      setPageError(json?.error || "Could not load trip details. Please refresh or contact admin support.");
+      setLoading(false);
+      return;
+    }
+
+    setTrip((json.trip as Trip | null) ?? null);
+    setEvents((json.events as TripEvent[] | null) ?? []);
+    setDrivers((json.drivers as Driver[] | null) ?? []);
     setLoading(false);
   }, [tripId]);
 
@@ -112,7 +129,7 @@ export default function TripDetailPage() {
 
     const json = await res.json();
     if (!json.ok) {
-      alert(json.error || "Offer failed");
+      setPageError(json.error || "Offer failed");
       return;
     }
 
@@ -124,18 +141,28 @@ export default function TripDetailPage() {
     const reason = prompt("Cancel reason?")?.trim();
     if (!reason) return;
 
-    await supabaseClient.from("trips").update({ status: "cancelled", cancel_reason: reason }).eq("id", tripId);
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
 
-    await supabaseClient.from("trip_events").insert({
-      trip_id: tripId,
-      event_type: "cancel",
-      message: `Cancelled: ${reason}`,
-      old_status: trip.status,
-      new_status: "cancelled",
+    if (!session?.access_token) {
+      setPageError("Please sign in as an admin to cancel trips.");
+      return;
+    }
+
+    const res = await fetch("/api/admin/trips/cancel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ tripId, reason }),
     });
+    const json = await res.json().catch(() => null);
 
-    if (trip.driver_id) {
-      await supabaseClient.from("drivers").update({ busy: false }).eq("id", trip.driver_id);
+    if (!res.ok || !json?.ok) {
+      setPageError(json?.error || "Could not cancel trip. Please try again.");
+      return;
     }
 
     await loadAll();
@@ -154,6 +181,13 @@ export default function TripDetailPage() {
   if (!trip) {
     return (
       <main className="space-y-6 text-black">
+        {pageError && (
+          <CenteredMessageBox
+            title="Could not load trip"
+            message={pageError}
+            onClose={() => setPageError(null)}
+          />
+        )}
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
           <p className="text-black">Trip not found.</p>
           <button
@@ -172,6 +206,13 @@ export default function TripDetailPage() {
 
   return (
     <main className="space-y-6 text-black">
+      {pageError && (
+        <CenteredMessageBox
+          title="Trip action failed"
+          message={pageError}
+          onClose={() => setPageError(null)}
+        />
+      )}
       <div className="flex items-start justify-between gap-6">
         <div>
           <div className="text-sm text-gray-500">Trip Detail</div>

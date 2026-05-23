@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { notifyInApp } from "@/lib/in-app-notifications";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -154,6 +155,7 @@ function gpsNoticeTone(notice: GpsNotice | string): GpsNotice["tone"] {
 
 export default function DriverHomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [driver, setDriver] = useState<Driver | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
@@ -178,11 +180,14 @@ export default function DriverHomePage() {
   const canOpenTripChat =
     !!currentTrip?.driver_id &&
     ["assigned", "arrived", "ongoing"].includes(currentTrip.status);
+  const shouldOpenChatFromNotification = searchParams.get("chat") === "1";
+  const notificationTripId = searchParams.get("tripId") || searchParams.get("offerTripId") || "";
 
   const offersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsPermissionBlockedRef = useRef(false);
+  const lastNotifiedOfferIdRef = useRef<string | null>(null);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -485,6 +490,12 @@ export default function DriverHomePage() {
     }
 
     setInfo(action === "accept" ? "Offer accepted." : "Offer declined.");
+    notifyInApp({
+      title: action === "accept" ? "Trip accepted" : "Trip declined",
+      body: action === "accept" ? "MOOVU is opening this trip for you." : "You will not receive this offer again.",
+      tone: action === "accept" ? "success" : "info",
+      loud: action === "accept",
+    });
     await loadCurrentOffer();
     await loadCurrentTrip();
     await loadDriverProfile(true);
@@ -525,6 +536,16 @@ export default function DriverHomePage() {
     }
 
     setInfo(successMsg);
+    notifyInApp({
+      title: successMsg,
+      body: endpoint.includes("/start")
+        ? "Start OTP verified. The trip is now active."
+        : endpoint.includes("/complete")
+          ? "End OTP verified. The trip has been completed."
+          : "MOOVU saved this trip update.",
+      tone: endpoint.includes("/complete") || endpoint.includes("/start") ? "success" : "info",
+      loud: endpoint.includes("/start") || endpoint.includes("/complete"),
+    });
     await loadCurrentTrip();
     await loadDriverProfile(true);
   }
@@ -732,6 +753,31 @@ export default function DriverHomePage() {
     // Polling is keyed to online/OTP state so OTP entry is not disrupted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driver?.online, otpEntryOpen]);
+
+  useEffect(() => {
+    if (!searchParams.get("offerTripId")) return;
+    document
+      .getElementById("driver-trip-offer-card")
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [offer?.id, searchParams]);
+
+  useEffect(() => {
+    if (!offer?.id) {
+      lastNotifiedOfferIdRef.current = null;
+      return;
+    }
+
+    if (lastNotifiedOfferIdRef.current === offer.id) return;
+    lastNotifiedOfferIdRef.current = offer.id;
+
+    notifyInApp({
+      title: "New trip offer",
+      body: `${offer.pickup_address ?? "Pickup"} to ${offer.dropoff_address ?? "destination"}`,
+      tone: "offer",
+      url: `/driver?offerTripId=${encodeURIComponent(offer.id)}`,
+      loud: true,
+    });
+  }, [offer?.dropoff_address, offer?.id, offer?.pickup_address]);
 
   useEffect(() => {
     if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
@@ -942,6 +988,54 @@ export default function DriverHomePage() {
             </div>
           </section>
         </div>
+      )}
+
+      {offer && (
+        <section className="moovu-driver-offer-drop" aria-live="assertive">
+          <div className="moovu-driver-offer-drop-inner">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="moovu-driver-offer-alert-dot" />
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+                  New trip offer
+                </span>
+                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-800">
+                  {secondsLeft != null ? `${secondsLeft}s left` : "Respond now"}
+                </span>
+              </div>
+              <div className="mt-2 text-xl font-black text-slate-950">
+                R{offer.fare_amount ?? "—"} • {offer.distance_km == null ? "Distance pending" : `${Number(offer.distance_km).toFixed(1)} km`}
+              </div>
+              <div className="mt-2 grid gap-2 text-sm font-semibold text-slate-700 sm:grid-cols-2">
+                <div className="truncate">
+                  <span className="text-slate-400">Pickup:</span> {offer.pickup_address ?? "—"}
+                </div>
+                <div className="truncate">
+                  <span className="text-slate-400">Dropoff:</span> {offer.dropoff_address ?? "—"}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid min-w-full grid-cols-2 gap-2 sm:min-w-[230px]">
+              <button
+                type="button"
+                className="moovu-driver-accept"
+                disabled={busy || secondsLeft === 0}
+                onClick={() => respondToOffer("accept")}
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                className="moovu-driver-decline"
+                disabled={busy || secondsLeft === 0}
+                onClick={() => respondToOffer("reject")}
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        </section>
       )}
 
       <div className="moovu-shell">
@@ -1411,7 +1505,7 @@ export default function DriverHomePage() {
                 </div>
               </section>
 
-              <section className={`moovu-driver-offer-card p-5 ${offer ? "has-offer" : ""}`}>
+              <section id="driver-trip-offer-card" className={`moovu-driver-offer-card p-5 ${offer ? "has-offer" : ""}`}>
                 <div className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
                   Trip offers
                 </div>
@@ -1517,6 +1611,10 @@ export default function DriverHomePage() {
             tripId={currentTrip.id}
             label="Chat with customer"
             buttonClassName="moovu-floating-chat-button"
+            initialOpen={
+              shouldOpenChatFromNotification &&
+              (!notificationTripId || notificationTripId === currentTrip.id)
+            }
           />
         </div>
       )}

@@ -223,7 +223,7 @@ export default function AdminPaymentReviewsPage() {
             <div className="moovu-section-title">MOOVU Admin</div>
             <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Payment reviews</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Review subscription, commission and combined payments in one place.
+              Review subscription and commission POPs in one place. Legacy combined requests remain visible for compatibility only.
             </p>
           </div>
 
@@ -262,7 +262,7 @@ export default function AdminPaymentReviewsPage() {
               <option value="all">All payment types</option>
               <option value="subscription">Subscriptions</option>
               <option value="commission">Commissions</option>
-              <option value="combined">Combined</option>
+              <option value="combined">Legacy combined</option>
             </select>
 
             <button
@@ -321,6 +321,12 @@ export default function AdminPaymentReviewsPage() {
                     <div>
                       <div className="text-sm text-gray-500">Reference</div>
                       <div className="font-medium">{row.payment_reference}</div>
+                      <Link
+                        href={`/admin/payment-receipts/${row.id}`}
+                        className="mt-1 inline-flex text-xs font-black text-[var(--moovu-primary)]"
+                      >
+                        Open receipt
+                      </Link>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Submitted At</div>

@@ -24,6 +24,17 @@ const navItems = [
   { href: "/admin/notifications", label: "Notifications", group: "System" },
 ];
 
+type PaymentFlagCounts = {
+  all: number;
+  subscription: number;
+  commission: number;
+};
+
+type PaymentFlagRow = {
+  payment_type?: string | null;
+  status?: string | null;
+};
+
 export default function AdminProtectedLayout({
   children,
 }: {
@@ -31,6 +42,11 @@ export default function AdminProtectedLayout({
 }) {
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
+  const [paymentFlags, setPaymentFlags] = useState<PaymentFlagCounts>({
+    all: 0,
+    subscription: 0,
+    commission: 0,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -59,6 +75,26 @@ export default function AdminProtectedLayout({
         }
         return;
       }
+
+      fetch("/api/admin/payment-reviews?status=all", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+        .then((res) => res.json())
+        .then((json: { ok?: boolean; requests?: PaymentFlagRow[] }) => {
+          if (!json?.ok) return;
+          const active = (json.requests ?? []).filter((row) =>
+            ["pending_payment_review", "waiting_confirmation"].includes(String(row.status ?? ""))
+          );
+          setPaymentFlags({
+            all: active.length,
+            subscription: active.filter((row) => row.payment_type === "subscription").length,
+            commission: active.filter((row) => row.payment_type === "commission").length,
+          });
+        })
+        .catch(() => {
+          setPaymentFlags({ all: 0, subscription: 0, commission: 0 });
+        });
 
       setChecking(false);
     }
@@ -170,7 +206,22 @@ export default function AdminProtectedLayout({
                             active ? "moovu-admin-link-active" : ""
                           }`}
                         >
-                          {item.label}
+                          <span>{item.label}</span>
+                          {item.href === "/admin/payment-reviews" && paymentFlags.all > 0 ? (
+                            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
+                              {paymentFlags.all}
+                            </span>
+                          ) : null}
+                          {item.href === "/admin/commission-payments" && paymentFlags.commission > 0 ? (
+                            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
+                              {paymentFlags.commission}
+                            </span>
+                          ) : null}
+                          {item.href === "/admin/subscriptions" && paymentFlags.subscription > 0 ? (
+                            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
+                              {paymentFlags.subscription}
+                            </span>
+                          ) : null}
                         </Link>
                       );
                     })}
@@ -219,9 +270,12 @@ export default function AdminProtectedLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={active ? "is-active" : ""}
-                >
+                className={active ? "is-active" : ""}
+              >
                   {item.label}
+                  {item.href === "/admin/payment-reviews" && paymentFlags.all > 0 ? ` (${paymentFlags.all})` : ""}
+                  {item.href === "/admin/commission-payments" && paymentFlags.commission > 0 ? ` (${paymentFlags.commission})` : ""}
+                  {item.href === "/admin/subscriptions" && paymentFlags.subscription > 0 ? ` (${paymentFlags.subscription})` : ""}
                 </Link>
               );
             })}
