@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { calculateCommission, MOOVU_COMMISSION_PCT } from "@/lib/finance/commission";
+import { calculateCommission, resolveCommissionPct } from "@/lib/finance/commission";
 
 type CommissionCalc = {
   fareAmount: number;
@@ -161,16 +161,21 @@ export async function applyTripCommissionServer(params: {
   fareAmount: number;
   createdBy?: string | null;
   commissionPct?: number;
+  rideOptionId?: string | null;
 }): Promise<ApplyTripCommissionServerResult> {
   const {
     tripId,
     driverId,
     fareAmount,
     createdBy = null,
-    commissionPct = MOOVU_COMMISSION_PCT,
+    commissionPct = null,
+    rideOptionId = null,
   } = params;
 
-  const calc = calculateCommission(fareAmount, commissionPct);
+  const calc = calculateCommission(
+    fareAmount,
+    resolveCommissionPct({ rideOptionId, commissionPct })
+  );
 
   if (!calc.fareAmount || calc.fareAmount <= 0) {
     return { ok: false, error: "Invalid fare amount." };

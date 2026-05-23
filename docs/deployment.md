@@ -77,8 +77,23 @@ After generation, wire the typed database into the browser/admin Supabase client
 - Apply `docs/cancellation-management-migration.sql` before relying on full cancellation/no-show fee reporting tables and optional trip columns.
 - The app server calculates fees. Current policy:
   - free cancellation during the first 2 minutes or before driver dispatch.
-  - late cancellation R15 after driver dispatch, split R10 driver and R5 MOOVU.
-  - no-show R30 after driver arrival plus 5 minutes, split R22 driver and R8 MOOVU.
+  - MOOVU Go late cancellation R20 after driver dispatch, split R13 driver and R7 MOOVU.
+  - MOOVU Go no-show R30 after driver arrival plus 5 minutes, split R22 driver and R8 MOOVU.
+  - MOOVU Go XL late cancellation R30, split R20 driver and R10 MOOVU.
+  - MOOVU Go XL no-show R40, split R30 driver and R10 MOOVU.
+
+## Manual Surge Pricing Setup
+
+- Apply `docs/manual-surge-migration.sql` before using the admin surge control in production.
+- The app safely defaults to Normal pricing if the setting table is not available.
+- Admins can change the active mode from the admin dashboard after the migration is applied:
+  - Normal: 1.0
+  - Busy: 1.1
+  - Heavy demand: 1.2
+  - Rain/Event: 1.4
+- Surge applies only to new bookings after the setting changes. Existing trips and historical fares are not recalculated.
+- Customers only see the final fare and a short pricing note when surge is active.
+- See `docs/pricing-surge.md` for the future automatic surge plan.
 
 ## Supabase Storage Setup
 

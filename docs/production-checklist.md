@@ -29,6 +29,12 @@ Configure these in Vercel:
 - Confirm server-only actions use service role only in API routes.
 - Confirm at least one production admin profile exists with role `owner` or `admin`.
 - Confirm driver account links exist in `driver_accounts`.
+- Apply and verify review-only migrations needed by enabled production features:
+  - `docs/pricing-model-migration.sql`
+  - `docs/manual-surge-migration.sql`
+  - `docs/cancellation-management-migration.sql`
+  - `docs/dispatch-offer-cycle-migration.sql`
+  - `docs/fcm-notifications-migration.sql`
 
 ## Storage Buckets
 
@@ -72,7 +78,7 @@ Create and configure:
 
 1. Customer signs in.
 2. Customer books MOOVU Go.
-3. Customer books MOOVU Group.
+3. Customer books MOOVU Go XL.
 4. Driver goes online.
 5. Driver accepts trip.
 6. Driver marks arrived.
@@ -86,6 +92,7 @@ Create and configure:
 14. Push notifications deliver or fail gracefully.
 15. Chat works after driver acceptance and is unavailable before acceptance.
 16. Admin proof-of-payment links open through signed URLs.
+17. Admin sets surge to Busy, confirms new booking estimate increases, then resets surge to Normal.
 
 ## PWA And Mobile
 

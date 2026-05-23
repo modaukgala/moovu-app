@@ -21,10 +21,10 @@ const rideOptions = [
     price: "From R40",
   },
   {
-    name: "MOOVU Group",
+    name: "MOOVU Go XL",
     capacity: "Up to 6 riders",
-    detail: "Larger vehicle requests",
-    price: "From R75",
+    detail: "More space for groups",
+    price: "From R70",
   },
 ] as const;
 

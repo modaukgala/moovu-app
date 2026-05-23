@@ -12,7 +12,8 @@ This document describes the Supabase objects the current MOOVU app expects. It i
 - `driver_documents`: Driver document metadata and review status.
 - `trips`: Ride lifecycle data including customer, driver, pickup/dropoff, fare, ride status, offer state, OTP fields, and commission fields.
 - `trip_events`: Audit trail for trip status changes, offers, OTP verification, commission application, and admin actions.
-- `trip_cancellation_fees`: Review-only migration-backed ledger for free cancellations, late cancellation fees, and no-show fees. Late cancellation is R15 split R10 driver / R5 MOOVU. No-show is R30 split R22 driver / R8 MOOVU. These are fixed fee splits and must not be treated as normal 9.5% trip commission.
+- `app_pricing_settings`: Server-managed platform pricing settings. The `manual_surge` key stores the active manual surge mode, label, multiplier, and customer message. Add with `docs/manual-surge-migration.sql`; admin APIs use service-role access and customers receive only read-only display data.
+- `trip_cancellation_fees`: Review-only migration-backed ledger for free cancellations, late cancellation fees, and no-show fees. MOOVU Go late cancellation is R20 split R13 driver / R7 MOOVU, and no-show is R30 split R22 driver / R8 MOOVU. MOOVU Go XL late cancellation is R30 split R20 driver / R10 MOOVU, and no-show is R40 split R30 driver / R10 MOOVU. These are fixed fee splits and must not be treated as normal trip commission.
 - `trip_messages`: Optional live chat messages between the customer and assigned driver for a specific accepted trip. Add with `docs/trip-chat-migration.sql`; do not run against production without approval.
 - `driver_trip_offers`: Review-only migration-backed offer queue for staged dispatch. The current app still keeps `trips.driver_id`, `trips.offer_status`, and `trips.offer_expires_at` populated for compatibility, while writing offer queue rows when the migration exists.
 - `driver_offer_stats`: Optional stats for received, accepted, rejected, and missed trip offers.
@@ -41,7 +42,7 @@ This document describes the Supabase objects the current MOOVU app expects. It i
 - Customer legal acceptance is currently stored in Supabase Auth user metadata during signup or the one-time booking prompt. Optional `customers` mirror columns are documented in `docs/legal-acceptance-migration.sql`.
 - Customer real email is stored in Supabase Auth metadata as `customer_email`. The optional `customers.email` column is documented in `docs/cancellation-management-migration.sql`; the app falls back to phone-compatible customer writes until that migration is applied.
 - Commission is applied through `src/lib/finance/applyTripCommissionServer.ts`.
-  New commission calculations use the shared `MOOVU_COMMISSION_PCT` constant in `src/lib/finance/commission.ts`, currently `9.5%`.
+  New commission calculations use the shared service-type fare rules in `src/lib/domain/fare.ts`: MOOVU Go uses 10% and MOOVU Go XL uses 12%. The legacy `MOOVU_COMMISSION_PCT` constant remains for backward-compatible rows without a ride option.
   Drivers are blocked from going online when `driver_wallets.balance_due` is R100 or more, while still being allowed to log in and submit commission payments.
   Existing completed trips keep their stored `commission_pct`, `commission_amount`, and wallet history unless a separate approved data migration is run.
 - Admin API access uses `requireAdminUser`.
@@ -61,7 +62,7 @@ Recommended RLS policies:
 
 ## Non-Destructive Migration Notes
 
-If persistent ride option reporting is required later, add a nullable `ride_option` column to `trips` rather than overloading `ride_type`.
+Persistent ride option reporting uses the nullable `ride_option` column on `trips` rather than overloading `ride_type`. The internal `group` value is displayed to customers as MOOVU Go XL for backward compatibility.
 
 ```sql
 alter table public.trips

@@ -6,6 +6,7 @@ import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { getNoShowFee } from "@/lib/finance/cancellationFees";
 import { notifyInApp } from "@/lib/in-app-notifications";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -42,6 +43,7 @@ type CurrentTrip = {
   created_at: string | null;
   driver_arrived_at?: string | null;
   no_show_eligible_at?: string | null;
+  ride_option?: string | null;
 };
 
 type Driver = {
@@ -906,6 +908,10 @@ export default function DriverHomePage() {
       Math.ceil((new Date(currentTrip.no_show_eligible_at).getTime() - nowMs) / 1000)
     );
   }, [currentTrip?.no_show_eligible_at, nowMs]);
+  const currentNoShowFee = useMemo(
+    () => getNoShowFee(currentTrip?.ride_option),
+    [currentTrip?.ride_option]
+  );
 
   if (loadingDriver) {
     return (
@@ -1362,7 +1368,7 @@ export default function DriverHomePage() {
                           ) : (
                             <div className="space-y-3">
                               <p className="font-semibold">
-                                Customer no-show is now eligible. No-show fee: R30. Driver payout: R22.
+                                Customer no-show is now eligible. No-show fee: R{currentNoShowFee.feeAmount}. Driver payout: R{currentNoShowFee.driverAmount}.
                               </p>
                               <button
                                 type="button"

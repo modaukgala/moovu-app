@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
-import { calculateKasiFare } from "@/lib/pricing/kasiPricing";
+import {
+  DEFAULT_RIDE_OPTION_ID,
+  RIDE_OPTIONS,
+  SURGE_MODES,
+  calculateTripFare,
+  type RideOptionId,
+  type SurgeModeConfig,
+} from "@/lib/domain/fare";
 
 type Driver = {
   id: string;
@@ -48,6 +55,8 @@ export default function NewTripPage() {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [fare, setFare] = useState<string>("");
+  const [rideOptionId, setRideOptionId] = useState<RideOptionId>(DEFAULT_RIDE_OPTION_ID);
+  const [activeSurge, setActiveSurge] = useState<SurgeModeConfig>(SURGE_MODES.normal);
 
   const [driverId, setDriverId] = useState<string>("");
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -90,6 +99,15 @@ export default function NewTripPage() {
         ["approved", "active"].includes(driver.status)
       );
       setDrivers(rows);
+
+      const surgeRes = await fetch("/api/admin/pricing/surge", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const surgeJson = (await surgeRes.json().catch(() => null)) as
+        | { ok?: boolean; surge?: SurgeModeConfig }
+        | null;
+      if (surgeJson?.ok && surgeJson.surge) setActiveSurge(surgeJson.surge);
     })();
   }, [getAccessToken]);
 
@@ -160,7 +178,13 @@ export default function NewTripPage() {
     setCalcInfo(`${json.distanceText} • ${json.durationText}`);
 
     const km = Number(json.distanceKm);
-    const calcFare = calculateKasiFare(km);
+    const calcFare = calculateTripFare({
+      distanceKm: km,
+      durationMin: Number(json.durationMin ?? 0),
+      rideOptionId,
+      surgeLabel: activeSurge.mode,
+      surgeMultiplier: activeSurge.multiplier,
+    }).totalFare;
     setAutoFare(calcFare);
     setFare(String(calcFare));
   }
@@ -180,7 +204,15 @@ export default function NewTripPage() {
       return;
     }
 
-    const finalFare = fare ? Number(fare) : calculateKasiFare(km);
+    const finalFare = fare
+      ? Number(fare)
+      : calculateTripFare({
+          distanceKm: km,
+          durationMin: Number(durationMin || 0),
+          rideOptionId,
+          surgeLabel: activeSurge.mode,
+          surgeMultiplier: activeSurge.multiplier,
+        }).totalFare;
     if (!Number.isFinite(finalFare) || finalFare <= 0) {
       setErr("Fare is invalid. Please auto-calc or enter a valid fare.");
       return;
@@ -211,6 +243,7 @@ export default function NewTripPage() {
         distanceKm: km,
         durationMin,
         driverId,
+        rideOptionId,
       }),
     });
     const json = await res.json().catch(() => null);
@@ -325,10 +358,40 @@ export default function NewTripPage() {
         <div className="border rounded-2xl p-4">
           <div className="font-semibold">Smart Kasi Pricing</div>
           <div className="text-sm opacity-70 mt-1">
-            Base R60 (≤ 3km). Above 3km: +R10 per started km.
+            Uses the same MOOVU launch pricing engine as customer booking.
+          </div>
+          <div className="mt-2 text-xs font-semibold text-sky-800">
+            Active manual surge: {activeSurge.label} x{activeSurge.multiplier.toFixed(1)}. Manual fare overrides remain intentional.
           </div>
 
-          <div className="grid md:grid-cols-4 gap-3 mt-4">
+          <div className="grid md:grid-cols-5 gap-3 mt-4">
+            <select
+              className="border rounded-xl p-3 bg-transparent"
+              value={rideOptionId}
+              onChange={(e) => {
+                const next = e.target.value === "group" ? "group" : "go";
+                setRideOptionId(next);
+                const km = Number(distanceKm);
+                const mins = Number(durationMin || 0);
+                if (Number.isFinite(km) && km > 0) {
+                  const calc = calculateTripFare({
+                    distanceKm: km,
+                    durationMin: mins,
+                    rideOptionId: next,
+                    surgeLabel: activeSurge.mode,
+                    surgeMultiplier: activeSurge.multiplier,
+                  }).totalFare;
+                  setAutoFare(calc);
+                }
+              }}
+            >
+              {RIDE_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+
             <input
               className="border rounded-xl p-3"
               placeholder="Distance (km)"
@@ -357,7 +420,13 @@ export default function NewTripPage() {
               className="border rounded-xl p-3"
               onClick={() => {
                 const km = Number(distanceKm);
-                const calc = calculateKasiFare(km);
+                const calc = calculateTripFare({
+                  distanceKm: km,
+                  durationMin: Number(durationMin || 0),
+                  rideOptionId,
+                  surgeLabel: activeSurge.mode,
+                  surgeMultiplier: activeSurge.multiplier,
+                }).totalFare;
                 setAutoFare(calc);
                 setFare(String(calc));
               }}

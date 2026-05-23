@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import MetricCard from "@/components/ui/MetricCard";
+import ManualSurgeControl from "@/components/admin/ManualSurgeControl";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type AnalyticsResponse = {
@@ -225,6 +226,8 @@ export default function AdminDashboardPage() {
           tone={(analytics?.open_support_issues ?? 0) > 0 ? "warning" : "success"}
         />
       </section>
+
+      <ManualSurgeControl />
 
       <section className="grid gap-3 md:grid-cols-3">
         <Link href="/admin/subscriptions" className="moovu-card-interactive p-5">

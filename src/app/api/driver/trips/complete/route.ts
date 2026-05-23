@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
       .select(
-        "id,status,driver_id,fare_amount,duration_min,dropoff_lat,dropoff_lng,end_otp,end_otp_verified"
+        "id,status,driver_id,fare_amount,duration_min,dropoff_lat,dropoff_lng,end_otp,end_otp_verified,ride_option"
       )
       .eq("id", tripId)
       .maybeSingle();
@@ -226,6 +226,7 @@ export async function POST(req: Request) {
       driverId,
       fareAmount,
       createdBy: user.id,
+      rideOptionId: trip.ride_option,
     });
 
     if (!commissionResult.ok) {

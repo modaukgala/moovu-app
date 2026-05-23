@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     const { data: trip, error } = await supabaseAdmin
       .from("trips")
       .select(
-        "id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,fare_amount,payment_method,created_at,offer_status,offer_expires_at"
+        "id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,fare_amount,payment_method,created_at,offer_status,offer_expires_at,ride_option"
       )
       .eq("driver_id", driverId)
       .in("status", ACTIVE)

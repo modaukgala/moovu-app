@@ -147,7 +147,7 @@ export default function AdminReportsPage() {
       <div>
         <h1 className="text-3xl font-semibold">Driver Earnings Report</h1>
         <p className="opacity-70 mt-1">
-          Completed trips use normal 9.5% MOOVU commission. Cancellation and no-show fees are fixed split payouts, not commission debt.
+          Completed trips use service-type MOOVU commission: 10% for MOOVU Go and 12% for MOOVU Go XL. Cancellation and no-show fees are fixed split payouts, not commission debt.
         </p>
       </div>
 

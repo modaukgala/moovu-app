@@ -9,8 +9,10 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import {
   DEFAULT_RIDE_OPTION_ID,
   RIDE_OPTIONS,
+  SURGE_MODES,
   calculateTripFare,
   type RideOptionId,
+  type SurgeModeConfig,
 } from "@/lib/domain/fare";
 import { MOOVU_LEGAL_VERSION } from "@/lib/legal";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
@@ -72,6 +74,7 @@ export default function RiderBookingPage() {
   const [rideType, setRideType] = useState<"now" | "scheduled">("now");
   const [scheduledFor, setScheduledFor] = useState("");
   const [selectedRideOption, setSelectedRideOption] = useState<RideOptionId>(DEFAULT_RIDE_OPTION_ID);
+  const [activeSurge, setActiveSurge] = useState<SurgeModeConfig>(SURGE_MODES.normal);
 
   const [busy, setBusy] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -106,8 +109,14 @@ export default function RiderBookingPage() {
 
   const fare = useMemo(() => {
     if (distanceKm == null || durationMin == null) return null;
-    return calculateTripFare({ distanceKm, durationMin, rideOptionId: selectedRideOption }).totalFare;
-  }, [distanceKm, durationMin, selectedRideOption]);
+    return calculateTripFare({
+      distanceKm,
+      durationMin,
+      rideOptionId: selectedRideOption,
+      surgeLabel: activeSurge.mode,
+      surgeMultiplier: activeSurge.multiplier,
+    }).totalFare;
+  }, [activeSurge.mode, activeSurge.multiplier, distanceKm, durationMin, selectedRideOption]);
 
   const canCalculate = useMemo(() => (
     !!pickupAddress.trim() && !!dropoffAddress.trim() &&
@@ -199,6 +208,17 @@ export default function RiderBookingPage() {
     setCustomer(json.customer);
     setLegalAcceptanceRequired(!json.legalAcceptance?.accepted);
     setAuthLoading(false);
+  }
+
+  async function loadActiveSurge() {
+    const res = await fetch("/api/pricing/surge", { cache: "no-store" });
+    const json = (await res.json().catch(() => null)) as
+      | { ok?: boolean; surge?: SurgeModeConfig }
+      | null;
+
+    if (json?.ok && json.surge) {
+      setActiveSurge(json.surge);
+    }
   }
 
   async function acceptLegalTerms() {
@@ -464,7 +484,13 @@ export default function RiderBookingPage() {
 
     const km = Number(json.distanceKm ?? 0);
     const mins = Number(json.durationMin ?? 0);
-    const est = calculateTripFare({ distanceKm: km, durationMin: mins, rideOptionId: DEFAULT_RIDE_OPTION_ID });
+    const est = calculateTripFare({
+      distanceKm: km,
+      durationMin: mins,
+      rideOptionId: DEFAULT_RIDE_OPTION_ID,
+      surgeLabel: activeSurge.mode,
+      surgeMultiplier: activeSurge.multiplier,
+    });
     const roundedKm = Number(km.toFixed(2));
     const roundedMins = Math.ceil(mins);
     setDistanceKm(roundedKm); setDurationMin(roundedMins); setBaseFare(est.totalFare);
@@ -495,7 +521,13 @@ export default function RiderBookingPage() {
       if (!accessToken) { router.replace("/customer/auth?next=/book"); return; }
 
       const finalFare = bDistKm != null && bDurMin != null
-        ? calculateTripFare({ distanceKm: bDistKm, durationMin: bDurMin, rideOptionId: selectedRideOption }).totalFare
+        ? calculateTripFare({
+            distanceKm: bDistKm,
+            durationMin: bDurMin,
+            rideOptionId: selectedRideOption,
+            surgeLabel: activeSurge.mode,
+            surgeMultiplier: activeSurge.multiplier,
+          }).totalFare
         : fare ?? baseFare ?? 0;
       const rideOptionLabel = RIDE_OPTIONS.find((o) => o.id === selectedRideOption)?.name ?? "MOOVU Go";
 
@@ -582,6 +614,9 @@ export default function RiderBookingPage() {
   // ── Effects ──────────────────────────────────────────────────────
   useEffect(() => {
     loadCustomer();
+    void loadActiveSurge().catch(() => {
+      setActiveSurge(SURGE_MODES.normal);
+    });
 
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
@@ -677,7 +712,15 @@ export default function RiderBookingPage() {
                       <div className="mt-0.5 text-xs font-semibold text-slate-500">{opt.capacity}</div>
                     </div>
                     <div className="text-sm font-black text-[var(--moovu-primary)]">
-                      {money(calculateTripFare({ distanceKm, durationMin, rideOptionId: opt.id }).totalFare)}
+                      {money(
+                        calculateTripFare({
+                          distanceKm,
+                          durationMin,
+                          rideOptionId: opt.id,
+                          surgeLabel: activeSurge.mode,
+                          surgeMultiplier: activeSurge.multiplier,
+                        }).totalFare
+                      )}
                     </div>
                   </div>
                   <div className="mt-2 text-xs leading-4 text-slate-600">{opt.description}</div>
@@ -685,6 +728,11 @@ export default function RiderBookingPage() {
               );
             })}
           </div>
+          {activeSurge.mode !== "normal" && (
+            <div className="mt-3 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800">
+              {activeSurge.message}
+            </div>
+          )}
         </div>
       )}
 

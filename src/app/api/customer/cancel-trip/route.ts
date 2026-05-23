@@ -122,7 +122,7 @@ export async function POST(req: Request) {
 
     const { data: trip, error: tripError } = await auth.supabaseAdmin
       .from("trips")
-      .select("id,status,customer_id,driver_id,created_at")
+      .select("id,status,customer_id,driver_id,created_at,ride_option")
       .eq("id", tripId)
       .eq("customer_id", auth.customer.id)
       .maybeSingle();
@@ -165,6 +165,7 @@ export async function POST(req: Request) {
     const fee = calculateCustomerCancellationFee({
       status: trip.status,
       createdAt: trip.created_at,
+      rideOptionId: trip.ride_option,
     });
     const cancelledAt = new Date().toISOString();
 

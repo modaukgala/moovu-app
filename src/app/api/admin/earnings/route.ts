@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { MOOVU_COMMISSION_RATE } from "@/lib/finance/commission";
 
 type TripRow = {
   id: string;
@@ -210,7 +209,8 @@ export async function GET(req: Request) {
         total_revenue: totalRevenue,
         total_commission: totalCommission,
         estimated_driver_payout: driverPayoutEstimate,
-        commission_rate: MOOVU_COMMISSION_RATE,
+        commission_rate: null,
+        commission_rate_label: "10% MOOVU Go / 12% MOOVU Go XL",
         total_completed_trips: normalizedTrips.length,
         by_payment_method: byPaymentMethod,
         recent_completed_trips: normalizedTrips.slice(0, 15),

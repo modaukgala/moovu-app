@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { calculateFare } from "@/lib/fare/calculateFare";
 import { getRideOption, normalizeRideOptionId } from "@/lib/domain/fare";
+import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 import { offerNextEligibleDriver } from "@/lib/trip-offers";
 import { fullCustomerName } from "@/lib/customer/auth";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
@@ -33,6 +34,15 @@ function parseScheduledDate(value: string | null) {
 
 function hasOkFlag(value: unknown): value is { ok?: boolean } {
   return typeof value === "object" && value !== null && "ok" in value;
+}
+
+function isMissingOptionalPricingColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && (
+    message.includes("surge_label") ||
+    message.includes("surge_multiplier") ||
+    message.includes("fare_breakdown")
+  );
 }
 
 type BookTripBody = {
@@ -155,10 +165,13 @@ export async function POST(req: Request) {
       }
     }
 
+    const activeSurge = await getActiveManualSurge();
     const fare = calculateFare({
       distanceKm,
       durationMin,
       rideOptionId,
+      surgeLabel: activeSurge.mode,
+      surgeMultiplier: activeSurge.multiplier,
     });
 
     const startOtp = generateOtp();
@@ -172,38 +185,59 @@ export async function POST(req: Request) {
         ? new Date(new Date(scheduledFor).getTime() - 15 * 60 * 1000).toISOString()
         : null;
 
-    const { data: trip, error: tripErr } = await auth.supabaseAdmin
+    const tripPayload: Record<string, unknown> = {
+      customer_id: auth.customer.id,
+      customer_auth_user_id: auth.user.id,
+      rider_name: riderName,
+      rider_phone: auth.customer.phone,
+      pickup_address: pickupAddress,
+      dropoff_address: dropoffAddress,
+      pickup_lat: pickupLat,
+      pickup_lng: pickupLng,
+      dropoff_lat: dropoffLat,
+      dropoff_lng: dropoffLng,
+      payment_method: paymentMethod,
+      distance_km: distanceKm,
+      duration_min: durationMin,
+      fare_amount: fare.totalFare,
+      ride_option: rideOptionId,
+      status: initialStatus,
+      ride_type: rideType,
+      scheduled_for: scheduledFor,
+      scheduled_release_at: scheduledReleaseAt,
+      schedule_status: scheduleStatus,
+      offer_status: null,
+      driver_id: null,
+      start_otp: startOtp,
+      end_otp: endOtp,
+      start_otp_verified: false,
+      end_otp_verified: false,
+      otp_verified: false,
+      surge_label: activeSurge.mode,
+      surge_multiplier: activeSurge.multiplier,
+      fare_breakdown: fare,
+    };
+
+    let insertResult = await auth.supabaseAdmin
       .from("trips")
-      .insert({
-        customer_id: auth.customer.id,
-        customer_auth_user_id: auth.user.id,
-        rider_name: riderName,
-        rider_phone: auth.customer.phone,
-        pickup_address: pickupAddress,
-        dropoff_address: dropoffAddress,
-        pickup_lat: pickupLat,
-        pickup_lng: pickupLng,
-        dropoff_lat: dropoffLat,
-        dropoff_lng: dropoffLng,
-        payment_method: paymentMethod,
-        distance_km: distanceKm,
-        duration_min: durationMin,
-        fare_amount: fare.totalFare,
-        status: initialStatus,
-        ride_type: rideType,
-        scheduled_for: scheduledFor,
-        scheduled_release_at: scheduledReleaseAt,
-        schedule_status: scheduleStatus,
-        offer_status: null,
-        driver_id: null,
-        start_otp: startOtp,
-        end_otp: endOtp,
-        start_otp_verified: false,
-        end_otp_verified: false,
-        otp_verified: false,
-      })
+      .insert(tripPayload)
       .select("*")
       .single();
+
+    if (isMissingOptionalPricingColumn(insertResult.error)) {
+      const legacyPayload = { ...tripPayload };
+      delete legacyPayload.surge_label;
+      delete legacyPayload.surge_multiplier;
+      delete legacyPayload.fare_breakdown;
+
+      insertResult = await auth.supabaseAdmin
+        .from("trips")
+        .insert(legacyPayload)
+        .select("*")
+        .single();
+    }
+
+    const { data: trip, error: tripErr } = insertResult;
 
     if (tripErr || !trip) {
       return NextResponse.json(
@@ -218,8 +252,8 @@ export async function POST(req: Request) {
         event_type: rideType === "scheduled" ? "scheduled_trip_created" : "trip_created",
         message:
           rideType === "scheduled"
-            ? `Scheduled trip created for ${scheduledFor}. Auto release planned for ${scheduledReleaseAt}. Ride option: ${rideOption.name}.`
-            : `Trip requested by authenticated customer. Ride option: ${rideOption.name}.`,
+            ? `Scheduled trip created for ${scheduledFor}. Auto release planned for ${scheduledReleaseAt}. Ride option: ${rideOption.name}. Surge: ${activeSurge.label}.`
+            : `Trip requested by authenticated customer. Ride option: ${rideOption.name}. Surge: ${activeSurge.label}.`,
         old_status: null,
         new_status: initialStatus,
       });

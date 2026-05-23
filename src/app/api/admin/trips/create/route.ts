@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { calculateKasiFare } from "@/lib/pricing/kasiPricing";
+import { calculateFare } from "@/lib/fare/calculateFare";
+import { normalizeRideOptionId } from "@/lib/domain/fare";
+import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 
 const PAYMENT_METHODS = new Set(["cash", "online", "other"]);
 
@@ -30,6 +32,7 @@ export async function POST(req: Request) {
     const dropoff = cleanText(body?.dropoff);
     const paymentMethod = cleanText(body?.paymentMethod) || "cash";
     const driverId = cleanText(body?.driverId);
+    const rideOptionId = normalizeRideOptionId(body?.rideOptionId ?? body?.rideOption ?? body?.ride_option);
     const distanceKm = Number(body?.distanceKm);
     const durationMin = body?.durationMin === "" || body?.durationMin == null ? null : Number(body.durationMin);
     const requestedFare = body?.fare == null || body?.fare === "" ? null : Number(body.fare);
@@ -46,10 +49,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Distance is required." }, { status: 400 });
     }
 
+    const activeSurge = await getActiveManualSurge();
     const fareAmount =
       requestedFare != null && Number.isFinite(requestedFare) && requestedFare > 0
         ? requestedFare
-        : calculateKasiFare(distanceKm);
+        : calculateFare({
+            distanceKm,
+            durationMin,
+            rideOptionId,
+            surgeLabel: activeSurge.mode,
+            surgeMultiplier: activeSurge.multiplier,
+          }).totalFare;
 
     const completionOtp = generateOtp();
     const initialStatus = driverId ? "assigned" : "requested";
@@ -87,6 +97,7 @@ export async function POST(req: Request) {
         fare_amount: fareAmount,
         distance_km: distanceKm,
         duration_min: durationMin != null && Number.isFinite(durationMin) ? durationMin : null,
+        ride_option: rideOptionId,
         status: initialStatus,
         driver_id: driverId || null,
         completion_otp: completionOtp,
@@ -106,7 +117,7 @@ export async function POST(req: Request) {
     await supabaseAdmin.from("trip_events").insert({
       trip_id: trip.id,
       event_type: "created",
-      message: `Trip created. Rider OTP: ${completionOtp}`,
+      message: `Trip created. Rider OTP: ${completionOtp}. Surge: ${activeSurge.label}.`,
       old_status: null,
       new_status: trip.status,
       created_by: user.id,

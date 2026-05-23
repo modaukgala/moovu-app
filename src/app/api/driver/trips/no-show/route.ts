@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { NO_SHOW_FEE, isNoShowEligible, noShowEligibleAt } from "@/lib/finance/cancellationFees";
+import { getNoShowFee, isNoShowEligible, noShowEligibleAt } from "@/lib/finance/cancellationFees";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 function isMissingCancellationColumn(error: { message?: string } | null | undefined) {
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
 
     const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
-      .select("id,status,customer_id,driver_id")
+      .select("id,status,customer_id,driver_id,ride_option")
       .eq("id", tripId)
       .maybeSingle();
 
@@ -102,14 +102,16 @@ export async function POST(req: Request) {
       );
     }
 
+    const noShowFee = getNoShowFee(trip.ride_option);
+
     const { error: feeInsertError } = await supabaseAdmin.from("trip_cancellation_fees").insert({
       trip_id: tripId,
       customer_id: trip.customer_id,
       driver_id: driverId,
-      fee_type: NO_SHOW_FEE.type,
-      fee_amount: NO_SHOW_FEE.feeAmount,
-      driver_amount: NO_SHOW_FEE.driverAmount,
-      moovu_amount: NO_SHOW_FEE.moovuAmount,
+      fee_type: noShowFee.type,
+      fee_amount: noShowFee.feeAmount,
+      driver_amount: noShowFee.driverAmount,
+      moovu_amount: noShowFee.moovuAmount,
       reason: "Customer no-show",
       created_by: user.id,
     });
@@ -134,13 +136,13 @@ export async function POST(req: Request) {
         status: "cancelled",
         cancel_reason: "Customer no-show",
         cancellation_reason: "Customer no-show",
-        cancellation_type: NO_SHOW_FEE.type,
+        cancellation_type: noShowFee.type,
         cancelled_by: "driver",
         cancelled_at: cancelledAt,
-        cancellation_fee_amount: NO_SHOW_FEE.feeAmount,
-        cancellation_driver_amount: NO_SHOW_FEE.driverAmount,
-        cancellation_moovu_amount: NO_SHOW_FEE.moovuAmount,
-        cancellation_policy_code: NO_SHOW_FEE.policyCode,
+        cancellation_fee_amount: noShowFee.feeAmount,
+        cancellation_driver_amount: noShowFee.driverAmount,
+        cancellation_moovu_amount: noShowFee.moovuAmount,
+        cancellation_policy_code: noShowFee.policyCode,
         driver_arrived_at: arrivedAt,
         no_show_eligible_at: eligibleAt,
       })
@@ -154,8 +156,8 @@ export async function POST(req: Request) {
           status: "cancelled",
           cancel_reason: "Customer no-show",
           cancelled_by: "driver",
-          cancellation_fee_amount: NO_SHOW_FEE.feeAmount,
-          cancellation_policy_code: NO_SHOW_FEE.policyCode,
+          cancellation_fee_amount: noShowFee.feeAmount,
+          cancellation_policy_code: noShowFee.policyCode,
         })
         .eq("id", tripId)
         .eq("status", "arrived");
@@ -172,7 +174,7 @@ export async function POST(req: Request) {
     const { error: eventError } = await supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
         event_type: "customer_no_show",
-        message: `Customer no-show marked. Fee R${NO_SHOW_FEE.feeAmount}. Driver payout R${NO_SHOW_FEE.driverAmount}. MOOVU revenue R${NO_SHOW_FEE.moovuAmount}.`,
+        message: `Customer no-show marked. Fee R${noShowFee.feeAmount}. Driver payout R${noShowFee.driverAmount}. MOOVU revenue R${noShowFee.moovuAmount}.`,
         old_status: "arrived",
         new_status: "cancelled",
       });
@@ -187,7 +189,7 @@ export async function POST(req: Request) {
     await notifyCustomerForTrip(
       tripId,
       "Trip marked no-show",
-      `Your trip was marked no-show. A R${NO_SHOW_FEE.feeAmount} fee may apply.`,
+      `Your trip was marked no-show. A R${noShowFee.feeAmount} fee may apply.`,
       `/ride/${tripId}`
     );
 
@@ -199,8 +201,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: `No-show recorded. Driver payout: R${NO_SHOW_FEE.driverAmount}.`,
-      fee: NO_SHOW_FEE,
+      message: `No-show recorded. Driver payout: R${noShowFee.driverAmount}.`,
+      fee: noShowFee,
     });
   } catch (error: unknown) {
     return NextResponse.json(

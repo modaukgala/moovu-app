@@ -1,3 +1,5 @@
+import { getFareRules, normalizeRideOptionId, type RideOptionId } from "@/lib/domain/fare";
+
 export const FREE_CANCELLATION_WINDOW_MS = 2 * 60 * 1000;
 export const NO_SHOW_WAIT_MS = 5 * 60 * 1000;
 
@@ -9,6 +11,7 @@ export type CancellationFee = {
   driverAmount: number;
   moovuAmount: number;
   policyCode: string;
+  rideOptionId: RideOptionId;
 };
 
 export const FREE_CANCELLATION_FEE: CancellationFee = {
@@ -17,14 +20,16 @@ export const FREE_CANCELLATION_FEE: CancellationFee = {
   driverAmount: 0,
   moovuAmount: 0,
   policyCode: "free_cancel",
+  rideOptionId: "go",
 };
 
 export const LATE_CANCELLATION_FEE: CancellationFee = {
   type: "late_cancel",
-  feeAmount: 15,
-  driverAmount: 10,
-  moovuAmount: 5,
+  feeAmount: 20,
+  driverAmount: 13,
+  moovuAmount: 7,
   policyCode: "late_cancel_driver_dispatched",
+  rideOptionId: "go",
 };
 
 export const NO_SHOW_FEE: CancellationFee = {
@@ -33,6 +38,7 @@ export const NO_SHOW_FEE: CancellationFee = {
   driverAmount: 22,
   moovuAmount: 8,
   policyCode: "customer_no_show",
+  rideOptionId: "go",
 };
 
 export function freeCancellationUntil(createdAt: string | null | undefined) {
@@ -41,24 +47,56 @@ export function freeCancellationUntil(createdAt: string | null | undefined) {
   return new Date(createdMs + FREE_CANCELLATION_WINDOW_MS).toISOString();
 }
 
+function freeCancellationFee(rideOptionId: RideOptionId): CancellationFee {
+  return { ...FREE_CANCELLATION_FEE, rideOptionId };
+}
+
+export function getLateCancellationFee(rideOptionValue: unknown): CancellationFee {
+  const rideOptionId = normalizeRideOptionId(rideOptionValue);
+  const rules = getFareRules(rideOptionId);
+  return {
+    type: "late_cancel",
+    feeAmount: rules.lateCancellationFee,
+    driverAmount: rules.lateCancellationDriverAmount,
+    moovuAmount: rules.lateCancellationMoovuAmount,
+    policyCode: "late_cancel_driver_dispatched",
+    rideOptionId,
+  };
+}
+
+export function getNoShowFee(rideOptionValue: unknown): CancellationFee {
+  const rideOptionId = normalizeRideOptionId(rideOptionValue);
+  const rules = getFareRules(rideOptionId);
+  return {
+    type: "no_show",
+    feeAmount: rules.noShowFee,
+    driverAmount: rules.noShowDriverAmount,
+    moovuAmount: rules.noShowMoovuAmount,
+    policyCode: "customer_no_show",
+    rideOptionId,
+  };
+}
+
 export function calculateCustomerCancellationFee(params: {
   status: string;
   createdAt: string | null | undefined;
+  rideOptionId?: unknown;
 }) {
   const status = params.status;
+  const rideOptionId = normalizeRideOptionId(params.rideOptionId);
   const createdMs = params.createdAt ? new Date(params.createdAt).getTime() : NaN;
   const insideFreeWindow =
     Number.isFinite(createdMs) && Date.now() - createdMs <= FREE_CANCELLATION_WINDOW_MS;
 
   if (insideFreeWindow || status === "requested" || status === "offered") {
-    return FREE_CANCELLATION_FEE;
+    return freeCancellationFee(rideOptionId);
   }
 
   if (status === "assigned" || status === "arrived") {
-    return LATE_CANCELLATION_FEE;
+    return getLateCancellationFee(rideOptionId);
   }
 
-  return FREE_CANCELLATION_FEE;
+  return freeCancellationFee(rideOptionId);
 }
 
 export function noShowEligibleAt(arrivedAt: string | null | undefined) {

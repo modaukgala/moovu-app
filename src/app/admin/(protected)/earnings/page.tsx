@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
-import { MOOVU_COMMISSION_RATE } from "@/lib/finance/commission";
 
 type CompletedTrip = {
   id: string;
@@ -32,6 +31,7 @@ type AdminEarnings = {
   total_commission: number;
   estimated_driver_payout: number;
   commission_rate?: number;
+  commission_rate_label?: string;
   total_completed_trips: number;
   by_payment_method: Record<
     string,
@@ -232,7 +232,7 @@ export default function AdminEarningsPage() {
                 <div className="border rounded-2xl p-4">
                   <div className="text-sm text-gray-600">Commission Rate</div>
                   <div className="text-3xl font-semibold mt-2">
-                    {((earnings.commission_rate ?? MOOVU_COMMISSION_RATE) * 100).toFixed(0)}%
+                    {earnings.commission_rate_label ?? "10% / 12%"}
                   </div>
                 </div>
               </div>

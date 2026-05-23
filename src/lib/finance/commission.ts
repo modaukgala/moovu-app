@@ -1,6 +1,23 @@
+import { getCommissionPctForRideOption } from "@/lib/domain/fare";
+
 export const MOOVU_COMMISSION_PCT = 9.5;
 export const MOOVU_COMMISSION_RATE = MOOVU_COMMISSION_PCT / 100;
 export const DRIVER_COMMISSION_LOCK_LIMIT = 100;
+
+export function resolveCommissionPct(params?: {
+  rideOptionId?: unknown;
+  commissionPct?: number | null;
+}) {
+  if (params?.commissionPct != null && Number.isFinite(Number(params.commissionPct))) {
+    return Number(params.commissionPct);
+  }
+
+  if (params?.rideOptionId != null) {
+    return getCommissionPctForRideOption(params.rideOptionId);
+  }
+
+  return MOOVU_COMMISSION_PCT;
+}
 
 export function calculateCommission(fareAmount: number, commissionPct = MOOVU_COMMISSION_PCT) {
   const fare = Number(fareAmount || 0);

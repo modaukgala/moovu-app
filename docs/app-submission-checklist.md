@@ -32,7 +32,7 @@ Last updated: 2026-05-06
 4. Accept Terms/Privacy and create a customer account.
 5. Login as an existing customer with no legal acceptance metadata and confirm /book shows the one-time acceptance prompt.
 6. Accept the prompt and confirm booking can continue.
-7. Book MOOVU Go and MOOVU Group on a safe local/staging environment.
+7. Book MOOVU Go and MOOVU Go XL on a safe local/staging environment.
 8. Confirm notifications, location, receipt, driver, and admin payment workflows with real staging data.
 
 ## Notification QA Checklist
