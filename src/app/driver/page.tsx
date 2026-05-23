@@ -8,6 +8,13 @@ import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { getNoShowFee } from "@/lib/finance/cancellationFees";
 import { notifyInApp } from "@/lib/in-app-notifications";
+import {
+  carMarkerIcon,
+  fitBoundsToPoints,
+  gpsMarkerIcon,
+  makeRouteRenderer,
+  stopMarkerIcon,
+} from "@/lib/maps/liveMapMarkers";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -600,8 +607,7 @@ export default function DriverHomePage() {
     clearMapLayers();
     const routePreview = currentTrip ?? offer;
 
-    const bounds = new window.google.maps.LatLngBounds();
-    let hasAnyPoint = false;
+    const points: google.maps.LatLngLiteral[] = [];
 
     if (typeof driver.lat === "number" && typeof driver.lng === "number") {
       const driverPos = { lat: driver.lat, lng: driver.lng };
@@ -609,10 +615,9 @@ export default function DriverHomePage() {
         map,
         position: driverPos,
         title: "You",
-        label: "Y",
+        icon: currentTrip || offer ? carMarkerIcon() : gpsMarkerIcon(),
       });
-      bounds.extend(driverPos);
-      hasAnyPoint = true;
+      points.push(driverPos);
     }
 
     if (routePreview?.pickup_lat != null && routePreview?.pickup_lng != null) {
@@ -621,10 +626,9 @@ export default function DriverHomePage() {
         map,
         position: pickupPos,
         title: "Pickup",
-        label: "P",
+        icon: stopMarkerIcon("P"),
       });
-      bounds.extend(pickupPos);
-      hasAnyPoint = true;
+      points.push(pickupPos);
     }
 
     if (routePreview?.dropoff_lat != null && routePreview?.dropoff_lng != null) {
@@ -633,18 +637,13 @@ export default function DriverHomePage() {
         map,
         position: dropoffPos,
         title: "Dropoff",
-        label: "D",
+        icon: stopMarkerIcon("D"),
       });
-      bounds.extend(dropoffPos);
-      hasAnyPoint = true;
+      points.push(dropoffPos);
     }
 
-    if (hasAnyPoint && !bounds.isEmpty()) {
-      map.fitBounds(bounds);
-      window.setTimeout(() => {
-        const zoom = map.getZoom();
-        if (zoom && zoom > 15) map.setZoom(15);
-      }, 250);
+    if (points.length > 0) {
+      fitBoundsToPoints(map, points);
     } else {
       map.setCenter(DEFAULT_CENTER);
       map.setZoom(11);
@@ -668,12 +667,7 @@ export default function DriverHomePage() {
 
     if (hasOrigin && destLat != null && destLng != null) {
       const directionsService = new window.google.maps.DirectionsService();
-      const directionsRenderer = new window.google.maps.DirectionsRenderer({
-        suppressMarkers: true,
-        preserveViewport: true,
-      });
-
-      directionsRenderer.setMap(map);
+      const directionsRenderer = makeRouteRenderer(map);
       directionsRendererRef.current = directionsRenderer;
 
       directionsService.route(

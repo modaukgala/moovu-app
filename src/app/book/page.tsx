@@ -8,13 +8,16 @@ import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import {
   DEFAULT_RIDE_OPTION_ID,
+  MAX_TRIP_STOPS,
   RIDE_OPTIONS,
   SURGE_MODES,
+  calculateAddStopIncrease,
   calculateTripFare,
   type RideOptionId,
   type SurgeModeConfig,
 } from "@/lib/domain/fare";
 import { MOOVU_LEGAL_VERSION } from "@/lib/legal";
+import { gpsMarkerIcon, stopMarkerIcon } from "@/lib/maps/liveMapMarkers";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -28,6 +31,15 @@ type CustomerMe = {
 type Prediction = { description: string; place_id: string };
 type LocationKind = "pickup" | "dropoff";
 type ResolvedLocation = { address: string; placeId: string; lat: number; lng: number };
+type StopInput = Omit<ResolvedLocation, "lat" | "lng"> & {
+  lat: number | null;
+  lng: number | null;
+  predictions: Prediction[];
+  loading: boolean;
+  resolving: boolean;
+  open: boolean;
+  error: string | null;
+};
 
 const DEFAULT_CENTER = { lat: -26.188, lng: 28.3206 };
 
@@ -40,6 +52,24 @@ function money(v: number | null | undefined) {
 }
 function fmtDist(v: number | null) { return v == null ? "--" : `${v} km`; }
 function fmtDur(v: number | null)  { return v == null ? "--" : `${v} min`; }
+
+function blankStop(): StopInput {
+  return {
+    address: "",
+    placeId: "",
+    lat: null,
+    lng: null,
+    predictions: [],
+    loading: false,
+    resolving: false,
+    open: false,
+    error: null,
+  };
+}
+
+function isResolvedStop(stop: StopInput): stop is StopInput & { address: string } {
+  return !!stop.address.trim() && typeof stop.lat === "number" && typeof stop.lng === "number";
+}
 
 export default function RiderBookingPage() {
   const router = useRouter();
@@ -81,7 +111,11 @@ export default function RiderBookingPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [durationMin, setDurationMin] = useState<number | null>(null);
+  const [originalDistanceKm, setOriginalDistanceKm] = useState<number | null>(null);
+  const [originalDurationMin, setOriginalDurationMin] = useState<number | null>(null);
   const [baseFare, setBaseFare] = useState<number | null>(null);
+  const [addStopIncrease, setAddStopIncrease] = useState(0);
+  const [stops, setStops] = useState<StopInput[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [routeVisible, setRouteVisible] = useState(false);
@@ -98,25 +132,54 @@ export default function RiderBookingPage() {
   const dropoffBoxRef = useRef<HTMLDivElement | null>(null);
   const pickupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopTimerRefs = useRef<Array<ReturnType<typeof setTimeout> | null>>([]);
   const lastCalculatedKeyRef = useRef("");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
+  const stopMarkerRefs = useRef<google.maps.Marker[]>([]);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
 
   const bothLocationsSet = pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null;
+  const resolvedStops = useMemo(() => stops.filter(isResolvedStop), [stops]);
+  const stopCount = resolvedStops.length;
+  const addStopBreakdown = useMemo(() => {
+    if (
+      stopCount === 0 ||
+      originalDistanceKm == null ||
+      originalDurationMin == null ||
+      distanceKm == null ||
+      durationMin == null
+    ) {
+      return null;
+    }
 
-  const fare = useMemo(() => {
-    if (distanceKm == null || durationMin == null) return null;
+    return calculateAddStopIncrease({
+      rideOptionId: selectedRideOption,
+      originalDistanceKm,
+      originalDurationMin,
+      routeDistanceKm: distanceKm,
+      routeDurationMin: durationMin,
+      stopCount,
+    });
+  }, [distanceKm, durationMin, originalDistanceKm, originalDurationMin, selectedRideOption, stopCount]);
+
+  const originalFare = useMemo(() => {
+    if (originalDistanceKm == null || originalDurationMin == null) return null;
     return calculateTripFare({
-      distanceKm,
-      durationMin,
+      distanceKm: originalDistanceKm,
+      durationMin: originalDurationMin,
       rideOptionId: selectedRideOption,
       surgeLabel: activeSurge.mode,
       surgeMultiplier: activeSurge.multiplier,
     }).totalFare;
-  }, [activeSurge.mode, activeSurge.multiplier, distanceKm, durationMin, selectedRideOption]);
+  }, [activeSurge.mode, activeSurge.multiplier, originalDistanceKm, originalDurationMin, selectedRideOption]);
+
+  const fare = useMemo(() => {
+    if (originalFare == null) return null;
+    return Math.round(originalFare + (addStopBreakdown?.finalAddStopIncrease ?? 0));
+  }, [addStopBreakdown?.finalAddStopIncrease, originalFare]);
 
   const canCalculate = useMemo(() => (
     !!pickupAddress.trim() && !!dropoffAddress.trim() &&
@@ -125,8 +188,11 @@ export default function RiderBookingPage() {
 
   const routeKey = useMemo(() => {
     if (!canCalculate) return "";
-    return [pickupAddress.trim(), dropoffAddress.trim(), pickupLat, pickupLng, dropoffLat, dropoffLng].join("|");
-  }, [canCalculate, pickupAddress, dropoffAddress, pickupLat, pickupLng, dropoffLat, dropoffLng]);
+    const stopKey = resolvedStops
+      .map((stop) => [stop.address.trim(), stop.placeId, stop.lat, stop.lng].join(":"))
+      .join("|");
+    return [pickupAddress.trim(), dropoffAddress.trim(), pickupLat, pickupLng, dropoffLat, dropoffLng, stopKey].join("|");
+  }, [canCalculate, dropoffAddress, dropoffLat, dropoffLng, pickupAddress, pickupLat, pickupLng, resolvedStops]);
 
   const canSubmit = useMemo(() => (
     !!customer && canCalculate && distanceKm != null && durationMin != null && fare != null &&
@@ -264,7 +330,7 @@ export default function RiderBookingPage() {
 
   // ── Location helpers ─────────────────────────────────────────────
   function resetRouteState() {
-    setDistanceKm(null); setDurationMin(null); setBaseFare(null);
+    setDistanceKm(null); setDurationMin(null); setOriginalDistanceKm(null); setOriginalDurationMin(null); setBaseFare(null); setAddStopIncrease(0);
     setRouteVisible(false); lastCalculatedKeyRef.current = "";
   }
 
@@ -421,6 +487,188 @@ export default function RiderBookingPage() {
     dropoffTimerRef.current = setTimeout(() => { void fetchPredictions("dropoff", value); }, 250);
   }
 
+  function addStopField() {
+    if (stops.length >= MAX_TRIP_STOPS) {
+      setMsg("You can add up to 2 stops per trip.");
+      return;
+    }
+    setStops((current) => [...current, blankStop()]);
+    resetRouteState();
+  }
+
+  function removeStop(index: number) {
+    setStops((current) => current.filter((_, i) => i !== index));
+    resetRouteState();
+  }
+
+  function updateStop(index: number, patch: Partial<StopInput>) {
+    setStops((current) =>
+      current.map((stop, i) => (i === index ? { ...stop, ...patch } : stop))
+    );
+  }
+
+  async function fetchStopPredictions(index: number, input: string) {
+    if (input.trim().length < 3) {
+      updateStop(index, { predictions: [], open: false, loading: false });
+      return;
+    }
+
+    updateStop(index, { loading: true });
+    try {
+      const res = await fetch("/api/maps/autocomplete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input }),
+      });
+      const json = await res.json().catch(() => null);
+      const predictions = json?.ok ? ((json.predictions ?? []) as Prediction[]) : [];
+      updateStop(index, { predictions, open: predictions.length > 0 });
+    } finally {
+      updateStop(index, { loading: false });
+    }
+  }
+
+  function onStopInputChange(index: number, value: string) {
+    updateStop(index, {
+      address: value,
+      placeId: "",
+      lat: null,
+      lng: null,
+      error: null,
+    });
+    resetRouteState();
+
+    if (stopTimerRefs.current[index]) clearTimeout(stopTimerRefs.current[index]!);
+    stopTimerRefs.current[index] = setTimeout(() => {
+      void fetchStopPredictions(index, value);
+    }, 250);
+  }
+
+  function samePoint(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+    return Math.abs(a.lat - b.lat) < 0.00008 && Math.abs(a.lng - b.lng) < 0.00008;
+  }
+
+  function validateStopLocation(index: number, location: ResolvedLocation) {
+    if (pickupLat != null && pickupLng != null && samePoint(location, { lat: pickupLat, lng: pickupLng })) {
+      return "Stop cannot be the same as pickup.";
+    }
+    if (dropoffLat != null && dropoffLng != null && samePoint(location, { lat: dropoffLat, lng: dropoffLng })) {
+      return "Stop cannot be the same as final destination.";
+    }
+    const duplicate = stops.some((stop, i) =>
+      i !== index &&
+      typeof stop.lat === "number" &&
+      typeof stop.lng === "number" &&
+      samePoint(location, { lat: stop.lat, lng: stop.lng })
+    );
+    if (duplicate) return "Duplicate stops are not allowed.";
+    return null;
+  }
+
+  async function resolveStop(index: number): Promise<ResolvedLocation | null> {
+    const stop = stops[index];
+    if (!stop) return null;
+    const input = stop.address.trim();
+    if (!input) return null;
+    if (typeof stop.lat === "number" && typeof stop.lng === "number") {
+      return { address: input, placeId: stop.placeId, lat: stop.lat, lng: stop.lng };
+    }
+
+    updateStop(index, { resolving: true, error: null, predictions: [], open: false });
+    try {
+      const acRes = await fetch("/api/maps/autocomplete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input }),
+      });
+      const acJson = await acRes.json().catch(() => null);
+
+      if (acJson?.ok && acJson.predictions?.length > 0) {
+        const first = acJson.predictions[0] as Prediction;
+        const detailRes = await fetch("/api/maps/place-details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ place_id: first.place_id }),
+        });
+        const detail = await detailRes.json().catch(() => null);
+
+        if (detail?.ok && typeof detail.lat === "number" && typeof detail.lng === "number") {
+          const resolved = {
+            address: detail.formatted_address || first.description,
+            placeId: detail.place_id || first.place_id,
+            lat: detail.lat,
+            lng: detail.lng,
+          };
+          const validationError = validateStopLocation(index, resolved);
+          if (validationError) {
+            updateStop(index, { error: validationError });
+            return null;
+          }
+          updateStop(index, { ...resolved, error: null });
+          resetRouteState();
+          return resolved;
+        }
+      }
+
+      const geoRes = await fetch("/api/maps/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place: input }),
+      });
+      const geo = await geoRes.json().catch(() => null);
+
+      if (geo?.ok && typeof geo.lat === "number" && typeof geo.lng === "number") {
+        const resolved = { address: geo.address || input, placeId: "", lat: geo.lat, lng: geo.lng };
+        const validationError = validateStopLocation(index, resolved);
+        if (validationError) {
+          updateStop(index, { error: validationError });
+          return null;
+        }
+        updateStop(index, { ...resolved, error: null });
+        resetRouteState();
+        return resolved;
+      }
+
+      updateStop(index, { error: "Please choose a valid stop location." });
+      return null;
+    } finally {
+      updateStop(index, { resolving: false });
+    }
+  }
+
+  async function chooseStopPlace(index: number, placeId: string, description: string) {
+    const res = await fetch("/api/maps/place-details", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ place_id: placeId }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!json?.ok || typeof json.lat !== "number" || typeof json.lng !== "number") {
+      updateStop(index, { error: json?.error || "Failed to load stop details." });
+      return;
+    }
+
+    const resolved = {
+      address: json.formatted_address || description,
+      placeId: json.place_id || placeId,
+      lat: json.lat,
+      lng: json.lng,
+    };
+    const validationError = validateStopLocation(index, resolved);
+    if (validationError) {
+      updateStop(index, { error: validationError, open: false });
+      return;
+    }
+
+    updateStop(index, {
+      ...resolved,
+      predictions: [],
+      open: false,
+      error: null,
+    });
+    resetRouteState();
+  }
+
   async function onPickupBlur() {
     setShowPickupDropdown(false);
     if (pickupAddress.trim() && pickupLat == null) await resolveTypedLocation("pickup", pickupAddress);
@@ -463,7 +711,32 @@ export default function RiderBookingPage() {
     const dropoff = currentResolvedLocation("dropoff") ?? (await resolveTypedLocation("dropoff", dropoffAddress));
     if (!pickup) { setPickupError("Please choose a valid pickup location."); return null; }
     if (!dropoff) { setDropoffError("Please choose a valid destination."); return null; }
-    return { pickup, dropoff };
+
+    const routeStops: ResolvedLocation[] = [];
+    for (let i = 0; i < stops.length; i += 1) {
+      const stop = stops[i];
+      if (!stop.address.trim()) continue;
+      const resolvedStop = isResolvedStop(stop)
+        ? { address: stop.address.trim(), placeId: stop.placeId, lat: stop.lat, lng: stop.lng }
+        : await resolveStop(i);
+      if (!resolvedStop) {
+        updateStop(i, { error: stop.error || "Please choose a valid stop location." });
+        return null;
+      }
+      const validationError = validateStopLocation(i, resolvedStop);
+      if (validationError) {
+        updateStop(i, { error: validationError });
+        return null;
+      }
+      routeStops.push(resolvedStop);
+    }
+
+    if (routeStops.length > MAX_TRIP_STOPS) {
+      setMsg("You can add up to 2 stops per trip.");
+      return null;
+    }
+
+    return { pickup, dropoff, stops: routeStops };
   }
 
   async function calculateTrip(options?: { silent?: boolean }) {
@@ -474,9 +747,14 @@ export default function RiderBookingPage() {
     const route = await ensureResolvedRoute();
     if (!route) { if (!silent) setMsg("Please choose valid pickup and destination locations."); return null; }
 
+    const waypoints = route.stops.map((stop) =>
+      stop.placeId
+        ? { place_id: stop.placeId }
+        : { lat: stop.lat, lng: stop.lng }
+    );
     const payload = route.pickup.placeId && route.dropoff.placeId
-      ? { origin_place_id: route.pickup.placeId, destination_place_id: route.dropoff.placeId }
-      : { origin_lat: route.pickup.lat, origin_lng: route.pickup.lng, destination_lat: route.dropoff.lat, destination_lng: route.dropoff.lng };
+      ? { origin_place_id: route.pickup.placeId, destination_place_id: route.dropoff.placeId, waypoints }
+      : { origin_lat: route.pickup.lat, origin_lng: route.pickup.lng, destination_lat: route.dropoff.lat, destination_lng: route.dropoff.lng, waypoints };
 
     const res = await fetch("/api/maps/distance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const json = await res.json().catch(() => null);
@@ -484,17 +762,40 @@ export default function RiderBookingPage() {
 
     const km = Number(json.distanceKm ?? 0);
     const mins = Number(json.durationMin ?? 0);
+    const originalKm = Number(json.originalDistanceKm ?? km);
+    const originalMins = Number(json.originalDurationMin ?? mins);
     const est = calculateTripFare({
-      distanceKm: km,
-      durationMin: mins,
-      rideOptionId: DEFAULT_RIDE_OPTION_ID,
+      distanceKm: originalKm,
+      durationMin: originalMins,
+      rideOptionId: selectedRideOption,
       surgeLabel: activeSurge.mode,
       surgeMultiplier: activeSurge.multiplier,
     });
+    const stopBreakdown = calculateAddStopIncrease({
+      rideOptionId: selectedRideOption,
+      originalDistanceKm: originalKm,
+      originalDurationMin: originalMins,
+      routeDistanceKm: km,
+      routeDurationMin: mins,
+      stopCount: route.stops.length,
+    });
     const roundedKm = Number(km.toFixed(2));
     const roundedMins = Math.ceil(mins);
-    setDistanceKm(roundedKm); setDurationMin(roundedMins); setBaseFare(est.totalFare);
-    return { distanceKm: roundedKm, durationMin: roundedMins };
+    const roundedOriginalKm = Number(originalKm.toFixed(2));
+    const roundedOriginalMins = Math.ceil(originalMins);
+    setDistanceKm(roundedKm);
+    setDurationMin(roundedMins);
+    setOriginalDistanceKm(roundedOriginalKm);
+    setOriginalDurationMin(roundedOriginalMins);
+    setBaseFare(est.totalFare);
+    setAddStopIncrease(stopBreakdown.finalAddStopIncrease);
+    return {
+      distanceKm: roundedKm,
+      durationMin: roundedMins,
+      originalDistanceKm: roundedOriginalKm,
+      originalDurationMin: roundedOriginalMins,
+      addStopIncrease: stopBreakdown.finalAddStopIncrease,
+    };
   }
 
   async function submitBooking() {
@@ -507,10 +808,13 @@ export default function RiderBookingPage() {
 
     let bDistKm = distanceKm;
     let bDurMin = durationMin;
-    if (distanceKm == null || durationMin == null) {
+    let bOriginalDistKm = originalDistanceKm;
+    let bOriginalDurMin = originalDurationMin;
+    if (distanceKm == null || durationMin == null || originalDistanceKm == null || originalDurationMin == null) {
       const calc = await calculateTrip({ silent: true });
       if (!calc) { setMsg("Waiting for fare calculation. Please try again."); return; }
       bDistKm = calc.distanceKm; bDurMin = calc.durationMin;
+      bOriginalDistKm = calc.originalDistanceKm; bOriginalDurMin = calc.originalDurationMin;
     }
 
     if (rideType === "scheduled" && !scheduledFor) { setMsg("Please choose the scheduled pickup date and time."); return; }
@@ -520,14 +824,24 @@ export default function RiderBookingPage() {
       const accessToken = await getAccessToken();
       if (!accessToken) { router.replace("/customer/auth?next=/book"); return; }
 
-      const finalFare = bDistKm != null && bDurMin != null
-        ? calculateTripFare({
-            distanceKm: bDistKm,
-            durationMin: bDurMin,
+      const stopBreakdown = bDistKm != null && bDurMin != null && bOriginalDistKm != null && bOriginalDurMin != null
+        ? calculateAddStopIncrease({
+            rideOptionId: selectedRideOption,
+            originalDistanceKm: bOriginalDistKm,
+            originalDurationMin: bOriginalDurMin,
+            routeDistanceKm: bDistKm,
+            routeDurationMin: bDurMin,
+            stopCount: route.stops.length,
+          })
+        : null;
+      const finalFare = bOriginalDistKm != null && bOriginalDurMin != null
+        ? Math.round(calculateTripFare({
+            distanceKm: bOriginalDistKm,
+            durationMin: bOriginalDurMin,
             rideOptionId: selectedRideOption,
             surgeLabel: activeSurge.mode,
             surgeMultiplier: activeSurge.multiplier,
-          }).totalFare
+          }).totalFare + (stopBreakdown?.finalAddStopIncrease ?? 0))
         : fare ?? baseFare ?? 0;
       const rideOptionLabel = RIDE_OPTIONS.find((o) => o.id === selectedRideOption)?.name ?? "MOOVU Go";
 
@@ -539,7 +853,10 @@ export default function RiderBookingPage() {
           dropoffAddress: route.dropoff.address || dropoffAddress,
           pickupLat: route.pickup.lat, pickupLng: route.pickup.lng,
           dropoffLat: route.dropoff.lat, dropoffLng: route.dropoff.lng,
+          stops: route.stops,
           paymentMethod, distanceKm: bDistKm, durationMin: bDurMin,
+          originalDistanceKm: bOriginalDistKm,
+          originalDurationMin: bOriginalDurMin,
           rideType, rideOption: selectedRideOption,
           scheduledFor: rideType === "scheduled" ? scheduledFor : null,
           fare_amount: finalFare, notes: `Ride option: ${rideOptionLabel}`,
@@ -562,6 +879,8 @@ export default function RiderBookingPage() {
     directionsRendererRef.current?.setMap(null); directionsRendererRef.current = null;
     if (pickupMarkerRef.current) { pickupMarkerRef.current.setMap(null); pickupMarkerRef.current = null; }
     if (dropoffMarkerRef.current) { dropoffMarkerRef.current.setMap(null); dropoffMarkerRef.current = null; }
+    stopMarkerRefs.current.forEach((marker) => marker.setMap(null));
+    stopMarkerRefs.current = [];
   }
 
   function ensureMap() {
@@ -580,7 +899,12 @@ export default function RiderBookingPage() {
     const map = mapInstanceRef.current!;
     clearMapVisuals(); setRouteVisible(false);
     const pickup = { lat: pickupLat, lng: pickupLng };
-    pickupMarkerRef.current = new window.google.maps.Marker({ map, position: pickup, title: "Pickup" });
+    pickupMarkerRef.current = new window.google.maps.Marker({
+      map,
+      position: pickup,
+      title: "Your current pickup location",
+      icon: gpsMarkerIcon(),
+    });
     map.setCenter(pickup); map.setZoom(15);
   }
 
@@ -588,8 +912,26 @@ export default function RiderBookingPage() {
     if (!ensureMap() || pickupLat == null || pickupLng == null || dropoffLat == null || dropoffLng == null) return;
     const map = mapInstanceRef.current!;
     clearMapVisuals();
-    pickupMarkerRef.current = new window.google.maps.Marker({ map, position: { lat: pickupLat, lng: pickupLng }, title: "Pickup" });
-    dropoffMarkerRef.current = new window.google.maps.Marker({ map, position: { lat: dropoffLat, lng: dropoffLng }, title: "Destination" });
+    pickupMarkerRef.current = new window.google.maps.Marker({
+      map,
+      position: { lat: pickupLat, lng: pickupLng },
+      title: "Pickup",
+      icon: stopMarkerIcon("P"),
+    });
+    dropoffMarkerRef.current = new window.google.maps.Marker({
+      map,
+      position: { lat: dropoffLat, lng: dropoffLng },
+      title: "Destination",
+      icon: stopMarkerIcon("D"),
+    });
+    resolvedStops.forEach((stop, index) => {
+      stopMarkerRefs.current.push(new window.google.maps.Marker({
+        map,
+        position: { lat: stop.lat, lng: stop.lng },
+        title: `Stop ${index + 1}`,
+        icon: stopMarkerIcon(index === 0 ? "1" : "2"),
+      }));
+    });
 
     const svc = new window.google.maps.DirectionsService();
     const renderer = new window.google.maps.DirectionsRenderer({
@@ -599,13 +941,24 @@ export default function RiderBookingPage() {
     renderer.setMap(map); directionsRendererRef.current = renderer;
 
     svc.route(
-      { origin: { lat: pickupLat, lng: pickupLng }, destination: { lat: dropoffLat, lng: dropoffLng }, travelMode: window.google.maps.TravelMode.DRIVING },
+      {
+        origin: { lat: pickupLat, lng: pickupLng },
+        destination: { lat: dropoffLat, lng: dropoffLng },
+        waypoints: resolvedStops.map((stop) => ({
+          location: { lat: stop.lat, lng: stop.lng },
+          stopover: true,
+        })),
+        optimizeWaypoints: false,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
       (result, status) => {
         if (status === window.google.maps.DirectionsStatus.OK && result) {
           renderer.setDirections(result); setRouteVisible(true); return;
         }
         const bounds = new window.google.maps.LatLngBounds();
-        bounds.extend({ lat: pickupLat, lng: pickupLng }); bounds.extend({ lat: dropoffLat, lng: dropoffLng });
+        bounds.extend({ lat: pickupLat, lng: pickupLng });
+        resolvedStops.forEach((stop) => bounds.extend({ lat: stop.lat, lng: stop.lng }));
+        bounds.extend({ lat: dropoffLat, lng: dropoffLng });
         map.fitBounds(bounds); setRouteVisible(false);
       }
     );
@@ -628,6 +981,9 @@ export default function RiderBookingPage() {
       document.removeEventListener("mousedown", handleClickOutside);
       if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
       if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
+      stopTimerRefs.current.forEach((timer) => {
+        if (timer) clearTimeout(timer);
+      });
     };
     // Keep this as a mount/auth setup effect; adding helpers here restarts auth and dropdown listeners.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -662,7 +1018,7 @@ export default function RiderBookingPage() {
     if (mapInstanceRef.current) { mapInstanceRef.current.setCenter(DEFAULT_CENTER); mapInstanceRef.current.setZoom(11); }
     // Map render helpers read refs and latest coordinates; listing them recreates this effect unnecessarily.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng]);
+  }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng, resolvedStops]);
 
   useEffect(() => {
     if (!canCalculate || !routeKey) return;
@@ -713,9 +1069,124 @@ export default function RiderBookingPage() {
                     </div>
                     <div className="text-sm font-black text-[var(--moovu-primary)]">
                       {money(
-                        calculateTripFare({
-                          distanceKm,
-                          durationMin,
+                        Math.round(
+                          calculateTripFare({
+                            distanceKm: originalDistanceKm ?? distanceKm,
+                            durationMin: originalDurationMin ?? durationMin,
+                            rideOptionId: opt.id,
+                            surgeLabel: activeSurge.mode,
+                            surgeMultiplier: activeSurge.multiplier,
+                          }).totalFare +
+                            (stopCount > 0
+                              ? calculateAddStopIncrease({
+                                  rideOptionId: opt.id,
+                                  originalDistanceKm: originalDistanceKm ?? distanceKm,
+                                  originalDurationMin: originalDurationMin ?? durationMin,
+                                  routeDistanceKm: distanceKm,
+                                  routeDurationMin: durationMin,
+                                  stopCount,
+                                }).finalAddStopIncrease
+                              : 0)
+                        )
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-xs leading-4 text-slate-600">{opt.description}</div>
+                </button>
+              );
+            })}
+          </div>
+          {activeSurge.mode !== "normal" && (
+            <div className="mt-3 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800">
+              {activeSurge.message}
+            </div>
+          )}
+        </div>
+      )}
+
+      {stopCount > 0 && (
+        <div className="mt-4 rounded-[22px] border border-emerald-100 bg-emerald-50 p-4">
+          <div className="text-sm font-black text-emerald-900">Add stop applied</div>
+          <div className="mt-1 text-xs font-semibold text-emerald-800">
+            Extra route cost discounted by 40%. First 3 minutes waiting at each stop are free.
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-2xl bg-white/80 p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">Original fare</div>
+              <div className="mt-1 text-sm font-black text-slate-950">{money(originalFare)}</div>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">Add stop</div>
+              <div className="mt-1 text-sm font-black text-slate-950">+{money(addStopBreakdown?.finalAddStopIncrease ?? addStopIncrease)}</div>
+            </div>
+            <div className="rounded-2xl bg-white p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">Total</div>
+              <div className="mt-1 text-sm font-black text-[var(--moovu-primary)]">{money(fare)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* When + Payment */}
+      <div className="mt-4 grid gap-3 grid-cols-2">
+        <div className="moovu-control-card">
+          <div className="moovu-field-label">When</div>
+          <div className="moovu-segmented mt-2">
+            <button type="button" className={rideType === "now" ? "moovu-segmented-active" : ""} onClick={() => setRideType("now")}>Ride now</button>
+            <button type="button" className={rideType === "scheduled" ? "moovu-segmented-active" : ""} onClick={() => setRideType("scheduled")}>Schedule</button>
+          </div>
+        </div>
+        <div className="moovu-control-card">
+          <div className="moovu-field-label">Payment</div>
+          <button type="button" className="mt-2 min-h-11 w-full rounded-2xl bg-slate-100 px-4 text-sm font-bold text-slate-950" onClick={() => setPaymentMethod("cash")}>
+            {paymentMethod === "cash" ? "Cash" : paymentMethod}
+          </button>
+        </div>
+      </div>
+
+      {rideType === "scheduled" && (
+        <div className="mt-3">
+          <label className="moovu-field-label" htmlFor="scheduled-for">Scheduled pickup</label>
+          <input id="scheduled-for" type="datetime-local" className="moovu-input mt-2" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="moovu-trip-metric"><span>Distance</span><strong>{fmtDist(distanceKm)}</strong></div>
+        <div className="moovu-trip-metric"><span>Time</span><strong>{fmtDur(durationMin)}</strong></div>
+        <div className="moovu-trip-metric moovu-trip-metric-primary"><span>Fare</span><strong>{money(fare)}</strong></div>
+      </div>
+
+      {/* Trip summary */}
+      <div className="mt-3 rounded-[20px] border border-[#d7e2ea] bg-[#f6fafc] p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Trip summary</div>
+            <div className="mt-1 text-sm font-semibold text-slate-950">
+              {pickupAddress || "Set pickup"} &rarr; {stopCount > 0 ? `${stopCount} stop${stopCount > 1 ? "s" : ""} -> ` : ""}{dropoffAddress || "set destination"}
+            </div>
+          </div>
+          <div className={routeVisible ? "moovu-status-pill-ready" : "moovu-status-pill"}>
+            {routeVisible ? "Route ready" : "Planning"}
+          </div>
+        </div>
+        <div className="mt-2 text-xs text-slate-500">Final fare is confirmed before booking.</div>
+      </div>
+
+      {/* Push notifications */}
+      <div className="mt-3 rounded-[20px] border border-[#cfe4ff] bg-[#eef7ff] p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-bold text-slate-950">Ride updates</div>
+            <div className="mt-1 text-xs text-slate-600">Enable alerts for driver accepted, arrived, started, and completed.</div>
+          </div>
+          <EnableNotificationsButton role="customer" variant="inline" />
+        </div>
+      </div>
+    </>
+  );
+*** End Patch
                           rideOptionId: opt.id,
                           surgeLabel: activeSurge.mode,
                           surgeMultiplier: activeSurge.multiplier,

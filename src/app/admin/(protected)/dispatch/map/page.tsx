@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import {
+  carMarkerIcon,
+  fitBoundsToPoints,
+  makeRouteRenderer,
+  stopMarkerIcon,
+} from "@/lib/maps/liveMapMarkers";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type DriverMarker = {
@@ -37,6 +43,9 @@ type TripMarker = {
     online: boolean | null;
     busy: boolean | null;
     subscription_status: string | null;
+    lat: number | null;
+    lng: number | null;
+    last_seen: string | null;
   } | null;
 };
 
@@ -51,6 +60,7 @@ export default function DispatchMapPage() {
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const driverMarkersRef = useRef<google.maps.Marker[]>([]);
   const tripMarkersRef = useRef<google.maps.Marker[]>([]);
+  const routeRenderersRef = useRef<google.maps.DirectionsRenderer[]>([]);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
 
   const [drivers, setDrivers] = useState<DriverMarker[]>([]);
@@ -100,27 +110,31 @@ export default function DispatchMapPage() {
     arr.length = 0;
   }
 
+  function clearRoutes() {
+    for (const renderer of routeRenderersRef.current) renderer.setMap(null);
+    routeRenderersRef.current.length = 0;
+  }
+
   function renderMarkers() {
     const map = mapInstanceRef.current;
     if (!map || !window.google) return;
 
     clearMarkers(driverMarkersRef.current);
     clearMarkers(tripMarkersRef.current);
+    clearRoutes();
 
     if (!infoWindowRef.current) {
       infoWindowRef.current = new window.google.maps.InfoWindow();
     }
+
+    const routeBoundsPoints: google.maps.LatLngLiteral[] = [];
 
     for (const d of drivers) {
       const marker = new window.google.maps.Marker({
         map,
         position: { lat: d.lat, lng: d.lng },
         title: d.name,
-        label: {
-          text: "D",
-          color: "white",
-          fontWeight: "bold",
-        },
+        icon: carMarkerIcon(),
       });
 
       marker.addListener("click", () => {
@@ -148,11 +162,7 @@ export default function DispatchMapPage() {
         map,
         position: { lat: t.pickup_lat, lng: t.pickup_lng },
         title: `Trip ${t.id}`,
-        label: {
-          text: "T",
-          color: "white",
-          fontWeight: "bold",
-        },
+        icon: stopMarkerIcon("P"),
       });
 
       marker.addListener("click", () => {
@@ -174,6 +184,37 @@ export default function DispatchMapPage() {
       });
 
       tripMarkersRef.current.push(marker);
+
+      const driverLat = t.driver?.lat;
+      const driverLng = t.driver?.lng;
+      const destination =
+        t.status === "ongoing" && t.dropoff_lat != null && t.dropoff_lng != null
+          ? { lat: t.dropoff_lat, lng: t.dropoff_lng }
+          : ["assigned", "arrived"].includes(t.status)
+            ? { lat: t.pickup_lat, lng: t.pickup_lng }
+            : null;
+
+      if (driverLat != null && driverLng != null && destination) {
+        const origin = { lat: driverLat, lng: driverLng };
+        const renderer = makeRouteRenderer(map);
+        routeRenderersRef.current.push(renderer);
+        routeBoundsPoints.push(origin, destination);
+
+        new window.google.maps.DirectionsService().route(
+          {
+            origin,
+            destination,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          },
+          (result, status) => {
+            if (status === "OK" && result) renderer.setDirections(result);
+          }
+        );
+      }
+    }
+
+    if (routeBoundsPoints.length > 0) {
+      fitBoundsToPoints(map, routeBoundsPoints);
     }
   }
 

@@ -253,7 +253,7 @@ export default function TripsPage() {
 
   function renderActions(trip: Trip) {
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {trip.status === "assigned" && (
           <button
             className="moovu-btn moovu-btn-secondary"
@@ -434,7 +434,7 @@ export default function TripsPage() {
 
           <section className="grid gap-3 xl:hidden">
             {trips.map((trip) => (
-              <article key={trip.id} className="moovu-card-interactive p-4">
+              <article key={trip.id} className="moovu-card-interactive overflow-hidden p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
@@ -451,32 +451,32 @@ export default function TripsPage() {
                 </div>
 
                 <div className="mt-4 space-y-3">
-                  <div className="moovu-route-line">
+                  <div className="moovu-route-line min-w-0">
                     <div className="moovu-route-line-marker" />
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Pickup</div>
-                      <div className="mt-1 text-sm font-semibold text-slate-950">{trip.pickup_address}</div>
+                      <div className="mt-1 break-words text-sm font-semibold text-slate-950">{trip.pickup_address}</div>
                     </div>
                   </div>
-                  <div className="moovu-route-line">
+                  <div className="moovu-route-line min-w-0">
                     <div className="moovu-route-line-marker" />
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Dropoff</div>
-                      <div className="mt-1 text-sm font-semibold text-slate-950">{trip.dropoff_address}</div>
+                      <div className="mt-1 break-words text-sm font-semibold text-slate-950">{trip.dropoff_address}</div>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 grid gap-2 rounded-3xl bg-slate-50 p-3 text-sm text-slate-700">
-                  <div>Rider: <strong>{trip.rider_name ?? "--"}</strong></div>
-                  <div>Driver: <strong>{trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}</strong></div>
+                  <div className="min-w-0">Rider: <strong className="break-words">{trip.rider_name ?? "--"}</strong></div>
+                  <div className="min-w-0">Driver: <strong className="break-words">{trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}</strong></div>
                   <div>Payment: <strong className="capitalize">{trip.payment_method}</strong></div>
-                  <div>Created: <strong>{displayDate(trip.created_at)}</strong></div>
+                  <div>Created: <strong className="break-words">{displayDate(trip.created_at)}</strong></div>
                 </div>
 
                 {!trip.driver_id && (
                   <select
-                    className="mt-4 rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm"
+                    className="mt-4 w-full rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm"
                     defaultValue=""
                     disabled={actionLoadingId === trip.id}
                     onChange={(event) => {

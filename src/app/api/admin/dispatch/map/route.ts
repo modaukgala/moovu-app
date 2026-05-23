@@ -87,7 +87,7 @@ export async function GET(req: Request) {
     if (driverIds.length > 0) {
       const { data: tripDrivers, error: tdErr } = await supabaseAdmin
         .from("drivers")
-        .select("id,first_name,last_name,phone,online,busy,subscription_status")
+        .select("id,first_name,last_name,phone,online,busy,subscription_status,lat,lng,last_seen")
         .in("id", driverIds);
 
       if (tdErr) {
@@ -136,6 +136,9 @@ export async function GET(req: Request) {
               online: tripDriversById[trip.driver_id].online ?? null,
               busy: tripDriversById[trip.driver_id].busy ?? null,
               subscription_status: tripDriversById[trip.driver_id].subscription_status ?? null,
+              lat: tripDriversById[trip.driver_id].lat != null ? Number(tripDriversById[trip.driver_id].lat) : null,
+              lng: tripDriversById[trip.driver_id].lng != null ? Number(tripDriversById[trip.driver_id].lng) : null,
+              last_seen: tripDriversById[trip.driver_id].last_seen ?? null,
             }
           : null,
     }));

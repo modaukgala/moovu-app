@@ -262,6 +262,7 @@ tr:last-child td {
   font-weight: 700;
   border: 1px solid transparent;
   text-decoration: none;
+  white-space: nowrap;
   transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
   user-select: none;
 }
@@ -1580,10 +1581,39 @@ tr:last-child td {
 }
 
 .moovu-driver-bottom-nav {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  width: min(calc(100% - 16px), 560px);
+  gap: 3px;
+  padding: 5px;
   border-color: rgba(207, 228, 255, 0.95);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(239, 247, 255, 0.95)),
     #fff;
+}
+
+.moovu-driver-bottom-nav .moovu-customer-nav-item {
+  min-height: 46px;
+  gap: 3px;
+  padding: 0 2px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.moovu-driver-bottom-nav .moovu-customer-nav-dot {
+  width: 6px;
+  height: 6px;
+}
+
+@media (max-width: 380px) {
+  .moovu-driver-bottom-nav .moovu-customer-nav-item {
+    font-size: 10px;
+  }
+
+  .moovu-driver-bottom-nav .moovu-customer-nav-dot {
+    display: none;
+  }
 }
 
 .moovu-app-card {

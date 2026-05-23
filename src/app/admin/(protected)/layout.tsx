@@ -255,6 +255,13 @@ export default function AdminProtectedLayout({
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                   Ops live
                 </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="moovu-btn moovu-btn-secondary min-h-10 px-4 py-2 text-sm text-red-600"
+                >
+                  Logout
+                </button>
               </div>
             </div>
           </div>

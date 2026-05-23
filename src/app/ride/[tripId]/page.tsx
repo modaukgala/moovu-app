@@ -7,6 +7,13 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import LoadingState from "@/components/ui/LoadingState";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import { notifyInApp } from "@/lib/in-app-notifications";
+import {
+  carMarkerIcon,
+  createOrMoveMarker,
+  fitBoundsToPoints,
+  makeRouteRenderer,
+  stopMarkerIcon,
+} from "@/lib/maps/liveMapMarkers";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type RideTrip = {
@@ -257,8 +264,7 @@ export default function RideTrackingPage() {
     const map = mapInstanceRef.current!;
     clearMapLayers();
 
-    const bounds = new window.google.maps.LatLngBounds();
-    let hasPoints = false;
+    const points: google.maps.LatLngLiteral[] = [];
 
     if (trip.pickup_lat != null && trip.pickup_lng != null) {
       const pos = { lat: Number(trip.pickup_lat), lng: Number(trip.pickup_lng) };
@@ -266,10 +272,9 @@ export default function RideTrackingPage() {
         map,
         position: pos,
         title: "Pickup",
-        label: "P",
+        icon: stopMarkerIcon("P"),
       });
-      bounds.extend(pos);
-      hasPoints = true;
+      points.push(pos);
     }
 
     if (trip.dropoff_lat != null && trip.dropoff_lng != null) {
@@ -278,83 +283,54 @@ export default function RideTrackingPage() {
         map,
         position: pos,
         title: "Dropoff",
-        label: "D",
+        icon: stopMarkerIcon("D"),
       });
-      bounds.extend(pos);
-      hasPoints = true;
+      points.push(pos);
     }
 
     if (driver?.lat != null && driver?.lng != null) {
       const pos = { lat: Number(driver.lat), lng: Number(driver.lng) };
-      driverMarkerRef.current = new window.google.maps.Marker({
+      driverMarkerRef.current = createOrMoveMarker({
         map,
         position: pos,
         title: "Driver",
-        label: "R",
+        marker: driverMarkerRef.current,
+        icon: carMarkerIcon(),
       });
-      bounds.extend(pos);
-      hasPoints = true;
+      points.push(pos);
     }
 
-    if (hasPoints && !bounds.isEmpty()) {
-      map.fitBounds(bounds);
-      window.setTimeout(() => {
-        const zoom = map.getZoom();
-        if (zoom && zoom > 15) map.setZoom(15);
-      }, 250);
+    if (points.length > 0) {
+      fitBoundsToPoints(map, points);
     } else {
       map.setCenter(DEFAULT_CENTER);
       map.setZoom(11);
     }
 
-    if (
+    const routeDestination =
       driver?.lat != null &&
       driver?.lng != null &&
       trip.pickup_lat != null &&
       trip.pickup_lng != null &&
       (trip.status === "assigned" || trip.status === "arrived")
-    ) {
+        ? { lat: Number(trip.pickup_lat), lng: Number(trip.pickup_lng) }
+        : driver?.lat != null &&
+            driver?.lng != null &&
+            trip.dropoff_lat != null &&
+            trip.dropoff_lng != null &&
+            trip.status === "ongoing"
+          ? { lat: Number(trip.dropoff_lat), lng: Number(trip.dropoff_lng) }
+          : null;
+
+    if (driver?.lat != null && driver?.lng != null && routeDestination) {
       const directionsService = new window.google.maps.DirectionsService();
-      const directionsRenderer = new window.google.maps.DirectionsRenderer({
-        suppressMarkers: true,
-        preserveViewport: true,
-      });
-      directionsRenderer.setMap(map);
+      const directionsRenderer = makeRouteRenderer(map);
       directionsRendererRef.current = directionsRenderer;
 
       directionsService.route(
         {
           origin: { lat: Number(driver.lat), lng: Number(driver.lng) },
-          destination: { lat: Number(trip.pickup_lat), lng: Number(trip.pickup_lng) },
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-          if (status === "OK" && result) {
-            directionsRenderer.setDirections(result);
-          }
-        }
-      );
-    }
-
-    if (
-      driver?.lat != null &&
-      driver?.lng != null &&
-      trip.dropoff_lat != null &&
-      trip.dropoff_lng != null &&
-      trip.status === "ongoing"
-    ) {
-      const directionsService = new window.google.maps.DirectionsService();
-      const directionsRenderer = new window.google.maps.DirectionsRenderer({
-        suppressMarkers: true,
-        preserveViewport: true,
-      });
-      directionsRenderer.setMap(map);
-      directionsRendererRef.current = directionsRenderer;
-
-      directionsService.route(
-        {
-          origin: { lat: Number(driver.lat), lng: Number(driver.lng) },
-          destination: { lat: Number(trip.dropoff_lat), lng: Number(trip.dropoff_lng) },
+          destination: routeDestination,
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (result, status) => {

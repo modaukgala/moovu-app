@@ -19,6 +19,41 @@ export type FareInput = {
   remotePickupFee?: number | null;
 };
 
+export type AddStopInput = {
+  rideOptionId?: RideOptionId | null;
+  originalDistanceKm: number;
+  originalDurationMin: number;
+  routeDistanceKm: number;
+  routeDurationMin: number;
+  stopCount: number;
+};
+
+export type AddStopBreakdown = {
+  stopCount: number;
+  extraDistanceKm: number;
+  extraDurationMin: number;
+  perKm: number;
+  perMinute: number;
+  stopFee: number;
+  rawAddStopIncrease: number;
+  addStopDiscountPercent: number;
+  finalAddStopIncrease: number;
+};
+
+export type StopWaitingFeeInput = {
+  rideOptionId?: RideOptionId | null;
+  stopWaitingMinutes: number[];
+};
+
+export type StopWaitingFeeBreakdown = {
+  freeMinutesPerStop: number;
+  maxMinutesPerStop: number;
+  maxTotalMinutes: number;
+  billableMinutes: number;
+  waitingFeePerMinute: number;
+  stopWaitingFee: number;
+};
+
 export type RideOption = {
   id: RideOptionId;
   name: string;
@@ -164,6 +199,17 @@ export const RIDE_OPTIONS: readonly RideOption[] = [
 
 export const DEFAULT_RIDE_OPTION_ID: RideOptionId = "go";
 export const DEFAULT_FARE_RULES: FareRules = RIDE_OPTION_RULES.go;
+export const MAX_TRIP_STOPS = 2;
+export const ADD_STOP_DISCOUNT_PERCENT = 40;
+export const ADD_STOP_CUSTOMER_PAY_MULTIPLIER = 0.6;
+export const STOP_WAITING_FREE_MINUTES = 3;
+export const STOP_WAITING_MAX_MINUTES_PER_STOP = 10;
+export const STOP_WAITING_MAX_TOTAL_MINUTES = 15;
+
+export const ADD_STOP_FEES: Record<RideOptionId, number> = {
+  go: 10,
+  group: 15,
+};
 
 function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
@@ -196,8 +242,8 @@ export function getCommissionPctForRideOption(value: unknown) {
 }
 
 export function getLongDistanceUpliftPct(distanceKm: number) {
-  if (distanceKm >= 50) return 15;
-  if (distanceKm >= 25) return 10;
+  if (distanceKm > 50) return 10;
+  if (distanceKm >= 25) return 7.5;
   if (distanceKm >= 10) return 5;
   return 0;
 }
@@ -283,5 +329,65 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
     totalFare,
     platformCommission,
     driverNetEstimate,
+  };
+}
+
+export function calculateAddStopIncrease(input: AddStopInput): AddStopBreakdown {
+  const rideOptionId = normalizeRideOptionId(input.rideOptionId);
+  const rules = getFareRules(rideOptionId);
+  const stopCount = Math.min(Math.max(0, Math.floor(Number(input.stopCount) || 0)), MAX_TRIP_STOPS);
+  const originalDistanceKm = safePositiveNumber(input.originalDistanceKm);
+  const originalDurationMin = safePositiveNumber(input.originalDurationMin);
+  const routeDistanceKm = safePositiveNumber(input.routeDistanceKm);
+  const routeDurationMin = safePositiveNumber(input.routeDurationMin);
+  const extraDistanceKm = roundMoney(Math.max(0, routeDistanceKm - originalDistanceKm));
+  const extraDurationMin = roundMoney(Math.max(0, routeDurationMin - originalDurationMin));
+  const stopFee = ADD_STOP_FEES[rideOptionId];
+  const rawAddStopIncrease = roundMoney(
+    extraDistanceKm * rules.perKm +
+      extraDurationMin * rules.perMinute +
+      stopCount * stopFee
+  );
+  const finalAddStopIncrease = Math.round(rawAddStopIncrease * ADD_STOP_CUSTOMER_PAY_MULTIPLIER);
+
+  return {
+    stopCount,
+    extraDistanceKm,
+    extraDurationMin,
+    perKm: rules.perKm,
+    perMinute: rules.perMinute,
+    stopFee,
+    rawAddStopIncrease,
+    addStopDiscountPercent: ADD_STOP_DISCOUNT_PERCENT,
+    finalAddStopIncrease,
+  };
+}
+
+export function calculateStopWaitingFee(input: StopWaitingFeeInput): StopWaitingFeeBreakdown {
+  const rules = getFareRules(input.rideOptionId);
+  const clampedStopMinutes = input.stopWaitingMinutes
+    .slice(0, MAX_TRIP_STOPS)
+    .map((value) => Math.min(safePositiveNumber(value), STOP_WAITING_MAX_MINUTES_PER_STOP));
+  const totalMinutes = Math.min(
+    STOP_WAITING_MAX_TOTAL_MINUTES,
+    clampedStopMinutes.reduce((sum, minutes) => sum + minutes, 0)
+  );
+  let remainingAllowedMinutes = totalMinutes;
+  let billableMinutes = 0;
+
+  for (const minutes of clampedStopMinutes) {
+    if (remainingAllowedMinutes <= 0) break;
+    const allowedAtStop = Math.min(minutes, remainingAllowedMinutes);
+    remainingAllowedMinutes -= allowedAtStop;
+    billableMinutes += Math.max(0, Math.ceil(allowedAtStop - STOP_WAITING_FREE_MINUTES));
+  }
+
+  return {
+    freeMinutesPerStop: STOP_WAITING_FREE_MINUTES,
+    maxMinutesPerStop: STOP_WAITING_MAX_MINUTES_PER_STOP,
+    maxTotalMinutes: STOP_WAITING_MAX_TOTAL_MINUTES,
+    billableMinutes,
+    waitingFeePerMinute: rules.waitingFeePerMinute,
+    stopWaitingFee: roundMoney(billableMinutes * rules.waitingFeePerMinute),
   };
 }
