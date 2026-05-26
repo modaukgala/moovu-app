@@ -32,6 +32,11 @@ type CustomerTripStatusRow = {
   ride_type: string | null;
   schedule_status: string | null;
   cancellation_fee_amount: number | null;
+  stops?: unknown;
+  original_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  final_fare?: number | null;
+  stop_waiting_fee?: number | null;
 };
 
 type CustomerTripDriverRow = {
@@ -57,6 +62,17 @@ type TripEventRow = {
   new_status: string | null;
   created_at: string;
 };
+
+function isMissingStopsColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && (
+    message.includes("stops") ||
+    message.includes("original_fare") ||
+    message.includes("final_add_stop_increase") ||
+    message.includes("final_fare") ||
+    message.includes("stop_waiting_fee")
+  );
+}
 
 const DRIVER_VISIBLE_STATUSES = new Set([
   "assigned",
@@ -115,7 +131,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing tripId" }, { status: 400 });
     }
 
-    const { data: trip, error: tripErr } = await auth.supabaseAdmin
+    let tripQuery = await auth.supabaseAdmin
       .from("trips")
       .select(`
         id,
@@ -146,11 +162,57 @@ export async function GET(req: Request) {
         scheduled_release_at,
         ride_type,
         schedule_status,
-        cancellation_fee_amount
+        cancellation_fee_amount,
+        stops,
+        original_fare,
+        final_add_stop_increase,
+        final_fare,
+        stop_waiting_fee
       `)
       .eq("id", tripId)
       .eq("customer_id", auth.customer.id)
       .maybeSingle();
+
+    if (isMissingStopsColumn(tripQuery.error)) {
+      tripQuery = await auth.supabaseAdmin
+        .from("trips")
+        .select(`
+          id,
+          customer_id,
+          rider_name,
+          rider_phone,
+          pickup_address,
+          dropoff_address,
+          pickup_lat,
+          pickup_lng,
+          dropoff_lat,
+          dropoff_lng,
+          payment_method,
+          distance_km,
+          duration_min,
+          fare_amount,
+          status,
+          driver_id,
+          offer_status,
+          offer_expires_at,
+          start_otp,
+          end_otp,
+          start_otp_verified,
+          end_otp_verified,
+          created_at,
+          cancel_reason,
+          scheduled_for,
+          scheduled_release_at,
+          ride_type,
+          schedule_status,
+          cancellation_fee_amount
+        `)
+        .eq("id", tripId)
+        .eq("customer_id", auth.customer.id)
+        .maybeSingle();
+    }
+
+    const { data: trip, error: tripErr } = tripQuery;
 
     if (tripErr) {
       return NextResponse.json({ ok: false, error: tripErr.message }, { status: 500 });

@@ -42,6 +42,18 @@ type RideTrip = {
   ride_type?: string | null;
   cancellation_fee_amount?: number | null;
   completed_at?: string | null;
+  stops?: unknown;
+  original_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  final_fare?: number | null;
+  stop_waiting_fee?: number | null;
+};
+
+type TripStop = {
+  address: string;
+  lat: number;
+  lng: number;
+  placeId?: string;
 };
 
 type Driver = {
@@ -184,12 +196,29 @@ export default function RideTrackingPage() {
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
+  const stopMarkerRefs = useRef<google.maps.Marker[]>([]);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
   const previousTripSnapshotRef = useRef<{
     status: string | null;
     startOtpVerified: boolean;
     endOtpVerified: boolean;
   } | null>(null);
+
+  const tripStops = useMemo<TripStop[]>(() => {
+    if (!Array.isArray(trip?.stops)) return [];
+    return trip.stops
+      .slice(0, 2)
+      .map((stop) => {
+        const item = (stop ?? {}) as { address?: unknown; lat?: unknown; lng?: unknown; placeId?: unknown };
+        return {
+          address: typeof item.address === "string" ? item.address : "",
+          lat: Number(item.lat),
+          lng: Number(item.lng),
+          placeId: typeof item.placeId === "string" ? item.placeId : undefined,
+        };
+      })
+      .filter((stop) => stop.address.trim() && Number.isFinite(stop.lat) && Number.isFinite(stop.lng));
+  }, [trip?.stops]);
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -235,11 +264,13 @@ export default function RideTrackingPage() {
     if (dropoffMarkerRef.current) dropoffMarkerRef.current.setMap(null);
     if (driverMarkerRef.current) driverMarkerRef.current.setMap(null);
     if (directionsRendererRef.current) directionsRendererRef.current.setMap(null);
+    stopMarkerRefs.current.forEach((marker) => marker.setMap(null));
 
     pickupMarkerRef.current = null;
     dropoffMarkerRef.current = null;
     driverMarkerRef.current = null;
     directionsRendererRef.current = null;
+    stopMarkerRefs.current = [];
   }, []);
 
   const initMapIfNeeded = useCallback(() => {
@@ -288,6 +319,17 @@ export default function RideTrackingPage() {
       points.push(pos);
     }
 
+    tripStops.forEach((stop, index) => {
+      const pos = { lat: stop.lat, lng: stop.lng };
+      stopMarkerRefs.current.push(new window.google.maps.Marker({
+        map,
+        position: pos,
+        title: `Stop ${index + 1}`,
+        icon: stopMarkerIcon(index === 0 ? "1" : "2"),
+      }));
+      points.push(pos);
+    });
+
     if (driver?.lat != null && driver?.lng != null) {
       const pos = { lat: Number(driver.lat), lng: Number(driver.lng) };
       driverMarkerRef.current = createOrMoveMarker({
@@ -331,6 +373,14 @@ export default function RideTrackingPage() {
         {
           origin: { lat: Number(driver.lat), lng: Number(driver.lng) },
           destination: routeDestination,
+          waypoints:
+            trip.status === "ongoing"
+              ? tripStops.map((stop) => ({
+                  location: { lat: stop.lat, lng: stop.lng },
+                  stopover: true,
+                }))
+              : [],
+          optimizeWaypoints: false,
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
@@ -340,7 +390,7 @@ export default function RideTrackingPage() {
         }
       );
     }
-  }, [clearMapLayers, driver, initMapIfNeeded, trip]);
+  }, [clearMapLayers, driver, initMapIfNeeded, trip, tripStops]);
 
   useEffect(() => {
     const firstLoadTimer = window.setTimeout(() => {
@@ -876,6 +926,23 @@ export default function RideTrackingPage() {
                 </div>
 
                 <div className="ml-[5px] h-8 w-0.5 bg-slate-200" />
+
+                {tripStops.map((stop, index) => (
+                  <div key={`${stop.address}-${index}`}>
+                    <div className="flex gap-3">
+                      <div className="mt-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--moovu-primary)] text-[10px] font-black text-white">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase tracking-wide text-slate-500">Stop {index + 1}</div>
+                        <div className="mt-1 text-sm font-medium text-slate-900">
+                          {displayValue(stop.address)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="ml-[10px] h-8 w-0.5 bg-slate-200" />
+                  </div>
+                ))}
 
                 <div className="flex gap-3">
                   <div className="mt-1 h-3 w-3 rounded-full bg-slate-900" />

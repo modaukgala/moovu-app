@@ -133,10 +133,20 @@ async function respondToTripOffer(row: NativeActionRow, action: "accept" | "decl
       await supabaseAdmin.from("drivers").update({ busy: false }).in("id", competingDriverIds);
     }
 
+    const { data: acceptingDriver } = await supabaseAdmin
+      .from("drivers")
+      .select("first_name,last_name,phone")
+      .eq("id", driverId)
+      .maybeSingle();
+    const acceptingDriverName =
+      `${acceptingDriver?.first_name ?? ""} ${acceptingDriver?.last_name ?? ""}`.trim() ||
+      acceptingDriver?.phone ||
+      "A driver";
+
     await supabaseAdmin.from("trip_events").insert({
       trip_id: row.trip_id,
       event_type: "offer_accepted",
-      message: "Driver accepted from Android notification",
+      message: `${acceptingDriverName} accepted the trip from Android notification`,
       old_status: "offered",
       new_status: "assigned",
     });
@@ -148,7 +158,7 @@ async function respondToTripOffer(row: NativeActionRow, action: "accept" | "decl
       `/ride/${row.trip_id}`,
     );
 
-    await notifyAdmins("Driver accepted trip", `A driver accepted trip ${row.trip_id}.`, "/admin/trips");
+    await notifyAdmins("Driver accepted trip", `${acceptingDriverName} accepted trip ${row.trip_id}.`, "/admin/trips");
 
     return NextResponse.json({ ok: true, message: "Trip accepted." });
   }

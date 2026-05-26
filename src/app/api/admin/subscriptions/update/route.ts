@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { isDriverSubscriptionPlan } from "@/lib/finance/driverPayments";
+import {
+  getDriverSubscriptionDays,
+  getDriverSubscriptionStartDate,
+  isDriverSubscriptionPlan,
+} from "@/lib/finance/driverPayments";
 
 type SubscriptionPatch = {
   subscription_status: string;
@@ -62,7 +66,14 @@ export async function POST(req: Request) {
 
     if (action === "activate") {
       newStatus = "active";
-      if (!newExp) newExp = addDays(new Date(), 30);
+      if (newPlan && isDriverSubscriptionPlan(newPlan)) {
+        newExp = addDays(
+          getDriverSubscriptionStartDate(driver.subscription_expires_at, new Date()),
+          getDriverSubscriptionDays(newPlan),
+        );
+      } else if (!newExp || newExp.getTime() <= Date.now()) {
+        newExp = addDays(new Date(), 30);
+      }
     } else if (action === "suspend") {
       newStatus = "suspended";
     } else if (action === "inactive") {

@@ -35,6 +35,7 @@ Configure these in Vercel:
   - `docs/cancellation-management-migration.sql`
   - `docs/dispatch-offer-cycle-migration.sql`
   - `docs/fcm-notifications-migration.sql`
+  - `docs/notification-polish-migration.sql`
 
 ## Storage Buckets
 
@@ -60,6 +61,8 @@ Create and configure:
 
 - Generate production VAPID keys.
 - Confirm service worker is served from `/sw.js`.
+- Confirm Firebase messaging service worker uses `/firebase-cloud-messaging-push-scope` and does not replace `/sw.js`.
+- Confirm `/admin/notifications` shows token status and notification delivery history after `docs/notification-polish-migration.sql` is applied.
 - Test push subscribe for:
   - customer
   - driver

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { getDriverSubscriptionStartDate } from "@/lib/finance/driverPayments";
 
 const PLAN_DAYS = {
   day: 1,
@@ -16,12 +17,6 @@ function num(value: unknown) {
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
-}
-
-function addDays(base: Date, days: number) {
-  const copy = new Date(base);
-  copy.setDate(copy.getDate() + days);
-  return copy;
 }
 
 function isPlanType(value: string): value is PlanType {
@@ -142,13 +137,9 @@ export async function POST(req: Request) {
       }
     }
 
-    const currentExpiry =
-      driver.subscription_expires_at &&
-      new Date(driver.subscription_expires_at).getTime() > now.getTime()
-        ? new Date(driver.subscription_expires_at)
-        : now;
-
-    const newExpiry = addDays(currentExpiry, PLAN_DAYS[planTypeRaw]);
+    const currentExpiry = getDriverSubscriptionStartDate(driver.subscription_expires_at, now);
+    const newExpiry = new Date(currentExpiry);
+    newExpiry.setDate(newExpiry.getDate() + PLAN_DAYS[planTypeRaw]);
 
     const { error: insertPaymentError } = await supabaseAdmin
       .from("driver_subscription_payments")

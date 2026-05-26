@@ -5,6 +5,24 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+const ADMIN_RECENT_EVENT_TYPES = [
+  "trip_created",
+  "scheduled_trip_created",
+  "offer_accepted",
+  "driver_arrived",
+  "trip_started",
+  "trip_completed",
+  "trip_completed_admin",
+  "trip_cancelled",
+  "customer_no_show",
+] as const;
+
+function safeLimit(value: string | null) {
+  const parsed = Number(value ?? 25);
+  if (!Number.isFinite(parsed)) return 25;
+  return Math.min(Math.max(Math.floor(parsed), 1), 75);
+}
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -17,8 +35,9 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const tripId = String(searchParams.get("tripId") ?? "").trim();
+    const recent = searchParams.get("recent") === "1";
 
-    if (!tripId) {
+    if (!tripId && !recent) {
       return NextResponse.json(
         { ok: false, error: "Trip ID is required." },
         { status: 400 }
@@ -26,6 +45,36 @@ export async function GET(req: Request) {
     }
 
     const { supabaseAdmin } = auth;
+
+    if (recent) {
+      const { data, error } = await supabaseAdmin
+        .from("trip_events")
+        .select(`
+          id,
+          trip_id,
+          event_type,
+          message,
+          old_status,
+          new_status,
+          created_at,
+          created_by
+        `)
+        .in("event_type", ADMIN_RECENT_EVENT_TYPES)
+        .order("created_at", { ascending: false })
+        .limit(safeLimit(searchParams.get("limit")));
+
+      if (error) {
+        return NextResponse.json(
+          { ok: false, error: error.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        events: data ?? [],
+      });
+    }
 
     const { data, error } = await supabaseAdmin
       .from("trip_events")

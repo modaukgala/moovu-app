@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import CapacitorBackButtonHandler from "@/components/CapacitorBackButtonHandler";
+import ClientErrorRecovery from "@/components/ClientErrorRecovery";
 import InAppNotificationBar from "@/components/InAppNotificationBar";
 import PortalNotificationLauncher from "@/components/PortalNotificationLauncher";
 
@@ -45,6 +46,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
+        <ClientErrorRecovery />
         <InAppNotificationBar />
         <CapacitorBackButtonHandler />
         <PortalNotificationLauncher />

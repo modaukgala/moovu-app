@@ -3,6 +3,21 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getDriverIdForUser, getUserFromBearer } from "@/app/api/driver/utils";
 
 const ACTIVE = ["assigned", "arrived", "ongoing"];
+const TRIP_SELECT =
+  "id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,fare_amount,payment_method,created_at,offer_status,offer_expires_at,ride_option,stops,original_fare,final_add_stop_increase,final_fare,stop_waiting_fee";
+const LEGACY_TRIP_SELECT =
+  "id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,fare_amount,payment_method,created_at,offer_status,offer_expires_at,ride_option";
+
+function isMissingStopsColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && (
+    message.includes("stops") ||
+    message.includes("original_fare") ||
+    message.includes("final_add_stop_increase") ||
+    message.includes("final_fare") ||
+    message.includes("stop_waiting_fee")
+  );
+}
 
 export async function POST(req: Request) {
   try {
@@ -24,16 +39,27 @@ export async function POST(req: Request) {
 
     await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
 
-    const { data: trip, error } = await supabaseAdmin
+    let tripQuery = await supabaseAdmin
       .from("trips")
-      .select(
-        "id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,fare_amount,payment_method,created_at,offer_status,offer_expires_at,ride_option"
-      )
+      .select(TRIP_SELECT)
       .eq("driver_id", driverId)
       .in("status", ACTIVE)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (isMissingStopsColumn(tripQuery.error)) {
+      tripQuery = await supabaseAdmin
+        .from("trips")
+        .select(LEGACY_TRIP_SELECT)
+        .eq("driver_id", driverId)
+        .in("status", ACTIVE)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    }
+
+    const { data: trip, error } = tripQuery;
 
     if (error) {
       return NextResponse.json(

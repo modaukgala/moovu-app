@@ -20,6 +20,15 @@ type Trip = {
   status: string;
   created_at: string;
   driver_id: string | null;
+  stops?: unknown;
+  original_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  final_fare?: number | null;
+  stop_waiting_fee?: number | null;
+};
+
+type TripStop = {
+  address: string;
 };
 
 type Driver = {
@@ -50,6 +59,17 @@ function money(value: number | null | undefined) {
 
 function displayDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "--";
+}
+
+function parseTripStops(value: unknown): TripStop[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, 2)
+    .map((stop) => {
+      const item = (stop ?? {}) as { address?: unknown };
+      return { address: typeof item.address === "string" ? item.address : "" };
+    })
+    .filter((stop) => stop.address.trim());
 }
 
 export default function TripsPage() {
@@ -386,6 +406,11 @@ export default function TripsPage() {
                         <Link href={`/admin/trips/${trip.id}`} className="font-black text-slate-950 hover:text-[var(--moovu-primary)]">
                           {trip.pickup_address}
                         </Link>
+                        {parseTripStops(trip.stops).map((stop, index) => (
+                          <div key={`${trip.id}-stop-${index}`} className="mt-1 text-xs font-semibold text-blue-700">
+                            Stop {index + 1}: {stop.address}
+                          </div>
+                        ))}
                         <div className="mt-1 text-xs text-slate-500">{trip.dropoff_address}</div>
                       </td>
                       <td>
@@ -458,6 +483,17 @@ export default function TripsPage() {
                       <div className="mt-1 break-words text-sm font-semibold text-slate-950">{trip.pickup_address}</div>
                     </div>
                   </div>
+                  {parseTripStops(trip.stops).map((stop, index) => (
+                    <div className="moovu-route-line min-w-0" key={`${trip.id}-mobile-stop-${index}`}>
+                      <div className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--moovu-primary)] text-[10px] font-black text-white">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Stop {index + 1}</div>
+                        <div className="mt-1 break-words text-sm font-semibold text-slate-950">{stop.address}</div>
+                      </div>
+                    </div>
+                  ))}
                   <div className="moovu-route-line min-w-0">
                     <div className="moovu-route-line-marker" />
                     <div className="min-w-0">

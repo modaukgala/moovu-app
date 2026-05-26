@@ -33,6 +33,11 @@ type Offer = {
   duration_min?: number | null;
   fare_amount: number | null;
   payment_method: string | null;
+  stops?: unknown;
+  original_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  final_fare?: number | null;
+  stop_waiting_fee?: number | null;
 };
 
 type CurrentTrip = {
@@ -51,6 +56,17 @@ type CurrentTrip = {
   driver_arrived_at?: string | null;
   no_show_eligible_at?: string | null;
   ride_option?: string | null;
+  stops?: unknown;
+  original_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  final_fare?: number | null;
+  stop_waiting_fee?: number | null;
+};
+
+type TripStop = {
+  address: string;
+  lat: number;
+  lng: number;
 };
 
 type Driver = {
@@ -162,6 +178,21 @@ function gpsNoticeTone(notice: GpsNotice | string): GpsNotice["tone"] {
   return notice.toLowerCase().includes("gps live") ? "success" : "info";
 }
 
+function parseTripStops(value: unknown): TripStop[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, 2)
+    .map((stop) => {
+      const item = (stop ?? {}) as { address?: unknown; lat?: unknown; lng?: unknown };
+      return {
+        address: typeof item.address === "string" ? item.address : "",
+        lat: Number(item.lat),
+        lng: Number(item.lng),
+      };
+    })
+    .filter((stop) => stop.address.trim() && Number.isFinite(stop.lat) && Number.isFinite(stop.lng));
+}
+
 export default function DriverHomePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -206,6 +237,7 @@ export default function DriverHomePage() {
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
+  const stopMarkerRefs = useRef<google.maps.Marker[]>([]);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
 
   function showDriverActionError(message: string) {
@@ -593,11 +625,13 @@ export default function DriverHomePage() {
     if (pickupMarkerRef.current) pickupMarkerRef.current.setMap(null);
     if (dropoffMarkerRef.current) dropoffMarkerRef.current.setMap(null);
     if (directionsRendererRef.current) directionsRendererRef.current.setMap(null);
+    stopMarkerRefs.current.forEach((marker) => marker.setMap(null));
 
     driverMarkerRef.current = null;
     pickupMarkerRef.current = null;
     dropoffMarkerRef.current = null;
     directionsRendererRef.current = null;
+    stopMarkerRefs.current = [];
   }
 
   function updateMapObjects() {
@@ -606,6 +640,7 @@ export default function DriverHomePage() {
 
     clearMapLayers();
     const routePreview = currentTrip ?? offer;
+    const routeStops = parseTripStops(routePreview?.stops);
 
     const points: google.maps.LatLngLiteral[] = [];
 
@@ -642,6 +677,17 @@ export default function DriverHomePage() {
       points.push(dropoffPos);
     }
 
+    routeStops.forEach((stop, index) => {
+      const stopPos = { lat: stop.lat, lng: stop.lng };
+      stopMarkerRefs.current.push(new window.google.maps.Marker({
+        map,
+        position: stopPos,
+        title: `Stop ${index + 1}`,
+        icon: stopMarkerIcon(index === 0 ? "1" : "2"),
+      }));
+      points.push(stopPos);
+    });
+
     if (points.length > 0) {
       fitBoundsToPoints(map, points);
     } else {
@@ -674,6 +720,14 @@ export default function DriverHomePage() {
         {
           origin: { lat: driver.lat!, lng: driver.lng! },
           destination: { lat: destLat, lng: destLng },
+          waypoints:
+            currentTrip?.status === "ongoing"
+              ? routeStops.map((stop) => ({
+                  location: { lat: stop.lat, lng: stop.lng },
+                  stopover: true,
+                }))
+              : [],
+          optimizeWaypoints: false,
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
@@ -906,6 +960,8 @@ export default function DriverHomePage() {
     () => getNoShowFee(currentTrip?.ride_option),
     [currentTrip?.ride_option]
   );
+  const offerStops = useMemo(() => parseTripStops(offer?.stops), [offer?.stops]);
+  const currentTripStops = useMemo(() => parseTripStops(currentTrip?.stops), [currentTrip?.stops]);
 
   if (loadingDriver) {
     return (
@@ -1014,6 +1070,11 @@ export default function DriverHomePage() {
                   <span className="text-slate-400">Dropoff:</span> {offer.dropoff_address ?? "—"}
                 </div>
               </div>
+              {offerStops.length > 0 && (
+                <div className="mt-2 rounded-2xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-800">
+                  Stops: {offerStops.map((stop, index) => `Stop ${index + 1}: ${stop.address}`).join(" | ")}
+                </div>
+              )}
             </div>
 
             <div className="grid min-w-full grid-cols-2 gap-2 sm:min-w-[230px]">
@@ -1250,6 +1311,22 @@ export default function DriverHomePage() {
                       </div>
                     </div>
                   </div>
+
+                  {currentTripStops.length > 0 && (
+                    <div className="mt-3 rounded-[24px] border border-blue-100 bg-blue-50 p-4">
+                      <div className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">Trip stops</div>
+                      <div className="mt-3 grid gap-2">
+                        {currentTripStops.map((stop, index) => (
+                          <div key={`${stop.address}-${index}`} className="rounded-2xl bg-white/85 p-3 text-sm font-semibold text-slate-900">
+                            Stop {index + 1}: {stop.address}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 text-xs font-semibold text-blue-800">
+                        First 3 minutes waiting at each stop are free. Maximum 10 minutes per stop.
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {currentTrip.status === "assigned" && (pickupGoogle || pickupWaze) && (
@@ -1547,6 +1624,15 @@ export default function DriverHomePage() {
                             {offer.dropoff_address ?? "—"}
                           </div>
                         </div>
+
+                        {offerStops.map((stop, index) => (
+                          <div key={`${stop.address}-${index}`} className="rounded-2xl bg-blue-50 p-3">
+                            <div className="text-xs text-blue-700">Stop {index + 1}</div>
+                            <div className="mt-1 text-sm font-medium text-slate-900">
+                              {stop.address}
+                            </div>
+                          </div>
+                        ))}
 
                         <div className="grid grid-cols-2 gap-3">
                           <div className="rounded-2xl bg-white p-3">

@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isPushRole, verifyPushRoleAccess } from "@/lib/push-auth";
 
+function isMissingFcmTokenTable(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return (
+    error?.code === "42P01" ||
+    error?.code === "PGRST205" ||
+    message.includes("fcm_tokens") ||
+    (message.includes("relation") && message.includes("does not exist"))
+  );
+}
+
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -52,7 +62,25 @@ export async function GET(req: Request) {
       .limit(10);
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      if (isMissingFcmTokenTable(error)) {
+        return NextResponse.json({
+          ok: true,
+          userId: user.id,
+          activeTokenCount: 0,
+          tokens: [],
+          warning: "FCM token storage is not ready. Run docs/fcm-notifications-migration.sql.",
+        });
+      }
+
+      console.error("[notification-status] failed to load FCM token status", {
+        role,
+        userId: user.id,
+        reason: error.message,
+      });
+      return NextResponse.json(
+        { ok: false, error: "Could not load notification status. Please refresh or contact support." },
+        { status: 500 },
+      );
     }
 
     const tokens = (data ?? []).map((row) => {
@@ -69,9 +97,9 @@ export async function GET(req: Request) {
       activeTokenCount: tokens.filter((row) => row.is_active).length,
       tokens,
     });
-  } catch (error: unknown) {
+  } catch {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Notification status failed." },
+      { ok: false, error: "Could not load notification status. Please refresh or contact support." },
       { status: 500 },
     );
   }

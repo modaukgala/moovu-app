@@ -21,7 +21,60 @@ type DriverCurrentTripResponse = {
   created_at: string | null;
   driver_arrived_at?: string | null;
   no_show_eligible_at?: string | null;
+  stops?: unknown;
+  original_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  final_fare?: number | null;
+  stop_waiting_fee?: number | null;
 };
+
+const CURRENT_TRIP_SELECT = `
+  id,
+  status,
+  driver_id,
+  pickup_address,
+  dropoff_address,
+  pickup_lat,
+  pickup_lng,
+  dropoff_lat,
+  dropoff_lng,
+  fare_amount,
+  payment_method,
+  created_at,
+  ride_option,
+  stops,
+  original_fare,
+  final_add_stop_increase,
+  final_fare,
+  stop_waiting_fee
+`;
+
+const LEGACY_CURRENT_TRIP_SELECT = `
+  id,
+  status,
+  driver_id,
+  pickup_address,
+  dropoff_address,
+  pickup_lat,
+  pickup_lng,
+  dropoff_lat,
+  dropoff_lng,
+  fare_amount,
+  payment_method,
+  created_at
+`;
+
+function isMissingStopsColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && (
+    message.includes("stops") ||
+    message.includes("original_fare") ||
+    message.includes("final_add_stop_increase") ||
+    message.includes("final_fare") ||
+    message.includes("stop_waiting_fee") ||
+    message.includes("ride_option")
+  );
+}
 
 export async function GET(req: Request) {
   try {
@@ -76,26 +129,25 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, trip: null });
     }
 
-    const { data: trip, error: tripError } = await supabaseAdmin
+    let tripQuery = await supabaseAdmin
       .from("trips")
-      .select(`
-        id,
-        status,
-        driver_id,
-        pickup_address,
-        dropoff_address,
-        pickup_lat,
-        pickup_lng,
-        dropoff_lat,
-        dropoff_lng,
-        fare_amount,
-        payment_method,
-        created_at
-      `)
+      .select(CURRENT_TRIP_SELECT)
       .eq("driver_id", mapping.driver_id)
       .in("status", ["assigned", "arrived", "ongoing"])
       .order("created_at", { ascending: false })
       .maybeSingle();
+
+    if (isMissingStopsColumn(tripQuery.error)) {
+      tripQuery = await supabaseAdmin
+        .from("trips")
+        .select(LEGACY_CURRENT_TRIP_SELECT)
+        .eq("driver_id", mapping.driver_id)
+        .in("status", ["assigned", "arrived", "ongoing"])
+        .order("created_at", { ascending: false })
+        .maybeSingle();
+    }
+
+    const { data: trip, error: tripError } = tripQuery;
 
     if (tripError) {
       return NextResponse.json(

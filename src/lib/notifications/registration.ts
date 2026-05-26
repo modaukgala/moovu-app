@@ -160,7 +160,10 @@ async function requestWebToken(): Promise<string | null> {
     throw new Error("Firebase messaging is not supported in this browser.");
   }
 
-  const serviceWorkerRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+  const serviceWorkerRegistration = await navigator.serviceWorker.register(
+    "/firebase-messaging-sw.js",
+    { scope: "/firebase-cloud-messaging-push-scope" },
+  );
   return getFcmToken(messaging, {
     vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
     serviceWorkerRegistration,

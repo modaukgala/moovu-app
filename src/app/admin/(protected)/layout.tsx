@@ -35,6 +35,10 @@ type PaymentFlagRow = {
   status?: string | null;
 };
 
+type ApplicationFlagRow = {
+  id: string;
+};
+
 export default function AdminProtectedLayout({
   children,
 }: {
@@ -47,9 +51,46 @@ export default function AdminProtectedLayout({
     subscription: 0,
     commission: 0,
   });
+  const [pendingApplications, setPendingApplications] = useState(0);
 
   useEffect(() => {
     let mounted = true;
+    let flagsTimer: number | null = null;
+
+    function loadAdminFlags(accessToken: string) {
+      fetch("/api/admin/payment-reviews?status=all", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((res) => res.json())
+        .then((json: { ok?: boolean; requests?: PaymentFlagRow[] }) => {
+          if (!mounted || !json?.ok) return;
+          const active = (json.requests ?? []).filter((row) =>
+            ["pending_payment_review", "waiting_confirmation"].includes(String(row.status ?? ""))
+          );
+          setPaymentFlags({
+            all: active.length,
+            subscription: active.filter((row) => row.payment_type === "subscription").length,
+            commission: active.filter((row) => row.payment_type === "commission").length,
+          });
+        })
+        .catch(() => {
+          if (mounted) setPaymentFlags({ all: 0, subscription: 0, commission: 0 });
+        });
+
+      fetch("/api/admin/driver-applications?status=pending_review", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((res) => res.json())
+        .then((json: { ok?: boolean; applications?: ApplicationFlagRow[] }) => {
+          if (!mounted || !json?.ok) return;
+          setPendingApplications((json.applications ?? []).length);
+        })
+        .catch(() => {
+          if (mounted) setPendingApplications(0);
+        });
+    }
 
     async function checkAuth() {
       const {
@@ -76,25 +117,8 @@ export default function AdminProtectedLayout({
         return;
       }
 
-      fetch("/api/admin/payment-reviews?status=all", {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-        .then((res) => res.json())
-        .then((json: { ok?: boolean; requests?: PaymentFlagRow[] }) => {
-          if (!json?.ok) return;
-          const active = (json.requests ?? []).filter((row) =>
-            ["pending_payment_review", "waiting_confirmation"].includes(String(row.status ?? ""))
-          );
-          setPaymentFlags({
-            all: active.length,
-            subscription: active.filter((row) => row.payment_type === "subscription").length,
-            commission: active.filter((row) => row.payment_type === "commission").length,
-          });
-        })
-        .catch(() => {
-          setPaymentFlags({ all: 0, subscription: 0, commission: 0 });
-        });
+      loadAdminFlags(session.access_token);
+      flagsTimer = window.setInterval(() => loadAdminFlags(session.access_token), 30000);
 
       setChecking(false);
     }
@@ -103,6 +127,7 @@ export default function AdminProtectedLayout({
 
     return () => {
       mounted = false;
+      if (flagsTimer) window.clearInterval(flagsTimer);
     };
   }, [pathname]);
 
@@ -222,6 +247,11 @@ export default function AdminProtectedLayout({
                               {paymentFlags.subscription}
                             </span>
                           ) : null}
+                          {item.href === "/admin/applications" && pendingApplications > 0 ? (
+                            <span className="ml-auto rounded-full bg-red-100 px-2 py-0.5 text-xs font-black text-red-700">
+                              {pendingApplications}
+                            </span>
+                          ) : null}
                         </Link>
                       );
                     })}
@@ -280,6 +310,7 @@ export default function AdminProtectedLayout({
                 className={active ? "is-active" : ""}
               >
                   {item.label}
+                  {item.href === "/admin/applications" && pendingApplications > 0 ? ` (${pendingApplications})` : ""}
                   {item.href === "/admin/payment-reviews" && paymentFlags.all > 0 ? ` (${paymentFlags.all})` : ""}
                   {item.href === "/admin/commission-payments" && paymentFlags.commission > 0 ? ` (${paymentFlags.commission})` : ""}
                   {item.href === "/admin/subscriptions" && paymentFlags.subscription > 0 ? ` (${paymentFlags.subscription})` : ""}

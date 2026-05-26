@@ -22,6 +22,14 @@ function driverName(driver: Driver) {
   return `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || "Unnamed driver";
 }
 
+function isSuspendedDriver(status?: string | null) {
+  return status === "inactive" || status === "suspended";
+}
+
+function adminDriverStatusLabel(status?: string | null) {
+  return isSuspendedDriver(status) ? "suspended" : status;
+}
+
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,7 +110,10 @@ export default function DriversPage() {
   const filteredDrivers = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
     return drivers.filter((driver) => {
-      const statusMatch = statusFilter === "all" || driver.status === statusFilter;
+      const statusMatch =
+        statusFilter === "all" ||
+        driver.status === statusFilter ||
+        (statusFilter === "suspended" && isSuspendedDriver(driver.status));
       const text = `${driverName(driver)} ${driver.phone ?? ""} ${driver.email ?? ""}`.toLowerCase();
       const queryMatch = !cleanQuery || text.includes(cleanQuery);
       return statusMatch && queryMatch;
@@ -113,7 +124,7 @@ export default function DriversPage() {
     ["active", "approved"].includes(driver.status ?? ""),
   ).length;
   const pendingCount = drivers.filter((driver) => driver.status === "pending").length;
-  const suspendedCount = drivers.filter((driver) => driver.status === "suspended").length;
+  const suspendedCount = drivers.filter((driver) => isSuspendedDriver(driver.status)).length;
 
   if (loading) {
     return (
@@ -229,7 +240,7 @@ export default function DriversPage() {
                       <td className="px-5 py-4 text-slate-700">{driver.phone ?? "--"}</td>
                       <td className="px-5 py-4 text-slate-700">{driver.email ?? "--"}</td>
                       <td className="px-5 py-4">
-                        <StatusBadge status={driver.status} />
+                        <StatusBadge status={adminDriverStatusLabel(driver.status)} />
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-2">
@@ -241,15 +252,15 @@ export default function DriversPage() {
                               Approve
                             </button>
                           )}
-                          {driver.status !== "suspended" && (
+                          {!isSuspendedDriver(driver.status) && (
                             <button
-                              onClick={() => void updateStatus(driver.id, "suspended")}
+                              onClick={() => void updateStatus(driver.id, "inactive")}
                               className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700"
                             >
                               Suspend
                             </button>
                           )}
-                          {driver.status === "suspended" && (
+                          {isSuspendedDriver(driver.status) && (
                             <button
                               onClick={() => void updateStatus(driver.id, "active")}
                               className="moovu-btn moovu-btn-primary"
@@ -277,7 +288,7 @@ export default function DriversPage() {
                         {driverName(driver)}
                       </Link>
                       <div className="mt-2">
-                        <StatusBadge status={driver.status} />
+                        <StatusBadge status={adminDriverStatusLabel(driver.status)} />
                       </div>
                     </div>
                   </div>
@@ -296,15 +307,15 @@ export default function DriversPage() {
                         Approve
                       </button>
                     )}
-                    {driver.status !== "suspended" && (
+                    {!isSuspendedDriver(driver.status) && (
                       <button
-                        onClick={() => void updateStatus(driver.id, "suspended")}
+                        onClick={() => void updateStatus(driver.id, "inactive")}
                         className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700"
                       >
                         Suspend
                       </button>
                     )}
-                    {driver.status === "suspended" && (
+                    {isSuspendedDriver(driver.status) && (
                       <button
                         onClick={() => void updateStatus(driver.id, "active")}
                         className="moovu-btn moovu-btn-primary"

@@ -17,6 +17,15 @@ type Trip = {
   created_at: string;
   offer_status: string | null;
   offer_expires_at: string | null;
+  stops?: unknown;
+  original_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  final_fare?: number | null;
+  stop_waiting_fee?: number | null;
+};
+
+type TripStop = {
+  address: string;
 };
 
 type TripEvent = {
@@ -37,6 +46,17 @@ type Driver = {
   busy: boolean | null;
   status: string;
 };
+
+function parseTripStops(value: unknown): TripStop[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, 2)
+    .map((stop) => {
+      const item = (stop ?? {}) as { address?: unknown };
+      return { address: typeof item.address === "string" ? item.address : "" };
+    })
+    .filter((stop) => stop.address.trim());
+}
 
 export default function TripDetailPage() {
   const params = useParams<{ id: string }>();
@@ -105,6 +125,7 @@ export default function TripDetailPage() {
   const driverLabel = assignedDriver
     ? `${assignedDriver.first_name} ${assignedDriver.last_name} (${assignedDriver.phone})`
     : driverId ?? "Unassigned";
+  const tripStops = parseTripStops(trip?.stops);
   const offerSecondsLeft = trip?.offer_expires_at
     ? Math.ceil((new Date(trip.offer_expires_at).getTime() - nowMs) / 1000)
     : null;
@@ -244,6 +265,37 @@ export default function TripDetailPage() {
             <div className="font-medium text-black mt-1">{trip.dropoff_address}</div>
           </div>
         </div>
+
+        {tripStops.length > 0 && (
+          <div className="rounded-3xl border border-blue-100 bg-blue-50 p-4">
+            <div className="text-sm font-black uppercase tracking-[0.12em] text-blue-700">Route stops</div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {tripStops.map((stop, index) => (
+                <div key={`${stop.address}-${index}`} className="rounded-2xl bg-white p-4">
+                  <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Stop {index + 1}</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">{stop.address}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {trip.final_add_stop_increase != null && Number(trip.final_add_stop_increase) > 0 && (
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="border rounded-2xl p-4 bg-white">
+              <div className="text-sm text-gray-600">Original fare</div>
+              <div className="font-semibold text-black mt-1">R{Number(trip.original_fare ?? 0).toFixed(2)}</div>
+            </div>
+            <div className="border rounded-2xl p-4 bg-white">
+              <div className="text-sm text-gray-600">Add stop increase</div>
+              <div className="font-semibold text-black mt-1">R{Number(trip.final_add_stop_increase ?? 0).toFixed(2)}</div>
+            </div>
+            <div className="border rounded-2xl p-4 bg-white">
+              <div className="text-sm text-gray-600">Waiting fees</div>
+              <div className="font-semibold text-black mt-1">R{Number(trip.stop_waiting_fee ?? 0).toFixed(2)}</div>
+            </div>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-4 gap-4">
           <div className="border rounded-2xl p-4 bg-white">

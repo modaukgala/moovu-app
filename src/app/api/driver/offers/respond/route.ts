@@ -238,6 +238,16 @@ export async function POST(req: Request) {
         });
       }
 
+      const { data: acceptingDriver } = await supabaseAdmin
+        .from("drivers")
+        .select("first_name,last_name,phone")
+        .eq("id", driverId)
+        .maybeSingle();
+      const acceptingDriverName =
+        `${acceptingDriver?.first_name ?? ""} ${acceptingDriver?.last_name ?? ""}`.trim() ||
+        acceptingDriver?.phone ||
+        "A driver";
+
       const { error: cancelOtherOffersError } = offerTableMissing
         ? { error: null }
         : await supabaseAdmin
@@ -263,7 +273,7 @@ export async function POST(req: Request) {
         await supabaseAdmin.from("trip_events").insert({
           trip_id: tripId,
           event_type: "offer_accepted",
-          message: "Driver accepted",
+          message: `${acceptingDriverName} accepted the trip`,
           old_status: "offered",
           new_status: "assigned",
         });
@@ -278,7 +288,7 @@ export async function POST(req: Request) {
 
       await notifyAdmins(
         "Driver accepted trip",
-        `A driver accepted trip ${tripId}.`,
+        `${acceptingDriverName} accepted trip ${tripId}.`,
         "/admin/trips"
       );
 

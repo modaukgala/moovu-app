@@ -3,6 +3,8 @@ import { requireAdminUser } from "@/lib/auth/admin";
 import { getActiveManualSurge, setActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 import { SURGE_MODES, validateSurgeMode } from "@/lib/domain/fare";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
   const auth = await requireAdminUser(req);
   if (!auth.ok) {
@@ -10,7 +12,14 @@ export async function GET(req: Request) {
   }
 
   const surge = await getActiveManualSurge();
-  return NextResponse.json({ ok: true, surge, modes: Object.values(SURGE_MODES) });
+  return NextResponse.json(
+    { ok: true, surge, modes: Object.values(SURGE_MODES) },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      },
+    }
+  );
 }
 
 export async function POST(req: Request) {
@@ -35,5 +44,12 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, surge: result.surge, modes: Object.values(SURGE_MODES) });
+  return NextResponse.json(
+    { ok: true, surge: result.surge, modes: Object.values(SURGE_MODES) },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      },
+    }
+  );
 }

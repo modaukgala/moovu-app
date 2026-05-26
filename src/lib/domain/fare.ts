@@ -242,9 +242,9 @@ export function getCommissionPctForRideOption(value: unknown) {
 }
 
 export function getLongDistanceUpliftPct(distanceKm: number) {
-  if (distanceKm > 50) return 10;
-  if (distanceKm >= 25) return 7.5;
-  if (distanceKm >= 10) return 5;
+  if (distanceKm >= 50) return 8.5;
+  if (distanceKm >= 30) return 6.5;
+  if (distanceKm >= 15) return 4.5;
   return 0;
 }
 

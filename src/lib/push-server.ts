@@ -254,7 +254,7 @@ async function recordNotificationHistory(params: {
   if (error) {
     const reason = error.message;
     if (isMissingTableError(error)) {
-      console.error("[notifications] app_notifications table missing. Run docs/fcm-notifications-migration.sql.", {
+      console.error("[notifications] app_notifications table missing. Run docs/notification-polish-migration.sql.", {
         reason,
       });
       return;

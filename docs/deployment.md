@@ -64,11 +64,13 @@ After generation, wire the typed database into the browser/admin Supabase client
   - `VAPID_PRIVATE_KEY`
   - `VAPID_SUBJECT`
 - Confirm the PWA service worker is served from `public/sw.js`.
+- Confirm Firebase Web Messaging registers `public/firebase-messaging-sw.js` on the `/firebase-cloud-messaging-push-scope` scope so it does not replace the PWA service worker.
 - Confirm `/api/push/subscribe` validates authenticated user roles before storing role-scoped subscriptions.
 - Use `/api/push/test-self` from the customer, driver, and admin UI to prove each logged-in role can receive a notification on its own device.
 - Keep `PUSH_INTERNAL_API_KEY` server-only; `/api/push/send` must not be called from public browser code.
 - Firebase Cloud Messaging is supported alongside the existing web-push path. Public Firebase client variables may be exposed to the browser, but `FIREBASE_PRIVATE_KEY` and `FIREBASE_CLIENT_EMAIL` must be server-only in Vercel.
 - Apply `docs/fcm-notifications-migration.sql` on staging/production before relying on FCM token storage.
+- Apply `docs/notification-polish-migration.sql` so `/admin/notifications` can show sent, failed, and no-token delivery history.
 - The Firebase private key must preserve newlines. In Vercel it can be stored with escaped `\n`; the server helper converts escaped newlines at runtime.
 - Browser/PWA push requires HTTPS in production. iOS push support depends on installed PWA behavior and current Safari limitations. Native Play Store/App Store packaging should use Capacitor with FCM/APNs for fully reliable app notifications.
 

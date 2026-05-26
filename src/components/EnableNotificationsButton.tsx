@@ -12,6 +12,11 @@ type Props = {
   variant?: "floating" | "inline";
 };
 
+type NotificationStatusResponse = {
+  ok?: boolean;
+  activeTokenCount?: number;
+};
+
 function savedKey(userId: string, role: NotificationRole) {
   return `moovu:fcm-enabled:${userId}:${role}:${Capacitor.getPlatform()}`;
 }
@@ -55,11 +60,26 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
 
       if (cancelled) return;
 
-      if (session?.user?.id && getSaved(session.user.id, role)) {
-        setSavedState(true);
-        setStatusLabel("Notifications Enabled");
-        setMessage("Token Saved");
-        return;
+      if (session?.user?.id) {
+        if (getSaved(session.user.id, role)) {
+          setSavedState(true);
+          setStatusLabel("Notifications Enabled");
+          setMessage("Token saved on this device.");
+          return;
+        }
+
+        const statusResponse = await fetch(`/api/notifications/status?role=${encodeURIComponent(role)}`, {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }).catch(() => null);
+
+        const statusJson = (await statusResponse?.json().catch(() => null)) as NotificationStatusResponse | null;
+        if (!cancelled && statusResponse?.ok && statusJson?.ok && Number(statusJson.activeTokenCount ?? 0) > 0) {
+          markSaved(session.user.id, "Notifications are already enabled on this device.");
+          return;
+        }
       }
 
       if (Capacitor.isNativePlatform()) {
@@ -93,7 +113,7 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
     return () => {
       cancelled = true;
     };
-  }, [role]);
+  }, [markSaved, role]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -174,13 +194,19 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
       }
     } finally {
       setBusy(false);
-      if (!saved) {
-        setStatusLabel((current) => current === "Enabling..." ? "Enable Notifications" : current);
-      }
+      setStatusLabel((current) => current === "Enabling..." ? "Enable Notifications" : current);
     }
   }
 
-  if ((saved || !canRequest) && variant === "floating") return null;
+  if (saved && variant === "floating") return null;
+
+  if (!canRequest && variant === "floating") {
+    return message ? (
+      <div className="max-w-[280px] rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow">
+        {message}
+      </div>
+    ) : null;
+  }
 
   if (saved) {
     return (

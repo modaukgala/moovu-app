@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { calculateFare } from "@/lib/fare/calculateFare";
-import { getRideOption, normalizeRideOptionId } from "@/lib/domain/fare";
+import {
+  MAX_TRIP_STOPS,
+  calculateAddStopIncrease,
+  calculateStopWaitingFee,
+  getRideOption,
+  normalizeRideOptionId,
+} from "@/lib/domain/fare";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 import { offerNextEligibleDriver } from "@/lib/trip-offers";
 import { fullCustomerName } from "@/lib/customer/auth";
@@ -41,9 +47,30 @@ function isMissingOptionalPricingColumn(error: { code?: string; message?: string
   return error?.code === "42703" && (
     message.includes("surge_label") ||
     message.includes("surge_multiplier") ||
-    message.includes("fare_breakdown")
+    message.includes("fare_breakdown") ||
+    message.includes("stops") ||
+    message.includes("original_distance_km") ||
+    message.includes("original_duration_min") ||
+    message.includes("original_fare") ||
+    message.includes("route_distance_km") ||
+    message.includes("route_duration_min") ||
+    message.includes("extra_stop_distance_km") ||
+    message.includes("extra_stop_duration_min") ||
+    message.includes("raw_add_stop_increase") ||
+    message.includes("add_stop_discount_percent") ||
+    message.includes("final_add_stop_increase") ||
+    message.includes("stop_waiting_fee") ||
+    message.includes("final_fare")
   );
 }
+
+type StopPayload = {
+  address?: string | null;
+  placeId?: string | null;
+  place_id?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+};
 
 type BookTripBody = {
   pickupAddress?: string | null;
@@ -66,6 +93,11 @@ type BookTripBody = {
   distance_km?: number | null;
   durationMin?: number | null;
   duration_min?: number | null;
+  originalDistanceKm?: number | null;
+  original_distance_km?: number | null;
+  originalDurationMin?: number | null;
+  original_duration_min?: number | null;
+  stops?: StopPayload[] | null;
   rideType?: string | null;
   ride_type?: string | null;
   rideOption?: string | null;
@@ -74,6 +106,93 @@ type BookTripBody = {
   scheduled_for?: string | null;
   notes?: string | null;
 };
+
+function normalizeStops(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_TRIP_STOPS).map((stop) => {
+    const item = (stop ?? {}) as StopPayload;
+    return {
+      address: pickFirstString(item.address),
+      placeId: pickFirstString(item.placeId, item.place_id),
+      lat: asNumber(item.lat),
+      lng: asNumber(item.lng),
+    };
+  }).filter((stop) => stop.address && stop.lat != null && stop.lng != null);
+}
+
+function samePoint(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  return Math.abs(a.lat - b.lat) < 0.00008 && Math.abs(a.lng - b.lng) < 0.00008;
+}
+
+async function fetchDistanceLeg(params: {
+  apiKey: string;
+  origin: { lat: number; lng: number };
+  destination: { lat: number; lng: number };
+}) {
+  const origin = `${params.origin.lat},${params.origin.lng}`;
+  const destination = `${params.destination.lat},${params.destination.lng}`;
+  const url =
+    `https://maps.googleapis.com/maps/api/distancematrix/json` +
+    `?origins=${encodeURIComponent(origin)}` +
+    `&destinations=${encodeURIComponent(destination)}` +
+    `&mode=driving` +
+    `&language=en` +
+    `&region=za` +
+    `&key=${encodeURIComponent(params.apiKey)}`;
+
+  const response = await fetch(url, { method: "GET", cache: "no-store" });
+  const data = await response.json().catch(() => null);
+  const element = data?.rows?.[0]?.elements?.[0];
+
+  if (!response.ok || data?.status !== "OK" || !element || element.status !== "OK") {
+    throw new Error(
+      element?.status === "ZERO_RESULTS"
+        ? "No driving route found between the selected locations."
+        : data?.error_message || "Could not calculate route."
+    );
+  }
+
+  return {
+    distanceKm: Number(element.distance?.value ?? 0) / 1000,
+    durationMin: Number(element.duration?.value ?? 0) / 60,
+  };
+}
+
+async function calculateServerRoute(params: {
+  pickup: { lat: number; lng: number };
+  dropoff: { lat: number; lng: number };
+  stops: Array<{ lat: number; lng: number }>;
+}) {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+  if (!apiKey) return null;
+
+  const original = await fetchDistanceLeg({
+    apiKey,
+    origin: params.pickup,
+    destination: params.dropoff,
+  });
+
+  const points = [params.pickup, ...params.stops, params.dropoff];
+  let routeDistanceKm = 0;
+  let routeDurationMin = 0;
+
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const leg = await fetchDistanceLeg({
+      apiKey,
+      origin: points[i],
+      destination: points[i + 1],
+    });
+    routeDistanceKm += leg.distanceKm;
+    routeDurationMin += leg.durationMin;
+  }
+
+  return {
+    originalDistanceKm: Number(original.distanceKm.toFixed(2)),
+    originalDurationMin: Math.ceil(original.durationMin),
+    distanceKm: Number(routeDistanceKm.toFixed(2)),
+    durationMin: Math.ceil(routeDurationMin),
+  };
+}
 
 export async function POST(req: Request) {
   try {
@@ -103,8 +222,11 @@ export async function POST(req: Request) {
     const dropoffLng = asNumber(body.dropoffLng ?? body.dropoff_lng);
 
     const paymentMethod = pickFirstString(body.paymentMethod, body.payment_method) || "cash";
-    const distanceKm = asNumber(body.distanceKm ?? body.distance_km);
-    const durationMin = asNumber(body.durationMin ?? body.duration_min);
+    let distanceKm = asNumber(body.distanceKm ?? body.distance_km);
+    let durationMin = asNumber(body.durationMin ?? body.duration_min);
+    let originalDistanceKm = asNumber(body.originalDistanceKm ?? body.original_distance_km) ?? distanceKm;
+    let originalDurationMin = asNumber(body.originalDurationMin ?? body.original_duration_min) ?? durationMin;
+    const stops = normalizeStops(body.stops);
 
     const rideTypeRaw = pickFirstString(body.rideType, body.ride_type) || "now";
     const rideType = rideTypeRaw === "scheduled" ? "scheduled" : "now";
@@ -138,6 +260,80 @@ export async function POST(req: Request) {
       );
     }
 
+    if (originalDistanceKm == null || originalDurationMin == null) {
+      return NextResponse.json(
+        { ok: false, error: "Original route distance and duration are required." },
+        { status: 400 }
+      );
+    }
+
+    if (Array.isArray(body.stops) && body.stops.length > MAX_TRIP_STOPS) {
+      return NextResponse.json(
+        { ok: false, error: "A trip can have a maximum of 2 stops." },
+        { status: 400 }
+      );
+    }
+
+    const pickupPoint = { lat: pickupLat, lng: pickupLng };
+    const dropoffPoint = { lat: dropoffLat, lng: dropoffLng };
+    for (const [index, stop] of stops.entries()) {
+      const point = { lat: stop.lat!, lng: stop.lng! };
+      if (samePoint(point, pickupPoint)) {
+        return NextResponse.json(
+          { ok: false, error: `Stop ${index + 1} cannot be the same as pickup.` },
+          { status: 400 }
+        );
+      }
+      if (samePoint(point, dropoffPoint)) {
+        return NextResponse.json(
+          { ok: false, error: `Stop ${index + 1} cannot be the same as final destination.` },
+          { status: 400 }
+        );
+      }
+      const duplicate = stops.some((other, otherIndex) =>
+        otherIndex !== index &&
+        other.lat != null &&
+        other.lng != null &&
+        samePoint(point, { lat: other.lat, lng: other.lng })
+      );
+      if (duplicate) {
+        return NextResponse.json(
+          { ok: false, error: "Duplicate stops are not allowed." },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (distanceKm < originalDistanceKm || durationMin < originalDurationMin) {
+      return NextResponse.json(
+        { ok: false, error: "Stop route cannot be shorter than the original route." },
+        { status: 400 }
+      );
+    }
+
+    const serverRoute = await calculateServerRoute({
+      pickup: pickupPoint,
+      dropoff: dropoffPoint,
+      stops: stops.map((stop) => ({ lat: stop.lat!, lng: stop.lng! })),
+    }).catch((error: unknown) => {
+      console.error("[book-trip] server route calculation failed", error instanceof Error ? error.message : error);
+      return null;
+    });
+
+    if (!serverRoute && stops.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: "Could not calculate the route through your stops. Please adjust the stops and try again." },
+        { status: 400 }
+      );
+    }
+
+    if (serverRoute) {
+      distanceKm = serverRoute.distanceKm;
+      durationMin = serverRoute.durationMin;
+      originalDistanceKm = serverRoute.originalDistanceKm;
+      originalDurationMin = serverRoute.originalDurationMin;
+    }
+
     if (rideType === "scheduled") {
       if (!scheduledDate || !scheduledFor) {
         return NextResponse.json(
@@ -167,12 +363,25 @@ export async function POST(req: Request) {
 
     const activeSurge = await getActiveManualSurge();
     const fare = calculateFare({
-      distanceKm,
-      durationMin,
+      distanceKm: originalDistanceKm,
+      durationMin: originalDurationMin,
       rideOptionId,
       surgeLabel: activeSurge.mode,
       surgeMultiplier: activeSurge.multiplier,
     });
+    const addStop = calculateAddStopIncrease({
+      rideOptionId,
+      originalDistanceKm,
+      originalDurationMin,
+      routeDistanceKm: distanceKm,
+      routeDurationMin: durationMin,
+      stopCount: stops.length,
+    });
+    const stopWaiting = calculateStopWaitingFee({
+      rideOptionId,
+      stopWaitingMinutes: [],
+    });
+    const finalFare = Math.round(fare.totalFare + addStop.finalAddStopIncrease + stopWaiting.stopWaitingFee);
 
     const startOtp = generateOtp();
     const endOtp = generateOtp();
@@ -199,7 +408,7 @@ export async function POST(req: Request) {
       payment_method: paymentMethod,
       distance_km: distanceKm,
       duration_min: durationMin,
-      fare_amount: fare.totalFare,
+      fare_amount: finalFare,
       ride_option: rideOptionId,
       status: initialStatus,
       ride_type: rideType,
@@ -215,7 +424,30 @@ export async function POST(req: Request) {
       otp_verified: false,
       surge_label: activeSurge.mode,
       surge_multiplier: activeSurge.multiplier,
-      fare_breakdown: fare,
+      fare_breakdown: {
+        ...fare,
+        routeDistanceKm: distanceKm,
+        routeDurationMin: durationMin,
+        originalDistanceKm,
+        originalDurationMin,
+        stops,
+        addStop,
+        stopWaiting,
+        finalFare,
+      },
+      stops,
+      original_distance_km: originalDistanceKm,
+      original_duration_min: originalDurationMin,
+      original_fare: fare.totalFare,
+      route_distance_km: distanceKm,
+      route_duration_min: durationMin,
+      extra_stop_distance_km: addStop.extraDistanceKm,
+      extra_stop_duration_min: addStop.extraDurationMin,
+      raw_add_stop_increase: addStop.rawAddStopIncrease,
+      add_stop_discount_percent: addStop.addStopDiscountPercent,
+      final_add_stop_increase: addStop.finalAddStopIncrease,
+      stop_waiting_fee: stopWaiting.stopWaitingFee,
+      final_fare: finalFare,
     };
 
     let insertResult = await auth.supabaseAdmin
@@ -229,6 +461,19 @@ export async function POST(req: Request) {
       delete legacyPayload.surge_label;
       delete legacyPayload.surge_multiplier;
       delete legacyPayload.fare_breakdown;
+      delete legacyPayload.stops;
+      delete legacyPayload.original_distance_km;
+      delete legacyPayload.original_duration_min;
+      delete legacyPayload.original_fare;
+      delete legacyPayload.route_distance_km;
+      delete legacyPayload.route_duration_min;
+      delete legacyPayload.extra_stop_distance_km;
+      delete legacyPayload.extra_stop_duration_min;
+      delete legacyPayload.raw_add_stop_increase;
+      delete legacyPayload.add_stop_discount_percent;
+      delete legacyPayload.final_add_stop_increase;
+      delete legacyPayload.stop_waiting_fee;
+      delete legacyPayload.final_fare;
 
       insertResult = await auth.supabaseAdmin
         .from("trips")
@@ -288,7 +533,7 @@ export async function POST(req: Request) {
       ok: true,
       tripId: trip.id,
       trip,
-      fareBreakdown: fare,
+      fareBreakdown: tripPayload.fare_breakdown ?? fare,
       otp: { startOtp, endOtp },
       autoOfferStarted: rideType === "now" && hasOkFlag(autoOfferResult) ? !!autoOfferResult.ok : false,
       autoOfferResult,

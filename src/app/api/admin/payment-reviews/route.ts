@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/lib/auth/admin";
 import {
+  calculateDriverSubscriptionExpiry,
   getDriverSubscriptionAmount,
-  getDriverSubscriptionDays,
   isDriverSubscriptionPlan,
   type DriverSubscriptionPlan,
 } from "@/lib/finance/driverPayments";
@@ -45,12 +45,6 @@ type DriverWalletRecord = {
 function num(value: unknown) {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
-}
-
-function addDays(base: Date, days: number) {
-  const copy = new Date(base);
-  copy.setDate(copy.getDate() + days);
-  return copy;
 }
 
 function isPaymentType(value: string): value is PaymentType {
@@ -368,13 +362,9 @@ export async function POST(req: Request) {
 
     if (paymentType === "subscription" || paymentType === "combined") {
       const now = new Date();
-      const currentExpiry =
-        driverRecord.subscription_expires_at && new Date(driverRecord.subscription_expires_at).getTime() > now.getTime()
-          ? new Date(driverRecord.subscription_expires_at)
-          : now;
-
-      const days = subscriptionPlan ? getDriverSubscriptionDays(subscriptionPlan) : 0;
-      const newExpiry = addDays(currentExpiry, days);
+      const newExpiry = subscriptionPlan
+        ? calculateDriverSubscriptionExpiry(driverRecord.subscription_expires_at, subscriptionPlan, now)
+        : now;
 
       const { error: paymentInsertError } = await supabaseAdmin
         .from("driver_subscription_payments")

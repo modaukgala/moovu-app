@@ -67,7 +67,7 @@ function blankStop(): StopInput {
   };
 }
 
-function isResolvedStop(stop: StopInput): stop is StopInput & { address: string } {
+function isResolvedStop(stop: StopInput): stop is StopInput & { address: string; lat: number; lng: number } {
   return !!stop.address.trim() && typeof stop.lat === "number" && typeof stop.lng === "number";
 }
 
@@ -116,6 +116,7 @@ export default function RiderBookingPage() {
   const [baseFare, setBaseFare] = useState<number | null>(null);
   const [addStopIncrease, setAddStopIncrease] = useState(0);
   const [stops, setStops] = useState<StopInput[]>([]);
+  const [routeCalculationError, setRouteCalculationError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [routeVisible, setRouteVisible] = useState(false);
@@ -180,6 +181,11 @@ export default function RiderBookingPage() {
     if (originalFare == null) return null;
     return Math.round(originalFare + (addStopBreakdown?.finalAddStopIncrease ?? 0));
   }, [addStopBreakdown?.finalAddStopIncrease, originalFare]);
+  const displayFare = useMemo(() => {
+    if (fare != null) return fare;
+    if (baseFare != null) return Math.round(baseFare + addStopIncrease);
+    return null;
+  }, [addStopIncrease, baseFare, fare]);
 
   const canCalculate = useMemo(() => (
     !!pickupAddress.trim() && !!dropoffAddress.trim() &&
@@ -195,17 +201,17 @@ export default function RiderBookingPage() {
   }, [canCalculate, dropoffAddress, dropoffLat, dropoffLng, pickupAddress, pickupLat, pickupLng, resolvedStops]);
 
   const canSubmit = useMemo(() => (
-    !!customer && canCalculate && distanceKm != null && durationMin != null && fare != null &&
+    !!customer && canCalculate && distanceKm != null && durationMin != null && displayFare != null &&
     !legalAcceptanceRequired && !(rideType === "scheduled" && !scheduledFor)
-  ), [customer, canCalculate, distanceKm, durationMin, fare, legalAcceptanceRequired, rideType, scheduledFor]);
+  ), [customer, canCalculate, distanceKm, durationMin, displayFare, legalAcceptanceRequired, rideType, scheduledFor]);
 
   const progressText = useMemo(() => {
     if (!pickupAddress.trim()) return "Set your pickup point";
     if (!dropoffAddress.trim()) return "Add your destination";
     if (!canCalculate) return "Resolving locations\u2026";
-    if (fare == null) return "Calculating your fare";
+    if (displayFare == null) return "Calculating your fare";
     return routeVisible ? "Route ready \u2014 swipe up for options" : "Trip details ready";
-  }, [canCalculate, dropoffAddress, fare, pickupAddress, routeVisible]);
+  }, [canCalculate, displayFare, dropoffAddress, pickupAddress, routeVisible]);
 
   // ── Sheet snap position in % of window height ───────────────────
   const sheetTopPct = sheetSnap === "collapsed" ? SNAP_COLLAPSED : SNAP_EXPANDED;
@@ -248,10 +254,10 @@ export default function RiderBookingPage() {
 
   // Auto-expand when both locations set and fare calculated
   useEffect(() => {
-    if (bothLocationsSet && fare != null) {
+    if (bothLocationsSet && displayFare != null) {
       setSheetSnap("expanded");
     }
-  }, [bothLocationsSet, fare]);
+  }, [bothLocationsSet, displayFare]);
 
   // ── Auth ─────────────────────────────────────────────────────────
   async function getAccessToken() {
@@ -277,7 +283,7 @@ export default function RiderBookingPage() {
   }
 
   async function loadActiveSurge() {
-    const res = await fetch("/api/pricing/surge", { cache: "no-store" });
+    const res = await fetch(`/api/pricing/surge?ts=${Date.now()}`, { cache: "no-store" });
     const json = (await res.json().catch(() => null)) as
       | { ok?: boolean; surge?: SurgeModeConfig }
       | null;
@@ -330,7 +336,7 @@ export default function RiderBookingPage() {
 
   // ── Location helpers ─────────────────────────────────────────────
   function resetRouteState() {
-    setDistanceKm(null); setDurationMin(null); setOriginalDistanceKm(null); setOriginalDurationMin(null); setBaseFare(null); setAddStopIncrease(0);
+    setDistanceKm(null); setDurationMin(null); setOriginalDistanceKm(null); setOriginalDurationMin(null); setBaseFare(null); setAddStopIncrease(0); setRouteCalculationError(null);
     setRouteVisible(false); lastCalculatedKeyRef.current = "";
   }
 
@@ -742,6 +748,7 @@ export default function RiderBookingPage() {
   async function calculateTrip(options?: { silent?: boolean }) {
     const silent = options?.silent ?? false;
     if (!silent) setMsg(null);
+    setRouteCalculationError(null);
     if (!pickupAddress.trim() || !dropoffAddress.trim()) { if (!silent) setMsg("Pickup and destination are required."); return null; }
 
     const route = await ensureResolvedRoute();
@@ -758,7 +765,12 @@ export default function RiderBookingPage() {
 
     const res = await fetch("/api/maps/distance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const json = await res.json().catch(() => null);
-    if (!json?.ok) { if (!silent) setMsg(json?.error || "Could not calculate trip distance."); return null; }
+    if (!json?.ok) {
+      const message = json?.error || "Could not calculate trip distance.";
+      setRouteCalculationError(message);
+      if (!silent) setMsg(message);
+      return null;
+    }
 
     const km = Number(json.distanceKm ?? 0);
     const mins = Number(json.durationMin ?? 0);
@@ -970,6 +982,14 @@ export default function RiderBookingPage() {
     void loadActiveSurge().catch(() => {
       setActiveSurge(SURGE_MODES.normal);
     });
+    const surgeTimer = window.setInterval(() => {
+      void loadActiveSurge().catch(() => undefined);
+    }, 15000);
+    const handleFocus = () => {
+      void loadActiveSurge().catch(() => undefined);
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
 
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
@@ -977,11 +997,15 @@ export default function RiderBookingPage() {
       if (dropoffBoxRef.current && !dropoffBoxRef.current.contains(target)) setShowDropoffDropdown(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
+    const stopTimers = stopTimerRefs.current;
     return () => {
+      window.clearInterval(surgeTimer);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
       document.removeEventListener("mousedown", handleClickOutside);
       if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
       if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
-      stopTimerRefs.current.forEach((timer) => {
+      stopTimers.forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
     };
@@ -1121,7 +1145,7 @@ export default function RiderBookingPage() {
             </div>
             <div className="rounded-2xl bg-white p-3">
               <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">Total</div>
-              <div className="mt-1 text-sm font-black text-[var(--moovu-primary)]">{money(fare)}</div>
+              <div className="mt-1 text-sm font-black text-[var(--moovu-primary)]">{money(displayFare)}</div>
             </div>
           </div>
         </div>
@@ -1155,7 +1179,7 @@ export default function RiderBookingPage() {
       <div className="mt-4 grid grid-cols-3 gap-2">
         <div className="moovu-trip-metric"><span>Distance</span><strong>{fmtDist(distanceKm)}</strong></div>
         <div className="moovu-trip-metric"><span>Time</span><strong>{fmtDur(durationMin)}</strong></div>
-        <div className="moovu-trip-metric moovu-trip-metric-primary"><span>Fare</span><strong>{money(fare)}</strong></div>
+        <div className="moovu-trip-metric moovu-trip-metric-primary"><span>Fare</span><strong>{money(displayFare)}</strong></div>
       </div>
 
       {/* Trip summary */}
@@ -1172,6 +1196,11 @@ export default function RiderBookingPage() {
           </div>
         </div>
         <div className="mt-2 text-xs text-slate-500">Final fare is confirmed before booking.</div>
+        {routeCalculationError && (
+          <div className="mt-2 rounded-2xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+            {routeCalculationError}
+          </div>
+        )}
       </div>
 
       {/* Push notifications */}
@@ -1186,87 +1215,6 @@ export default function RiderBookingPage() {
       </div>
     </>
   );
-*** End Patch
-                          rideOptionId: opt.id,
-                          surgeLabel: activeSurge.mode,
-                          surgeMultiplier: activeSurge.multiplier,
-                        }).totalFare
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs leading-4 text-slate-600">{opt.description}</div>
-                </button>
-              );
-            })}
-          </div>
-          {activeSurge.mode !== "normal" && (
-            <div className="mt-3 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800">
-              {activeSurge.message}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* When + Payment */}
-      <div className="mt-4 grid gap-3 grid-cols-2">
-        <div className="moovu-control-card">
-          <div className="moovu-field-label">When</div>
-          <div className="moovu-segmented mt-2">
-            <button type="button" className={rideType === "now" ? "moovu-segmented-active" : ""} onClick={() => setRideType("now")}>Ride now</button>
-            <button type="button" className={rideType === "scheduled" ? "moovu-segmented-active" : ""} onClick={() => setRideType("scheduled")}>Schedule</button>
-          </div>
-        </div>
-        <div className="moovu-control-card">
-          <div className="moovu-field-label">Payment</div>
-          <button type="button" className="mt-2 min-h-11 w-full rounded-2xl bg-slate-100 px-4 text-sm font-bold text-slate-950" onClick={() => setPaymentMethod("cash")}>
-            {paymentMethod === "cash" ? "Cash" : paymentMethod}
-          </button>
-        </div>
-      </div>
-
-      {rideType === "scheduled" && (
-        <div className="mt-3">
-          <label className="moovu-field-label" htmlFor="scheduled-for">Scheduled pickup</label>
-          <input id="scheduled-for" type="datetime-local" className="moovu-input mt-2" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
-        </div>
-      )}
-
-      {/* Stats */}
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="moovu-trip-metric"><span>Distance</span><strong>{fmtDist(distanceKm)}</strong></div>
-        <div className="moovu-trip-metric"><span>Time</span><strong>{fmtDur(durationMin)}</strong></div>
-        <div className="moovu-trip-metric moovu-trip-metric-primary"><span>Fare</span><strong>{money(fare)}</strong></div>
-      </div>
-
-      {/* Trip summary */}
-      <div className="mt-3 rounded-[20px] border border-[#d7e2ea] bg-[#f6fafc] p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Trip summary</div>
-            <div className="mt-1 text-sm font-semibold text-slate-950">
-              {pickupAddress || "Set pickup"} &rarr; {dropoffAddress || "set destination"}
-            </div>
-          </div>
-          <div className={routeVisible ? "moovu-status-pill-ready" : "moovu-status-pill"}>
-            {routeVisible ? "Route ready" : "Planning"}
-          </div>
-        </div>
-        <div className="mt-2 text-xs text-slate-500">Final fare is confirmed before booking.</div>
-      </div>
-
-      {/* Push notifications */}
-      <div className="mt-3 rounded-[20px] border border-[#cfe4ff] bg-[#eef7ff] p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-bold text-slate-950">Ride updates</div>
-            <div className="mt-1 text-xs text-slate-600">Enable alerts for driver accepted, arrived, started, and completed.</div>
-          </div>
-          <EnableNotificationsButton role="customer" variant="inline" />
-        </div>
-      </div>
-    </>
-  );
-
   return (
     <main className="mbk-page">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
@@ -1396,6 +1344,84 @@ export default function RiderBookingPage() {
               </div>
             </div>
 
+            {stops.map((stop, index) => (
+              <div className="moovu-route-field" key={`stop-${index}`}>
+                <div className="moovu-route-marker-wrap">
+                  <span className="moovu-route-dot bg-[var(--moovu-primary)] text-white">
+                    {index + 1}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="moovu-field-label" htmlFor={`stop-input-${index}`}>
+                      Stop {index + 1}
+                    </label>
+                    <button
+                      type="button"
+                      className="text-xs font-black text-red-600"
+                      onClick={() => removeStop(index)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <input
+                    id={`stop-input-${index}`}
+                    className="moovu-route-input"
+                    placeholder="Add a stop"
+                    value={stop.address}
+                    onChange={(e) => onStopInputChange(index, e.target.value)}
+                    onBlur={() => {
+                      updateStop(index, { open: false });
+                      if (stop.address.trim() && !isResolvedStop(stop)) void resolveStop(index);
+                    }}
+                    onFocus={() => {
+                      if (stop.predictions.length > 0) updateStop(index, { open: true });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void resolveStop(index);
+                      }
+                    }}
+                  />
+                  {stop.loading && <div className="moovu-field-hint">Searching...</div>}
+                  {stop.resolving && <div className="moovu-field-hint">Resolving...</div>}
+                  {stop.error && <div className="moovu-field-error">{stop.error}</div>}
+                  {stop.open && stop.predictions.length > 0 && (
+                    <div className="moovu-place-menu">
+                      {stop.predictions.map((item) => (
+                        <button
+                          key={item.place_id}
+                          type="button"
+                          className="moovu-place-option"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => void chooseStopPlace(index, item.place_id, item.description)}
+                        >
+                          {item.description}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <div className="flex items-center justify-between gap-3 px-1">
+              <button
+                type="button"
+                className="text-sm font-black text-[var(--moovu-primary)] disabled:text-slate-400"
+                disabled={stops.length >= MAX_TRIP_STOPS}
+                onClick={addStopField}
+              >
+                + Add stop
+              </button>
+              <span className="text-xs font-semibold text-slate-500">
+                {stops.length >= MAX_TRIP_STOPS
+                  ? "Maximum 2 stops reached"
+                  : "Stops get 40% off extra route cost"}
+              </span>
+            </div>
+
             {/* DESTINATION */}
             <div className="moovu-route-field" ref={dropoffBoxRef}>
               <div className="moovu-route-marker-wrap">
@@ -1431,7 +1457,7 @@ export default function RiderBookingPage() {
           )}
 
           {/* Swipe hint when collapsed but both locations set */}
-          {sheetSnap === "collapsed" && bothLocationsSet && fare != null && (
+          {sheetSnap === "collapsed" && bothLocationsSet && displayFare != null && (
             <div className="mx-4 mt-3 flex items-center justify-center gap-2 text-xs font-bold text-slate-500">
               <span>↑ Swipe up to see ride options</span>
             </div>
@@ -1442,7 +1468,7 @@ export default function RiderBookingPage() {
         <div className="mbk-confirm-bar">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Estimated total</div>
-            <div className="text-xl font-black text-slate-950">{money(fare)}</div>
+            <div className="text-xl font-black text-slate-950">{money(displayFare)}</div>
           </div>
           <button
             className="moovu-confirm-button flex-1"

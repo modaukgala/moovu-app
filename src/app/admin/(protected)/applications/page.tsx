@@ -30,6 +30,7 @@ export default function AdminDriverApplicationsPage() {
   const [selected, setSelected] = useState<ApplicationRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"approve" | "suspend" | "delete" | null>(null);
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -106,6 +107,67 @@ export default function AdminDriverApplicationsPage() {
     return [selected.vehicle_make, selected.vehicle_model].filter(Boolean).join(" ") || "--";
   }, [selected]);
 
+  async function runApplicationAction(action: "approve" | "suspend" | "delete") {
+    if (!selected) return;
+
+    setBusy(true);
+    setMsg(null);
+
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setMsg("Missing access token.");
+        return;
+      }
+
+      const endpoint =
+        action === "approve"
+          ? "/api/admin/driver-verification"
+          : action === "suspend"
+            ? "/api/admin/drivers/status"
+            : "/api/admin/drivers/remove";
+      const body =
+        action === "approve"
+          ? { driverId: selected.id, verificationStatus: "approved" }
+          : action === "suspend"
+            ? { driverId: selected.id, status: "inactive" }
+            : {
+                driverId: selected.id,
+                mode: "deactivate",
+                reason: "Driver application removed by admin review.",
+              };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        setMsg(json?.error || "Could not update this application. Please try again.");
+        return;
+      }
+
+      setConfirmAction(null);
+      setMsg(
+        action === "approve"
+          ? "Application approved. The driver can complete access requirements and operate when eligible."
+          : action === "suspend"
+            ? "Application suspended. The driver cannot go online until reactivated."
+            : "Application removed from the active review queue.",
+      );
+      await loadApplications(filter);
+    } catch {
+      setMsg("Could not update this application. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="moovu-page min-h-screen text-slate-950">
       <div className="moovu-shell max-w-6xl space-y-6 py-6 sm:py-8">
@@ -151,6 +213,59 @@ export default function AdminDriverApplicationsPage() {
         </div>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
+        {confirmAction && selected && (
+          <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+            <section className="w-full max-w-lg rounded-[30px] bg-white p-5 shadow-2xl">
+              <div className="moovu-section-title">Application action</div>
+              <h2 className="mt-2 text-2xl font-black text-slate-950">
+                {confirmAction === "approve"
+                  ? "Approve driver application"
+                  : confirmAction === "suspend"
+                    ? "Suspend driver application"
+                    : "Delete application"}
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {confirmAction === "approve"
+                  ? "Approve only after profile, vehicle, phone, and document checks are complete."
+                  : confirmAction === "suspend"
+                    ? "This keeps the record but blocks the driver from operating until admin reactivates them."
+                    : "This removes the applicant from the active queue using the safe deactivation flow. Existing records are preserved."}
+              </p>
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                <div className="text-sm font-bold text-slate-500">Applicant</div>
+                <div className="mt-1 font-black text-slate-950">
+                  {selected.first_name ?? "--"} {selected.last_name ?? ""}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">{selected.phone ?? selected.email ?? selected.id}</div>
+              </div>
+              <div className="mt-5 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  className="moovu-btn moovu-btn-secondary"
+                  onClick={() => setConfirmAction(null)}
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={confirmAction === "approve" ? "moovu-btn moovu-btn-primary" : "moovu-btn moovu-btn-secondary text-red-600"}
+                  onClick={() => void runApplicationAction(confirmAction)}
+                  disabled={busy}
+                >
+                  {busy
+                    ? "Working..."
+                    : confirmAction === "approve"
+                      ? "Approve"
+                      : confirmAction === "suspend"
+                        ? "Suspend"
+                        : "Delete"}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="moovu-card p-5 sm:p-6">
@@ -253,10 +368,70 @@ export default function AdminDriverApplicationsPage() {
                   </div>
                 </div>
 
+                <div className="rounded-3xl border border-sky-100 bg-sky-50/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black uppercase tracking-[0.14em] text-sky-800">
+                        Verification checklist
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Confirm these details before approving the driver.
+                      </p>
+                    </div>
+                    <StatusBadge status={selected.verification_status} />
+                  </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {[
+                      { label: "Name captured", ok: Boolean(selected.first_name || selected.last_name) },
+                      { label: "Phone captured", ok: Boolean(selected.phone) },
+                      { label: "Email captured", ok: Boolean(selected.email) },
+                      { label: "Vehicle captured", ok: Boolean(selected.vehicle_make || selected.vehicle_model) },
+                      { label: "Registration captured", ok: Boolean(selected.vehicle_registration) },
+                      { label: "Profile completed", ok: Boolean(selected.profile_completed) },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2 text-sm font-bold"
+                      >
+                        <span className="text-slate-700">{item.label}</span>
+                        <span className={item.ok ? "text-emerald-700" : "text-amber-700"}>
+                          {item.ok ? "Ready" : "Check"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="pt-2">
-                  <Link href={`/admin/drivers/${selected.id}`} className="moovu-btn moovu-btn-primary">
-                    Open Driver Profile
-                  </Link>
+                  <div className="flex flex-wrap gap-3">
+                    <Link href={`/admin/drivers/${selected.id}`} className="moovu-btn moovu-btn-secondary">
+                      Open Driver Profile
+                    </Link>
+                    <button
+                      type="button"
+                      className="moovu-btn moovu-btn-primary"
+                      disabled={busy}
+                      onClick={() => setConfirmAction("approve")}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="moovu-btn moovu-btn-secondary text-amber-700"
+                      disabled={busy}
+                      onClick={() => setConfirmAction("suspend")}
+                    >
+                      Suspend
+                    </button>
+                    <button
+                      type="button"
+                      className="moovu-btn moovu-btn-secondary text-red-600"
+                      disabled={busy}
+                      onClick={() => setConfirmAction("delete")}
+                    >
+                      Delete application
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

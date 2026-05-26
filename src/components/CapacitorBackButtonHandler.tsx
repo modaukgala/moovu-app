@@ -26,10 +26,14 @@ function readRouteStack() {
 }
 
 function writeRouteStack(stack: string[]) {
-  window.sessionStorage.setItem(
-    ROUTE_STACK_KEY,
-    JSON.stringify(stack.slice(-MAX_STACK_ITEMS)),
-  );
+  try {
+    window.sessionStorage.setItem(
+      ROUTE_STACK_KEY,
+      JSON.stringify(stack.slice(-MAX_STACK_ITEMS)),
+    );
+  } catch {
+    // Some mobile webviews can temporarily block session storage.
+  }
 }
 
 export default function CapacitorBackButtonHandler() {
