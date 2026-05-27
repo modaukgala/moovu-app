@@ -273,7 +273,7 @@ export default function TripsPage() {
 
   function renderActions(trip: Trip) {
     return (
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+      <div className="moovu-action-row">
         {trip.status === "assigned" && (
           <button
             className="moovu-btn moovu-btn-secondary"
@@ -298,7 +298,7 @@ export default function TripsPage() {
 
         {trip.status !== "completed" && trip.status !== "cancelled" && (
           <button
-            className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700"
+            className="moovu-btn moovu-btn-danger"
             disabled={actionLoadingId === trip.id}
             onClick={() => void cancelTrip(trip.id)}
           >
@@ -360,16 +360,12 @@ export default function TripsPage() {
       </section>
 
       <section className="moovu-card p-4 sm:p-5">
-        <div className="flex flex-wrap gap-2">
+        <div className="moovu-filter-row" aria-label="Trip status filters">
           {STATUSES.map((s) => (
             <button
               key={s}
               onClick={() => setStatus(s)}
-              className={`rounded-full border px-4 py-2 text-sm font-black capitalize ${
-                status === s
-                  ? "border-[var(--moovu-primary)] bg-[var(--moovu-primary)] text-white"
-                  : "border-[var(--moovu-border)] bg-white text-slate-700"
-              }`}
+              className={status === s ? "moovu-filter-chip active capitalize" : "moovu-filter-chip capitalize"}
             >
               {s}
             </button>
@@ -503,11 +499,25 @@ export default function TripsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-2 rounded-3xl bg-slate-50 p-3 text-sm text-slate-700">
-                  <div className="min-w-0">Rider: <strong className="break-words">{trip.rider_name ?? "--"}</strong></div>
-                  <div className="min-w-0">Driver: <strong className="break-words">{trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}</strong></div>
-                  <div>Payment: <strong className="capitalize">{trip.payment_method}</strong></div>
-                  <div>Created: <strong className="break-words">{displayDate(trip.created_at)}</strong></div>
+                <div className="mt-4 grid gap-2 rounded-3xl border border-[var(--moovu-border)] bg-slate-50/80 p-3 text-sm text-slate-700">
+                  <div className="min-w-0">
+                    <span className="moovu-data-label">Rider</span>
+                    <strong className="moovu-data-value block">{trip.rider_name ?? "--"}</strong>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="moovu-data-label">Driver</span>
+                    <strong className="moovu-data-value block">
+                      {trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="moovu-data-label">Payment</span>
+                    <strong className="moovu-data-value block capitalize">{trip.payment_method}</strong>
+                  </div>
+                  <div>
+                    <span className="moovu-data-label">Created</span>
+                    <strong className="moovu-data-value block">{displayDate(trip.created_at)}</strong>
+                  </div>
                 </div>
 
                 {!trip.driver_id && (

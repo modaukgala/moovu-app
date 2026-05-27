@@ -228,9 +228,9 @@ export default function CustomerAuthPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-auth-card">
-        <div className="mb-6">
+        <div className="mb-6 rounded-[26px] bg-[linear-gradient(135deg,#eaf3ff,#f0fffa)] p-5 ring-1 ring-[#d7e2ea]">
           <div className="moovu-section-title">MOOVU Customer</div>
-          <h1 className="mt-3 text-3xl font-semibold text-slate-950">
+          <h1 className="mt-3 text-3xl font-black text-slate-950">
             Login or create account
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">

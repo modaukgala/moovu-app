@@ -67,6 +67,13 @@ function blankStop(): StopInput {
   };
 }
 
+function selectedPlaceLabel(description: string, detailName?: unknown) {
+  const name = typeof detailName === "string" ? detailName.trim() : "";
+  if (name && !/^south africa$/i.test(name)) return name;
+  const [firstPart] = description.split(",");
+  return firstPart?.trim() || description;
+}
+
 function isResolvedStop(stop: StopInput): stop is StopInput & { address: string; lat: number; lng: number } {
   return !!stop.address.trim() && typeof stop.lat === "number" && typeof stop.lng === "number";
 }
@@ -401,7 +408,7 @@ export default function RiderBookingPage() {
         const detail = await detailRes.json().catch(() => null);
 
         if (detail?.ok && typeof detail.lat === "number" && typeof detail.lng === "number") {
-          const resolved = { address: detail.formatted_address || first.description, placeId: detail.place_id || first.place_id, lat: detail.lat, lng: detail.lng };
+          const resolved = { address: selectedPlaceLabel(first.description, detail.name), placeId: detail.place_id || first.place_id, lat: detail.lat, lng: detail.lng };
           if (kind === "pickup") { setPickupAddress(resolved.address); setPickupPlaceId(resolved.placeId); setPickupLat(detail.lat); setPickupLng(detail.lng); setPickupPredictions([]); setShowPickupDropdown(false); }
           else { setDropoffAddress(resolved.address); setDropoffPlaceId(resolved.placeId); setDropoffLat(detail.lat); setDropoffLng(detail.lng); setDropoffPredictions([]); setShowDropoffDropdown(false); }
           resetRouteState();
@@ -415,7 +422,7 @@ export default function RiderBookingPage() {
       const geo = await geoRes.json().catch(() => null);
 
       if (geo?.ok && typeof geo.lat === "number" && typeof geo.lng === "number") {
-        const resolved = { address: geo.address || input, placeId: "", lat: geo.lat, lng: geo.lng };
+        const resolved = { address: input, placeId: "", lat: geo.lat, lng: geo.lng };
         if (kind === "pickup") { setPickupAddress(resolved.address); setPickupPlaceId(""); setPickupLat(geo.lat); setPickupLng(geo.lng); setPickupPredictions([]); setShowPickupDropdown(false); }
         else { setDropoffAddress(resolved.address); setDropoffPlaceId(""); setDropoffLat(geo.lat); setDropoffLng(geo.lng); setDropoffPredictions([]); setShowDropoffDropdown(false); }
         resetRouteState();
@@ -600,7 +607,7 @@ export default function RiderBookingPage() {
 
         if (detail?.ok && typeof detail.lat === "number" && typeof detail.lng === "number") {
           const resolved = {
-            address: detail.formatted_address || first.description,
+            address: selectedPlaceLabel(first.description, detail.name),
             placeId: detail.place_id || first.place_id,
             lat: detail.lat,
             lng: detail.lng,
@@ -624,7 +631,7 @@ export default function RiderBookingPage() {
       const geo = await geoRes.json().catch(() => null);
 
       if (geo?.ok && typeof geo.lat === "number" && typeof geo.lng === "number") {
-        const resolved = { address: geo.address || input, placeId: "", lat: geo.lat, lng: geo.lng };
+        const resolved = { address: input, placeId: "", lat: geo.lat, lng: geo.lng };
         const validationError = validateStopLocation(index, resolved);
         if (validationError) {
           updateStop(index, { error: validationError });
@@ -655,7 +662,7 @@ export default function RiderBookingPage() {
     }
 
     const resolved = {
-      address: json.formatted_address || description,
+      address: selectedPlaceLabel(description, json.name),
       placeId: json.place_id || placeId,
       lat: json.lat,
       lng: json.lng,
@@ -692,11 +699,11 @@ export default function RiderBookingPage() {
     if (!json?.ok) { setMsg(json?.error || "Failed to load place details."); return; }
 
     if (kind === "pickup") {
-      setPickupAddress(json.formatted_address || description); setPickupPlaceId(json.place_id || placeId);
+      setPickupAddress(selectedPlaceLabel(description, json.name)); setPickupPlaceId(json.place_id || placeId);
       setPickupLat(typeof json.lat === "number" ? json.lat : null); setPickupLng(typeof json.lng === "number" ? json.lng : null);
       setPickupPredictions([]); setShowPickupDropdown(false); setPickupError(null);
     } else {
-      setDropoffAddress(json.formatted_address || description); setDropoffPlaceId(json.place_id || placeId);
+      setDropoffAddress(selectedPlaceLabel(description, json.name)); setDropoffPlaceId(json.place_id || placeId);
       setDropoffLat(typeof json.lat === "number" ? json.lat : null); setDropoffLng(typeof json.lng === "number" ? json.lng : null);
       setDropoffPredictions([]); setShowDropoffDropdown(false); setDropoffError(null);
     }
@@ -1012,6 +1019,27 @@ export default function RiderBookingPage() {
     // Keep this as a mount/auth setup effect; adding helpers here restarts auth and dropdown listeners.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+
+    const updateKeyboardInset = () => {
+      const viewport = window.visualViewport;
+      if (!viewport) return;
+      const keyboardInset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      document.documentElement.style.setProperty("--moovu-keyboard-inset", `${Math.round(keyboardInset)}px`);
+    };
+
+    updateKeyboardInset();
+    window.visualViewport.addEventListener("resize", updateKeyboardInset);
+    window.visualViewport.addEventListener("scroll", updateKeyboardInset);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateKeyboardInset);
+      window.visualViewport?.removeEventListener("scroll", updateKeyboardInset);
+      document.documentElement.style.removeProperty("--moovu-keyboard-inset");
+    };
+  }, []);
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -1335,7 +1363,16 @@ export default function RiderBookingPage() {
                   <div className="moovu-place-menu">
                     {pickupPredictions.map((item) => (
                       <button key={item.place_id} type="button" className="moovu-place-option"
-                        onClick={() => void choosePlace("pickup", item.place_id, item.description)}>
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          void choosePlace("pickup", item.place_id, item.description);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            void choosePlace("pickup", item.place_id, item.description);
+                          }
+                        }}>
                         {item.description}
                       </button>
                     ))}
@@ -1441,7 +1478,16 @@ export default function RiderBookingPage() {
                   <div className="moovu-place-menu">
                     {dropoffPredictions.map((item) => (
                       <button key={item.place_id} type="button" className="moovu-place-option"
-                        onClick={() => void choosePlace("dropoff", item.place_id, item.description)}>
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          void choosePlace("dropoff", item.place_id, item.description);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            void choosePlace("dropoff", item.place_id, item.description);
+                          }
+                        }}>
                         {item.description}
                       </button>
                     ))}

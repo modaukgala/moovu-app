@@ -227,25 +227,27 @@ export default function DriverEarningsPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-shell space-y-6">
-        <div className="moovu-card p-5 sm:p-6">
+        <div className="moovu-hero-panel p-5 sm:p-7">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="moovu-section-title">MOOVU Driver</div>
-            <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Earnings and payments</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Track your trip earnings, subscription status, and MOOVU commission balance from one clean wallet view.
-            </p>
-          </div>
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">MOOVU Driver</div>
+              <h1 className="mt-2 text-2xl font-black text-white sm:text-4xl">Earnings and payments</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/74">
+                Track your trip earnings, subscription status, and MOOVU commission balance from one clean wallet view.
+              </p>
+            </div>
 
-          <Link href="/driver" className="moovu-btn moovu-btn-secondary">
-            Back to Dashboard
-          </Link>
-          <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary">
-            Commission payments
-          </Link>
-          <Link href="/driver/subscriptions" className="moovu-btn moovu-btn-secondary">
-            Subscriptions
-          </Link>
+            <div className="moovu-action-row">
+              <Link href="/driver" className="moovu-btn bg-white text-slate-950">
+                Dashboard
+              </Link>
+              <Link href="/driver/commission-payments" className="moovu-btn bg-white text-slate-950">
+                Commission
+              </Link>
+              <Link href="/driver/subscriptions" className="moovu-btn bg-white text-slate-950">
+                Subscriptions
+              </Link>
+            </div>
           </div>
         </div>
 

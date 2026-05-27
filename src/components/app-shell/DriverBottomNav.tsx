@@ -6,9 +6,9 @@ import { usePathname } from "next/navigation";
 const items = [
   { href: "/driver", label: "Home" },
   { href: "/driver/history", label: "Trips" },
-  { href: "/driver/earnings", label: "Earning" },
+  { href: "/driver/earnings", label: "Earn" },
   { href: "/driver/subscriptions", label: "Subs" },
-  { href: "/driver/complete-profile", label: "Account" },
+  { href: "/driver/complete-profile", label: "Acct" },
 ] as const;
 
 function isActive(pathname: string, href: string) {

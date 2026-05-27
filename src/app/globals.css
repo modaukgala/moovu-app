@@ -73,7 +73,7 @@ textarea {
 
 button:hover:not(:disabled),
 a:hover {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 button:disabled {
@@ -133,7 +133,9 @@ tr:last-child td {
 }
 
 .moovu-card {
-  background: var(--moovu-bg-elevated);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(250, 253, 255, 0.96)),
+    var(--moovu-bg-elevated);
   border: 1px solid rgba(215, 226, 234, 0.82);
   border-radius: var(--radius-lg);
   box-shadow: 0 16px 38px rgba(31, 116, 201, 0.06);
@@ -298,6 +300,89 @@ tr:last-child td {
   cursor: not-allowed;
   opacity: 0.58;
   box-shadow: none;
+}
+
+.moovu-btn-danger {
+  background: var(--moovu-danger-soft);
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.moovu-btn-danger:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  box-shadow: 0 14px 30px rgba(220, 38, 38, 0.12);
+}
+
+.moovu-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.moovu-action-row .moovu-btn,
+.moovu-action-row button,
+.moovu-action-row a {
+  min-height: 44px;
+}
+
+.moovu-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .moovu-section-header {
+    flex-direction: row;
+    align-items: end;
+    justify-content: space-between;
+  }
+}
+
+.moovu-premium-list {
+  display: grid;
+  gap: 12px;
+}
+
+.moovu-data-row {
+  border: 1px solid rgba(215, 226, 234, 0.9);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.94)),
+    #fff;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.moovu-data-label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--moovu-text-soft);
+}
+
+.moovu-data-value {
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.moovu-sticky-safe-action {
+  position: sticky;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 20;
+  border: 1px solid rgba(215, 226, 234, 0.92);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 10px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(16px);
 }
 
 .moovu-btn:focus-visible,
@@ -711,6 +796,11 @@ tr:last-child td {
   border-bottom: 1px solid var(--moovu-border);
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(14px);
+  scrollbar-width: none;
+}
+
+.moovu-admin-mobile-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .moovu-admin-mobile-nav a {
@@ -847,6 +937,10 @@ tr:last-child td {
   border: 1px solid var(--moovu-border);
   background: #fff;
   box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-table-wrap table {
+  min-width: 860px;
 }
 
 .moovu-sidebar-link {
@@ -1282,13 +1376,15 @@ tr:last-child td {
   left: 36px;
   right: 8px;
   top: calc(100% - 4px);
-  z-index: 90;
+  z-index: 160;
   max-height: 230px;
   overflow-y: auto;
   border: 1px solid var(--moovu-border);
   border-radius: 20px;
   background: #fff;
   box-shadow: 0 20px 44px rgba(5, 5, 5, 0.16);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .moovu-place-option {
@@ -1305,6 +1401,37 @@ tr:last-child td {
 
 .moovu-place-option:last-child {
   border-bottom: 0;
+}
+
+@media (max-width: 767px) {
+  .moovu-place-menu {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(86px + env(safe-area-inset-bottom) + var(--moovu-keyboard-inset, 0px));
+    max-height: min(46svh, 360px);
+    border-radius: 24px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+  }
+
+  .moovu-place-menu::before {
+    content: "Choose location";
+    display: block;
+    border-bottom: 1px solid #eef2f6;
+    padding: 12px 14px 10px;
+    color: var(--moovu-text-soft);
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .moovu-place-option {
+    min-height: 54px;
+    padding: 14px 16px;
+    font-size: 15px;
+  }
 }
 
 .moovu-utility-button {
@@ -1584,8 +1711,8 @@ tr:last-child td {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   left: max(8px, env(safe-area-inset-left));
   right: max(8px, env(safe-area-inset-right));
-  width: min(calc(100% - 16px), 560px);
-  gap: 3px;
+  width: min(calc(100% - 16px), 600px);
+  gap: 2px;
   padding: 5px;
   border-color: rgba(207, 228, 255, 0.95);
   background:
@@ -1595,9 +1722,10 @@ tr:last-child td {
 
 .moovu-driver-bottom-nav .moovu-customer-nav-item {
   min-height: 46px;
-  gap: 3px;
-  padding: 0 2px;
-  font-size: 10.5px;
+  gap: 2px;
+  padding: 0 1px;
+  font-size: 10px;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -1608,7 +1736,7 @@ tr:last-child td {
 
 @media (max-width: 380px) {
   .moovu-driver-bottom-nav .moovu-customer-nav-item {
-    font-size: 10px;
+    font-size: 9.5px;
   }
 
   .moovu-driver-bottom-nav .moovu-customer-nav-dot {
