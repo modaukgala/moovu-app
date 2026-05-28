@@ -34,14 +34,31 @@ function hasLocationPermission(permissions: { location?: string; coarseLocation?
 
 export async function getMoovuCurrentPosition(options: PositionOptions = {}): Promise<MoovuPosition> {
   if (Capacitor.isNativePlatform()) {
-    const currentPermission = await Geolocation.checkPermissions();
+    let currentPermission: { location?: string; coarseLocation?: string };
+
+    try {
+      currentPermission = await Geolocation.checkPermissions();
+    } catch {
+      throw createGeolocationError(
+        2,
+        "MOOVU could not check location access. Make sure location permission is configured for this app.",
+      );
+    }
+
     let locationAllowed = hasLocationPermission(currentPermission);
 
     if (!locationAllowed) {
-      const requestedPermission = await Geolocation.requestPermissions({
-        permissions: ["location"],
-      });
-      locationAllowed = hasLocationPermission(requestedPermission);
+      try {
+        const requestedPermission = await Geolocation.requestPermissions({
+          permissions: ["location"],
+        });
+        locationAllowed = hasLocationPermission(requestedPermission);
+      } catch {
+        throw createGeolocationError(
+          1,
+          "Location permission was not granted. Allow location access for MOOVU in your phone settings, then retry.",
+        );
+      }
     }
 
     if (!locationAllowed) {
@@ -51,11 +68,20 @@ export async function getMoovuCurrentPosition(options: PositionOptions = {}): Pr
       );
     }
 
-    const position = await Geolocation.getCurrentPosition({
-      enableHighAccuracy: options.enableHighAccuracy,
-      timeout: options.timeout,
-      maximumAge: options.maximumAge,
-    });
+    let position: Awaited<ReturnType<typeof Geolocation.getCurrentPosition>>;
+
+    try {
+      position = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: options.enableHighAccuracy ?? true,
+        timeout: options.timeout ?? 15000,
+        maximumAge: options.maximumAge ?? 0,
+      });
+    } catch {
+      throw createGeolocationError(
+        2,
+        "MOOVU could not get your current location. Check GPS, allow precise location, then retry.",
+      );
+    }
 
     return {
       coords: {

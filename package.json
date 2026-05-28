@@ -5,8 +5,18 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:customer": "next build",
+    "build:driver": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "ios:customer": "node scripts/capacitor-ios-target.mjs customer sync",
+    "ios:driver": "node scripts/capacitor-ios-target.mjs driver sync",
+    "ios:customer:add": "node scripts/capacitor-ios-target.mjs customer add",
+    "ios:driver:add": "node scripts/capacitor-ios-target.mjs driver add",
+    "ios:customer:open": "node scripts/capacitor-ios-target.mjs customer open",
+    "ios:driver:open": "node scripts/capacitor-ios-target.mjs driver open",
+    "ios:customer:doctor": "node scripts/capacitor-ios-target.mjs customer doctor",
+    "ios:driver:doctor": "node scripts/capacitor-ios-target.mjs driver doctor"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.3",

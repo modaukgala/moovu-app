@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 export default function GlobalError({
   error,
   reset,
@@ -12,6 +14,14 @@ export default function GlobalError({
       <body>
         <main className="moovu-auth-shell text-black">
           <section className="moovu-auth-card text-center">
+            <Image
+              src="/logo.png"
+              alt="MOOVU Kasi Rides"
+              width={96}
+              height={96}
+              priority
+              className="mx-auto mb-4 h-20 w-20 rounded-3xl object-contain shadow-sm"
+            />
             <div className="moovu-chip mx-auto w-fit">
               <span className="moovu-chip-dot" />
               MOOVU

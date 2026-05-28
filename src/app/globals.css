@@ -975,9 +975,10 @@ tr:last-child td {
 
 .moovu-auth-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
 }
 
 .moovu-auth-card {
@@ -988,6 +989,10 @@ tr:last-child td {
   border-radius: 32px;
   padding: 28px;
   box-shadow: var(--moovu-shadow-lg);
+}
+
+.moovu-chat-sheet {
+  max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 
 .moovu-hero-grid {

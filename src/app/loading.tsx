@@ -1,8 +1,18 @@
+import Image from "next/image";
+
 export default function GlobalLoading() {
   return (
     <main className="moovu-page">
       <div className="moovu-shell space-y-5">
         <div className="moovu-card p-6">
+          <Image
+            src="/logo.png"
+            alt="MOOVU Kasi Rides"
+            width={80}
+            height={80}
+            priority
+            className="mb-5 h-16 w-16 rounded-2xl object-contain shadow-sm"
+          />
           <div className="moovu-skeleton h-4 w-28" />
           <div className="mt-4 moovu-skeleton h-10 w-72" />
           <div className="mt-4 moovu-skeleton h-5 w-full max-w-2xl" />

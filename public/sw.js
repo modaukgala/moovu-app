@@ -1,9 +1,36 @@
-self.addEventListener("install", () => {
-  self.skipWaiting();
+const MOOVU_OFFLINE_CACHE = "moovu-offline-v1";
+const MOOVU_OFFLINE_URL = "/offline.html";
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(MOOVU_OFFLINE_CACHE)
+      .then((cache) => cache.add(MOOVU_OFFLINE_URL))
+      .catch(() => undefined)
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+
+  const requestMode = event.request.mode;
+  const accept = event.request.headers.get("accept") || "";
+  const isNavigation = requestMode === "navigate" || accept.includes("text/html");
+
+  if (!isNavigation) return;
+
+  event.respondWith(
+    fetch(event.request).catch(async () => {
+      const cached = await caches.match(MOOVU_OFFLINE_URL);
+      return cached || new Response("MOOVU is offline. Please check your connection and try again.", {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    })
+  );
 });
 
 self.addEventListener("push", (event) => {

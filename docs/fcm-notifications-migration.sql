@@ -15,7 +15,10 @@ create table if not exists public.fcm_tokens (
       'web_driver',
       'web_admin',
       'android_customer',
-      'android_driver'
+      'android_driver',
+      'ios_customer',
+      'ios_driver',
+      'ios_admin'
     )
   ),
   user_agent text null,
@@ -40,26 +43,23 @@ alter table public.fcm_tokens
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
 
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_constraint
-    where conname = 'fcm_tokens_app_type_check'
-  ) then
-    alter table public.fcm_tokens
-      add constraint fcm_tokens_app_type_check
-      check (
-        app_type is null or app_type in (
-          'web_customer',
-          'web_driver',
-          'web_admin',
-          'android_customer',
-          'android_driver'
-        )
-      );
-  end if;
-end $$;
+alter table public.fcm_tokens
+  drop constraint if exists fcm_tokens_app_type_check;
+
+alter table public.fcm_tokens
+  add constraint fcm_tokens_app_type_check
+  check (
+    app_type is null or app_type in (
+      'web_customer',
+      'web_driver',
+      'web_admin',
+      'android_customer',
+      'android_driver',
+      'ios_customer',
+      'ios_driver',
+      'ios_admin'
+    )
+  );
 
 create index if not exists fcm_tokens_user_role_idx
   on public.fcm_tokens(user_id, role);

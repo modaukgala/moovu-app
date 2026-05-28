@@ -47,6 +47,10 @@ function legacyAppType(role: NotificationRole) {
   if (platform === "web") return role === "driver" ? "web_driver" : role === "admin" ? "web_admin" : "web_customer";
   if (platform === "android" && role === "driver") return "android_driver";
   if (platform === "android" && role === "customer") return "android_customer";
+  if (platform === "android" && role === "admin") return "web_admin";
+  if (platform === "ios" && role === "driver") return "ios_driver";
+  if (platform === "ios" && role === "customer") return "ios_customer";
+  if (platform === "ios" && role === "admin") return "ios_admin";
   return null;
 }
 

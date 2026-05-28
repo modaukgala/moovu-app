@@ -43,8 +43,55 @@ type Props = {
 
 const MAX_MESSAGE_LENGTH = 1000;
 
+function safeIsoDate(value: unknown) {
+  if (typeof value !== "string") return new Date().toISOString();
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? value : new Date().toISOString();
+}
+
+function sanitizeMessage(value: unknown): TripMessage | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Partial<TripMessage>;
+  const senderRole = record.sender_role === "driver" ? "driver" : "customer";
+  const id = typeof record.id === "string" && record.id
+    ? record.id
+    : `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const body = typeof record.body === "string" ? record.body : "";
+  if (!body.trim()) return null;
+
+  return {
+    id,
+    trip_id: typeof record.trip_id === "string" ? record.trip_id : "",
+    sender_user_id: typeof record.sender_user_id === "string" ? record.sender_user_id : "",
+    sender_role: senderRole,
+    body,
+    created_at: safeIsoDate(record.created_at),
+    read_at: typeof record.read_at === "string" ? record.read_at : null,
+  };
+}
+
+function normalizeMessages(values: unknown) {
+  if (!Array.isArray(values)) return [];
+  const seen = new Set<string>();
+  const messages: TripMessage[] = [];
+
+  for (const value of values) {
+    const message = sanitizeMessage(value);
+    if (!message || seen.has(message.id)) continue;
+    seen.add(message.id);
+    messages.push(message);
+  }
+
+  return messages;
+}
+
+function safeDateMs(value: string) {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 function formatMessageTime(value: string) {
-  return new Date(value).toLocaleTimeString([], {
+  return new Date(safeIsoDate(value)).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -74,7 +121,7 @@ export default function TripChatPanel({
 
   const sortedMessages = useMemo(() => {
     return [...messages].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      (a, b) => safeDateMs(a.created_at) - safeDateMs(b.created_at),
     );
   }, [messages]);
 
@@ -93,33 +140,39 @@ export default function TripChatPanel({
       if (showLoading) setLoading(true);
       setError(null);
 
-      const token = await getAccessToken();
-      if (!token) {
-        setError("Please log in again to use chat.");
+      try {
+        const token = await getAccessToken();
+        if (!token) {
+          setError("Please log in again to use chat.");
+          setLoading(false);
+          return;
+        }
+
+        const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages?markRead=1`, {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const json = (await res.json().catch(() => null)) as MessagesResponse | null;
+
+        if (!res.ok || !json?.ok) {
+          setError(json?.error || "Could not load chat messages.");
+          setLoading(false);
+          return;
+        }
+
+        setMessages(normalizeMessages(json.messages));
+        setRole(json.role ?? null);
+        setCanSend(Boolean(json.canSend));
+        setUnreadCount(0);
+      } catch (loadError: unknown) {
+        console.error("[trip-chat] load failed", loadError);
+        setError("Could not load chat messages. Please try again.");
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages?markRead=1`, {
-        cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const json = (await res.json().catch(() => null)) as MessagesResponse | null;
-
-      if (!res.ok || !json?.ok) {
-        setError(json?.error || "Could not load chat messages.");
-        setLoading(false);
-        return;
-      }
-
-      setMessages(json.messages ?? []);
-      setRole(json.role ?? null);
-      setCanSend(Boolean(json.canSend));
-      setUnreadCount(0);
-      setLoading(false);
     },
     [getAccessToken, open, tripId],
   );
@@ -165,32 +218,36 @@ export default function TripChatPanel({
   const loadUnreadCount = useCallback(async () => {
     if (open || disabled) return;
 
-    const token = await getAccessToken();
-    if (!token) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
 
-    const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const json = (await res.json().catch(() => null)) as MessagesResponse | null;
-    if (!res.ok || !json?.ok) return;
-
-    const nextUnreadCount = Number(json.unreadCount ?? 0);
-    if (nextUnreadCount > lastUnreadCountRef.current) {
-      const otherParticipant = label.toLowerCase().includes("customer") ? "customer" : "driver";
-      notifyInApp({
-        title: `New message from ${otherParticipant}`,
-        body: "Open trip chat to reply.",
-        tone: "message",
-        loud: true,
+      const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages`, {
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
-    }
 
-    lastUnreadCountRef.current = nextUnreadCount;
-    setUnreadCount(nextUnreadCount);
+      const json = (await res.json().catch(() => null)) as MessagesResponse | null;
+      if (!res.ok || !json?.ok) return;
+
+      const nextUnreadCount = Number(json.unreadCount ?? 0);
+      if (Number.isFinite(nextUnreadCount) && nextUnreadCount > lastUnreadCountRef.current) {
+        const otherParticipant = label.toLowerCase().includes("customer") ? "customer" : "driver";
+        notifyInApp({
+          title: `New message from ${otherParticipant}`,
+          body: "Open trip chat to reply.",
+          tone: "message",
+          loud: true,
+        });
+      }
+
+      lastUnreadCountRef.current = Number.isFinite(nextUnreadCount) ? nextUnreadCount : 0;
+      setUnreadCount(Number.isFinite(nextUnreadCount) ? nextUnreadCount : 0);
+    } catch (unreadError: unknown) {
+      console.warn("[trip-chat] unread count failed", unreadError);
+    }
   }, [disabled, getAccessToken, label, open, tripId]);
 
   useEffect(() => {
@@ -234,40 +291,51 @@ export default function TripChatPanel({
 
   async function sendMessage() {
     const body = text.trim();
-    if (!body || !canSend) return;
+    if (!body || !canSend || sending) return;
 
     setSending(true);
     setError(null);
 
-    const token = await getAccessToken();
-    if (!token) {
-      setError("Please log in again to send a message.");
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setError("Please log in again to send a message.");
+        return;
+      }
+
+      const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ body }),
+      });
+
+      const json = (await res.json().catch(() => null)) as SendResponse | null;
+
+      if (!res.ok || !json?.ok || !json.message) {
+        setError(json?.error || "Could not send message.");
+        return;
+      }
+
+      const nextMessage = sanitizeMessage(json.message);
+      if (!nextMessage) {
+        setError("Message was sent, but the app could not display it. Reopen chat to refresh.");
+        return;
+      }
+
+      setText("");
+      setMessages((current) => {
+        if (current.some((message) => message.id === nextMessage.id)) return current;
+        return [...current, nextMessage];
+      });
+    } catch (sendError: unknown) {
+      console.error("[trip-chat] send failed", sendError);
+      setError("Could not send message. Please check your connection and try again.");
+    } finally {
       setSending(false);
-      return;
     }
-
-    const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ body }),
-    });
-
-    const json = (await res.json().catch(() => null)) as SendResponse | null;
-    setSending(false);
-
-    if (!res.ok || !json?.ok || !json.message) {
-      setError(json?.error || "Could not send message.");
-      return;
-    }
-
-    setText("");
-    setMessages((current) => {
-      if (current.some((message) => message.id === json.message?.id)) return current;
-      return [...current, json.message as TripMessage];
-    });
   }
 
   return (
@@ -292,7 +360,7 @@ export default function TripChatPanel({
       {open && (
         <div className="fixed inset-0 z-[10000] bg-slate-950/45 backdrop-blur-sm">
           <div className="flex min-h-[100dvh] items-end justify-center p-0 sm:items-center sm:p-5">
-            <section className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:rounded-[28px]">
+            <section className="moovu-chat-sheet flex w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:rounded-[28px]">
               <header className="border-b border-slate-200 px-5 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -330,7 +398,7 @@ export default function TripChatPanel({
 
                       return (
                         <div
-                          key={message.id}
+                          key={`${message.id}-${message.created_at}`}
                           className={`flex ${mine ? "justify-end" : "justify-start"}`}
                         >
                           <div

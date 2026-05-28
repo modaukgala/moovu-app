@@ -8,6 +8,11 @@ const config: CapacitorConfig = {
     url: "https://moovurides.co.za",
     cleartext: false,
   },
+  plugins: {
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
+    },
+  },
 };
 
 export default config;

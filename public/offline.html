@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0B5FFF" />
+    <title>MOOVU is offline</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --blue: #0b5fff;
+        --aqua: #22d3ee;
+        --ink: #07111f;
+        --muted: #65758a;
+        --surface: rgba(255, 255, 255, 0.94);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(34, 211, 238, 0.25), transparent 28%),
+          linear-gradient(145deg, #eef7ff 0%, #f8fbfd 48%, #ffffff 100%);
+        color: var(--ink);
+      }
+
+      body {
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: calc(28px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom));
+      }
+
+      main {
+        width: min(100%, 430px);
+        border: 1px solid rgba(196, 216, 236, 0.86);
+        border-radius: 30px;
+        background: var(--surface);
+        padding: 28px;
+        text-align: center;
+        box-shadow: 0 26px 80px rgba(15, 23, 42, 0.16);
+        backdrop-filter: blur(18px);
+      }
+
+      .logo {
+        width: 74px;
+        height: 74px;
+        margin: 0 auto 18px;
+        border-radius: 24px;
+        background: #fff;
+        object-fit: contain;
+        box-shadow: 0 16px 36px rgba(11, 95, 255, 0.16);
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        background: rgba(11, 95, 255, 0.08);
+        padding: 8px 12px;
+        color: var(--blue);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: var(--aqua);
+        box-shadow: 0 0 0 6px rgba(34, 211, 238, 0.16);
+      }
+
+      h1 {
+        margin: 18px 0 10px;
+        font-size: clamp(28px, 8vw, 38px);
+        line-height: 1.05;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.6;
+      }
+
+      button {
+        width: 100%;
+        min-height: 52px;
+        margin-top: 24px;
+        border: 0;
+        border-radius: 18px;
+        background: var(--blue);
+        color: #fff;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 900;
+        box-shadow: 0 16px 34px rgba(11, 95, 255, 0.2);
+      }
+
+      button:active {
+        transform: translateY(1px) scale(0.99);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img class="logo" src="/icon-192.png" alt="MOOVU" />
+      <div class="chip"><span class="dot"></span>MOOVU app</div>
+      <h1>MOOVU is offline</h1>
+      <p>Please check your connection and try again. Your current trip and account details are kept safely in MOOVU.</p>
+      <button type="button" onclick="window.location.reload()">Retry</button>
+    </main>
+  </body>
+</html>

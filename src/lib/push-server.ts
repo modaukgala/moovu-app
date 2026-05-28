@@ -163,6 +163,30 @@ function isAndroidNativeToken(row: { platform?: string | null; app_type?: string
   return platform === "android" || appType.startsWith("android");
 }
 
+function isIosNativeToken(row: { platform?: string | null; app_type?: string | null }) {
+  const platform = String(row.platform ?? "").toLowerCase();
+  const appType = String(row.app_type ?? "").toLowerCase();
+  return platform === "ios" || appType.startsWith("ios");
+}
+
+function apnsOptions() {
+  return {
+    headers: {
+      "apns-priority": "10",
+      "apns-push-type": "alert",
+    },
+    payload: {
+      aps: {
+        sound: "default",
+        badge: 1,
+      },
+    },
+    fcmOptions: {
+      analyticsLabel: "moovu_push",
+    },
+  } as const;
+}
+
 async function withNativeActionData(params: {
   supabase: AdminSupabaseClient;
   row: { user_id: string | null; role: PushRole | null };
@@ -339,6 +363,7 @@ async function sendFcmToTargets(params: SendPushParams) {
         role: params.role || String(row.role || ""),
       });
       const androidNativeToken = isAndroidNativeToken(row);
+      const iosNativeToken = isIosNativeToken(row);
       const data = androidNativeToken
         ? await withNativeActionData({
             supabase,
@@ -374,6 +399,7 @@ async function sendFcmToTargets(params: SendPushParams) {
                 },
               }),
         },
+        ...(iosNativeToken ? { apns: apnsOptions() } : {}),
         webpush: {
           notification: {
             title: params.title,
@@ -489,6 +515,7 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
             clickAction: "FCM_PLUGIN_ACTIVITY",
           },
         },
+        apns: apnsOptions(),
         webpush: {
           notification: {
             title: payload.title,

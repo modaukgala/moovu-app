@@ -135,6 +135,17 @@ function statusLabel(status: string | null | undefined) {
   }
 }
 
+function formatTripEventType(eventType: string) {
+  if (eventType === "trip_completed") return "Trip completed";
+  return eventType.replace(/_/g, " ");
+}
+
+function formatEventTime(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Just now";
+  return date.toLocaleString();
+}
+
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
 }
@@ -661,6 +672,16 @@ export default function RideTrackingPage() {
     }));
   }, [trip?.status]);
 
+  const customerVisibleEvents = useMemo(() => {
+    const userFacingBlockedEvents = new Set([
+      "commission_applied",
+      "wallet_transaction_created",
+      "driver_wallet_updated",
+    ]);
+
+    return events.filter((event) => !userFacingBlockedEvents.has(event.event_type));
+  }, [events]);
+
   const otpCards = useMemo(() => {
     if (!trip || trip.status === "completed" || trip.status === "cancelled") return [];
 
@@ -1057,22 +1078,24 @@ export default function RideTrackingPage() {
           <section className="moovu-card p-5">
             <div className="text-sm font-medium text-slate-500">Trip timeline</div>
 
-            {events.length === 0 ? (
+            {customerVisibleEvents.length === 0 ? (
               <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                 No events yet.
               </div>
             ) : (
               <div className="mt-4 space-y-3">
-                {events.map((event) => (
+                {customerVisibleEvents.map((event) => (
                   <div key={event.id} className="flex gap-3 rounded-2xl bg-slate-50 p-4">
                     <div className="mt-1 h-3 w-3 rounded-full bg-[var(--moovu-primary)]" />
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900">{event.event_type}</div>
+                      <div className="text-sm font-semibold capitalize text-slate-900">
+                        {formatTripEventType(event.event_type)}
+                      </div>
                       {event.message && (
                         <div className="mt-1 text-sm text-slate-700">{event.message}</div>
                       )}
                       <div className="mt-2 text-xs text-slate-500">
-                        {new Date(event.created_at).toLocaleString()}
+                        {formatEventTime(event.created_at)}
                       </div>
                     </div>
                   </div>

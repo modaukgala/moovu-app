@@ -72,7 +72,19 @@ After generation, wire the typed database into the browser/admin Supabase client
 - Apply `docs/fcm-notifications-migration.sql` on staging/production before relying on FCM token storage.
 - Apply `docs/notification-polish-migration.sql` so `/admin/notifications` can show sent, failed, and no-token delivery history.
 - The Firebase private key must preserve newlines. In Vercel it can be stored with escaped `\n`; the server helper converts escaped newlines at runtime.
-- Browser/PWA push requires HTTPS in production. iOS push support depends on installed PWA behavior and current Safari limitations. Native Play Store/App Store packaging should use Capacitor with FCM/APNs for fully reliable app notifications.
+- Browser/PWA push requires HTTPS in production. Native iOS closed-app push requires the Xcode Push Notifications capability, a Firebase iOS app with the exact bundle ID, `GoogleService-Info.plist`, and an APNs key/certificate uploaded to Firebase. See `docs/mobile-ios-stabilization.md`.
+- The server now sends high-priority APNs alert options for iOS FCM targets. Do not claim iOS closed-app push is verified until tested on a real iPhone with APNs/Firebase configured.
+
+## Mobile Native Setup
+
+- Android native files live under `android/`.
+- This repository does not currently contain an `ios/` Capacitor project. If the iOS project is outside this repo, apply the icon, `Info.plist`, Push Notifications capability, and Firebase plist steps there.
+- MOOVU offline fallback is served from `public/offline.html` through the service workers after the app has loaded online at least once.
+- iOS location requires `NSLocationWhenInUseUsageDescription`; do not request background location unless MOOVU intentionally supports background tracking.
+- Split iOS App Store packaging is configured through:
+  - Customer: `capacitor.customer.config.ts`, bundle ID `com.moovu.customer`, native folder `ios-customer/`.
+  - Driver: `capacitor.driver.config.ts`, bundle ID `com.moovu.driver`, native folder `ios-driver/`.
+  - See `docs/ios-split-apps.md` for Mac build, sync, Xcode, archive, Firebase, and icon steps.
 
 ## Cancellation And No-Show Setup
 

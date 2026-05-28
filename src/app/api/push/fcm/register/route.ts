@@ -16,6 +16,9 @@ const VALID_APP_TYPES = new Set([
   "web_admin",
   "android_customer",
   "android_driver",
+  "ios_customer",
+  "ios_driver",
+  "ios_admin",
 ]);
 
 const VALID_PLATFORMS = new Set(["android", "ios", "web", "unknown"]);
@@ -25,9 +28,9 @@ function defaultAppType(role: PushRole) {
 }
 
 function appTypeMatchesRole(appType: string, role: PushRole) {
-  if (role === "admin") return appType === "web_admin";
-  if (role === "driver") return appType === "web_driver" || appType === "android_driver";
-  return appType === "web_customer" || appType === "android_customer";
+  if (role === "admin") return appType === "web_admin" || appType === "ios_admin";
+  if (role === "driver") return appType === "web_driver" || appType === "android_driver" || appType === "ios_driver";
+  return appType === "web_customer" || appType === "android_customer" || appType === "ios_customer";
 }
 
 function isMissingColumnError(errorMessage: string, columnName: string) {
