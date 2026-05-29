@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "MOOVU Driver",
   webDir: "capacitor-shell-driver",
   server: {
-    url: process.env.CAPACITOR_DRIVER_URL || "https://driver.moovurides.co.za/driver",
+    url: process.env.CAPACITOR_DRIVER_URL || "https://driver.moovurides.co.za",
     cleartext: false,
   },
   plugins: {

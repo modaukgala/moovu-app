@@ -6,15 +6,18 @@ MOOVU's shared permission code already calls Capacitor plugins on native platfor
 - `@capacitor/camera` for proof-of-payment camera/photo access.
 - `@capacitor/push-notifications` for native push notifications.
 
-The repository does not currently contain an `ios/` Capacitor project. When the iOS project is created on a Mac, add these privacy strings in Xcode under `App/App/Info.plist` before testing permissions.
+The repository uses split native iOS projects:
+
+- Customer: `ios-customer/`, bundle ID `com.moovu.customer`
+- Driver: `ios-driver/`, bundle ID `com.moovu.driver`
+
+Add or confirm these privacy strings in each Xcode target under `App/App/Info.plist` before testing permissions.
 
 ## Required Info.plist entries
 
 ```xml
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>MOOVU uses your location to set pickup points, show trips, and help drivers update active trip GPS.</string>
-<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>MOOVU uses your location to support active trip and driver GPS features when allowed.</string>
 <key>NSCameraUsageDescription</key>
 <string>MOOVU uses the camera so drivers can capture proof of payment and required trip or account documents.</string>
 <key>NSPhotoLibraryUsageDescription</key>
@@ -29,18 +32,22 @@ Enable **Push Notifications** in Xcode for the iOS app target. Native iOS push n
 
 Before production iOS testing:
 
-- Add an iOS app in Firebase using the final iOS bundle ID.
-- Download `GoogleService-Info.plist` and add it to the Xcode app target.
+- Add two iOS apps in Firebase using the final iOS bundle IDs.
+- Download each matching `GoogleService-Info.plist` and add it to the correct Xcode app target.
 - Upload the APNs authentication key in Firebase project settings.
-- Enable **Background Modes** and check **Remote notifications** in Xcode.
-- Run `npx cap sync ios` after plugin or native config changes.
+- Do not enable background location unless MOOVU intentionally supports background tracking.
+- Use explicit target scripts after plugin or native config changes.
 
 ## Setup commands on Mac
 
 ```bash
-npx cap add ios
-npx cap sync ios
-npx cap open ios
+npm run build:customer
+npm run sync:customer
+npm run open:customer
+
+npm run build:driver
+npm run sync:driver
+npm run open:driver
 ```
 
 After opening Xcode, add the Info.plist entries above, enable Push Notifications, configure signing, then test on a real iPhone. The iOS Home Screen web shortcut is still a PWA and cannot use Capacitor native permission plugins.

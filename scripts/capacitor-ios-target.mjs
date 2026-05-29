@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { closeSync, existsSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { copyFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -27,7 +26,7 @@ const [targetName, action = "sync"] = process.argv.slice(2);
 const target = targets[targetName];
 
 if (!target) {
-  fail("Usage: node scripts/capacitor-ios-target.mjs <customer|driver> <add|sync|open|doctor>");
+  fail("Usage: node scripts/capacitor-ios-target.mjs <customer|driver> <add|copy|sync|open|archive|doctor>");
 }
 
 const iosPath = join(root, "ios");
@@ -35,8 +34,6 @@ const targetPath = join(root, target.nativeDir);
 const markerPath = (dir) => join(dir, markerName);
 const appWorkspacePath = join(targetPath, "App", "App.xcworkspace");
 const appProjectPath = join(targetPath, "App", "App.xcodeproj");
-const rootConfigPath = join(root, "capacitor.config.ts");
-const selectedConfigPath = join(root, target.config);
 
 function fail(message) {
   console.error(`[moovu-ios-target] ${message}`);
@@ -67,17 +64,6 @@ function writeMarker(dir) {
   );
 }
 
-async function withSelectedConfig(callback) {
-  const original = readFileSync(rootConfigPath);
-  await copyFile(selectedConfigPath, rootConfigPath);
-
-  try {
-    await callback();
-  } finally {
-    writeFileSync(rootConfigPath, original);
-  }
-}
-
 function run(command, args) {
   const executable = process.platform === "win32" && command === "npx" ? "cmd.exe" : command;
   const commandArgs = process.platform === "win32" && command === "npx"
@@ -86,6 +72,10 @@ function run(command, args) {
   console.log(`[moovu-ios-target] ${command} ${args.join(" ")}`);
   const result = spawnSync(executable, commandArgs, {
     cwd: root,
+    env: {
+      ...process.env,
+      CAPACITOR_TARGET: targetName,
+    },
     stdio: "inherit",
     shell: false,
   });
@@ -145,9 +135,7 @@ async function addTargetIfMissing() {
     fail("ios/ already exists. Move or sync it before adding another iOS target.");
   }
 
-  await withSelectedConfig(async () => {
-    run("npx", ["cap", "add", "ios"]);
-  });
+  run("npx", ["cap", "add", "ios"]);
 
   writeMarker(iosPath);
   renameSync(iosPath, targetPath);
@@ -180,12 +168,18 @@ async function withTargetAsIos(callback) {
 
 async function syncTarget() {
   await withTargetAsIos(async () => {
-    await withSelectedConfig(async () => {
-      run("npx", ["cap", "sync", "ios"]);
-    });
+    run("npx", ["cap", "sync", "ios"]);
   });
 
   console.log(`[moovu-ios-target] Synced ${target.label} in ${target.nativeDir}/.`);
+}
+
+async function copyTarget() {
+  await withTargetAsIos(async () => {
+    run("npx", ["cap", "copy", "ios"]);
+  });
+
+  console.log(`[moovu-ios-target] Copied web assets for ${target.label} into ${target.nativeDir}/.`);
 }
 
 function openTarget() {
@@ -203,6 +197,32 @@ function openTarget() {
   } else {
     console.log(`[moovu-ios-target] Open this on Mac: ${openPath}`);
   }
+}
+
+function archiveTarget() {
+  if (!existsSync(targetPath)) {
+    fail(`${target.nativeDir}/ does not exist yet. Run npm run sync:${targetName} first.`);
+  }
+
+  const workspacePath = existsSync(appWorkspacePath) ? appWorkspacePath : null;
+  if (!workspacePath) {
+    fail(`Could not find ${appWorkspacePath}. Run npm run sync:${targetName} first.`);
+  }
+
+  const archivePath = join(root, "build", targetName === "customer" ? "MOOVU-Customer.xcarchive" : "MOOVU-Driver.xcarchive");
+  run("xcodebuild", [
+    "archive",
+    "-workspace",
+    workspacePath,
+    "-scheme",
+    "App",
+    "-configuration",
+    "Release",
+    "-destination",
+    "generic/platform=iOS",
+    "-archivePath",
+    archivePath,
+  ]);
 }
 
 function doctor() {
@@ -224,15 +244,21 @@ switch (action) {
   case "add":
     await withTargetLock(addTargetIfMissing);
     break;
+  case "copy":
+    await withTargetLock(copyTarget);
+    break;
   case "sync":
     await withTargetLock(syncTarget);
     break;
   case "open":
     openTarget();
     break;
+  case "archive":
+    archiveTarget();
+    break;
   case "doctor":
     doctor();
     break;
   default:
-    fail(`Unknown action "${action}". Use add, sync, open, or doctor.`);
+    fail(`Unknown action "${action}". Use add, copy, sync, open, archive, or doctor.`);
 }

@@ -78,13 +78,14 @@ After generation, wire the typed database into the browser/admin Supabase client
 ## Mobile Native Setup
 
 - Android native files live under `android/`.
-- This repository does not currently contain an `ios/` Capacitor project. If the iOS project is outside this repo, apply the icon, `Info.plist`, Push Notifications capability, and Firebase plist steps there.
+- Split iOS native projects live under `ios-customer/` and `ios-driver/`.
 - MOOVU offline fallback is served from `public/offline.html` through the service workers after the app has loaded online at least once.
 - iOS location requires `NSLocationWhenInUseUsageDescription`; do not request background location unless MOOVU intentionally supports background tracking.
 - Split iOS App Store packaging is configured through:
-  - Customer: `capacitor.customer.config.ts`, bundle ID `com.moovu.customer`, native folder `ios-customer/`.
-  - Driver: `capacitor.driver.config.ts`, bundle ID `com.moovu.driver`, native folder `ios-driver/`.
+  - Customer: `capacitor.customer.config.ts`, bundle ID `com.moovu.customer`, URL `https://moovurides.co.za`, native folder `ios-customer/`.
+  - Driver: `capacitor.driver.config.ts`, bundle ID `com.moovu.driver`, URL `https://driver.moovurides.co.za`, native folder `ios-driver/`.
   - See `docs/ios-split-apps.md` for Mac build, sync, Xcode, archive, Firebase, and icon steps.
+- Do not run generic `npx cap ...` commands. `capacitor.config.ts` is only a guarded wrapper and requires an explicit target through the npm scripts.
 
 ## Cancellation And No-Show Setup
 

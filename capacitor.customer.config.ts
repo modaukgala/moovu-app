@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "MOOVU",
   webDir: "capacitor-shell-customer",
   server: {
-    url: process.env.CAPACITOR_CUSTOMER_URL || "https://moovurides.co.za/",
+    url: process.env.CAPACITOR_CUSTOMER_URL || "https://moovurides.co.za",
     cleartext: false,
   },
   plugins: {

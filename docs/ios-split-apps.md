@@ -6,10 +6,10 @@ MOOVU uses one Next.js codebase and two independent iOS Capacitor app packages f
 
 | App | Display name | Bundle ID | Start URL |
 | --- | --- | --- | --- |
-| Customer | MOOVU | `com.moovu.customer` | `https://moovurides.co.za/` |
-| Driver | MOOVU Driver | `com.moovu.driver` | `https://driver.moovurides.co.za/driver` |
+| Customer | MOOVU | `com.moovu.customer` | `https://moovurides.co.za` |
+| Driver | MOOVU Driver | `com.moovu.driver` | `https://driver.moovurides.co.za` |
 
-The existing `capacitor.config.ts` remains the shared/current packaging config used by Android and existing workflows.
+`capacitor.config.ts` is a guarded wrapper only. It refuses generic Capacitor commands unless `CAPACITOR_TARGET=customer` or `CAPACITOR_TARGET=driver` is set by the npm scripts.
 
 ## Files
 
@@ -20,6 +20,7 @@ The existing `capacitor.config.ts` remains the shared/current packaging config u
 - `scripts/capacitor-ios-target.mjs` safely creates and syncs isolated native folders:
   - `ios-customer/`
   - `ios-driver/`
+- `scripts/build-target.mjs` runs target-aware web builds.
 - `native-assets/ios/customer/AppIcon.appiconset/` contains Customer icon placeholder assets.
 - `native-assets/ios/driver/AppIcon.appiconset/` contains Driver icon placeholder assets.
 - Generated native folders currently contain MOOVU 1024px app icon placeholders in each `AppIcon.appiconset`.
@@ -33,22 +34,34 @@ Run these on a Mac with Xcode and CocoaPods/SPM support installed.
 ```bash
 npm install
 npm run build:customer
-npm run ios:customer
-npm run ios:customer:open
+npm run sync:customer
+npm run open:customer
 ```
 
-If the Customer native folder does not exist yet, `npm run ios:customer` creates `ios-customer/` automatically.
+Shortcut:
+
+```bash
+npm run ios:customer
+```
+
+This runs `build:customer` and `sync:customer`.
 
 ### Driver app
 
 ```bash
 npm install
 npm run build:driver
-npm run ios:driver
-npm run ios:driver:open
+npm run sync:driver
+npm run open:driver
 ```
 
-If the Driver native folder does not exist yet, `npm run ios:driver` creates `ios-driver/` automatically.
+Shortcut:
+
+```bash
+npm run ios:driver
+```
+
+This runs `build:driver` and `sync:driver`.
 
 ## Xcode Setup
 
@@ -85,13 +98,14 @@ Customer:
 
 ```bash
 npm run build:customer
-npm run ios:customer
-open ios-customer/App/App.xcworkspace
+npm run sync:customer
+npm run archive:customer
 ```
 
-Then in Xcode:
+Or open and archive in Xcode:
 
 ```text
+npm run open:customer
 Product > Scheme > App
 Product > Any iOS Device
 Product > Archive
@@ -102,13 +116,14 @@ Driver:
 
 ```bash
 npm run build:driver
-npm run ios:driver
-open ios-driver/App/App.xcworkspace
+npm run sync:driver
+npm run archive:driver
 ```
 
-Then in Xcode:
+Or open and archive in Xcode:
 
 ```text
+npm run open:driver
 Product > Scheme > App
 Product > Any iOS Device
 Product > Archive
@@ -128,4 +143,4 @@ The backend already validates role ownership server-side and sends APNs alert op
 
 - Do not rename `ios-customer/` or `ios-driver/` while Xcode is open.
 - The script refuses to overwrite an unmanaged `ios/` folder.
-- Android packaging remains on the existing `android/` folder and `capacitor.config.ts`.
+- Do not run generic `npx cap ...` commands directly. Use `sync:customer`, `sync:driver`, `copy:customer`, `copy:driver`, `open:customer`, `open:driver`, `archive:customer`, or `archive:driver`.

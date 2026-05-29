@@ -59,29 +59,30 @@ NEXT_PUBLIC_SITE_URL=https://moovurides.co.za
 - Confirm `@capacitor/push-notifications` is installed.
 - Confirm `android.permission.POST_NOTIFICATIONS` exists in `android/app/src/main/AndroidManifest.xml`.
 - Confirm `android/app/src/main/res/raw/moovu_alert.wav` exists for MOOVU's custom notification sound.
-- Run:
-
-```bash
-npx cap sync android
-npx cap open android
-```
+- Run the Android package through an explicit customer/driver target command in the Android packaging workspace. Do not run generic Capacitor commands without a target.
 
 - Test on a real Android 13+ device and accept the notification permission prompt.
 - Background/terminated push must be tested on a physical device, not only browser dev tools.
 
 ## iOS-ready notes
 
-- Add an iOS Firebase app when the iOS project is created.
-- Place `GoogleService-Info.plist` in the iOS app target in Xcode.
+- Add two iOS Firebase apps:
+  - Customer: `com.moovu.customer`
+  - Driver: `com.moovu.driver`
+- Place each matching `GoogleService-Info.plist` in the correct iOS app target in Xcode.
 - Upload an APNs key to Firebase.
 - Enable Push Notifications capability in Xcode.
-- Enable Background Modes with Remote notifications in Xcode.
+- Enable Background Modes with Remote notifications only if the final push implementation requires it.
 - Run on a Mac:
 
 ```bash
-npx cap add ios
-npx cap sync ios
-npx cap open ios
+npm run build:customer
+npm run sync:customer
+npm run open:customer
+
+npm run build:driver
+npm run sync:driver
+npm run open:driver
 ```
 
 ## Local and Vercel checks
@@ -94,7 +95,7 @@ npx cap open ios
 ## Test flow
 
 1. Run `npm run build`.
-2. Run `npx cap sync android`.
+2. Run explicit target syncs, for example `npm run sync:customer` and `npm run sync:driver` for iOS packaging.
 3. Log in as a customer and open `/book`.
 4. Tap **Enable notifications** and confirm a token row appears in `fcm_tokens`.
 5. Log in as a driver and open `/driver`.
