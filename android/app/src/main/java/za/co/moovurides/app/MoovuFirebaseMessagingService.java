@@ -16,7 +16,7 @@ import com.google.firebase.messaging.RemoteMessage;
 import java.util.Map;
 
 public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
-    private static final String CHANNEL_ID = "moovu_critical_v2";
+    private static final String CHANNEL_ID = "moovu_premium_v1";
 
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
@@ -56,7 +56,7 @@ public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
-            .setVibrate(new long[] {0, 450, 140, 450, 140, 700})
+            .setVibrate(new long[] {0, 180, 80, 260})
             .setSound(soundUri())
             .setContentIntent(contentIntent);
 
@@ -123,18 +123,18 @@ public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
 
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID,
-            "MOOVU loud ride alerts",
+            "MOOVU premium ride alerts",
             NotificationManager.IMPORTANCE_HIGH
         );
-        channel.setDescription("Loud ride offers, chat replies, and urgent MOOVU notifications.");
+        channel.setDescription("Clear but softer MOOVU trip offers, chat replies, and urgent ride updates.");
         channel.enableVibration(true);
-        channel.setVibrationPattern(new long[] {0, 450, 140, 450, 140, 700});
+        channel.setVibrationPattern(new long[] {0, 180, 80, 260});
         channel.setSound(soundUri(), audioAttributes);
         manager.createNotificationChannel(channel);
     }
 
     private Uri soundUri() {
-        return Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/" + R.raw.moovu_alert);
+        return Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/" + R.raw.moovu_premium_alert);
     }
 
     private int mutableFlag() {

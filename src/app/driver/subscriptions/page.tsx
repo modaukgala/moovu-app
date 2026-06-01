@@ -233,7 +233,7 @@ export default function DriverSubscriptionsPage() {
                   Keep your driver access active with a clean daily, weekly, or monthly subscription POP.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="moovu-driver-toolbar-actions">
                 <Link href="/driver/earnings" className="moovu-btn moovu-btn-secondary">
                   Earnings
                 </Link>
@@ -244,7 +244,7 @@ export default function DriverSubscriptionsPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 border-t border-[var(--moovu-border)] p-4 sm:grid-cols-4 sm:p-5">
+          <div className="moovu-driver-metric-grid moovu-driver-metric-grid-4 border-t border-[var(--moovu-border)] p-4 sm:p-5">
             <MetricCard label="Status" value={driver?.subscription_status ?? "inactive"} helper="Current access" tone={driver?.subscription_status === "active" ? "success" : "warning"} />
             <MetricCard label="Plan" value={planLabel(driver?.subscription_plan)} helper="Current plan" />
             <MetricCard label="Expires" value={displayDate(driver?.subscription_expires_at)} helper={`${daysRemaining(driver?.subscription_expires_at)} day(s) remaining`} />
@@ -252,7 +252,7 @@ export default function DriverSubscriptionsPage() {
           </div>
         </section>
 
-        <section className="grid gap-3 md:grid-cols-3">
+        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           {(Object.entries(DRIVER_SUBSCRIPTION_PLANS) as Array<[DriverSubscriptionPlan, typeof DRIVER_SUBSCRIPTION_PLANS[DriverSubscriptionPlan]]>).map(([key, item]) => {
             const active = selectedPlan === key;
             return (

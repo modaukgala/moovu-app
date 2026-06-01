@@ -33,7 +33,7 @@ function toneClass(tone: InAppNotificationDetail["tone"]) {
 
 function vibrate() {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
-  navigator.vibrate([0, 360, 90, 420, 90, 560]);
+  navigator.vibrate([0, 160, 80, 220]);
 }
 
 function playAttentionSound() {
@@ -44,29 +44,30 @@ function playAttentionSound() {
     const context = new AudioContextConstructor();
     const gain = context.createGain();
     gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.92, context.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 1.4);
+    gain.gain.exponentialRampToValueAtTime(0.54, context.currentTime + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 1.15);
     gain.connect(context.destination);
 
     const schedule = [
-      { start: 0, frequency: 880 },
-      { start: 0.24, frequency: 1175 },
-      { start: 0.48, frequency: 880 },
-      { start: 0.78, frequency: 1320 },
+      { start: 0, frequency: 659.25, duration: 0.34 },
+      { start: 0, frequency: 880, duration: 0.34 },
+      { start: 0.3, frequency: 783.99, duration: 0.36 },
+      { start: 0.3, frequency: 1046.5, duration: 0.36 },
+      { start: 0.62, frequency: 987.77, duration: 0.26 },
     ];
 
     for (const note of schedule) {
       const oscillator = context.createOscillator();
-      oscillator.type = "square";
+      oscillator.type = "sine";
       oscillator.frequency.setValueAtTime(note.frequency, context.currentTime + note.start);
       oscillator.connect(gain);
       oscillator.start(context.currentTime + note.start);
-      oscillator.stop(context.currentTime + note.start + 0.18);
+      oscillator.stop(context.currentTime + note.start + note.duration);
     }
 
     window.setTimeout(() => {
       void context.close().catch(() => undefined);
-    }, 1800);
+    }, 1500);
   } catch {
     // Browsers may block audio until the user interacts with the app.
   }

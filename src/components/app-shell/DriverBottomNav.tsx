@@ -8,7 +8,7 @@ const items = [
   { href: "/driver/history", label: "Trips" },
   { href: "/driver/earnings", label: "Earn" },
   { href: "/driver/subscriptions", label: "Subs" },
-  { href: "/driver/complete-profile", label: "Acct" },
+  { href: "/driver/complete-profile", label: "Account" },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -44,10 +44,11 @@ export default function DriverBottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={active ? "moovu-customer-nav-item active" : "moovu-customer-nav-item"}
             >
               <span className="moovu-customer-nav-dot" />
-              <span>{item.label}</span>
+              <span className="moovu-customer-nav-label">{item.label}</span>
             </Link>
           );
         })}

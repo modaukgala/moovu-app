@@ -478,7 +478,7 @@ export default function DriverCompleteProfilePage() {
             Required fields completed: {requiredFilled ? "Yes" : "Not yet"}
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="moovu-driver-form-actions">
             <button
               className="moovu-btn moovu-btn-secondary"
               disabled={busy}

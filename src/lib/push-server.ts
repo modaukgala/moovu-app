@@ -4,6 +4,10 @@ import type { PushRole } from "@/lib/push-auth";
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
 import { createNativeNotificationActionToken } from "@/lib/native-notification-actions";
 
+const MOOVU_NOTIFICATION_SOUND = "moovu_premium_alert";
+const MOOVU_NOTIFICATION_SOUND_FILE = `${MOOVU_NOTIFICATION_SOUND}.wav`;
+const MOOVU_ANDROID_CHANNEL_ID = "moovu_premium_v1";
+
 type SendPushParams = {
   userIds?: string[];
   role?: PushRole;
@@ -177,7 +181,7 @@ function apnsOptions() {
     },
     payload: {
       aps: {
-        sound: "default",
+        sound: MOOVU_NOTIFICATION_SOUND_FILE,
         badge: 1,
       },
     },
@@ -224,8 +228,8 @@ async function withNativeActionData(params: {
     nativeActionToken: token,
     nativeActionApiUrl: absoluteAppUrl("/api/notifications/native-action"),
     nativeClickUrl: absoluteRoleAppUrl(params.data.url || "/", params.row.role),
-    nativeSound: "moovu_alert",
-    androidChannelId: "moovu_critical_v2",
+    nativeSound: MOOVU_NOTIFICATION_SOUND,
+    androidChannelId: MOOVU_ANDROID_CHANNEL_ID,
   };
 }
 
@@ -393,8 +397,8 @@ async function sendFcmToTargets(params: SendPushParams) {
                   title: params.title,
                   body: params.body,
                   icon: "ic_launcher",
-                  sound: "moovu_alert",
-                  channelId: "moovu_critical_v2",
+                  sound: MOOVU_NOTIFICATION_SOUND,
+                  channelId: MOOVU_ANDROID_CHANNEL_ID,
                   clickAction: "FCM_PLUGIN_ACTIVITY",
                 },
               }),
@@ -510,8 +514,8 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
             title: payload.title,
             body: payload.body,
             icon: "ic_launcher",
-            sound: "moovu_alert",
-            channelId: "moovu_critical_v2",
+            sound: MOOVU_NOTIFICATION_SOUND,
+            channelId: MOOVU_ANDROID_CHANNEL_ID,
             clickAction: "FCM_PLUGIN_ACTIVITY",
           },
         },

@@ -1709,15 +1709,158 @@ tr:last-child td {
 }
 
 .moovu-driver-shell {
-  padding-bottom: calc(112px + env(safe-area-inset-bottom));
+  padding-bottom: calc(128px + env(safe-area-inset-bottom));
+}
+
+.moovu-driver-shell .moovu-shell {
+  width: min(100%, 1440px);
+}
+
+.moovu-driver-hero-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 520px);
+}
+
+.moovu-driver-hero-actions .moovu-btn {
+  min-width: 0;
+  width: 100%;
+  padding-inline: 12px;
+  text-align: center;
+}
+
+.moovu-driver-metric-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.moovu-driver-metric-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.moovu-driver-metric-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.moovu-driver-metric-grid-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.moovu-driver-toolbar-actions,
+.moovu-driver-form-actions,
+.moovu-driver-filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.moovu-driver-toolbar-actions {
+  max-width: 420px;
+}
+
+.moovu-driver-form-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.moovu-driver-filter-row {
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+}
+
+.moovu-driver-toolbar-actions .moovu-btn,
+.moovu-driver-form-actions .moovu-btn {
+  width: 100%;
+  min-width: 0;
+}
+
+.moovu-driver-filter-row button {
+  min-height: 42px;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.moovu-driver-payment-card {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.moovu-driver-payment-card > .moovu-btn {
+  margin-top: auto;
+}
+
+.moovu-driver-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.moovu-driver-plan-button {
+  display: flex;
+  min-width: 0;
+  min-height: 64px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--moovu-border);
+  border-radius: 18px;
+  background: #fff;
+  padding: 9px 6px;
+  color: var(--moovu-text);
+  text-align: center;
+  box-shadow: var(--moovu-shadow-sm);
+  transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.moovu-driver-plan-button span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--moovu-text-soft);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.moovu-driver-plan-button strong {
+  color: var(--moovu-text);
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.moovu-driver-plan-button:hover {
+  border-color: #cfe4ff;
+  background: #f8fbff;
+  box-shadow: 0 14px 30px rgba(31, 116, 201, 0.1);
+}
+
+.moovu-driver-plan-button:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.moovu-driver-plan-button.is-selected {
+  border-color: rgba(31, 116, 201, 0.45);
+  background: var(--moovu-primary);
+  box-shadow: 0 16px 32px rgba(31, 116, 201, 0.2);
+}
+
+.moovu-driver-plan-button.is-selected span,
+.moovu-driver-plan-button.is-selected strong {
+  color: #fff;
 }
 
 .moovu-driver-bottom-nav {
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  left: max(8px, env(safe-area-inset-left));
-  right: max(8px, env(safe-area-inset-right));
-  width: min(calc(100% - 16px), 600px);
-  gap: 2px;
+  left: max(6px, env(safe-area-inset-left));
+  right: max(6px, env(safe-area-inset-right));
+  width: min(calc(100% - 12px), 600px);
+  gap: 3px;
   padding: 5px;
   border-color: rgba(207, 228, 255, 0.95);
   background:
@@ -1726,12 +1869,22 @@ tr:last-child td {
 }
 
 .moovu-driver-bottom-nav .moovu-customer-nav-item {
-  min-height: 46px;
-  gap: 2px;
-  padding: 0 1px;
+  min-width: 0;
+  min-height: 48px;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 1px;
   font-size: 10px;
   line-height: 1;
   white-space: nowrap;
+}
+
+.moovu-driver-bottom-nav .moovu-customer-nav-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
 }
 
 .moovu-driver-bottom-nav .moovu-customer-nav-dot {
@@ -1739,9 +1892,80 @@ tr:last-child td {
   height: 6px;
 }
 
+@media (max-width: 1180px) {
+  .moovu-driver-metric-grid-4,
+  .moovu-driver-metric-grid-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .moovu-driver-metric-grid-3,
+  .moovu-driver-metric-grid-4,
+  .moovu-driver-metric-grid-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .moovu-page.moovu-driver-shell {
+    padding: 12px 12px calc(132px + env(safe-area-inset-bottom));
+  }
+
+  .moovu-driver-hero-actions {
+    width: 100%;
+    gap: 7px;
+  }
+
+  .moovu-driver-hero-actions .moovu-btn {
+    min-height: 42px;
+    border-radius: 14px;
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+
+  .moovu-driver-metric-grid-3,
+  .moovu-driver-metric-grid-4,
+  .moovu-driver-metric-grid-5 {
+    grid-template-columns: 1fr;
+  }
+
+  .moovu-driver-toolbar-actions {
+    max-width: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .moovu-driver-form-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .moovu-driver-filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .moovu-driver-plan-grid {
+    gap: 6px;
+  }
+
+  .moovu-driver-plan-button {
+    min-height: 58px;
+    border-radius: 16px;
+    padding-inline: 4px;
+  }
+
+  .moovu-driver-plan-button span {
+    font-size: 10px;
+  }
+
+  .moovu-driver-plan-button strong {
+    font-size: 12px;
+  }
+}
+
 @media (max-width: 380px) {
   .moovu-driver-bottom-nav .moovu-customer-nav-item {
-    font-size: 9.5px;
+    min-height: 46px;
+    font-size: 9px;
   }
 
   .moovu-driver-bottom-nav .moovu-customer-nav-dot {
@@ -1815,6 +2039,10 @@ tr:last-child td {
 }
 
 .moovu-app-metric {
+  display: flex;
+  min-width: 0;
+  min-height: 126px;
+  flex-direction: column;
   border: 1px solid var(--moovu-border);
   border-radius: 22px;
   background:
@@ -1854,6 +2082,7 @@ tr:last-child td {
 
 .moovu-app-metric-value {
   margin-top: 8px;
+  overflow-wrap: anywhere;
   color: #050505;
   font-size: clamp(20px, 6vw, 30px);
   font-weight: 950;

@@ -76,3 +76,4 @@ Use a local or staging Supabase project with VAPID keys configured. Do not test 
 - VAPID keys must be configured for push notifications.
 - Storage buckets should include private driver-docs and private payment-proofs with signed URL access for admins.
 - Final privacy/legal wording should be reviewed before public submission.
+- Final publication blocker tracking lives in `docs/publication-readiness-blockers.md`, including iOS Firebase plist paths, APNs setup, Android split packaging notes, notification test matrix, and the full customer-driver-admin E2E checklist.

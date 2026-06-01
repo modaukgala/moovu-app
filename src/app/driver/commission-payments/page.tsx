@@ -287,7 +287,7 @@ export default function DriverCommissionPaymentsPage() {
           </div>
         </section>
 
-        <section className="grid gap-3 md:grid-cols-4">
+        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-4">
           <MetricCard label="Commission owed" value={money(balanceDue)} helper="Payable to MOOVU" tone={balanceDue > 0 ? "warning" : "success"} />
           <MetricCard label="Debt limit" value={money(DRIVER_COMMISSION_LOCK_LIMIT)} helper="Online lock threshold" tone="primary" />
           <MetricCard label="Before lock" value={money(remainingBeforeLock)} helper="Remaining available balance" />

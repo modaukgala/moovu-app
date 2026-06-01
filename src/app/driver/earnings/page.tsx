@@ -237,7 +237,7 @@ export default function DriverEarningsPage() {
               </p>
             </div>
 
-            <div className="moovu-action-row">
+            <div className="moovu-driver-hero-actions">
               <Link href="/driver" className="moovu-btn bg-white text-slate-950">
                 Dashboard
               </Link>
@@ -251,7 +251,7 @@ export default function DriverEarningsPage() {
           </div>
         </div>
 
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-5">
           <MetricCard label="Today" value={money(earningsSummary.today)} helper="Recent completed trips" />
           <MetricCard label="This week" value={money(earningsSummary.week)} helper="Last 7 days" />
           <MetricCard label="This month" value={money(earningsSummary.month)} helper="Current month" />
@@ -259,7 +259,7 @@ export default function DriverEarningsPage() {
           <MetricCard label="Commission owed" value={money(commissionDue)} helper="Payable to MOOVU" tone={commissionDue > 0 ? "warning" : "success"} />
         </section>
 
-        <section className="grid gap-3 md:grid-cols-3">
+        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <MetricCard
             label="Cancellation payouts"
             value={money(lateCancellationDriverEarnings)}
@@ -280,7 +280,7 @@ export default function DriverEarningsPage() {
           />
         </section>
 
-        <section className="grid gap-3 md:grid-cols-3">
+        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <div className="moovu-card p-5">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Subscription</div>
             <div className="mt-2"><StatusBadge status={driver?.subscription_status} /></div>
@@ -300,27 +300,30 @@ export default function DriverEarningsPage() {
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Payment areas</h2>
 
-          <div className="grid lg:grid-cols-2 gap-4">
-            <div className="moovu-card-interactive space-y-4 p-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="moovu-card-interactive moovu-driver-payment-card p-5">
               <div className="moovu-section-title">Subscription Payment</div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="moovu-driver-plan-grid">
                 <button
-                  className={`moovu-btn justify-center px-3 ${selectedPlan === "day" ? "moovu-btn-primary" : "moovu-btn-secondary"}`}
+                  className={`moovu-driver-plan-button ${selectedPlan === "day" ? "is-selected" : ""}`}
                   onClick={() => setSelectedPlan("day")}
                 >
-                  {DRIVER_SUBSCRIPTION_PLANS.day.label} {money(DRIVER_SUBSCRIPTION_PLANS.day.amount)}
+                  <span>{DRIVER_SUBSCRIPTION_PLANS.day.label}</span>
+                  <strong>{money(DRIVER_SUBSCRIPTION_PLANS.day.amount)}</strong>
                 </button>
                 <button
-                  className={`moovu-btn justify-center px-3 ${selectedPlan === "week" ? "moovu-btn-primary" : "moovu-btn-secondary"}`}
+                  className={`moovu-driver-plan-button ${selectedPlan === "week" ? "is-selected" : ""}`}
                   onClick={() => setSelectedPlan("week")}
                 >
-                  {DRIVER_SUBSCRIPTION_PLANS.week.label} {money(DRIVER_SUBSCRIPTION_PLANS.week.amount)}
+                  <span>{DRIVER_SUBSCRIPTION_PLANS.week.label}</span>
+                  <strong>{money(DRIVER_SUBSCRIPTION_PLANS.week.amount)}</strong>
                 </button>
                 <button
-                  className={`moovu-btn justify-center px-3 ${selectedPlan === "month" ? "moovu-btn-primary" : "moovu-btn-secondary"}`}
+                  className={`moovu-driver-plan-button ${selectedPlan === "month" ? "is-selected" : ""}`}
                   onClick={() => setSelectedPlan("month")}
                 >
-                  {DRIVER_SUBSCRIPTION_PLANS.month.label} {money(DRIVER_SUBSCRIPTION_PLANS.month.amount)}
+                  <span>{DRIVER_SUBSCRIPTION_PLANS.month.label}</span>
+                  <strong>{money(DRIVER_SUBSCRIPTION_PLANS.month.amount)}</strong>
                 </button>
               </div>
               <div className="text-2xl font-black text-slate-950">{money(subscriptionSelectedPrice)}</div>
@@ -329,7 +332,7 @@ export default function DriverEarningsPage() {
               </Link>
             </div>
 
-            <div className="moovu-card-interactive space-y-4 p-5">
+            <div className="moovu-card-interactive moovu-driver-payment-card p-5">
               <div className="moovu-section-title">Commission Payment</div>
               <div className="text-2xl font-black text-slate-950">{money(commissionDue)}</div>
               <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary w-full justify-center">

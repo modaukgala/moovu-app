@@ -131,7 +131,7 @@ export default function DriverHistoryPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="moovu-driver-toolbar-actions">
               <Link href="/driver" className="moovu-btn moovu-btn-secondary">
                 Driver dashboard
               </Link>
@@ -144,7 +144,7 @@ export default function DriverHistoryPage() {
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-        <section className="grid gap-3 md:grid-cols-3">
+        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <MetricCard label="Total trips" value={String(trips.length)} helper="All recorded trips" />
           <MetricCard
             label="Completed"
@@ -161,7 +161,7 @@ export default function DriverHistoryPage() {
         </section>
 
         <section className="moovu-card p-4 sm:p-5">
-          <div className="flex flex-wrap gap-2">
+          <div className="moovu-driver-filter-row">
             {FILTERS.map((item) => (
               <button
                 key={item.id}
