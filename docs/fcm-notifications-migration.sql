@@ -18,6 +18,7 @@ create table if not exists public.fcm_tokens (
       'android_driver',
       'ios_customer',
       'ios_driver',
+      'ios_admin',
       'ios_admin'
     )
   ),
@@ -57,6 +58,7 @@ alter table public.fcm_tokens
       'android_driver',
       'ios_customer',
       'ios_driver',
+      'ios_admin',
       'ios_admin'
     )
   );

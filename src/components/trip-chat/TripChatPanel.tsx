@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { notifyInApp } from "@/lib/in-app-notifications";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -42,6 +42,63 @@ type Props = {
 };
 
 const MAX_MESSAGE_LENGTH = 1000;
+const SEND_FAILURE_MESSAGE = "Message could not be sent. Please try again.";
+
+class TripChatErrorBoundary extends Component<
+  { children: ReactNode; onClose: () => void; onRetry: () => void },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error("[trip-chat] render failed", error);
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <div className="fixed inset-0 z-[10000] bg-slate-950/45 backdrop-blur-sm">
+        <div className="flex min-h-[100dvh] items-end justify-center p-0 sm:items-center sm:p-5">
+          <section className="w-full max-w-md rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[28px]">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-red-600">
+              Chat needs attention
+            </div>
+            <h2 className="mt-2 text-xl font-black text-slate-950">
+              Chat display refreshed
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              The trip is safe. Reopen chat and try again.
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-secondary"
+                onClick={this.props.onClose}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-primary"
+                onClick={() => {
+                  this.setState({ hasError: false });
+                  this.props.onRetry();
+                }}
+              >
+                Reopen chat
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+}
 
 function safeIsoDate(value: unknown) {
   if (typeof value !== "string") return new Date().toISOString();
@@ -58,13 +115,15 @@ function sanitizeMessage(value: unknown): TripMessage | null {
     : `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const body = typeof record.body === "string" ? record.body : "";
   if (!body.trim()) return null;
+  const messageTripId = typeof record.trip_id === "string" ? record.trip_id : "";
+  const senderUserId = typeof record.sender_user_id === "string" ? record.sender_user_id : "";
 
   return {
     id,
-    trip_id: typeof record.trip_id === "string" ? record.trip_id : "",
-    sender_user_id: typeof record.sender_user_id === "string" ? record.sender_user_id : "",
+    trip_id: messageTripId,
+    sender_user_id: senderUserId,
     sender_role: senderRole,
-    body,
+    body: body.trim(),
     created_at: safeIsoDate(record.created_at),
     read_at: typeof record.read_at === "string" ? record.read_at : null,
   };
@@ -116,6 +175,7 @@ export default function TripChatPanel({
   const [unreadCount, setUnreadCount] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   const lastUnreadCountRef = useRef(0);
+  const mountedRef = useRef(false);
 
   const remaining = MAX_MESSAGE_LENGTH - text.length;
 
@@ -133,9 +193,22 @@ export default function TripChatPanel({
     return session?.access_token ?? "";
   }, []);
 
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const loadMessages = useCallback(
     async (showLoading = true) => {
       if (!open) return;
+
+      if (!tripId) {
+        setError("Unable to load this trip chat. Please reopen the trip.");
+        return;
+      }
 
       if (showLoading) setLoading(true);
       setError(null);
@@ -143,8 +216,10 @@ export default function TripChatPanel({
       try {
         const token = await getAccessToken();
         if (!token) {
-          setError("Please log in again to use chat.");
-          setLoading(false);
+          if (mountedRef.current) {
+            setError("Please log in again to use chat.");
+            setLoading(false);
+          }
           return;
         }
 
@@ -158,20 +233,23 @@ export default function TripChatPanel({
         const json = (await res.json().catch(() => null)) as MessagesResponse | null;
 
         if (!res.ok || !json?.ok) {
-          setError(json?.error || "Could not load chat messages.");
-          setLoading(false);
+          if (mountedRef.current) {
+            setError(json?.error || "Unable to load messages. Try again.");
+            setLoading(false);
+          }
           return;
         }
 
+        if (!mountedRef.current) return;
         setMessages(normalizeMessages(json.messages));
         setRole(json.role ?? null);
         setCanSend(Boolean(json.canSend));
         setUnreadCount(0);
       } catch (loadError: unknown) {
         console.error("[trip-chat] load failed", loadError);
-        setError("Could not load chat messages. Please try again.");
+        if (mountedRef.current) setError("Unable to load messages. Try again.");
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     },
     [getAccessToken, open, tripId],
@@ -292,6 +370,10 @@ export default function TripChatPanel({
   async function sendMessage() {
     const body = text.trim();
     if (!body || !canSend || sending) return;
+    if (!tripId) {
+      setError("Unable to send this message because the trip could not be found.");
+      return;
+    }
 
     setSending(true);
     setError(null);
@@ -315,16 +397,18 @@ export default function TripChatPanel({
       const json = (await res.json().catch(() => null)) as SendResponse | null;
 
       if (!res.ok || !json?.ok || !json.message) {
-        setError(json?.error || "Could not send message.");
+        setError(json?.error || SEND_FAILURE_MESSAGE);
         return;
       }
 
       const nextMessage = sanitizeMessage(json.message);
       if (!nextMessage) {
         setError("Message was sent, but the app could not display it. Reopen chat to refresh.");
+        void loadMessages(false);
         return;
       }
 
+      if (!mountedRef.current) return;
       setText("");
       setMessages((current) => {
         if (current.some((message) => message.id === nextMessage.id)) return current;
@@ -332,9 +416,9 @@ export default function TripChatPanel({
       });
     } catch (sendError: unknown) {
       console.error("[trip-chat] send failed", sendError);
-      setError("Could not send message. Please check your connection and try again.");
+      if (mountedRef.current) setError(SEND_FAILURE_MESSAGE);
     } finally {
-      setSending(false);
+      if (mountedRef.current) setSending(false);
     }
   }
 
@@ -358,7 +442,15 @@ export default function TripChatPanel({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[10000] bg-slate-950/45 backdrop-blur-sm">
+        <TripChatErrorBoundary
+          onClose={() => setOpen(false)}
+          onRetry={() => {
+            setMessages([]);
+            setError(null);
+            void loadMessages();
+          }}
+        >
+          <div className="fixed inset-0 z-[10000] bg-slate-950/45 backdrop-blur-sm">
           <div className="flex min-h-[100dvh] items-end justify-center p-0 sm:items-center sm:p-5">
             <section className="moovu-chat-sheet flex w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:rounded-[28px]">
               <header className="border-b border-slate-200 px-5 py-4">
@@ -447,6 +539,7 @@ export default function TripChatPanel({
                     rows={1}
                     placeholder={canSend ? "Type a message..." : "Chat is read-only"}
                     className="moovu-input min-h-12 resize-none"
+                    aria-label="Trip chat message"
                   />
                   <button
                     type="button"
@@ -465,6 +558,7 @@ export default function TripChatPanel({
             </section>
           </div>
         </div>
+        </TripChatErrorBoundary>
       )}
     </>
   );

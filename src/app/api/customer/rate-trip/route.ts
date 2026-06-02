@@ -6,6 +6,16 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function isMissingRatingRoleColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && (
+    message.includes("reviewer_role") ||
+    message.includes("reviewee_role") ||
+    message.includes("reviewer_id") ||
+    message.includes("reviewee_id")
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const auth = await getAuthenticatedCustomer(req);
@@ -62,22 +72,66 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error: upsertError } = await auth.supabaseAdmin
+    let duplicateCheck = await auth.supabaseAdmin
       .from("trip_ratings")
-      .upsert(
-        {
+      .select("id")
+      .eq("trip_id", tripId)
+      .eq("reviewer_role", "customer")
+      .maybeSingle();
+
+    if (isMissingRatingRoleColumn(duplicateCheck.error)) {
+      duplicateCheck = await auth.supabaseAdmin
+        .from("trip_ratings")
+        .select("id")
+        .eq("trip_id", tripId)
+        .maybeSingle();
+    }
+
+    if (duplicateCheck.error) {
+      return NextResponse.json(
+        { ok: false, error: "Could not check existing rating. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    if (duplicateCheck.data?.id) {
+      return NextResponse.json(
+        { ok: false, error: "You have already rated this trip." },
+        { status: 409 }
+      );
+    }
+
+    const ratingPayload = {
+      trip_id: tripId,
+      customer_id: auth.customer.id,
+      driver_id: trip.driver_id,
+      reviewer_id: auth.customer.id,
+      reviewer_role: "customer",
+      reviewee_id: trip.driver_id,
+      reviewee_role: "driver",
+      rating,
+      comment: comment || null,
+    };
+
+    let insertResult = await auth.supabaseAdmin
+      .from("trip_ratings")
+      .insert(ratingPayload);
+
+    if (isMissingRatingRoleColumn(insertResult.error)) {
+      insertResult = await auth.supabaseAdmin
+        .from("trip_ratings")
+        .insert({
           trip_id: tripId,
           customer_id: auth.customer.id,
           driver_id: trip.driver_id,
           rating,
           comment: comment || null,
-        },
-        { onConflict: "trip_id" }
-      );
+        });
+    }
 
-    if (upsertError) {
+    if (insertResult.error) {
       return NextResponse.json(
-        { ok: false, error: upsertError.message },
+        { ok: false, error: "Could not save your rating. Please try again." },
         { status: 500 }
       );
     }

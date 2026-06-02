@@ -56,6 +56,9 @@ type CustomerTripDriverRow = {
   vehicle_year: string | null;
   vehicle_color: string | null;
   vehicle_registration: string | null;
+  verification_status?: string | null;
+  completed_trips_count?: number;
+  average_rating?: number | null;
 };
 
 type TripEventRow = {
@@ -80,6 +83,11 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
     message.includes("fare_adjustment_reason") ||
     message.includes("fare_finalized_at")
   );
+}
+
+function isMissingRevieweeRoleColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && (message.includes("reviewee_role") || message.includes("reviewer_role"));
 }
 
 const DRIVER_VISIBLE_STATUSES = new Set([
@@ -251,12 +259,65 @@ export async function GET(req: Request) {
           vehicle_model,
           vehicle_year,
           vehicle_color,
-          vehicle_registration
+          vehicle_registration,
+          verification_status
         `)
         .eq("id", trip.driver_id)
         .maybeSingle();
 
       driver = (driverRow as CustomerTripDriverRow | null) ?? null;
+
+      if (driver?.id) {
+        const { count: completedTripsCount } = await auth.supabaseAdmin
+          .from("trips")
+          .select("id", { count: "exact", head: true })
+          .eq("driver_id", driver.id)
+          .eq("status", "completed");
+
+        const { data: driverTripsForRating } = await auth.supabaseAdmin
+          .from("trips")
+          .select("id")
+          .eq("driver_id", driver.id)
+          .eq("status", "completed")
+          .limit(100);
+
+        let averageRating: number | null = null;
+        const ratedTripIds = (driverTripsForRating ?? [])
+          .map((row) => row.id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+        if (ratedTripIds.length > 0) {
+          let driverRatingsResult = await auth.supabaseAdmin
+            .from("trip_ratings")
+            .select("rating")
+            .in("trip_id", ratedTripIds)
+            .eq("reviewee_role", "driver");
+
+          if (isMissingRevieweeRoleColumn(driverRatingsResult.error)) {
+            driverRatingsResult = await auth.supabaseAdmin
+              .from("trip_ratings")
+              .select("rating")
+              .in("trip_id", ratedTripIds);
+          }
+
+          const ratingValues = (driverRatingsResult.data ?? [])
+            .map((row) => Number(row.rating))
+            .filter((value) => Number.isFinite(value));
+
+          if (ratingValues.length > 0) {
+            averageRating =
+              Math.round(
+                (ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length) * 10
+              ) / 10;
+          }
+        }
+
+        driver = {
+          ...driver,
+          completed_trips_count: completedTripsCount ?? 0,
+          average_rating: averageRating,
+        };
+      }
     }
 
     const { data: events } = await auth.supabaseAdmin
@@ -265,11 +326,20 @@ export async function GET(req: Request) {
       .eq("trip_id", tripId)
       .order("created_at", { ascending: false });
 
-    const { data: rating } = await auth.supabaseAdmin
+    let ratingResult = await auth.supabaseAdmin
       .from("trip_ratings")
       .select("id,rating,comment")
       .eq("trip_id", tripId)
+      .eq("reviewer_role", "customer")
       .maybeSingle();
+
+    if (isMissingRevieweeRoleColumn(ratingResult.error)) {
+      ratingResult = await auth.supabaseAdmin
+        .from("trip_ratings")
+        .select("id,rating,comment")
+        .eq("trip_id", tripId)
+        .maybeSingle();
+    }
 
     const typedEvents = ((events ?? []) as TripEventRow[]);
     const completedEvent = typedEvents.find((event) => event.event_type === "trip_completed");
@@ -282,7 +352,7 @@ export async function GET(req: Request) {
       },
       driver,
       events: typedEvents,
-      rating: rating ?? null,
+      rating: ratingResult.data ?? null,
       tracking: buildTrackingState({ trip: typedTrip, driver }),
       customer: {
         id: auth.customer.id,

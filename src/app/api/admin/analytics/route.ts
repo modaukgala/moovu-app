@@ -37,9 +37,24 @@ export async function GET(req: Request) {
     const { supabaseAdmin } = auth;
 
     const now = new Date().toISOString();
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(dayStart);
+    weekStart.setDate(dayStart.getDate() - 6);
+    const monthStart = new Date(dayStart.getFullYear(), dayStart.getMonth(), 1);
     const nextHour = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const expiringSoon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
     const [
+      completedToday,
+      cancelledToday,
+      weeklyCompleted,
+      monthlyCompleted,
+      activeDrivers,
+      onlineDrivers,
+      pendingApplications,
+      activeSubscriptions,
+      expiringSubscriptions,
       scheduledDue,
       scheduledTotal,
       openIssues,
@@ -48,6 +63,48 @@ export async function GET(req: Request) {
       topDrivers,
       drivers,
     ] = await Promise.all([
+      supabaseAdmin
+        .from("trips")
+        .select("id,fare_amount,commission_amount", { count: "exact" })
+        .eq("status", "completed")
+        .gte("completed_at", dayStart.toISOString()),
+      supabaseAdmin
+        .from("trips")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "cancelled")
+        .gte("cancelled_at", dayStart.toISOString()),
+      supabaseAdmin
+        .from("trips")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "completed")
+        .gte("completed_at", weekStart.toISOString()),
+      supabaseAdmin
+        .from("trips")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "completed")
+        .gte("completed_at", monthStart.toISOString()),
+      supabaseAdmin
+        .from("drivers")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["active", "approved"]),
+      supabaseAdmin
+        .from("drivers")
+        .select("id", { count: "exact", head: true })
+        .eq("online", true),
+      supabaseAdmin
+        .from("driver_applications")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
+      supabaseAdmin
+        .from("drivers")
+        .select("id", { count: "exact", head: true })
+        .eq("subscription_status", "active"),
+      supabaseAdmin
+        .from("drivers")
+        .select("id", { count: "exact", head: true })
+        .eq("subscription_status", "active")
+        .gte("subscription_expires_at", now)
+        .lte("subscription_expires_at", expiringSoon),
       supabaseAdmin
         .from("trips")
         .select("id", { count: "exact", head: true })
@@ -91,9 +148,38 @@ export async function GET(req: Request) {
       driverNameById.set(d.id, fullName || d.phone || d.id);
     }
 
+    const completedTodayRows = (completedToday.data ?? []) as Array<{
+      fare_amount?: number | string | null;
+      commission_amount?: number | string | null;
+    }>;
+    const todayGrossRevenue = completedTodayRows.reduce(
+      (sum, row) => sum + Number(row.fare_amount ?? 0),
+      0
+    );
+    const todayCommissionOwed = completedTodayRows.reduce(
+      (sum, row) => sum + Number(row.commission_amount ?? 0),
+      0
+    );
+    const todayCompletedCount = completedToday.count ?? completedTodayRows.length;
+    const todayCancelledCount = cancelledToday.count ?? 0;
+    const todayTripTotal = todayCompletedCount + todayCancelledCount;
+
     return NextResponse.json({
       ok: true,
       analytics: {
+        today_completed_trips: todayCompletedCount,
+        today_cancelled_trips: todayCancelledCount,
+        today_gross_revenue: todayGrossRevenue,
+        today_commission_owed: todayCommissionOwed,
+        weekly_trips: weeklyCompleted.count ?? 0,
+        monthly_trips: monthlyCompleted.count ?? 0,
+        active_drivers: activeDrivers.count ?? 0,
+        online_drivers: onlineDrivers.count ?? 0,
+        pending_driver_applications: pendingApplications.error ? 0 : pendingApplications.count ?? 0,
+        active_subscriptions: activeSubscriptions.count ?? 0,
+        expiring_subscriptions: expiringSubscriptions.count ?? 0,
+        average_fare: todayCompletedCount > 0 ? todayGrossRevenue / todayCompletedCount : 0,
+        cancellation_rate: todayTripTotal > 0 ? (todayCancelledCount / todayTripTotal) * 100 : 0,
         scheduled_due_next_hour: scheduledDue.count ?? 0,
         scheduled_total_pending: scheduledTotal.count ?? 0,
         open_support_issues: openIssues.count ?? 0,

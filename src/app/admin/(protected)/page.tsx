@@ -10,6 +10,19 @@ import { supabaseClient } from "@/lib/supabase/client";
 type AnalyticsResponse = {
   ok: boolean;
   analytics?: {
+    today_completed_trips: number;
+    today_cancelled_trips: number;
+    today_gross_revenue: number;
+    today_commission_owed: number;
+    weekly_trips: number;
+    monthly_trips: number;
+    active_drivers: number;
+    online_drivers: number;
+    pending_driver_applications: number;
+    active_subscriptions: number;
+    expiring_subscriptions: number;
+    average_fare: number;
+    cancellation_rate: number;
     scheduled_due_next_hour: number;
     scheduled_total_pending: number;
     open_support_issues: number;
@@ -205,6 +218,36 @@ export default function AdminDashboardPage() {
             Refresh dashboard
           </button>
         </div>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        <MetricCard
+          label="Completed today"
+          value={String(analytics?.today_completed_trips ?? 0)}
+          helper={`Gross ${money(analytics?.today_gross_revenue)}`}
+          tone="success"
+        />
+        <MetricCard
+          label="Commission today"
+          value={money(analytics?.today_commission_owed)}
+          helper={`Average fare ${money(analytics?.average_fare)}`}
+          tone="primary"
+        />
+        <MetricCard
+          label="Cancelled today"
+          value={String(analytics?.today_cancelled_trips ?? 0)}
+          helper={`${Number(analytics?.cancellation_rate ?? 0).toFixed(1)}% cancellation rate`}
+          tone={(analytics?.today_cancelled_trips ?? 0) > 0 ? "warning" : "success"}
+        />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <MetricCard label="Weekly trips" value={String(analytics?.weekly_trips ?? 0)} helper="Completed" />
+        <MetricCard label="Monthly trips" value={String(analytics?.monthly_trips ?? 0)} helper="Completed" />
+        <MetricCard label="Active drivers" value={String(analytics?.active_drivers ?? 0)} helper="Approved/active" />
+        <MetricCard label="Online drivers" value={String(analytics?.online_drivers ?? 0)} helper="Live availability" />
+        <MetricCard label="Applications" value={String(analytics?.pending_driver_applications ?? 0)} helper="Pending review" />
+        <MetricCard label="Expiring subs" value={String(analytics?.expiring_subscriptions ?? 0)} helper={`${analytics?.active_subscriptions ?? 0} active`} />
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">

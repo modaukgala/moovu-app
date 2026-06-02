@@ -94,7 +94,7 @@ export async function getTripChatAccess(
   const accessToken = readBearerToken(req);
 
   if (!accessToken) {
-    return { ok: false, status: 401, error: "Missing access token." };
+    return { ok: false, status: 401, error: "Please log in again to use chat." };
   }
 
   const supabaseUser = createUserSupabase(accessToken);
@@ -104,7 +104,7 @@ export async function getTripChatAccess(
   } = await supabaseUser.auth.getUser();
 
   if (userError || !user) {
-    return { ok: false, status: 401, error: "Unauthorized." };
+    return { ok: false, status: 401, error: "Please log in again to use chat." };
   }
 
   const supabaseAdmin = createAdminSupabase();
@@ -116,7 +116,11 @@ export async function getTripChatAccess(
     .maybeSingle();
 
   if (tripError) {
-    return { ok: false, status: 500, error: tripError.message };
+    console.error("[trip-chat] trip lookup failed", {
+      tripId,
+      reason: tripError.message,
+    });
+    return { ok: false, status: 500, error: "Something went wrong while loading this trip chat. Please try again." };
   }
 
   if (!trip) {

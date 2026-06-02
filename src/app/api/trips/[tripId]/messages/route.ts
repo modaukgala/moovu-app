@@ -56,7 +56,15 @@ export async function GET(req: Request) {
       .limit(100);
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      console.error("[trip-chat] message load failed", {
+        tripId,
+        role: auth.access.role,
+        reason: error.message,
+      });
+      return NextResponse.json(
+        { ok: false, error: "Unable to load messages. Try again." },
+        { status: 500 },
+      );
     }
 
     const messages = (data ?? []) as TripChatMessage[];
@@ -75,8 +83,11 @@ export async function GET(req: Request) {
         : "Chat is read-only after a trip is completed or cancelled.",
     });
   } catch (error: unknown) {
+    console.error("[trip-chat] load route failed", {
+      error: error instanceof Error ? error.message : "Unknown chat load error",
+    });
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Failed to load messages." },
+      { ok: false, error: "Unable to load messages. Try again." },
       { status: 500 },
     );
   }
@@ -125,8 +136,13 @@ export async function POST(req: Request) {
       .single();
 
     if (error || !data) {
+      console.error("[trip-chat] message insert failed", {
+        tripId,
+        role: auth.access.role,
+        reason: error?.message || "No inserted message returned.",
+      });
       return NextResponse.json(
-        { ok: false, error: error?.message || "Failed to send message." },
+        { ok: false, error: "Message could not be sent. Please try again." },
         { status: 500 },
       );
     }
@@ -171,8 +187,11 @@ export async function POST(req: Request) {
       canSend: auth.access.canSend,
     });
   } catch (error: unknown) {
+    console.error("[trip-chat] send route failed", {
+      error: error instanceof Error ? error.message : "Unknown chat send error",
+    });
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Failed to send message." },
+      { ok: false, error: "Message could not be sent. Please try again." },
       { status: 500 },
     );
   }

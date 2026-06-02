@@ -14,6 +14,7 @@ import {
   makeRouteRenderer,
   stopMarkerIcon,
 } from "@/lib/maps/liveMapMarkers";
+import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type RideTrip = {
@@ -78,6 +79,9 @@ type Driver = {
   vehicle_year?: string | null;
   vehicle_color?: string | null;
   vehicle_registration?: string | null;
+  verification_status?: string | null;
+  completed_trips_count?: number | null;
+  average_rating?: number | null;
 };
 
 type Rating = {
@@ -155,6 +159,19 @@ function displayDistance(value: number | null | undefined) {
 
 function displayDuration(value: number | null | undefined) {
   return value == null ? "--" : `${Math.round(Number(value))} min`;
+}
+
+function driverRatingLabel(driver: Driver | null) {
+  const rating = Number(driver?.average_rating ?? 0);
+  return rating > 0 ? `${rating.toFixed(1)} / 5` : "New Driver";
+}
+
+function friendlyTripError(value: unknown) {
+  const message = typeof value === "string" ? value : "";
+  if (!message || /supabase|postgres|schema|column|rls|jwt|service_role|stack depth/i.test(message)) {
+    return "Something went wrong while loading your trip. Please try again.";
+  }
+  return message;
 }
 
 function selectedPlaceLabel(description: string | undefined, name: string | undefined) {
@@ -262,7 +279,7 @@ export default function RideTrackingPage() {
     const json = await res.json().catch(() => null);
 
     if (!json?.ok) {
-      setMsg(json?.error || "Failed to load trip.");
+      setMsg(friendlyTripError(json?.error));
       setLoading(false);
       return;
     }
@@ -623,7 +640,7 @@ export default function RideTrackingPage() {
       const json = await res.json().catch(() => null);
 
       if (!json?.ok || typeof json.lat !== "number" || typeof json.lng !== "number") {
-        setAddStopError(json?.error || "Could not load that stop. Please choose another place.");
+        setAddStopError(friendlyTripError(json?.error || "Could not load that stop. Please choose another place."));
         return;
       }
 
@@ -672,7 +689,7 @@ export default function RideTrackingPage() {
       const json = await res.json().catch(() => null);
 
       if (!res.ok || !json?.ok) {
-        setAddStopError(json?.error || "Could not add this stop. Please try again.");
+        setAddStopError(friendlyTripError(json?.error || "Could not add this stop. Please try again."));
         return;
       }
 
@@ -725,12 +742,21 @@ export default function RideTrackingPage() {
     return ["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(trip.status);
   }, [driver, trip]);
 
+  const searchingForDriver = useMemo(() => {
+    if (!trip) return false;
+    return !trip.driver_id && ["requested", "offered", "scheduled"].includes(trip.status);
+  }, [trip]);
+
   const carText = useMemo(() => {
     if (!driver) return "--";
     return [driver.vehicle_make, driver.vehicle_model, driver.vehicle_color]
       .filter(Boolean)
       .join(" - ") || "--";
   }, [driver]);
+  const driverLevel = useMemo(
+    () => getDriverLevel(driver?.completed_trips_count),
+    [driver?.completed_trips_count],
+  );
 
   const driverName = useMemo(() => {
     if (!driver) return "Searching...";
@@ -1112,11 +1138,54 @@ export default function RideTrackingPage() {
               </div>
 
               {!canShowDriverDetails ? (
-                <div className="mt-4 rounded-2xl bg-[#eaf3ff] p-4 text-sm font-semibold text-[#244f9e]">
-                  Driver details, vehicle, phone, and chat unlock after a driver accepts your trip.
+                <div className="mt-4 rounded-[24px] border border-blue-100 bg-[#eaf3ff] p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-xl shadow-sm">
+                      {searchingForDriver ? "..." : "!"}
+                    </div>
+                    <div>
+                      <div className="text-sm font-black text-[#244f9e]">
+                        {searchingForDriver ? "Looking for nearby MOOVU drivers..." : "Nearby drivers are currently unavailable."}
+                      </div>
+                      <p className="mt-2 text-sm font-semibold leading-6 text-[#244f9e]">
+                        {searchingForDriver
+                          ? "Your request is being sent to available drivers near you."
+                          : "Please try again shortly or keep your request open while we continue checking."}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="moovu-btn moovu-btn-secondary mt-4 w-full"
+                    onClick={() => void loadTrip()}
+                  >
+                    Retry status check
+                  </button>
+                  <div className="mt-3 text-xs font-semibold text-blue-700">
+                    Driver details, vehicle, phone, and chat unlock only after a driver accepts your trip.
+                  </div>
                 </div>
               ) : (
                 <div className="mt-4 grid gap-3">
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-black text-emerald-800">
+                        Verified MOOVU Driver
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-emerald-700 shadow-sm">
+                        {driver?.verification_status === "verified" || driver?.verification_status === "approved"
+                          ? "Verified"
+                          : "MOOVU checked"}
+                      </span>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-black ${driverLevel.className}`}>
+                        {driverLevel.label} driver
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-emerald-800">
+                      Always confirm the vehicle and driver before starting your trip.
+                    </p>
+                  </div>
+
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <div className="text-xs text-slate-500">Phone</div>
                     <div className="mt-1 text-sm font-medium text-slate-900">{displayValue(driver?.phone)}</div>
@@ -1131,6 +1200,22 @@ export default function RideTrackingPage() {
                     <div className="text-xs text-slate-500">Registration</div>
                     <div className="mt-1 text-sm font-medium text-slate-900">
                       {displayValue(driver?.vehicle_registration)}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <div className="text-xs text-slate-500">Completed trips</div>
+                      <div className="mt-1 text-sm font-black text-slate-900">
+                        {Number(driver?.completed_trips_count ?? 0)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <div className="text-xs text-slate-500">Driver rating</div>
+                      <div className="mt-1 text-sm font-black text-slate-900">
+                        {driverRatingLabel(driver)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1160,6 +1245,28 @@ export default function RideTrackingPage() {
                 </a>
               )}
 
+            </section>
+
+            <section className="moovu-card p-5">
+              <div className="text-sm font-medium text-slate-500">Safety</div>
+              <div className="mt-3 rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
+                MOOVU connects you with verified local drivers. Check driver details before entering the vehicle.
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <Link
+                  href={`/ride/${trip.id}/share`}
+                  className="moovu-btn moovu-btn-secondary w-full"
+                >
+                  Share trip
+                </Link>
+                <button
+                  type="button"
+                  className="moovu-btn moovu-btn-secondary w-full"
+                  onClick={() => setMsg("SOS support is coming soon. For now, contact local emergency services if you are in immediate danger.")}
+                >
+                  SOS soon
+                </button>
+              </div>
             </section>
 
             <section className="moovu-card p-5">
@@ -1452,7 +1559,7 @@ export default function RideTrackingPage() {
               </div>
             )}
 
-            {rating && (
+            {rating ? (
               <div className="mt-5 rounded-2xl bg-slate-100 p-4 text-slate-900">
                 <div className="text-sm text-slate-500">Your rating</div>
                 <div className="mt-1 text-2xl font-semibold">{rating.rating} / 5</div>
@@ -1460,7 +1567,11 @@ export default function RideTrackingPage() {
                   <div className="mt-2 text-sm text-slate-700">{rating.comment}</div>
                 )}
               </div>
-            )}
+            ) : trip.status === "completed" ? (
+              <div className="mt-5 rounded-2xl bg-slate-100 p-4 text-sm font-semibold text-slate-700">
+                Rating feature coming soon. You can still use the Rate driver button if ratings are enabled for this trip.
+              </div>
+            ) : null}
           </section>
         </div>
       </div>

@@ -44,6 +44,10 @@ export default function DriverHistoryPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [trips, setTrips] = useState<DriverTrip[]>([]);
   const [filter, setFilter] = useState("all");
+  const [ratingTripId, setRatingTripId] = useState<string | null>(null);
+  const [rating, setRating] = useState(5);
+  const [ratingComment, setRatingComment] = useState("");
+  const [ratingBusy, setRatingBusy] = useState(false);
 
   async function loadTrips() {
     setLoading(true);
@@ -107,6 +111,47 @@ export default function DriverHistoryPage() {
     0,
   );
 
+  async function submitCustomerRating() {
+    if (!ratingTripId) return;
+    setRatingBusy(true);
+    setMsg(null);
+
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    if (!session) {
+      window.location.href = "/driver/login";
+      return;
+    }
+
+    const res = await fetch("/api/driver/rate-customer", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        tripId: ratingTripId,
+        rating,
+        comment: ratingComment,
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+    setRatingBusy(false);
+
+    if (!res.ok || !json?.ok) {
+      setMsg(json?.error || "Could not save this rating. Please try again.");
+      return;
+    }
+
+    setMsg("Customer rating saved.");
+    setRatingTripId(null);
+    setRating(5);
+    setRatingComment("");
+  }
+
   if (loading) {
     return (
       <LoadingState
@@ -143,6 +188,74 @@ export default function DriverHistoryPage() {
         </div>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
+        {ratingTripId && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 px-4"
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setRatingTripId(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-[30px] border border-[var(--moovu-border)] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.18)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="moovu-section-title">Rate customer</div>
+                  <h2 className="mt-2 text-2xl font-black text-slate-950">Trip feedback</h2>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                    Rate this completed trip experience. This helps MOOVU monitor rider reliability.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-medium text-slate-700"
+                  onClick={() => setRatingTripId(null)}
+                >
+                  X
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Rating
+                  </span>
+                  <select
+                    className="moovu-input bg-white"
+                    value={rating}
+                    onChange={(event) => setRating(Number(event.target.value))}
+                  >
+                    <option value={5}>5 - Excellent</option>
+                    <option value={4}>4 - Good</option>
+                    <option value={3}>3 - Average</option>
+                    <option value={2}>2 - Poor</option>
+                    <option value={1}>1 - Very poor</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Comment
+                  </span>
+                  <textarea
+                    className="moovu-input min-h-[110px] resize-none"
+                    placeholder="Optional note"
+                    value={ratingComment}
+                    onChange={(event) => setRatingComment(event.target.value)}
+                  />
+                </label>
+                <button
+                  className="moovu-btn moovu-btn-primary w-full justify-center"
+                  disabled={ratingBusy}
+                  onClick={() => void submitCustomerRating()}
+                >
+                  {ratingBusy ? "Saving..." : "Submit rating"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <MetricCard label="Total trips" value={String(trips.length)} helper="All recorded trips" />
@@ -230,6 +343,22 @@ export default function DriverHistoryPage() {
                     <div className="mt-1 font-bold text-slate-950">{trip.payment_method ?? "--"}</div>
                   </div>
                 </div>
+
+                {trip.status === "completed" && (
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      className="moovu-btn moovu-btn-secondary"
+                      onClick={() => {
+                        setRatingTripId(trip.id);
+                        setRating(5);
+                        setRatingComment("");
+                      }}
+                    >
+                      Rate customer
+                    </button>
+                  </div>
+                )}
               </article>
             ))
           )}

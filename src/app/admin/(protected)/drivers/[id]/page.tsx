@@ -28,6 +28,12 @@ type DriverProfile = {
   deleted_at?: string | null;
   delete_mode?: string | null;
   deleted_reason?: string | null;
+  driver_profile?: {
+    license_expiry?: string | null;
+    pdp_expiry?: string | null;
+    vehicle_license_expiry?: string | null;
+    insurance_expiry?: string | null;
+  } | null;
 };
 
 type SubscriptionPayment = {
@@ -65,6 +71,20 @@ const BANK_DETAILS = {
 
 function money(v: number | null | undefined) {
   return `R${Number(v ?? 0).toFixed(2)}`;
+}
+
+function documentStatus(value: string | null | undefined) {
+  if (!value) return { label: "Not captured", className: "bg-slate-100 text-slate-700" };
+  const ms = new Date(value).getTime();
+  if (!Number.isFinite(ms)) return { label: "Check date", className: "bg-amber-50 text-amber-800" };
+  const daysLeft = Math.ceil((ms - Date.now()) / (24 * 60 * 60 * 1000));
+  if (daysLeft < 0) return { label: "Expired", className: "bg-red-50 text-red-700" };
+  if (daysLeft <= 30) return { label: "Expiring soon", className: "bg-amber-50 text-amber-800" };
+  return { label: "Valid", className: "bg-emerald-50 text-emerald-700" };
+}
+
+function displayDate(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleDateString() : "--";
 }
 
 export default function AdminDriverProfilePage() {
@@ -253,6 +273,32 @@ export default function AdminDriverProfilePage() {
                 ? money(profile.subscription_last_payment_amount)
                 : "—"}
             </div>
+          </div>
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-2xl font-semibold">Document expiry tracking</h2>
+          <p className="text-sm text-gray-700">
+            Warnings are visible only. MOOVU does not automatically block drivers from these dates yet.
+          </p>
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              ["Driver license", profile.driver_profile?.license_expiry],
+              ["PDP", profile.driver_profile?.pdp_expiry],
+              ["Vehicle license disc", profile.driver_profile?.vehicle_license_expiry],
+              ["Insurance", profile.driver_profile?.insurance_expiry],
+            ].map(([label, value]) => {
+              const status = documentStatus(value);
+              return (
+                <div key={label} className="rounded-2xl border border-[var(--moovu-border)] bg-white p-4">
+                  <div className="text-sm text-gray-600">{label}</div>
+                  <div className="mt-2 text-lg font-semibold">{displayDate(value)}</div>
+                  <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-black ${status.className}`}>
+                    {status.label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
 

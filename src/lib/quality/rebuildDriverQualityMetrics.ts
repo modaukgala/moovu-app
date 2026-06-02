@@ -10,11 +10,26 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function isMissingRevieweeRoleColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && message.includes("reviewee_role");
+}
+
 export async function rebuildDriverQualityMetrics(driverId: string) {
-  const { data: ratings } = await supabaseAdmin
+  let ratingsResult = await supabaseAdmin
     .from("trip_ratings")
     .select("rating")
-    .eq("driver_id", driverId);
+    .eq("driver_id", driverId)
+    .eq("reviewee_role", "driver");
+
+  if (isMissingRevieweeRoleColumn(ratingsResult.error)) {
+    ratingsResult = await supabaseAdmin
+      .from("trip_ratings")
+      .select("rating")
+      .eq("driver_id", driverId);
+  }
+
+  const ratings = ratingsResult.data;
 
   const { data: issues } = await supabaseAdmin
     .from("trip_issues")

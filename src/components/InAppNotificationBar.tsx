@@ -31,6 +31,17 @@ function toneClass(tone: InAppNotificationDetail["tone"]) {
   }
 }
 
+function normalizeNotice(value: InAppNotificationDetail | null | undefined) {
+  if (!value || typeof value.title !== "string" || !value.title.trim()) return null;
+
+  return {
+    ...value,
+    title: value.title.trim(),
+    body: typeof value.body === "string" ? value.body : undefined,
+    url: typeof value.url === "string" ? value.url : undefined,
+  };
+}
+
 function vibrate() {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
   navigator.vibrate([0, 160, 80, 220]);
@@ -93,6 +104,9 @@ export default function InAppNotificationBar() {
 
   useEffect(() => {
     function show(detail: InAppNotificationDetail) {
+      const safeDetail = normalizeNotice(detail);
+      if (!safeDetail) return;
+
       if (hideTimerRef.current) {
         window.clearTimeout(hideTimerRef.current);
       }
@@ -100,10 +114,10 @@ export default function InAppNotificationBar() {
       setNotice({
         tone: "info",
         loud: true,
-        ...detail,
+        ...safeDetail,
       });
 
-      if (detail.loud !== false) {
+      if (safeDetail.loud !== false) {
         vibrate();
         playAttentionSound();
       }
@@ -115,7 +129,6 @@ export default function InAppNotificationBar() {
 
     function onEvent(event: Event) {
       const custom = event as CustomEvent<InAppNotificationDetail>;
-      if (!custom.detail?.title) return;
       show(custom.detail);
     }
 
@@ -148,21 +161,24 @@ export default function InAppNotificationBar() {
         if (method !== "GET" && url.origin === window.location.origin && url.pathname.startsWith("/api/")) {
           const json = await response.clone().json().catch(() => null) as {
             ok?: boolean;
-            message?: string;
-            error?: string;
+            message?: unknown;
+            error?: unknown;
           } | null;
 
-          if (!response.ok && json?.error) {
+          const errorMessage = typeof json?.error === "string" ? json.error : "";
+          const successMessage = typeof json?.message === "string" ? json.message : "";
+
+          if (!response.ok && errorMessage) {
             show({
               title: "Action needs attention",
-              body: json.error,
+              body: errorMessage,
               tone: "danger",
               loud: false,
             });
-          } else if (json?.message) {
+          } else if (successMessage) {
             show({
-              title: json.message,
-              tone: json.ok === false ? "warning" : "success",
+              title: successMessage,
+              tone: json?.ok === false ? "warning" : "success",
               loud: false,
             });
           }

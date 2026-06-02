@@ -259,15 +259,23 @@ async function replyToChat(row: NativeActionRow, replyText: string) {
   }
 
   const preview = chatPreview(normalized.body);
-  if (row.role === "customer") {
-    await notifyDriverForTrip(row.trip_id, "New MOOVU message", preview, `/driver?chat=1&tripId=${row.trip_id}`, {
-      nativeActionType: "chat_reply",
+  try {
+    if (row.role === "customer") {
+      await notifyDriverForTrip(row.trip_id, "New MOOVU message", preview, `/driver?chat=1&tripId=${row.trip_id}`, {
+        nativeActionType: "chat_reply",
+        tripId: row.trip_id,
+      });
+    } else {
+      await notifyCustomerForTrip(row.trip_id, "New MOOVU message", preview, `/ride/${row.trip_id}?chat=1`, {
+        nativeActionType: "chat_reply",
+        tripId: row.trip_id,
+      });
+    }
+  } catch (error: unknown) {
+    console.error("[native-actions] chat reply notification failed", {
       tripId: row.trip_id,
-    });
-  } else {
-    await notifyCustomerForTrip(row.trip_id, "New MOOVU message", preview, `/ride/${row.trip_id}?chat=1`, {
-      nativeActionType: "chat_reply",
-      tripId: row.trip_id,
+      role: row.role,
+      reason: error instanceof Error ? error.message : "Unknown push error",
     });
   }
 

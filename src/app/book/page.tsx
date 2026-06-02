@@ -893,6 +893,10 @@ export default function RiderBookingPage() {
     setBusy(false);
   }
 
+  function showFavoritePlaceholder(label: string) {
+    setMsg(`${label} favorite places coming soon.`);
+  }
+
   // ── Map ──────────────────────────────────────────────────────────
   function clearMapVisuals() {
     directionsRendererRef.current?.setMap(null); directionsRendererRef.current = null;
@@ -1328,6 +1332,31 @@ export default function RiderBookingPage() {
             <div className="moovu-account-pill">
               <span className="moovu-account-dot" />
               <span>{customer?.first_name || "Rider"}</span>
+            </div>
+          </div>
+
+          <div className="mx-4 mb-3 rounded-[22px] border border-blue-100 bg-blue-50/80 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                  Favorite places
+                </div>
+                <p className="mt-1 text-xs font-semibold text-blue-800">
+                  MOOVU connects you with verified local drivers.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {["Home", "Work", "Add favorite"].map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  className="min-h-11 rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm active:scale-[0.98]"
+                  onClick={() => showFavoritePlaceholder(label)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 

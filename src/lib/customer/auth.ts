@@ -57,13 +57,17 @@ export function formatVehicleLabel(driver: {
 
 export function buildTripShareMessage(params: {
   customerName: string;
+  pickup?: string | null;
   destination: string;
   driverName: string;
   driverPhone?: string | null;
   vehicleLabel: string;
+  tripStatus?: string | null;
   shareUrl: string;
 }) {
   const driverPhonePart = params.driverPhone ? ` Driver phone: ${params.driverPhone}.` : "";
+  const pickupPart = params.pickup ? ` Pickup: ${params.pickup}.` : "";
+  const statusPart = params.tripStatus ? ` Status: ${params.tripStatus}.` : "";
 
-  return `${params.customerName} is sharing their trip with you and they are travelling to ${params.destination} with ${params.driverName} in ${params.vehicleLabel}.${driverPhonePart} Track the trip here: ${params.shareUrl}`;
+  return `${params.customerName} is sharing their MOOVU trip.${pickupPart} Destination: ${params.destination}. Driver: ${params.driverName}. Vehicle: ${params.vehicleLabel}.${statusPart}${driverPhonePart} Track the trip here: ${params.shareUrl}`;
 }

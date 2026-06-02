@@ -5,6 +5,60 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+const DRIVER_PROFILE_SELECT = `
+  driver_id,
+  first_name,
+  last_name,
+  phone,
+  alt_phone,
+  id_number,
+  home_address,
+  area_name,
+  emergency_contact_name,
+  emergency_contact_phone,
+  license_number,
+  license_code,
+  license_expiry,
+  pdp_number,
+  pdp_expiry,
+  vehicle_license_expiry,
+  insurance_expiry,
+  profile_completed,
+  submitted_at,
+  updated_at,
+  deleted_at
+`;
+
+const LEGACY_DRIVER_PROFILE_SELECT = `
+  driver_id,
+  first_name,
+  last_name,
+  phone,
+  alt_phone,
+  id_number,
+  home_address,
+  area_name,
+  emergency_contact_name,
+  emergency_contact_phone,
+  license_number,
+  license_code,
+  license_expiry,
+  pdp_number,
+  pdp_expiry,
+  profile_completed,
+  submitted_at,
+  updated_at,
+  deleted_at
+`;
+
+function isMissingDocumentExpiryColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && (
+    message.includes("vehicle_license_expiry") ||
+    message.includes("insurance_expiry")
+  );
+}
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireAdminUser(req);
@@ -19,11 +73,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Missing driverId" }, { status: 400 });
     }
 
-    const [{ data: driver, error: driverErr }, { data: profile, error: profileErr }, { data: subscriptionPayments, error: subscriptionErr }, { data: subscriptionRequests, error: requestsErr }] =
-      await Promise.all([
-        supabaseAdmin
-          .from("drivers")
-          .select(`
+    const [
+      { data: driver, error: driverErr },
+      profileResult,
+      { data: subscriptionPayments, error: subscriptionErr },
+      { data: subscriptionRequests, error: requestsErr },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("drivers")
+        .select(`
             id,
             first_name,
             last_name,
@@ -55,36 +113,16 @@ export async function GET(req: NextRequest) {
             deleted_reason,
             last_seen
           `)
-          .eq("id", driverId)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("driver_profiles")
-          .select(`
-            driver_id,
-            first_name,
-            last_name,
-            phone,
-            alt_phone,
-            id_number,
-            home_address,
-            area_name,
-            emergency_contact_name,
-            emergency_contact_phone,
-            license_number,
-            license_code,
-            license_expiry,
-            pdp_number,
-            pdp_expiry,
-            profile_completed,
-            submitted_at,
-            updated_at,
-            deleted_at
-          `)
-          .eq("driver_id", driverId)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("driver_subscription_payments")
-          .select(`
+        .eq("id", driverId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("driver_profiles")
+        .select(DRIVER_PROFILE_SELECT)
+        .eq("driver_id", driverId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("driver_subscription_payments")
+        .select(`
             id,
             amount_paid,
             payment_method,
@@ -92,12 +130,12 @@ export async function GET(req: NextRequest) {
             note,
             created_at
           `)
-          .eq("driver_id", driverId)
-          .order("created_at", { ascending: false })
-          .limit(20),
-        supabaseAdmin
-          .from("driver_subscription_requests")
-          .select(`
+        .eq("driver_id", driverId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("driver_subscription_requests")
+        .select(`
             id,
             plan_type,
             amount_expected,
@@ -107,10 +145,23 @@ export async function GET(req: NextRequest) {
             created_at,
             confirmed_at
           `)
-          .eq("driver_id", driverId)
-          .order("created_at", { ascending: false })
-          .limit(20),
-      ]);
+        .eq("driver_id", driverId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+    ]);
+
+    let profile: unknown = profileResult.data;
+    let profileErr = profileResult.error;
+
+    if (isMissingDocumentExpiryColumn(profileErr)) {
+      const legacyProfileResult = await supabaseAdmin
+        .from("driver_profiles")
+        .select(LEGACY_DRIVER_PROFILE_SELECT)
+        .eq("driver_id", driverId)
+        .maybeSingle();
+      profile = legacyProfileResult.data;
+      profileErr = legacyProfileResult.error;
+    }
 
     if (driverErr) {
       return NextResponse.json({ ok: false, error: driverErr.message }, { status: 500 });

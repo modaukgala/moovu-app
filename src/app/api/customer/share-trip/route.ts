@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         id,
         customer_id,
         status,
-        start_otp_verified,
+        pickup_address,
         dropoff_address,
         driver_id
       `)
@@ -56,19 +56,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Trip not found." }, { status: 404 });
     }
 
-    if (!trip.start_otp_verified || trip.status !== "ongoing") {
+    if (!trip.driver_id || !["assigned", "arrived", "ongoing", "completed"].includes(String(trip.status))) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Trip can only be shared after it has started and the OTP has been verified.",
+          error: "Trip can only be shared after a driver has accepted it.",
         },
-        { status: 400 }
-      );
-    }
-
-    if (!trip.driver_id) {
-      return NextResponse.json(
-        { ok: false, error: "Driver details are not available yet." },
         { status: 400 }
       );
     }
@@ -105,10 +98,12 @@ export async function POST(req: Request) {
 
     const shareMessage = buildTripShareMessage({
       customerName,
+      pickup: trip.pickup_address || "pickup",
       destination: trip.dropoff_address || "their destination",
       driverName,
       driverPhone: driver.phone,
       vehicleLabel,
+      tripStatus: String(trip.status ?? "accepted"),
       shareUrl,
     });
 

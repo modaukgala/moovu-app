@@ -17,6 +17,7 @@ import {
 } from "@/lib/maps/liveMapMarkers";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
+import { getDriverLevel } from "@/lib/trust/driverLevels";
 
 type Offer = {
   id: string;
@@ -93,6 +94,22 @@ type Driver = {
 type GpsNotice = {
   message: string;
   tone: "success" | "warning" | "danger" | "info";
+};
+
+type DriverEarningsTrip = {
+  driver_net_earnings?: number | string | null;
+  fare_amount?: number | string | null;
+  commission_amount?: number | string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+};
+
+type DriverEarningsSnapshot = {
+  todayEarnings: number;
+  todayTrips: number;
+  weekEarnings: number;
+  amountOwed: number;
+  completedTrips: number;
 };
 
 declare global {
@@ -193,6 +210,54 @@ function parseTripStops(value: unknown): TripStop[] {
     .filter((stop) => stop.address.trim() && Number.isFinite(stop.lat) && Number.isFinite(stop.lng));
 }
 
+function money(value: number | null | undefined) {
+  return `R${Number(value ?? 0).toFixed(2)}`;
+}
+
+function num(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function subscriptionTone(driver: Driver | null) {
+  if (!driver) {
+    return {
+      label: "Inactive",
+      message: "Your subscription must be active to receive trips.",
+      className: "border-red-100 bg-red-50 text-red-700",
+    };
+  }
+
+  const status = String(driver.subscription_status ?? "").toLowerCase();
+  const expiryMs = driver.subscription_expires_at
+    ? new Date(driver.subscription_expires_at).getTime()
+    : NaN;
+  const daysLeft = Number.isFinite(expiryMs)
+    ? Math.ceil((expiryMs - Date.now()) / (24 * 60 * 60 * 1000))
+    : null;
+
+  if (status === "active" || status === "grace") {
+    if (daysLeft != null && daysLeft <= 3) {
+      return {
+        label: "Expiring soon",
+        message: "Your subscription is expiring soon. Renew to keep receiving trips.",
+        className: "border-amber-200 bg-amber-50 text-amber-800",
+      };
+    }
+    return {
+      label: "Active",
+      message: "Only active subscribed drivers receive trips.",
+      className: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    };
+  }
+
+  return {
+    label: "Inactive",
+    message: "Your subscription must be active to receive trips.",
+    className: "border-red-100 bg-red-50 text-red-700",
+  };
+}
+
 export default function DriverHomePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -200,6 +265,13 @@ export default function DriverHomePage() {
   const [driver, setDriver] = useState<Driver | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
   const [currentTrip, setCurrentTrip] = useState<CurrentTrip | null>(null);
+  const [earningsSnapshot, setEarningsSnapshot] = useState<DriverEarningsSnapshot>({
+    todayEarnings: 0,
+    todayTrips: 0,
+    weekEarnings: 0,
+    amountOwed: 0,
+    completedTrips: 0,
+  });
 
   const [locationName, setLocationName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -216,6 +288,8 @@ export default function DriverHomePage() {
   const [showEndOtp, setShowEndOtp] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<"pickup" | "dropoff" | null>(null);
 
+  const subscriptionReminder = subscriptionTone(driver);
+  const driverLevel = getDriverLevel(earningsSnapshot.completedTrips);
   const otpEntryOpen = showStartOtp || showEndOtp;
   const canOpenTripChat =
     !!currentTrip?.driver_id &&
@@ -333,6 +407,61 @@ export default function DriverHomePage() {
     if (!json?.ok) return;
 
     setCurrentTrip(json.trip ?? null);
+  }
+
+  async function loadEarningsSnapshot() {
+    const token = await getAccessToken();
+    if (!token) return;
+
+    const json = await fetch("/api/driver/earnings", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    })
+      .then((res) => res.json())
+      .catch(() => null);
+    if (!json?.ok) return;
+
+    const earnings = (json.earnings ?? {}) as {
+      wallet?: { balance_due?: number | string | null } | null;
+      recent_completed_trips?: DriverEarningsTrip[] | null;
+    };
+    const trips = earnings.recent_completed_trips ?? [];
+    const now = new Date();
+    const todayKey = now.toISOString().slice(0, 10);
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - 6);
+    weekStart.setHours(0, 0, 0, 0);
+
+    let todayTrips = 0;
+    let todayEarnings = 0;
+    let weekEarnings = 0;
+
+    for (const trip of trips) {
+      const completedAt = trip.completed_at ?? trip.created_at;
+      const completedMs = completedAt ? new Date(completedAt).getTime() : NaN;
+      const earned =
+        trip.driver_net_earnings != null
+          ? num(trip.driver_net_earnings)
+          : Math.max(0, num(trip.fare_amount) - num(trip.commission_amount));
+
+      if (completedAt?.slice(0, 10) === todayKey) {
+        todayTrips += 1;
+        todayEarnings += earned;
+      }
+
+      if (Number.isFinite(completedMs) && completedMs >= weekStart.getTime()) {
+        weekEarnings += earned;
+      }
+    }
+
+    setEarningsSnapshot({
+      todayEarnings,
+      todayTrips,
+      weekEarnings,
+      amountOwed: num(earnings.wallet?.balance_due),
+      completedTrips: trips.length,
+    });
   }
 
   async function setOnlineServer(wantOnline: boolean) {
@@ -540,6 +669,7 @@ export default function DriverHomePage() {
     await loadCurrentOffer();
     await loadCurrentTrip();
     await loadDriverProfile(true);
+    await loadEarningsSnapshot();
   }
 
   async function tripAction(
@@ -589,6 +719,7 @@ export default function DriverHomePage() {
     });
     await loadCurrentTrip();
     await loadDriverProfile(true);
+    await loadEarningsSnapshot();
   }
 
   async function arriveTrip(tripId: string) {
@@ -769,6 +900,7 @@ export default function DriverHomePage() {
       await loadDriverProfile(false);
       await loadCurrentOffer();
       await loadCurrentTrip();
+      await loadEarningsSnapshot();
     })();
     // Initial dashboard load only; polling effects below refresh offer/trip state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1182,6 +1314,61 @@ export default function DriverHomePage() {
                     <span className={`moovu-driver-rhythm-step ${offer || currentTrip ? "is-active" : ""}`} />
                     <span className={`moovu-driver-rhythm-step ${currentTrip?.status === "arrived" || currentTrip?.status === "ongoing" ? "is-active" : ""}`} />
                     <span className={`moovu-driver-rhythm-step ${currentTrip?.status === "ongoing" ? "is-active" : ""}`} />
+                  </div>
+                </div>
+
+                <div className={`mt-5 rounded-2xl border p-4 ${subscriptionReminder.className}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.14em] opacity-80">
+                        Subscription
+                      </div>
+                      <div className="mt-1 text-lg font-black">{subscriptionReminder.label}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-2xl bg-white/85 px-4 py-2 text-xs font-black text-slate-900 shadow-sm"
+                      onClick={() => router.push("/driver/subscriptions")}
+                    >
+                      Renew
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold leading-6">{subscriptionReminder.message}</p>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Today earnings</div>
+                    <div className="mt-1 text-lg font-black text-slate-950">
+                      {money(earningsSnapshot.todayEarnings)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Today trips</div>
+                    <div className="mt-1 text-lg font-black text-slate-950">
+                      {earningsSnapshot.todayTrips}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">This week</div>
+                    <div className="mt-1 text-lg font-black text-slate-950">
+                      {money(earningsSnapshot.weekEarnings)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs text-slate-500">Owed to MOOVU</div>
+                    <div className="mt-1 text-lg font-black text-slate-950">
+                      {money(earningsSnapshot.amountOwed)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span>Stay online to receive nearby requests. Only active subscribed drivers receive trips.</span>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-black ${driverLevel.className}`}>
+                      {driverLevel.label} driver
+                    </span>
                   </div>
                 </div>
 
