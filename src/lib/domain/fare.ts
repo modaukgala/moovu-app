@@ -54,6 +54,22 @@ export type StopWaitingFeeBreakdown = {
   stopWaitingFee: number;
 };
 
+export type FinalFareInput = {
+  originalFare?: number | null;
+  addStopIncrease?: number | null;
+  stopWaitingFee?: number | null;
+  fallbackFare?: number | null;
+};
+
+export type FinalFareBreakdown = {
+  estimatedFare: number;
+  originalFare: number;
+  addStopIncrease: number;
+  stopWaitingFee: number;
+  finalFare: number;
+  adjustmentAmount: number;
+};
+
 export type RideOption = {
   id: RideOptionId;
   name: string;
@@ -389,5 +405,23 @@ export function calculateStopWaitingFee(input: StopWaitingFeeInput): StopWaiting
     billableMinutes,
     waitingFeePerMinute: rules.waitingFeePerMinute,
     stopWaitingFee: roundMoney(billableMinutes * rules.waitingFeePerMinute),
+  };
+}
+
+export function calculateFinalFare(input: FinalFareInput): FinalFareBreakdown {
+  const fallbackFare = safePositiveNumber(input.fallbackFare);
+  const originalFare = safePositiveNumber(input.originalFare) || fallbackFare;
+  const addStopIncrease = safePositiveNumber(input.addStopIncrease);
+  const stopWaitingFee = safePositiveNumber(input.stopWaitingFee);
+  const finalFare = Math.round(originalFare + addStopIncrease + stopWaitingFee);
+  const estimatedFare = fallbackFare || finalFare;
+
+  return {
+    estimatedFare,
+    originalFare,
+    addStopIncrease,
+    stopWaitingFee,
+    finalFare,
+    adjustmentAmount: roundMoney(finalFare - estimatedFare),
   };
 }

@@ -47,6 +47,10 @@ type RideTrip = {
   final_add_stop_increase?: number | null;
   final_fare?: number | null;
   stop_waiting_fee?: number | null;
+  estimated_fare?: number | null;
+  fare_adjustment_amount?: number | null;
+  fare_adjustment_reason?: string | null;
+  fare_finalized_at?: string | null;
 };
 
 type TripStop = {
@@ -54,6 +58,11 @@ type TripStop = {
   lat: number;
   lng: number;
   placeId?: string;
+};
+
+type Prediction = {
+  description?: string;
+  place_id?: string;
 };
 
 type Driver = {
@@ -69,13 +78,6 @@ type Driver = {
   vehicle_year?: string | null;
   vehicle_color?: string | null;
   vehicle_registration?: string | null;
-};
-
-type TripEvent = {
-  id: string;
-  event_type: string;
-  message: string | null;
-  created_at: string;
 };
 
 type Rating = {
@@ -135,17 +137,6 @@ function statusLabel(status: string | null | undefined) {
   }
 }
 
-function formatTripEventType(eventType: string) {
-  if (eventType === "trip_completed") return "Trip completed";
-  return eventType.replace(/_/g, " ");
-}
-
-function formatEventTime(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "Just now";
-  return date.toLocaleString();
-}
-
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
 }
@@ -164,6 +155,13 @@ function displayDistance(value: number | null | undefined) {
 
 function displayDuration(value: number | null | undefined) {
   return value == null ? "--" : `${Math.round(Number(value))} min`;
+}
+
+function selectedPlaceLabel(description: string | undefined, name: string | undefined) {
+  const cleanName = (name ?? "").trim();
+  if (cleanName) return cleanName;
+  const cleanDescription = (description ?? "").trim();
+  return cleanDescription.split(",")[0]?.trim() || cleanDescription;
 }
 
 function statusChipClass(status: string | null | undefined) {
@@ -189,7 +187,6 @@ export default function RideTrackingPage() {
 
   const [trip, setTrip] = useState<RideTrip | null>(null);
   const [driver, setDriver] = useState<Driver | null>(null);
-  const [events, setEvents] = useState<TripEvent[]>([]);
   const [rating, setRating] = useState<Rating | null>(null);
   const [tracking, setTracking] = useState<Tracking | null>(null);
 
@@ -201,6 +198,13 @@ export default function RideTrackingPage() {
   const [mapError, setMapError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
+  const [addStopOpen, setAddStopOpen] = useState(false);
+  const [addStopInput, setAddStopInput] = useState("");
+  const [addStopPredictions, setAddStopPredictions] = useState<Prediction[]>([]);
+  const [selectedAddStop, setSelectedAddStop] = useState<TripStop | null>(null);
+  const [addStopNote, setAddStopNote] = useState("");
+  const [addStopBusy, setAddStopBusy] = useState(false);
+  const [addStopError, setAddStopError] = useState<string | null>(null);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -209,6 +213,7 @@ export default function RideTrackingPage() {
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
   const stopMarkerRefs = useRef<google.maps.Marker[]>([]);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const addStopTimerRef = useRef<number | null>(null);
   const previousTripSnapshotRef = useRef<{
     status: string | null;
     startOtpVerified: boolean;
@@ -264,7 +269,6 @@ export default function RideTrackingPage() {
 
     setTrip(json.trip ?? null);
     setDriver(json.driver ?? null);
-    setEvents(json.events ?? []);
     setRating(json.rating ?? null);
     setTracking(json.tracking ?? null);
     setLoading(false);
@@ -578,10 +582,122 @@ export default function RideTrackingPage() {
     setCancelBusy(false);
   }
 
+  async function fetchAddStopPredictions(input: string) {
+    if (input.trim().length < 3) {
+      setAddStopPredictions([]);
+      return;
+    }
+
+    const res = await fetch("/api/maps/autocomplete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input }),
+    });
+    const json = await res.json().catch(() => null);
+    setAddStopPredictions(json?.ok ? ((json.predictions ?? []) as Prediction[]) : []);
+  }
+
+  function onAddStopInput(value: string) {
+    setAddStopInput(value);
+    setSelectedAddStop(null);
+    setAddStopError(null);
+
+    if (addStopTimerRef.current) window.clearTimeout(addStopTimerRef.current);
+    addStopTimerRef.current = window.setTimeout(() => {
+      void fetchAddStopPredictions(value);
+    }, 220);
+  }
+
+  async function chooseAddStopPlace(placeId: string | undefined, description: string | undefined) {
+    if (!placeId) return;
+
+    setAddStopBusy(true);
+    setAddStopError(null);
+
+    try {
+      const res = await fetch("/api/maps/place-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place_id: placeId }),
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!json?.ok || typeof json.lat !== "number" || typeof json.lng !== "number") {
+        setAddStopError(json?.error || "Could not load that stop. Please choose another place.");
+        return;
+      }
+
+      const address = selectedPlaceLabel(description, json.name);
+      setSelectedAddStop({
+        address,
+        placeId: json.place_id || placeId,
+        lat: json.lat,
+        lng: json.lng,
+      });
+      setAddStopInput(address);
+      setAddStopPredictions([]);
+    } finally {
+      setAddStopBusy(false);
+    }
+  }
+
+  async function submitActiveStop() {
+    if (!trip || !selectedAddStop) {
+      setAddStopError("Choose a stop from the list first.");
+      return;
+    }
+
+    setAddStopBusy(true);
+    setAddStopError(null);
+
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        router.replace(`/customer/auth?next=/ride/${tripId}`);
+        return;
+      }
+
+      const res = await fetch("/api/customer/trips/add-stop", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          tripId: trip.id,
+          stop: selectedAddStop,
+          note: addStopNote,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        setAddStopError(json?.error || "Could not add this stop. Please try again.");
+        return;
+      }
+
+      setTrip(json.trip ?? null);
+      setMsg("Stop added. Your pending trip total has been updated.");
+      setAddStopOpen(false);
+      setAddStopInput("");
+      setAddStopNote("");
+      setSelectedAddStop(null);
+      setAddStopPredictions([]);
+      await loadTrip();
+    } finally {
+      setAddStopBusy(false);
+    }
+  }
+
   const canCancel = useMemo(() => {
     if (!trip) return false;
     return trip.status !== "completed" && trip.status !== "cancelled" && trip.status !== "ongoing";
   }, [trip]);
+
+  const canAddStop = useMemo(() => {
+    if (!trip) return false;
+    return ["assigned", "arrived", "ongoing"].includes(trip.status) && tripStops.length < 2;
+  }, [trip, tripStops.length]);
 
   const cancellationPreview = useMemo(() => {
     if (!trip) return { fee: 0, label: "Cancel ride for free" };
@@ -641,47 +757,6 @@ export default function RideTrackingPage() {
     }
   }, [trip?.status]);
 
-  const topTimeline = useMemo(() => {
-    const status = trip?.status;
-    const currentIndex =
-      status === "completed"
-        ? 5
-        : status === "ongoing"
-          ? 4
-          : status === "arrived"
-            ? 3
-            : status === "assigned"
-              ? 2
-              : status === "offered"
-                ? 1
-                : status
-                  ? 0
-                  : -1;
-
-    return [
-      "Requested",
-      "Accepted",
-      "On the way",
-      "Arrived",
-      "Started",
-      "Completed",
-    ].map((label, index) => ({
-      label,
-      active: index === currentIndex,
-      done: currentIndex >= index,
-    }));
-  }, [trip?.status]);
-
-  const customerVisibleEvents = useMemo(() => {
-    const userFacingBlockedEvents = new Set([
-      "commission_applied",
-      "wallet_transaction_created",
-      "driver_wallet_updated",
-    ]);
-
-    return events.filter((event) => !userFacingBlockedEvents.has(event.event_type));
-  }, [events]);
-
   const otpCards = useMemo(() => {
     if (!trip || trip.status === "completed" || trip.status === "cancelled") return [];
 
@@ -717,6 +792,55 @@ export default function RideTrackingPage() {
     ];
   }, [trip]);
 
+  const tripTotalLabel = useMemo(() => {
+    if (trip?.status === "completed") return "Final total";
+    if (trip?.status === "cancelled") return "Trip total";
+    return "Pending total";
+  }, [trip?.status]);
+
+  const displayTotal = useMemo(() => {
+    if (!trip) return 0;
+    return Number(trip.final_fare ?? trip.fare_amount ?? 0);
+  }, [trip]);
+
+  const routeAddition = useMemo(() => {
+    if (!trip) return 0;
+    return Number(trip.final_add_stop_increase ?? 0) + Number(trip.stop_waiting_fee ?? 0);
+  }, [trip]);
+
+  const fareHelperText = useMemo(() => {
+    if (trip?.status === "completed") return "Receipt-ready total after trip completion.";
+    if (trip?.status === "cancelled") return "Shown for reference after cancellation.";
+    return "This total stays pending until the trip ends and the end OTP is verified.";
+  }, [trip?.status]);
+
+  const premiumTripStats = useMemo(() => {
+    if (!trip) return [];
+
+    return [
+      {
+        label: "Route distance",
+        value: displayDistance(trip.distance_km),
+        helper: "Based on the booked route",
+      },
+      {
+        label: "Trip time",
+        value: displayDuration(trip.duration_min),
+        helper: "Estimated driving duration",
+      },
+      {
+        label: "Stops",
+        value: String(tripStops.length),
+        helper: tripStops.length > 0 ? "Included in trip total" : "Direct ride",
+      },
+      {
+        label: "Payment",
+        value: displayValue(trip.payment_method),
+        helper: "Settled through the selected method",
+      },
+    ];
+  }, [trip, tripStops.length]);
+
   if (loading) {
     return (
       <LoadingState
@@ -738,6 +862,112 @@ export default function RideTrackingPage() {
   return (
     <main className="moovu-page text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {addStopOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+          <section className="w-full max-w-lg rounded-[30px] border border-blue-100 bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.22)] sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                  Add stop
+                </div>
+                <h2 className="mt-4 text-2xl font-black text-slate-950">
+                  Add a stop to this ride
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Choose a place from the list. MOOVU recalculates the route and applies the 40% add-stop discount before the trip is finalized.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-lg font-black text-slate-600"
+                onClick={() => setAddStopOpen(false)}
+                disabled={addStopBusy}
+                aria-label="Close add stop"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div className="relative">
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Stop location
+                </label>
+                <input
+                  className="moovu-input"
+                  value={addStopInput}
+                  onChange={(event) => onAddStopInput(event.target.value)}
+                  onFocus={() => {
+                    if (addStopPredictions.length > 0) setAddStopPredictions([...addStopPredictions]);
+                  }}
+                  placeholder="Search for mall, school, clinic, or area"
+                  disabled={addStopBusy}
+                />
+
+                {addStopPredictions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[10000] max-h-64 overflow-y-auto rounded-[22px] border border-blue-100 bg-white p-2 shadow-[0_22px_60px_rgba(15,23,42,0.18)]">
+                    {addStopPredictions.map((prediction) => (
+                      <button
+                        key={prediction.place_id || prediction.description}
+                        type="button"
+                        className="w-full rounded-2xl px-3 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-blue-50 active:bg-blue-100"
+                        onClick={() => void chooseAddStopPlace(prediction.place_id, prediction.description)}
+                      >
+                        {prediction.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {selectedAddStop && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+                  Selected stop: {selectedAddStop.address}
+                </div>
+              )}
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Note for driver (optional)
+                </label>
+                <input
+                  className="moovu-input"
+                  value={addStopNote}
+                  onChange={(event) => setAddStopNote(event.target.value)}
+                  placeholder="Example: quick pickup at entrance"
+                  maxLength={240}
+                  disabled={addStopBusy}
+                />
+              </div>
+
+              {addStopError && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
+                  {addStopError}
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  className="moovu-btn moovu-btn-primary w-full"
+                  disabled={addStopBusy || !selectedAddStop}
+                  onClick={() => void submitActiveStop()}
+                >
+                  {addStopBusy ? "Checking route..." : "Add stop and update fare"}
+                </button>
+                <button
+                  type="button"
+                  className="moovu-btn moovu-btn-secondary w-full"
+                  disabled={addStopBusy}
+                  onClick={() => setAddStopOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
       {showCompletionPrompt && trip.status === "completed" && !rating && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
           <section className="w-full max-w-md rounded-[30px] border border-emerald-100 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.22)]">
@@ -783,23 +1013,23 @@ export default function RideTrackingPage() {
           </div>
         </div>
 
-        <div className="mb-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          {topTimeline.map((item) => (
-            <div
-              key={item.label}
-              className={`rounded-2xl border px-3 py-3 text-center ${
-                item.done
-                  ? "border-blue-100 bg-[var(--moovu-primary-soft)] text-slate-900"
-                  : item.active
-                  ? "border-slate-200 bg-slate-100 text-slate-700"
-                  : "border-slate-200 bg-white text-slate-400"
-              }`}
-            >
-              <div className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
-                Step
-              </div>
-              <div className="mt-1 text-sm font-black">{item.label}</div>
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
+          <section className="rounded-[24px] border border-blue-100 bg-[#eaf3ff] p-4 shadow-sm">
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+              {tripTotalLabel}
             </div>
+            <div className="mt-2 text-3xl font-black text-slate-950">{money(displayTotal)}</div>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{fareHelperText}</p>
+          </section>
+
+          {premiumTripStats.slice(0, 3).map((item) => (
+            <section key={item.label} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                {item.label}
+              </div>
+              <div className="mt-2 text-2xl font-black text-slate-950">{item.value}</div>
+              <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{item.helper}</p>
+            </section>
           ))}
         </div>
 
@@ -835,8 +1065,8 @@ export default function RideTrackingPage() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <div className="moovu-stat-card">
-                  <div className="moovu-stat-label">Fare</div>
-                  <div className="moovu-stat-value">{money(trip.fare_amount)}</div>
+                  <div className="moovu-stat-label">{tripTotalLabel}</div>
+                  <div className="moovu-stat-value">{money(displayTotal)}</div>
                 </div>
 
                 <div className="moovu-stat-card">
@@ -1075,40 +1305,98 @@ export default function RideTrackingPage() {
         </div>
 
         <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-          <section className="moovu-card p-5">
-            <div className="text-sm font-medium text-slate-500">Trip timeline</div>
-
-            {customerVisibleEvents.length === 0 ? (
-              <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                No events yet.
+          <section className="moovu-card overflow-hidden p-0">
+            <div className="bg-slate-950 p-5 text-white">
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-blue-200">
+                Ride total
               </div>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {customerVisibleEvents.map((event) => (
-                  <div key={event.id} className="flex gap-3 rounded-2xl bg-slate-50 p-4">
-                    <div className="mt-1 h-3 w-3 rounded-full bg-[var(--moovu-primary)]" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold capitalize text-slate-900">
-                        {formatTripEventType(event.event_type)}
-                      </div>
-                      {event.message && (
-                        <div className="mt-1 text-sm text-slate-700">{event.message}</div>
-                      )}
-                      <div className="mt-2 text-xs text-slate-500">
-                        {formatEventTime(event.created_at)}
-                      </div>
-                    </div>
+              <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <div className="text-4xl font-black">{money(displayTotal)}</div>
+                  <p className="mt-2 max-w-sm text-sm leading-6 text-blue-50">
+                    {fareHelperText}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/10 px-4 py-3 text-right">
+                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-100">
+                    Status
                   </div>
-                ))}
+                  <div className="mt-1 text-sm font-black">{statusLabel(trip.status)}</div>
+                </div>
               </div>
-            )}
+            </div>
+
+            <div className="grid gap-3 p-5 sm:grid-cols-2">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                  Booked fare
+                </div>
+                <div className="mt-2 text-xl font-black text-slate-950">
+                  {money(trip.fare_amount)}
+                </div>
+                <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                  Shown before the driver started the trip.
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                  Route additions
+                </div>
+                <div className="mt-2 text-xl font-black text-slate-950">
+                  {money(routeAddition)}
+                </div>
+                <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                  Stops and stop-waiting amounts included where applicable.
+                </p>
+              </div>
+
+              {premiumTripStats.map((item) => (
+                <div key={item.label} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                    {item.label}
+                  </div>
+                  <div className="mt-2 text-lg font-black text-slate-950 capitalize">
+                    {item.value}
+                  </div>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{item.helper}</p>
+                </div>
+              ))}
+
+              <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-800 sm:col-span-2">
+                <div className="text-xs font-black uppercase tracking-[0.16em]">
+                  Secure trip
+                </div>
+                <p className="mt-2 text-sm font-semibold leading-6">
+                  Driver details unlock after acceptance, start and end OTPs protect the trip, and your receipt remains available after completion.
+                </p>
+              </div>
+            </div>
           </section>
 
-          <section className="moovu-card p-5">
-            <div className="text-sm font-medium text-slate-500">Trip controls</div>
+            <section className="moovu-card p-5">
+              <div className="text-sm font-medium text-slate-500">Trip controls</div>
 
-            {trip.status === "cancelled" ? (
-              <div className="mt-4 rounded-2xl bg-red-50 p-4">
+              {canAddStop && (
+                <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <div className="text-sm font-black text-blue-900">
+                    Need to add a stop?
+                  </div>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-blue-800">
+                    You can add up to 2 stops. Extra route cost is discounted by 40%, then the total is finalized after the end OTP.
+                  </p>
+                  <button
+                    type="button"
+                    className="moovu-btn moovu-btn-primary mt-3"
+                    onClick={() => setAddStopOpen(true)}
+                  >
+                    Add stop
+                  </button>
+                </div>
+              )}
+
+              {trip.status === "cancelled" ? (
+                <div className="mt-4 rounded-2xl bg-red-50 p-4">
                 <div className="text-sm font-semibold text-red-700">Trip cancelled</div>
                 <div className="mt-2 text-sm text-red-700">
                   Reason: {trip.cancel_reason ?? "--"}

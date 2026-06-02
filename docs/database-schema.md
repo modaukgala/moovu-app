@@ -72,3 +72,22 @@ add column if not exists ride_option text;
 Trip chat requires the non-destructive migration in `docs/trip-chat-migration.sql`.
 
 If push subscriptions are currently public-writeable, tighten policies so authenticated users can only manage their own rows and role assignment remains server-validated.
+
+## Add Stops And Final Fare
+
+Pre-booking and active-trip stops use nullable `trips.stops` JSON plus route/fare audit columns so old trips without stops still display normally. Customers may add up to 2 stops. The server recalculates the route as pickup -> stop 1 -> stop 2 -> final destination and applies the approved 40% add-stop discount.
+
+Active stops and end-OTP finalization require the review-only migration in `docs/final-fare-active-stop-migration.sql`. The app expects these additive fields when active stops are enabled:
+
+- `estimated_fare`
+- `fare_adjustment_amount`
+- `fare_adjustment_reason`
+- `fare_finalized_at`
+- `actual_distance_km`
+- `actual_duration_min`
+- `actual_route_source`
+- `active_stop_added_at`
+- `active_stop_added_by`
+- `active_stop_note`
+
+The driver completion API finalizes `fare_amount`/`final_fare` before commission is applied, so receipts, driver earnings, and wallet commission use the same final customer fare.
