@@ -854,6 +854,50 @@ tr:last-child td {
   box-shadow: 0 18px 34px rgba(31, 116, 201, 0.11);
 }
 
+.moovu-admin-ride-option {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(215, 226, 234, 0.92);
+  border-radius: 24px;
+  background: #fff;
+  padding: 12px;
+  text-align: left;
+  box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-admin-ride-option.active {
+  border-color: rgba(31, 116, 201, 0.46);
+  background: linear-gradient(180deg, #eef8ff 0%, #f7fffc 100%);
+  box-shadow: 0 16px 34px rgba(31, 116, 201, 0.13);
+}
+
+.moovu-admin-ride-option img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 20px;
+  object-fit: contain;
+}
+
+.moovu-admin-ride-option span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.moovu-admin-ride-option strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.moovu-admin-ride-option small {
+  color: var(--moovu-primary);
+  font-size: 13px;
+  font-weight: 950;
+}
+
 .moovu-dispatch-column {
   min-height: 260px;
   border-radius: 28px;
@@ -1171,9 +1215,10 @@ tr:last-child td {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding-top: 4px;
+  padding-bottom: 8px;
 }
 .mbk-sheet-expanded .mbk-sheet-scroll {
-  max-height: calc(84dvh - 88px - env(safe-area-inset-bottom));
+  max-height: calc(84dvh - 98px - env(safe-area-inset-bottom));
 }
 .mbk-sheet:not(.mbk-sheet-expanded) .mbk-sheet-scroll { overflow: hidden; }
 
@@ -1381,7 +1426,7 @@ tr:last-child td {
   left: 36px;
   right: 8px;
   top: calc(100% - 4px);
-  z-index: 160;
+  z-index: 10001;
   max-height: 230px;
   overflow-y: auto;
   border: 1px solid var(--moovu-border);
@@ -1414,8 +1459,8 @@ tr:last-child td {
     left: 12px;
     right: 12px;
     top: auto;
-    bottom: calc(132px + env(safe-area-inset-bottom) + var(--moovu-keyboard-inset, 0px));
-    max-height: min(40svh, 320px);
+    bottom: calc(156px + env(safe-area-inset-bottom) + var(--moovu-keyboard-inset, 0px));
+    max-height: min(42svh, 340px);
     border-radius: 24px;
     box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
   }
@@ -1589,7 +1634,8 @@ tr:last-child td {
   .mbk-header { align-items: flex-start; }
   .moovu-brand-lockup { max-width: 190px; }
   .moovu-icon-link { min-height: 40px; padding: 0 10px; font-size: 12px; }
-  .mbk-confirm-bar { padding-left: 14px; padding-right: 14px; }
+  .mbk-confirm-bar { gap: 10px; padding-left: 14px; padding-right: 14px; }
+  .moovu-confirm-button { min-height: 50px; padding: 0 14px; font-size: 14px; }
 }
 
 .moovu-app-screen {
@@ -2332,11 +2378,14 @@ tr:last-child td {
 }
 
 .moovu-ride-option-card {
-  min-height: 74px;
+  min-height: 260px;
   border: 1px solid var(--moovu-border);
-  border-radius: 20px;
-  background: #fff;
-  padding: 12px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.96)),
+    #fff;
+  padding: 13px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 
 .moovu-ride-options-sheet {
@@ -2348,9 +2397,121 @@ tr:last-child td {
 }
 
 .moovu-ride-option-card.active {
-  border-color: #cfe4ff;
+  border-color: rgba(31, 116, 201, 0.42);
+  background: linear-gradient(180deg, #eef8ff 0%, #f7fffc 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(31, 116, 201, 0.18),
+    0 16px 34px rgba(31, 116, 201, 0.12);
+}
+
+.moovu-ride-vehicle-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 14px;
   background: #eaf3ff;
-  box-shadow: inset 0 0 0 1px rgba(31, 116, 201, 0.12);
+  color: var(--moovu-primary);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.moovu-ride-vehicle-art {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 20px;
+  background: #fff;
+  object-fit: contain;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.moovu-mini-pill {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0 8px;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.moovu-booking-state-card {
+  margin-top: 14px;
+  border: 1px solid #d7e2ea;
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(234, 243, 255, 0.9)),
+    #fff;
+  padding: 14px;
+  box-shadow: 0 12px 30px rgba(31, 116, 201, 0.08);
+}
+
+.moovu-booking-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.moovu-booking-steps.compact {
+  margin-top: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.moovu-booking-steps.compact::-webkit-scrollbar {
+  display: none;
+}
+
+.moovu-booking-step {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: #eef2f6;
+  padding: 5px 7px 5px 5px;
+  color: #64748b;
+}
+
+.moovu-booking-step b {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.moovu-booking-step small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.moovu-booking-step.active {
+  background: #eaf3ff;
+  color: #244f9e;
+}
+
+.moovu-booking-step.active b,
+.moovu-booking-step.complete b {
+  background: var(--moovu-primary);
+  color: #fff;
 }
 
 .moovu-receipt-screen {
@@ -3485,6 +3646,702 @@ tr:last-child td {
 .mhp-legal-footer a:hover {
   color: #1f74c9;
   text-decoration: underline;
+}
+
+.customer-landing {
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background:
+    linear-gradient(180deg, #eef8ff 0%, #fbfdff 42%, #f4f8fb 100%);
+  color: #050505;
+  padding-bottom: calc(178px + env(safe-area-inset-bottom));
+}
+
+.customer-landing-shell {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 28px;
+}
+
+.customer-landing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customer-brand-lockup {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  color: #050505;
+  text-decoration: none;
+}
+
+.customer-brand-logo {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(215, 226, 234, 0.94);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(31, 116, 201, 0.09);
+}
+
+.customer-brand-kicker,
+.customer-section-kicker {
+  display: block;
+  color: #5b6776;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.customer-brand-title {
+  display: block;
+  margin-top: 2px;
+  color: #050505;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.customer-landing-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.customer-header-link,
+.customer-header-pill {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.customer-header-link {
+  color: #334155;
+  padding: 0 10px;
+}
+
+.customer-header-pill {
+  border: 1px solid #d7e2ea;
+  background: #fff;
+  color: #050505;
+  padding: 0 16px;
+  box-shadow: 0 10px 22px rgba(31, 116, 201, 0.08);
+}
+
+.customer-hero-grid {
+  display: grid;
+  gap: 22px;
+  padding: 34px 0 22px;
+}
+
+.customer-hero-copy {
+  display: grid;
+  align-content: center;
+  gap: 18px;
+}
+
+.customer-hero-eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #d2e3fc;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 9px 13px;
+  color: #244f9e;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.customer-live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #16a34a;
+  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.12);
+}
+
+.customer-hero-copy h1 {
+  margin: 0;
+  max-width: 690px;
+  color: #050505;
+  font-size: clamp(3rem, 10vw, 6.6rem);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 0.9;
+}
+
+.customer-hero-copy p {
+  margin: 0;
+  max-width: 600px;
+  color: #4b5f70;
+  font-size: clamp(1rem, 2.6vw, 1.2rem);
+  font-weight: 650;
+  line-height: 1.65;
+}
+
+.customer-primary-cta,
+.customer-secondary-cta,
+.customer-booking-button,
+.customer-phone-button {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.customer-primary-cta,
+.customer-booking-button,
+.customer-phone-button {
+  background: var(--moovu-primary);
+  color: #fff;
+  box-shadow: 0 18px 38px rgba(31, 116, 201, 0.24);
+}
+
+.customer-secondary-cta {
+  border: 1px solid #d7e2ea;
+  background: #fff;
+  color: #050505;
+}
+
+.customer-hero-assurance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.customer-hero-assurance span,
+.customer-area-pills span {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  border: 1px solid #d7e2ea;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 0 12px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.customer-phone-stage {
+  min-width: 0;
+}
+
+.customer-map-card {
+  position: relative;
+  min-height: 580px;
+  overflow: hidden;
+  border: 1px solid rgba(215, 226, 234, 0.92);
+  border-radius: 36px;
+  background: #dff1fb;
+  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.14);
+}
+
+.customer-map-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.6) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.6) 1px, transparent 1px);
+  background-size: 52px 52px;
+}
+
+.customer-map-route {
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 53%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--moovu-primary);
+  box-shadow: 0 16px 34px rgba(31, 116, 201, 0.24);
+  transform: rotate(-14deg);
+}
+
+.customer-map-pin {
+  position: absolute;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border: 5px solid #fff;
+  border-radius: 999px;
+  background: var(--moovu-primary);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.22);
+}
+
+.customer-map-pin-pickup {
+  left: 16%;
+  top: 48%;
+}
+
+.customer-map-pin-dropoff {
+  right: 15%;
+  top: 38%;
+  border-radius: 10px;
+  background: #050505;
+}
+
+.customer-phone-mockup {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  width: min(270px, calc(100% - 58px));
+  aspect-ratio: 9 / 19.5;
+  max-height: calc(100% - 42px);
+  flex-direction: column;
+  gap: 12px;
+  transform: translate(-50%, -50%);
+  border: 10px solid #111827;
+  border-radius: 46px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 38px 15px 20px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    0 34px 80px rgba(15, 23, 42, 0.28);
+}
+
+.customer-phone-speaker {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 72px;
+  height: 18px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #111827;
+}
+
+.customer-phone-speaker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: #3b4656;
+}
+
+.customer-phone-button-side {
+  position: absolute;
+  width: 4px;
+  border-radius: 999px;
+  background: #111827;
+}
+
+.customer-phone-button-side-left {
+  left: -12px;
+  top: 106px;
+  height: 64px;
+}
+
+.customer-phone-button-side-right {
+  right: -12px;
+  top: 146px;
+  height: 86px;
+}
+
+.customer-phone-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #111827;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.customer-phone-camera {
+  width: 8px;
+  height: 8px;
+  border: 2px solid #334155;
+  border-radius: 999px;
+  background: #050505;
+}
+
+.customer-phone-top,
+.customer-phone-search,
+.customer-phone-ride {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.customer-phone-top {
+  color: #5b6776;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.customer-phone-search,
+.customer-phone-ride {
+  margin-top: auto;
+  border: 1px solid #d7e2ea;
+  border-radius: 18px;
+  background: #fff;
+  padding: 10px;
+}
+
+.customer-phone-search {
+  justify-content: flex-start;
+}
+
+.customer-phone-dot,
+.customer-phone-square {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--moovu-primary);
+}
+
+.customer-phone-square {
+  border-radius: 4px;
+  background: #050505;
+}
+
+.customer-phone-search small,
+.customer-phone-ride span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.customer-phone-search strong,
+.customer-phone-ride strong,
+.customer-phone-ride b {
+  display: block;
+  color: #050505;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.customer-ride-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 16px;
+  background: #eaf3ff;
+  color: var(--moovu-primary);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.customer-vehicle-art {
+  width: 76px;
+  height: 56px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.customer-booking-preview,
+.customer-section-block,
+.customer-service-area,
+.customer-driver-apply-panel {
+  margin-top: 16px;
+}
+
+.customer-booking-card,
+.customer-service-area,
+.customer-driver-apply-panel {
+  display: grid;
+  gap: 16px;
+  border: 1px solid rgba(215, 226, 234, 0.92);
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 18px;
+  box-shadow: 0 16px 42px rgba(31, 116, 201, 0.08);
+}
+
+.customer-booking-card h2,
+.customer-section-heading h2,
+.customer-service-area h2,
+.customer-driver-apply-panel h2 {
+  margin: 8px 0 0;
+  color: #050505;
+  font-size: clamp(1.6rem, 4vw, 2.5rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.customer-booking-card p,
+.customer-service-area p,
+.customer-driver-apply-panel p {
+  margin: 10px 0 0;
+  color: #5b6776;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.65;
+}
+
+.customer-ride-grid,
+.customer-trust-grid,
+.customer-steps-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.customer-ride-card {
+  display: grid;
+  align-items: start;
+  gap: 12px;
+  border: 1px solid #d7e2ea;
+  border-radius: 24px;
+  background: #fff;
+  padding: 14px;
+  color: #050505;
+  text-decoration: none;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+}
+
+.customer-ride-icon {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #fff;
+  padding: 0;
+}
+
+.customer-ride-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.customer-ride-meta {
+  display: grid;
+  gap: 5px;
+}
+
+.customer-ride-meta strong,
+.customer-ride-meta small,
+.customer-ride-meta em {
+  display: block;
+}
+
+.customer-ride-meta strong {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.customer-ride-meta small {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.customer-ride-meta em {
+  color: #5b6776;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.customer-section-heading {
+  max-width: 720px;
+}
+
+.customer-step-card,
+.customer-trust-card {
+  border: 1px solid #d7e2ea;
+  border-radius: 24px;
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+}
+
+.customer-step-card {
+  display: flex;
+  min-height: 86px;
+  align-items: center;
+  gap: 12px;
+}
+
+.customer-step-card span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 15px;
+  background: var(--moovu-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.customer-step-card strong,
+.customer-trust-card strong {
+  color: #050505;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.customer-trust-card p {
+  margin: 8px 0 0;
+  color: #5b6776;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.customer-trust-mark {
+  display: block;
+  width: 34px;
+  height: 8px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--moovu-primary), #2bb5a0);
+}
+
+.customer-area-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.customer-landing-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 18px;
+  padding: 28px 0 8px;
+}
+
+.customer-landing-footer a {
+  color: #5b6776;
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.customer-bottom-cta-dock {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 88;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  width: min(calc(100% - 24px), 420px);
+  margin: 0 auto;
+  border: 1px solid rgba(215, 226, 234, 0.92);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 8px;
+  box-shadow: 0 20px 52px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.customer-bottom-cta-dock .customer-primary-cta,
+.customer-bottom-cta-dock .customer-secondary-cta {
+  min-height: 54px;
+  border-radius: 18px;
+  padding: 0 12px;
+  font-size: 15px;
+}
+
+@media (min-width: 640px) {
+  .customer-landing-shell {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .customer-booking-card,
+  .customer-service-area,
+  .customer-driver-apply-panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 22px;
+  }
+
+  .customer-ride-grid,
+  .customer-steps-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .customer-trust-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .customer-hero-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.82fr);
+    align-items: center;
+    min-height: min(760px, calc(100dvh - 88px));
+    gap: 48px;
+  }
+
+  .customer-booking-preview {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1fr);
+    gap: 14px;
+  }
+
+  .customer-trust-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .customer-steps-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .customer-landing-shell {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .customer-header-link {
+    display: none;
+  }
+
+  .customer-phone-mockup {
+    width: min(248px, calc(100% - 70px));
+    border-width: 8px;
+  }
+
+  .customer-map-card {
+    min-height: 540px;
+  }
+
+  .mbk-ride-options .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .contact-cards {

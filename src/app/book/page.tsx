@@ -123,6 +123,7 @@ export default function RiderBookingPage() {
   const [baseFare, setBaseFare] = useState<number | null>(null);
   const [addStopIncrease, setAddStopIncrease] = useState(0);
   const [stops, setStops] = useState<StopInput[]>([]);
+  const [stopsOpen, setStopsOpen] = useState(false);
   const [routeCalculationError, setRouteCalculationError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -215,10 +216,28 @@ export default function RiderBookingPage() {
   const progressText = useMemo(() => {
     if (!pickupAddress.trim()) return "Set your pickup point";
     if (!dropoffAddress.trim()) return "Add your destination";
-    if (!canCalculate) return "Resolving locations\u2026";
-    if (displayFare == null) return "Calculating your fare";
-    return routeVisible ? "Route ready \u2014 swipe up for options" : "Trip details ready";
+    if (!canCalculate) return "Resolving your locations...";
+    if (displayFare == null) return "We are calculating this trip...";
+    return routeVisible ? "Route ready - choose your ride" : "Trip details ready";
   }, [canCalculate, displayFare, dropoffAddress, pickupAddress, routeVisible]);
+
+  const bookingStep = useMemo(() => {
+    if (!pickupAddress.trim()) return 1;
+    if (!dropoffAddress.trim() || !canCalculate) return 2;
+    if (displayFare == null) return 3;
+    return 4;
+  }, [canCalculate, displayFare, dropoffAddress, pickupAddress]);
+
+  const bookingSteps = useMemo(
+    () => [
+      { label: "Pickup", active: bookingStep >= 1 },
+      { label: "Destination", active: bookingStep >= 2 },
+      { label: "Ride type", active: bookingStep >= 3 },
+      { label: "Confirm", active: bookingStep >= 4 },
+      { label: "Track", active: false },
+    ],
+    [bookingStep],
+  );
 
   // ── Sheet snap position in % of window height ───────────────────
   const sheetTopPct = sheetSnap === "collapsed" ? SNAP_COLLAPSED : SNAP_EXPANDED;
@@ -505,12 +524,17 @@ export default function RiderBookingPage() {
       setMsg("You can add up to 2 stops per trip.");
       return;
     }
+    setStopsOpen(true);
     setStops((current) => [...current, blankStop()]);
     resetRouteState();
   }
 
   function removeStop(index: number) {
-    setStops((current) => current.filter((_, i) => i !== index));
+    setStops((current) => {
+      const nextStops = current.filter((_, i) => i !== index);
+      if (nextStops.length === 0) setStopsOpen(false);
+      return nextStops;
+    });
     resetRouteState();
   }
 
@@ -773,7 +797,7 @@ export default function RiderBookingPage() {
     const res = await fetch("/api/maps/distance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const json = await res.json().catch(() => null);
     if (!json?.ok) {
-      const message = json?.error || "Could not calculate trip distance.";
+      const message = json?.error || "We could not calculate this trip yet. Please check your pickup and destination.";
       setRouteCalculationError(message);
       if (!silent) setMsg(message);
       return null;
@@ -819,11 +843,11 @@ export default function RiderBookingPage() {
 
   async function submitBooking() {
     setMsg(null);
-    if (!customer) { setMsg("Your customer account could not be loaded."); return; }
+    if (!customer) { setMsg("Something went wrong while loading your account. Please sign in again."); return; }
     if (!pickupAddress.trim() || !dropoffAddress.trim()) { setMsg("Pickup and destination are required."); return; }
 
     const route = await ensureResolvedRoute();
-    if (!route) { setMsg("Please fix the location errors before confirming."); return; }
+    if (!route) { setMsg("We could not prepare this trip yet. Please check your pickup and destination."); return; }
 
     let bDistKm = distanceKm;
     let bDurMin = durationMin;
@@ -831,7 +855,7 @@ export default function RiderBookingPage() {
     let bOriginalDurMin = originalDurationMin;
     if (distanceKm == null || durationMin == null || originalDistanceKm == null || originalDurationMin == null) {
       const calc = await calculateTrip({ silent: true });
-      if (!calc) { setMsg("Waiting for fare calculation. Please try again."); return; }
+      if (!calc) { setMsg("Your trip is being prepared. Please try again in a moment."); return; }
       bDistKm = calc.distanceKm; bDurMin = calc.durationMin;
       bOriginalDistKm = calc.originalDistanceKm; bOriginalDurMin = calc.originalDurationMin;
     }
@@ -1101,11 +1125,47 @@ export default function RiderBookingPage() {
   // ── Expanded-only section (hidden when collapsed) ────────────────
   const expandedDetails = (
     <>
+      <div className="moovu-booking-state-card">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.14em] text-[var(--moovu-primary)]">
+              Guided booking
+            </div>
+            <div className="mt-1 text-sm font-black text-slate-950">
+              {displayFare == null
+                ? "Your trip is being prepared..."
+                : "Choose your ride and confirm when ready."}
+            </div>
+            <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+              MOOVU connects you with verified local drivers and keeps you updated after booking.
+            </p>
+          </div>
+          <span className={displayFare == null ? "moovu-status-pill" : "moovu-status-pill-ready"}>
+            {displayFare == null ? "Preparing" : "Ready"}
+          </span>
+        </div>
+        <div className="moovu-booking-steps" aria-label="Booking progress">
+          {bookingSteps.map((step, index) => (
+            <span
+              key={step.label}
+              className={`moovu-booking-step${step.active ? " active" : ""}${index < bookingStep ? " complete" : ""}`}
+            >
+              <b>{index + 1}</b>
+              <small>{step.label}</small>
+            </span>
+          ))}
+        </div>
+      </div>
       {/* Ride options — only shown after fare calculated */}
       {distanceKm != null && durationMin != null && (
         <div className="mbk-ride-options">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="moovu-field-label">Choose your ride</div>
+            <div>
+              <div className="moovu-field-label">Choose ride type</div>
+              <div className="mt-1 text-xs font-semibold text-slate-500">
+                Select the vehicle that fits your trip.
+              </div>
+            </div>
             <div className="text-xs font-semibold text-slate-500">
               {fmtDist(distanceKm)} · {fmtDur(durationMin)}
             </div>
@@ -1118,12 +1178,26 @@ export default function RiderBookingPage() {
                   className={`moovu-ride-option-card text-left${active ? " active" : ""}`}
                   onClick={() => setSelectedRideOption(opt.id)} aria-pressed={active}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-black text-slate-950">{opt.name}</div>
-                      <div className="mt-0.5 text-xs font-semibold text-slate-500">{opt.capacity}</div>
+                  <div className="grid gap-3">
+                    <Image
+                      src={opt.id === "group" ? "/icons/moovu-go-xl-clean.png" : "/icons/moovu-go-clean.png"}
+                      alt={opt.name}
+                      width={220}
+                      height={220}
+                      className="moovu-ride-vehicle-art"
+                    />
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-950">{opt.capacity}</div>
+                        <div className="mt-1 text-xs font-semibold text-slate-500">
+                          {opt.id === "group" ? "More space for groups" : "Everyday local trips"}
+                        </div>
+                      </div>
+                      <div className="text-sm font-black text-[var(--moovu-primary)]">
+                        {money(opt.baseFare)}
+                      </div>
                     </div>
-                    <div className="text-sm font-black text-[var(--moovu-primary)]">
+                    <div className="rounded-2xl bg-white/86 px-3 py-2 text-sm font-black text-[var(--moovu-primary)]">
                       {money(
                         Math.round(
                           calculateTripFare({
@@ -1147,7 +1221,10 @@ export default function RiderBookingPage() {
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 text-xs leading-4 text-slate-600">{opt.description}</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="moovu-mini-pill">From {money(opt.baseFare)}</span>
+                    <span className="moovu-mini-pill">Pickup estimate after route</span>
+                  </div>
                 </button>
               );
             })}
@@ -1207,12 +1284,13 @@ export default function RiderBookingPage() {
         </div>
       )}
 
-      {/* Stats */}
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="moovu-trip-metric"><span>Distance</span><strong>{fmtDist(distanceKm)}</strong></div>
-        <div className="moovu-trip-metric"><span>Time</span><strong>{fmtDur(durationMin)}</strong></div>
-        <div className="moovu-trip-metric moovu-trip-metric-primary"><span>Fare</span><strong>{money(displayFare)}</strong></div>
-      </div>
+      {distanceKm != null && durationMin != null && (
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="moovu-trip-metric"><span>Distance</span><strong>{fmtDist(distanceKm)}</strong></div>
+          <div className="moovu-trip-metric"><span>Time</span><strong>{fmtDur(durationMin)}</strong></div>
+          <div className="moovu-trip-metric moovu-trip-metric-primary"><span>Fare</span><strong>{money(displayFare)}</strong></div>
+        </div>
+      )}
 
       {/* Trip summary */}
       <div className="mt-3 rounded-[20px] border border-[#d7e2ea] bg-[#f6fafc] p-4">
@@ -1220,7 +1298,7 @@ export default function RiderBookingPage() {
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Trip summary</div>
             <div className="mt-1 text-sm font-semibold text-slate-950">
-              {pickupAddress || "Set pickup"} &rarr; {stopCount > 0 ? `${stopCount} stop${stopCount > 1 ? "s" : ""} -> ` : ""}{dropoffAddress || "set destination"}
+              {pickupAddress || "Set pickup"} to {stopCount > 0 ? `${stopCount} stop${stopCount > 1 ? "s" : ""}, then ` : ""}{dropoffAddress || "set destination"}
             </div>
           </div>
           <div className={routeVisible ? "moovu-status-pill-ready" : "moovu-status-pill"}>
@@ -1236,11 +1314,11 @@ export default function RiderBookingPage() {
       </div>
 
       {/* Push notifications */}
-      <div className="mt-3 rounded-[20px] border border-[#cfe4ff] bg-[#eef7ff] p-4">
+      <div className="mt-3 rounded-[20px] border border-[#d7e2ea] bg-white p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-bold text-slate-950">Ride updates</div>
-            <div className="mt-1 text-xs text-slate-600">Enable alerts for driver accepted, arrived, started, and completed.</div>
+            <div className="mt-1 text-xs text-slate-600">Get driver accepted, arrived, started, and completed alerts.</div>
           </div>
           <EnableNotificationsButton role="customer" variant="inline" />
         </div>
@@ -1335,6 +1413,20 @@ export default function RiderBookingPage() {
             </div>
           </div>
 
+          <div className="mx-4 mb-3">
+            <div className="moovu-booking-steps compact" aria-label="Booking steps">
+              {bookingSteps.map((step, index) => (
+                <span
+                  key={step.label}
+                  className={`moovu-booking-step${step.active ? " active" : ""}${index < bookingStep ? " complete" : ""}`}
+                >
+                  <b>{index + 1}</b>
+                  <small>{step.label}</small>
+                </span>
+              ))}
+            </div>
+          </div>
+
           <div className="mx-4 mb-3 rounded-[22px] border border-blue-100 bg-blue-50/80 p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1410,7 +1502,24 @@ export default function RiderBookingPage() {
               </div>
             </div>
 
-            {stops.map((stop, index) => (
+            <div className="border-y border-[#eef2f6] px-1 py-2">
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl bg-[#f6fafc] px-3 text-left text-sm font-black text-[var(--moovu-primary)] disabled:text-slate-400"
+                disabled={stops.length >= MAX_TRIP_STOPS && !stopsOpen}
+                onClick={() => {
+                  if (stops.length === 0) addStopField();
+                  else setStopsOpen((value) => !value);
+                }}
+              >
+                <span>{stops.length > 0 ? `${stops.length} stop${stops.length > 1 ? "s" : ""} added` : "+ Add stop"}</span>
+                <span className="text-xs font-semibold text-slate-500">
+                  {stops.length >= MAX_TRIP_STOPS ? "Max 2" : "40% off extra route"}
+                </span>
+              </button>
+            </div>
+
+            {stopsOpen && stops.map((stop, index) => (
               <div className="moovu-route-field" key={`stop-${index}`}>
                 <div className="moovu-route-marker-wrap">
                   <span className="moovu-route-dot bg-[var(--moovu-primary)] text-white">
@@ -1472,22 +1581,6 @@ export default function RiderBookingPage() {
               </div>
             ))}
 
-            <div className="flex items-center justify-between gap-3 px-1">
-              <button
-                type="button"
-                className="text-sm font-black text-[var(--moovu-primary)] disabled:text-slate-400"
-                disabled={stops.length >= MAX_TRIP_STOPS}
-                onClick={addStopField}
-              >
-                + Add stop
-              </button>
-              <span className="text-xs font-semibold text-slate-500">
-                {stops.length >= MAX_TRIP_STOPS
-                  ? "Maximum 2 stops reached"
-                  : "Stops get 40% off extra route cost"}
-              </span>
-            </div>
-
             {/* DESTINATION */}
             <div className="moovu-route-field" ref={dropoffBoxRef}>
               <div className="moovu-route-marker-wrap">
@@ -1543,7 +1636,7 @@ export default function RiderBookingPage() {
         <div className="mbk-confirm-bar">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Estimated total</div>
-            <div className="text-xl font-black text-slate-950">{money(displayFare)}</div>
+            <div className="text-xl font-black text-slate-950">{displayFare == null ? "Set route" : money(displayFare)}</div>
           </div>
           <button
             className="moovu-confirm-button flex-1"

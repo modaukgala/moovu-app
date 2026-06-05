@@ -1039,7 +1039,7 @@ export default function RideTrackingPage() {
           </div>
         </div>
 
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
+        <div className="mb-4 grid gap-3 md:grid-cols-3">
           <section className="rounded-[24px] border border-blue-100 bg-[#eaf3ff] p-4 shadow-sm">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
               {tripTotalLabel}
@@ -1048,7 +1048,7 @@ export default function RideTrackingPage() {
             <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{fareHelperText}</p>
           </section>
 
-          {premiumTripStats.slice(0, 3).map((item) => (
+          {premiumTripStats.slice(0, 2).map((item) => (
             <section key={item.label} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                 {item.label}
@@ -1060,17 +1060,17 @@ export default function RideTrackingPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-          <section className="relative min-h-[72vh] overflow-hidden rounded-[28px] border border-[var(--moovu-border)] bg-white shadow-sm">
+          <section className="relative min-h-[68vh] overflow-hidden rounded-[28px] border border-[var(--moovu-border)] bg-white shadow-sm">
             <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow">
               {tracking?.liveState || statusLabel(trip.status)}
             </div>
 
             {mapError ? (
-              <div className="flex min-h-[72vh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">
+              <div className="flex min-h-[68vh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">
                 {mapError}
               </div>
             ) : (
-              <div ref={mapRef} className="min-h-[72vh] w-full bg-slate-100" />
+              <div ref={mapRef} className="min-h-[68vh] w-full bg-slate-100" />
             )}
 
             <div className="absolute bottom-0 left-0 right-0 z-10 rounded-t-[28px] border-t border-white/70 bg-white/95 p-4 shadow-[0_-16px_45px_rgba(15,23,42,0.14)] backdrop-blur md:p-5">
@@ -1089,7 +1089,7 @@ export default function RideTrackingPage() {
                   </Link>
                 )}
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="moovu-stat-card">
                   <div className="moovu-stat-label">{tripTotalLabel}</div>
                   <div className="moovu-stat-value">{money(displayTotal)}</div>
@@ -1112,12 +1112,6 @@ export default function RideTrackingPage() {
                   <div className="moovu-stat-value">{displayDuration(trip.duration_min)}</div>
                 </div>
 
-                <div className="moovu-stat-card">
-                  <div className="moovu-stat-label">Requested</div>
-                  <div className="mt-2 text-sm font-medium text-slate-900">
-                    {displayDate(trip.created_at)}
-                  </div>
-                </div>
               </div>
             </div>
           </section>
@@ -1221,21 +1215,9 @@ export default function RideTrackingPage() {
                 </div>
               )}
 
-              {tracking && (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-slate-50 p-3">
-                    <div className="text-xs text-slate-500">GPS fresh</div>
-                    <div className="mt-1 text-sm font-semibold text-slate-900">
-                      {tracking.driverFresh ? "Yes" : "No"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl bg-slate-50 p-3">
-                    <div className="text-xs text-slate-500">Freshness</div>
-                    <div className="mt-1 text-sm font-semibold text-slate-900">
-                      {tracking.freshnessSeconds ?? "--"}s
-                    </div>
-                  </div>
+              {tracking && canShowDriverDetails && (
+                <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-slate-700">
+                  Driver location updates automatically while your trip is active.
                 </div>
               )}
 
@@ -1412,6 +1394,7 @@ export default function RideTrackingPage() {
         </div>
 
         <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          {(trip.status === "completed" || trip.status === "cancelled" || routeAddition > 0) && (
           <section className="moovu-card overflow-hidden p-0">
             <div className="bg-slate-950 p-5 text-white">
               <div className="text-xs font-black uppercase tracking-[0.18em] text-blue-200">
@@ -1480,6 +1463,7 @@ export default function RideTrackingPage() {
               </div>
             </div>
           </section>
+          )}
 
             <section className="moovu-card p-5">
               <div className="text-sm font-medium text-slate-500">Trip controls</div>

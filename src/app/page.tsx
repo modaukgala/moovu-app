@@ -12,19 +12,33 @@ const rideOptions = [
     capacity: "Up to 3 riders",
     detail: "Everyday local trips",
     price: "From R40",
+    icon: "Go",
+    image: "/icons/moovu-go-clean.png",
   },
   {
     name: "MOOVU Go XL",
     capacity: "Up to 6 riders",
     detail: "More space for groups",
     price: "From R70",
+    icon: "XL",
+    image: "/icons/moovu-go-xl-clean.png",
   },
 ] as const;
 
-const trustPoints = [
-  { label: "OTP protected", detail: "Start and finish trips with secure codes." },
-  { label: "Live updates", detail: "Track driver progress after acceptance." },
-  { label: "Receipts", detail: "Open trip receipts from history anytime." },
+const trustCards = [
+  { title: "Verified local drivers", detail: "See driver, vehicle and plate details after acceptance." },
+  { title: "OTP-protected trip starts", detail: "Trips start only after the correct rider OTP is confirmed." },
+  { title: "Live driver tracking", detail: "Follow your driver and ride progress from pickup to destination." },
+  { title: "Clear trip receipts", detail: "Access your completed trip receipt after the ride." },
+  { title: "Cash-friendly local rides", detail: "Built around the way local township trips are taken." },
+  { title: "Driver details before pickup", detail: "Confirm the car and driver before getting into the vehicle." },
+] as const;
+
+const howItWorks = [
+  "Enter pickup and destination",
+  "Choose MOOVU Go or Go XL",
+  "Confirm your ride",
+  "Track your driver and ride safely",
 ] as const;
 
 export default function HomePage() {
@@ -66,197 +80,196 @@ export default function HomePage() {
   const accountLabel = checkingAuth ? "Checking" : isLoggedIn ? "Trips" : "Sign in";
 
   return (
-    <main className="min-h-dvh overflow-x-hidden bg-[linear-gradient(180deg,#eef8ff_0%,#f8fbff_42%,#f5f8fc_100%)] pb-[calc(104px+env(safe-area-inset-bottom))] text-[#050505]">
-      <section className="mx-auto grid min-h-dvh w-full max-w-6xl gap-5 px-4 pt-[calc(14px+env(safe-area-inset-top))] sm:px-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)] lg:items-center lg:gap-8 lg:px-8">
-        <div className="grid gap-4">
-          <header className="flex items-center justify-between gap-3">
-            <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="MOOVU home">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#d7e2ea] bg-white shadow-[0_10px_24px_rgba(31,116,201,0.08)]">
-                <Image src="/logo.png" alt="" width={31} height={31} priority className="h-8 w-8 object-contain" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-[#5b6776]">
-                  MOOVU
-                </span>
-                <span className="block truncate text-base font-black text-[#050505]">
-                  Kasi Rides
-                </span>
-              </span>
-            </Link>
+    <main className="customer-landing">
+      <section className="customer-landing-shell">
+        <header className="customer-landing-header">
+          <Link href="/" className="customer-brand-lockup" aria-label="MOOVU home">
+            <span className="customer-brand-logo">
+              <Image src="/logo.png" alt="" width={34} height={34} priority className="h-9 w-9 object-contain" />
+            </span>
+            <span className="min-w-0">
+              <span className="customer-brand-kicker">MOOVU</span>
+              <span className="customer-brand-title">Kasi Rides</span>
+            </span>
+          </Link>
 
-            <Link
-              href={accountHref}
-              className="inline-flex min-h-11 items-center rounded-full border border-[#d7e2ea] bg-white px-4 text-sm font-black text-[#050505] shadow-[0_10px_24px_rgba(31,116,201,0.07)] transition hover:border-[#1f74c9]"
-            >
-              {accountLabel}
-            </Link>
-          </header>
+          <nav className="customer-landing-actions" aria-label="Customer links">
+            <Link href="/ride/history" className="customer-header-link">Trips</Link>
+            <Link href={accountHref} className="customer-header-pill">{accountLabel}</Link>
+          </nav>
+        </header>
 
-          <section className="overflow-hidden rounded-[30px] border border-[#d7e2ea] bg-white shadow-[0_26px_80px_rgba(15,23,42,0.10)]">
-            <div className="relative overflow-hidden bg-[linear-gradient(135deg,#ffffff_0%,#eaf3ff_48%,#e9fff8_100%)] p-5 sm:p-6">
-              <div className="pointer-events-none absolute right-[-86px] top-[-96px] h-56 w-56 rounded-full bg-[#1f74c9]/18 blur-3xl" />
-              <div className="pointer-events-none absolute bottom-[-105px] left-[-88px] h-52 w-52 rounded-full bg-[#c0f0e0]/60 blur-3xl" />
+        <section className="customer-hero-grid">
+          <div className="customer-hero-copy">
+            <div className="customer-hero-eyebrow">
+              <span className="customer-live-dot" />
+              Local township rides
+            </div>
 
-              <div className="relative z-10">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="rounded-full bg-white/84 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#244f9e] shadow-sm">
-                    Ride with MOOVU
-                  </span>
-                  <span className="rounded-full bg-[#ecfdf3] px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#166534] shadow-sm">
-                    Nearby
-                  </span>
+            <h1>Your local ride, just a few taps away.</h1>
+            <p>
+              Book safe, reliable local trips with nearby MOOVU drivers, OTP trip starts,
+              live updates and clear receipts.
+            </p>
+
+            <div className="customer-hero-assurance">
+              <span>Verified drivers</span>
+              <span>OTP starts</span>
+              <span>Receipts</span>
+            </div>
+          </div>
+
+          <div className="customer-phone-stage" aria-label="MOOVU app preview">
+            <div className="customer-map-card">
+              <div className="customer-map-grid" />
+              <div className="customer-map-pin customer-map-pin-pickup" />
+              <div className="customer-map-pin customer-map-pin-dropoff" />
+              <div className="customer-map-route" />
+              <div className="customer-phone-mockup">
+                <span className="customer-phone-speaker" />
+                <span className="customer-phone-button-side customer-phone-button-side-left" />
+                <span className="customer-phone-button-side customer-phone-button-side-right" />
+                <div className="customer-phone-status">
+                  <span>9:41</span>
+                  <span className="customer-phone-camera" />
+                  <span>5G</span>
                 </div>
-
-                <h1 className="mt-6 max-w-lg text-[2.35rem] font-black leading-[0.96] tracking-normal text-[#050505] sm:text-5xl">
-                  Where to?
-                </h1>
-                <p className="mt-3 max-w-md text-sm font-semibold leading-6 text-[#5b6776]">
-                  Book local rides with nearby drivers, secure OTPs, live trip status, and receipts after every ride.
-                </p>
-
-                <Link
-                  href={bookingHref}
-                  className="mt-6 grid gap-3 rounded-[26px] border border-[#d7e2ea] bg-white p-4 shadow-[0_18px_42px_rgba(31,116,201,0.12)] transition active:scale-[0.99] hover:border-[#1f74c9]"
-                  aria-label="Start booking a MOOVU ride"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#5b6776]">
-                        Start booking
-                      </p>
-                      <p className="mt-1 truncate text-[1.35rem] font-black leading-tight text-[#050505] sm:text-2xl">
-                        Enter destination
-                      </p>
-                    </div>
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#1f74c9] text-sm font-black text-white shadow-[0_14px_28px_rgba(31,116,201,0.24)] sm:h-12 sm:w-12">
-                      Go
-                    </span>
+                <div className="customer-phone-top">
+                  <span>MOOVU</span>
+                  <strong>Ready</strong>
+                </div>
+                <div className="customer-phone-search">
+                  <span className="customer-phone-dot" />
+                  <div>
+                    <small>Pickup</small>
+                    <strong>My current location</strong>
                   </div>
-
-                  <div className="grid gap-2 rounded-[20px] bg-[#f8fbff] p-3 ring-1 ring-[#d7e2ea]">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="h-3 w-3 shrink-0 rounded-full bg-[#1f74c9]" />
-                      <span className="truncate text-sm font-bold text-[#050505]">
-                        Pickup from your location or typed address
-                      </span>
-                    </div>
-                    <div className="ml-[5px] h-4 w-px bg-[#cad5e3]" />
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="h-3 w-3 shrink-0 rounded-[4px] bg-[#050505]" />
-                      <span className="truncate text-sm font-bold text-[#050505]">
-                        Choose where you are going
-                      </span>
-                    </div>
+                </div>
+                <div className="customer-phone-search">
+                  <span className="customer-phone-square" />
+                  <div>
+                    <small>Destination</small>
+                    <strong>Siyabuswa Mall</strong>
                   </div>
-
-                  <span className="text-sm font-black text-[#1f74c9]">
-                    {checkingAuth
-                      ? "Checking your account..."
-                      : isLoggedIn
-                        ? "Open booking"
-                        : "Sign in or create an account to continue"}
-                  </span>
+                </div>
+                <div className="customer-phone-ride">
+                  <Image src="/icons/moovu-go-clean.png" alt="" width={62} height={42} className="customer-vehicle-art" />
+                  <div>
+                    <strong>MOOVU Go</strong>
+                    <span>Everyday local trips</span>
+                  </div>
+                  <b>R40+</b>
+                </div>
+                <Link href={bookingHref} className="customer-phone-button">
+                  Confirm ride
                 </Link>
               </div>
             </div>
+          </div>
+        </section>
 
-            <div className="grid grid-cols-2 gap-3 p-4 sm:p-5">
-              {rideOptions.map((option) => (
-                <Link
-                  key={option.name}
-                  href={bookingHref}
-                  className="min-w-0 rounded-[23px] border border-[#d7e2ea] bg-[#fbfdff] p-4 shadow-sm transition active:scale-[0.99] hover:border-[#1f74c9] hover:bg-white"
-                >
-                  <h2 className="text-[15px] font-black leading-tight text-[#050505]">{option.name}</h2>
-                  <p className="mt-1 text-xs font-black text-[#5b6776]">{option.capacity}</p>
-                  <p className="mt-3 text-xs font-semibold leading-5 text-[#5b6776]">{option.detail}</p>
-                  <p className="mt-3 text-sm font-black text-[#1f74c9]">{option.price}</p>
-                </Link>
-              ))}
+        <section className="customer-booking-preview" aria-label="Start booking">
+          <div className="customer-booking-card">
+            <div>
+              <span className="customer-section-kicker">Start here</span>
+              <h2>Where to?</h2>
+              <p>Set your pickup, add a destination, choose a ride type and confirm when the fare is ready.</p>
             </div>
-          </section>
-        </div>
+            <Link href={bookingHref} className="customer-booking-button">
+              Book now
+            </Link>
+          </div>
 
-        <div className="grid gap-4">
-          <section className="relative min-h-[330px] overflow-hidden rounded-[32px] border border-[#d7e2ea] bg-[#dff1fb] shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.42)_1px,transparent_1px),linear-gradient(rgba(255,255,255,0.42)_1px,transparent_1px)] bg-[size:52px_52px]" />
-            <div className="absolute left-8 top-24 h-10 w-10 rounded-full bg-[#1f74c9] shadow-[0_14px_30px_rgba(31,116,201,0.28)]" />
-            <div className="absolute bottom-20 right-10 h-12 w-12 rounded-[18px] bg-[#050505] shadow-[0_14px_30px_rgba(5,5,5,0.22)]" />
-            <div className="absolute left-[24%] top-[55%] h-14 w-14 rounded-full border border-[#d7e2ea] bg-white shadow-xl" />
-            <div className="absolute left-10 right-10 top-[60%] h-2 rounded-full bg-white/74">
-              <div className="h-2 w-2/3 rounded-full bg-[#1f74c9]" />
-            </div>
-
-            <div className="absolute left-4 right-4 top-4 rounded-[24px] border border-white/70 bg-white/92 p-4 shadow-sm backdrop-blur">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#5b6776]">
-                Nearby driver estimate
-              </p>
-              <div className="mt-2 flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-4xl font-black leading-none text-[#050505]">4 min</p>
-                  <p className="mt-1 text-sm font-semibold text-[#5b6776]">Available after pickup is set</p>
-                </div>
-                <Link href={bookingHref} className="rounded-full bg-[#050505] px-4 py-3 text-sm font-black text-white">
-                  Book
-                </Link>
-              </div>
-            </div>
-
-            <div className="absolute bottom-4 left-4 right-4 rounded-[24px] border border-white/70 bg-white/92 p-4 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-[#050505]">Live status after driver accepts</p>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-[#5b6776]">
-                    Driver details, chat, OTP, trip progress, and receipt access.
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full bg-[#eaf3ff] px-3 py-2 text-xs font-black text-[#244f9e]">
-                  Tracked
+          <div className="customer-ride-grid">
+            {rideOptions.map((option) => (
+              <Link key={option.name} href={bookingHref} className="customer-ride-card">
+                <span className="customer-ride-icon">
+                  <Image src={option.image} alt={option.name} width={220} height={220} />
                 </span>
-              </div>
-            </div>
-          </section>
+                <span className="customer-ride-meta">
+                  <strong>{option.capacity}</strong>
+                  <small>{option.price}</small>
+                  <em>{option.detail}</em>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
 
-          <section className="grid gap-3 sm:grid-cols-3">
-            {trustPoints.map((point) => (
-              <div key={point.label} className="rounded-[24px] border border-[#d7e2ea] bg-white p-4 shadow-sm">
-                <p className="text-sm font-black text-[#050505]">{point.label}</p>
-                <p className="mt-2 text-xs font-semibold leading-5 text-[#5b6776]">{point.detail}</p>
+        <section className="customer-section-block">
+          <div className="customer-section-heading">
+            <span className="customer-section-kicker">How MOOVU works</span>
+            <h2>A guided ride flow from request to receipt.</h2>
+          </div>
+          <div className="customer-steps-grid">
+            {howItWorks.map((step, index) => (
+              <div key={step} className="customer-step-card">
+                <span>{index + 1}</span>
+                <strong>{step}</strong>
               </div>
             ))}
-          </section>
+          </div>
+        </section>
 
-          <section className="rounded-[30px] border border-[#d7e2ea] bg-white p-5 shadow-sm">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#5b6776]">Drive with MOOVU</p>
-            <h2 className="mt-2 text-2xl font-black text-[#050505]">Earn with local trips</h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-[#5b6776]">
-              Apply to join the driver network or open the driver portal.
+        <section className="customer-section-block">
+          <div className="customer-section-heading">
+            <span className="customer-section-kicker">Trust and safety</span>
+            <h2>Built for confident local movement.</h2>
+          </div>
+          <div className="customer-trust-grid">
+            {trustCards.map((card) => (
+              <article key={card.title} className="customer-trust-card">
+                <span className="customer-trust-mark" />
+                <strong>{card.title}</strong>
+                <p>{card.detail}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="customer-service-area">
+          <div>
+            <span className="customer-section-kicker">Service areas</span>
+            <h2>Focused on Siyabuswa and nearby local travel.</h2>
+            <p>
+              MOOVU is growing around Siyabuswa, KwaMhlanga, KwaNdebele nearby areas,
+              and everyday township travel routes. Availability may vary as the driver
+              network expands.
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <Link
-                href="/driver/apply"
-                className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-[#1f74c9] px-4 text-center text-sm font-black text-white transition active:scale-[0.99]"
-              >
-                Become a driver
-              </Link>
-              <Link
-                href="/driver/login"
-                className="inline-flex min-h-12 items-center justify-center rounded-[18px] border border-[#d7e2ea] bg-white px-4 text-center text-sm font-black text-[#050505] transition active:scale-[0.99]"
-              >
-                Driver portal
-              </Link>
-            </div>
-          </section>
+          </div>
+          <div className="customer-area-pills">
+            <span>Siyabuswa</span>
+            <span>KwaMhlanga</span>
+            <span>KwaNdebele nearby</span>
+            <span>Local township travel</span>
+          </div>
+        </section>
 
-          <footer className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 pb-4 text-xs font-bold text-[#5b6776]">
-            <Link href="/privacy-policy" className="hover:text-[#1f74c9]">Privacy Policy</Link>
-            <span>|</span>
-            <Link href="/terms" className="hover:text-[#1f74c9]">Terms</Link>
-            <span>|</span>
-            <Link href="/contact" className="hover:text-[#1f74c9]">Contact</Link>
-          </footer>
-        </div>
+        <section className="customer-driver-apply-panel">
+          <div>
+            <span className="customer-section-kicker">Drive with MOOVU</span>
+            <h2>Earn with local trips in your area.</h2>
+            <p>
+              Apply to drive with MOOVU and help move people safely around local routes.
+            </p>
+          </div>
+          <Link href="/driver/apply" className="customer-secondary-cta">
+            Apply to Drive
+          </Link>
+        </section>
+
+        <footer className="customer-landing-footer">
+          <Link href="/privacy-policy">Privacy Policy</Link>
+          <Link href="/terms">Terms</Link>
+          <Link href="/contact">Contact</Link>
+        </footer>
       </section>
+
+      <div className="customer-bottom-cta-dock" aria-label="Main actions">
+        <Link href={bookingHref} className="customer-primary-cta">
+          Book a Ride
+        </Link>
+      </div>
 
       <CustomerBottomNav />
     </main>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import {
@@ -189,6 +190,22 @@ export default function NewTripPage() {
     setFare(String(calcFare));
   }
 
+  function selectRideOption(next: RideOptionId) {
+    setRideOptionId(next);
+    const km = Number(distanceKm);
+    const mins = Number(durationMin || 0);
+    if (Number.isFinite(km) && km > 0) {
+      const calc = calculateTripFare({
+        distanceKm: km,
+        durationMin: mins,
+        rideOptionId: next,
+        surgeLabel: activeSurge.mode,
+        surgeMultiplier: activeSurge.multiplier,
+      }).totalFare;
+      setAutoFare(calc);
+    }
+  }
+
   async function createTrip(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
@@ -364,25 +381,39 @@ export default function NewTripPage() {
             Active manual surge: {activeSurge.label} x{activeSurge.multiplier.toFixed(1)}. Manual fare overrides remain intentional.
           </div>
 
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {RIDE_OPTIONS.map((option) => {
+              const active = rideOptionId === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`moovu-admin-ride-option${active ? " active" : ""}`}
+                  onClick={() => selectRideOption(option.id)}
+                  aria-pressed={active}
+                >
+                  <Image
+                    src={option.id === "group" ? "/icons/moovu-go-xl-clean.png" : "/icons/moovu-go-clean.png"}
+                    alt={option.name}
+                    width={260}
+                    height={260}
+                  />
+                  <span>
+                    <strong>{option.capacity}</strong>
+                    <small>From R{option.baseFare}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="grid md:grid-cols-5 gap-3 mt-4">
             <select
               className="border rounded-xl p-3 bg-transparent"
               value={rideOptionId}
               onChange={(e) => {
                 const next = e.target.value === "group" ? "group" : "go";
-                setRideOptionId(next);
-                const km = Number(distanceKm);
-                const mins = Number(durationMin || 0);
-                if (Number.isFinite(km) && km > 0) {
-                  const calc = calculateTripFare({
-                    distanceKm: km,
-                    durationMin: mins,
-                    rideOptionId: next,
-                    surgeLabel: activeSurge.mode,
-                    surgeMultiplier: activeSurge.multiplier,
-                  }).totalFare;
-                  setAutoFare(calc);
-                }
+                selectRideOption(next);
               }}
             >
               {RIDE_OPTIONS.map((option) => (
