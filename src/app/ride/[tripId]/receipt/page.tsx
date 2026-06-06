@@ -17,6 +17,12 @@ type Trip = {
   dropoff_address: string | null;
   payment_method: string | null;
   fare_amount: number | null;
+  final_fare?: number | null;
+  original_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  stop_waiting_fee?: number | null;
+  ride_type?: string | null;
+  stops?: unknown;
   distance_km?: number | null;
   duration_min?: number | null;
   status: string;
@@ -44,6 +50,10 @@ type TripStatusResponse = {
   error?: string;
 };
 
+type ReceiptStop = {
+  address: string;
+};
+
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
 }
@@ -66,6 +76,13 @@ function fmt(value: string | null | undefined) {
 function fmtNum(value: number | null | undefined, suffix: string) {
   if (value == null) return "--";
   return `${Number(value).toFixed(value % 1 === 0 ? 0 : 1)} ${suffix}`;
+}
+
+function rideTypeLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized === "group" || normalized === "xl" || normalized.includes("xl")) return "MOOVU Go XL";
+  if (normalized === "scheduled") return "Scheduled ride";
+  return "MOOVU Go";
 }
 
 function buildReceiptNumber(tripId: string, issueAt: string | null | undefined) {
@@ -142,10 +159,24 @@ export default function TripReceiptPage() {
   }, [loadReceipt]);
 
   const issueAt = trip?.completed_at ?? trip?.created_at ?? null;
-  const totalPaid = Number(trip?.fare_amount ?? 0);
+  const totalPaid = Number(trip?.final_fare ?? trip?.fare_amount ?? 0);
   const vatAmount = useMemo(() => totalPaid - totalPaid / 1.15, [totalPaid]);
   const fareExclVat = useMemo(() => totalPaid / 1.15, [totalPaid]);
   const receiptNumber = useMemo(() => buildReceiptNumber(trip?.id ?? "", issueAt), [trip?.id, issueAt]);
+  const receiptStops = useMemo<ReceiptStop[]>(() => {
+    if (!Array.isArray(trip?.stops)) return [];
+    return trip.stops
+      .slice(0, 2)
+      .map((stop) => {
+        const item = (stop ?? {}) as { address?: unknown };
+        return { address: typeof item.address === "string" ? item.address : "" };
+      })
+      .filter((stop) => stop.address.trim());
+  }, [trip?.stops]);
+  const routeAddition = useMemo(
+    () => Number(trip?.final_add_stop_increase ?? 0) + Number(trip?.stop_waiting_fee ?? 0),
+    [trip?.final_add_stop_increase, trip?.stop_waiting_fee]
+  );
 
   const vehicleLabel = useMemo(() => {
     if (!driver) return "--";
@@ -244,6 +275,18 @@ export default function TripReceiptPage() {
               </div>
             </div>
             <div className="moovu-receipt-route-connector" />
+            {receiptStops.map((stop, index) => (
+              <div key={`${stop.address}-${index}`}>
+                <div className="moovu-receipt-route-row">
+                  <div className="moovu-receipt-route-icon stop">{index + 1}</div>
+                  <div>
+                    <div className="moovu-receipt-route-label">Stop {index + 1}</div>
+                    <div className="moovu-receipt-route-value">{dash(stop.address)}</div>
+                  </div>
+                </div>
+                <div className="moovu-receipt-route-connector" />
+              </div>
+            ))}
             <div className="moovu-receipt-route-row">
               <div className="moovu-receipt-route-icon dropoff" />
               <div>
@@ -257,6 +300,10 @@ export default function TripReceiptPage() {
 
           {/* ── TRIP STATS ────────────────────────────────────────── */}
           <div className="moovu-receipt-stats">
+            <div className="moovu-receipt-stat">
+              <div className="moovu-receipt-stat-label">Ride type</div>
+              <div className="moovu-receipt-stat-value">{rideTypeLabel(trip.ride_type)}</div>
+            </div>
             <div className="moovu-receipt-stat">
               <div className="moovu-receipt-stat-label">Distance</div>
               <div className="moovu-receipt-stat-value">{fmtNum(trip.distance_km, "km")}</div>
@@ -322,6 +369,30 @@ export default function TripReceiptPage() {
               <span>VAT (15%)</span>
               <span>{money(vatAmount)}</span>
             </div>
+            {Number(trip.original_fare ?? 0) > 0 && (
+              <div className="moovu-receipt-fare-row">
+                <span>Original route estimate</span>
+                <span>{money(trip.original_fare)}</span>
+              </div>
+            )}
+            {Number(trip.final_add_stop_increase ?? 0) > 0 && (
+              <div className="moovu-receipt-fare-row">
+                <span>Add-stop route increase</span>
+                <span>{money(trip.final_add_stop_increase)}</span>
+              </div>
+            )}
+            {Number(trip.stop_waiting_fee ?? 0) > 0 && (
+              <div className="moovu-receipt-fare-row">
+                <span>Stop waiting fee</span>
+                <span>{money(trip.stop_waiting_fee)}</span>
+              </div>
+            )}
+            {routeAddition > 0 && (
+              <div className="moovu-receipt-fare-row">
+                <span>Add-stop discount applied</span>
+                <span>40%</span>
+              </div>
+            )}
             <div className="moovu-receipt-fare-total-row">
               <span>TOTAL PAID</span>
               <span>{money(totalPaid)}</span>

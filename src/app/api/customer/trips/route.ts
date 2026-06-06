@@ -3,7 +3,13 @@ import { getAuthenticatedCustomer } from "@/lib/customer/server";
 
 function isMissingCancellationColumn(error: { message?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() || "";
-  return message.includes("cancellation_") || message.includes("cancelled_at");
+  return (
+    message.includes("cancellation_") ||
+    message.includes("cancelled_at") ||
+    message.includes("stops") ||
+    message.includes("final_fare") ||
+    message.includes("final_add_stop_increase")
+  );
 }
 
 export async function GET(req: Request) {
@@ -21,9 +27,16 @@ export async function GET(req: Request) {
       dropoff_address,
       fare_amount,
       payment_method,
+      distance_km,
+      duration_min,
       status,
       created_at,
       driver_id,
+      ride_type,
+      stops,
+      final_fare,
+      final_add_stop_increase,
+      stop_waiting_fee,
       cancel_reason,
       cancellation_reason,
       cancellation_type,

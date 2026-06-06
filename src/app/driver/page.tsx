@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -53,6 +53,8 @@ type CurrentTrip = {
   dropoff_lng?: number | null;
   fare_amount: number | null;
   payment_method: string | null;
+  rider_name?: string | null;
+  rider_phone?: string | null;
   created_at: string | null;
   driver_arrived_at?: string | null;
   no_show_eligible_at?: string | null;
@@ -143,6 +145,61 @@ function tripStatusLabel(status: string | null | undefined) {
     default:
       return status || "No trip";
   }
+}
+
+function rideTypeLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized === "group" || normalized === "xl" || normalized.includes("xl")) return "MOOVU Go XL";
+  if (normalized === "scheduled") return "Scheduled ride";
+  return "MOOVU Go";
+}
+
+function driverStageDetail(params: {
+  driver: Driver | null;
+  offer: Offer | null;
+  currentTrip: CurrentTrip | null;
+}) {
+  const { driver, offer, currentTrip } = params;
+  if (offer) {
+    return {
+      eyebrow: "New request",
+      title: "New trip nearby",
+      body: "Review pickup, destination, fare and timer before accepting.",
+      action: "Accept or decline",
+    };
+  }
+  if (currentTrip?.status === "assigned") {
+    return {
+      eyebrow: "Stage 1",
+      title: "Navigate to pickup",
+      body: "Drive to the pickup point, then mark arrived when you reach the customer.",
+      action: "Drive to pickup",
+    };
+  }
+  if (currentTrip?.status === "arrived") {
+    return {
+      eyebrow: "Stage 2",
+      title: "Verify pickup OTP",
+      body: "Ask the customer for the start OTP before the ride begins.",
+      action: "Start trip with OTP",
+    };
+  }
+  if (currentTrip?.status === "ongoing") {
+    return {
+      eyebrow: "Stage 4",
+      title: "Trip in progress",
+      body: "Drive to destination and complete the ride with the end OTP.",
+      action: "Complete trip",
+    };
+  }
+  return {
+    eyebrow: driver?.online ? "Online" : "Offline",
+    title: driver?.online ? "Ready for nearby requests" : "Go online to drive",
+    body: driver?.online
+      ? "Keep GPS active and stay ready for local MOOVU trip offers."
+      : "Go online when you are available, subscribed, and ready to accept rides.",
+    action: driver?.online ? "Waiting for request" : "Go online",
+  };
 }
 
 function gpsNoticeClass(tone: GpsNotice["tone"]) {
@@ -572,7 +629,7 @@ export default function DriverHomePage() {
       return false;
     }
 
-    setGpsInfo(`GPS live • ${new Date().toLocaleTimeString()}`);
+    setGpsInfo(`GPS live â€¢ ${new Date().toLocaleTimeString()}`);
     return true;
   }
 
@@ -723,15 +780,15 @@ export default function DriverHomePage() {
   }
 
   async function arriveTrip(tripId: string) {
-    await tripAction("/api/driver/trips/arrive", { tripId }, "Marked as arrived ✅");
+    await tripAction("/api/driver/trips/arrive", { tripId }, "Marked as arrived âœ…");
   }
 
   async function startTrip(tripId: string, otp: string) {
-    await tripAction("/api/driver/trips/start", { tripId, otp }, "Trip started ✅");
+    await tripAction("/api/driver/trips/start", { tripId, otp }, "Trip started âœ…");
   }
 
   async function completeTrip(tripId: string, otp: string) {
-    await tripAction("/api/driver/trips/complete", { tripId, otp }, "Trip completed ✅");
+    await tripAction("/api/driver/trips/complete", { tripId, otp }, "Trip completed âœ…");
   }
 
   async function markNoShow(tripId: string) {
@@ -1094,6 +1151,10 @@ export default function DriverHomePage() {
   );
   const offerStops = useMemo(() => parseTripStops(offer?.stops), [offer?.stops]);
   const currentTripStops = useMemo(() => parseTripStops(currentTrip?.stops), [currentTrip?.stops]);
+  const stageDetail = useMemo(
+    () => driverStageDetail({ driver, offer, currentTrip }),
+    [currentTrip, driver, offer]
+  );
 
   if (loadingDriver) {
     return (
@@ -1192,14 +1253,14 @@ export default function DriverHomePage() {
                 </span>
               </div>
               <div className="mt-2 text-xl font-black text-slate-950">
-                R{offer.fare_amount ?? "—"} • {offer.distance_km == null ? "Distance pending" : `${Number(offer.distance_km).toFixed(1)} km`}
+                R{offer.fare_amount ?? "â€”"} â€¢ {offer.distance_km == null ? "Distance pending" : `${Number(offer.distance_km).toFixed(1)} km`}
               </div>
               <div className="mt-2 grid gap-2 text-sm font-semibold text-slate-700 sm:grid-cols-2">
                 <div className="truncate">
-                  <span className="text-slate-400">Pickup:</span> {offer.pickup_address ?? "—"}
+                  <span className="text-slate-400">Pickup:</span> {offer.pickup_address ?? "â€”"}
                 </div>
                 <div className="truncate">
-                  <span className="text-slate-400">Dropoff:</span> {offer.dropoff_address ?? "—"}
+                  <span className="text-slate-400">Dropoff:</span> {offer.dropoff_address ?? "â€”"}
                 </div>
               </div>
               {offerStops.length > 0 && (
@@ -1232,24 +1293,44 @@ export default function DriverHomePage() {
       )}
 
       <div className="moovu-shell">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="moovu-section-title">MOOVU Driver</div>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
-              Driver dashboard
+        <section className="moovu-driver-os-hero mb-4">
+          <div className="min-w-0">
+            <div className="moovu-section-title">{stageDetail.eyebrow}</div>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+              {stageDetail.title}
             </h1>
-            <p className="mt-2 text-sm font-medium text-slate-600">
-              Manage availability, GPS, offers, and active trips from one screen.
+            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
+              {stageDetail.body}
             </p>
+            <div className="mt-5 grid gap-2 sm:grid-cols-5">
+              {["Online", "Offer", "Pickup", "Trip", "Complete"].map((step, index) => {
+                const active =
+                  (index === 0 && !!driver?.online) ||
+                  (index === 1 && !!offer) ||
+                  (index === 2 && currentTrip?.status === "assigned") ||
+                  (index === 3 && (currentTrip?.status === "arrived" || currentTrip?.status === "ongoing")) ||
+                  (index === 4 && currentTrip?.status === "completed");
+                return (
+                  <div key={step} className={active ? "moovu-driver-step is-active" : "moovu-driver-step"}>
+                    <span />
+                    <strong>{step}</strong>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="moovu-driver-os-side">
+            <div className="moovu-driver-os-action">
+              <span>Next action</span>
+              <strong>{stageDetail.action}</strong>
+            </div>
             <EnableNotificationsButton role="driver" variant="inline" />
             <button className="moovu-btn moovu-btn-secondary" onClick={logout}>
               Logout
             </button>
           </div>
-        </div>
+        </section>
 
         {(info || gpsInfo) && (
           <div className="mb-4 grid gap-3 md:grid-cols-2">
@@ -1294,7 +1375,7 @@ export default function DriverHomePage() {
                       {driver.online ? "Online" : "Offline"}
                     </div>
                     <div className="mt-2 text-sm text-slate-600">
-                      {driver.first_name ?? "--"} {driver.last_name ?? ""} · {driver.phone ?? "--"}
+                      {driver.first_name ?? "--"} {driver.last_name ?? ""} Â· {driver.phone ?? "--"}
                     </div>
                   </div>
 
@@ -1426,9 +1507,12 @@ export default function DriverHomePage() {
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-[34px] border border-[var(--moovu-border)] bg-white shadow-md">
-                <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow">
+              <div className="moovu-driver-map-card">
+                <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-black text-slate-700 shadow">
                   {currentTrip ? tripStatusLabel(currentTrip.status) : offer ? "New trip offer" : "Waiting for request"}
+                </div>
+                <div className="absolute right-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700 shadow">
+                  Map first
                 </div>
 
                 {mapError ? (
@@ -1439,28 +1523,28 @@ export default function DriverHomePage() {
                   <div ref={mapRef} className="h-[58vh] w-full bg-slate-100" />
                 )}
 
-                <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-white via-white/95 to-white/65 p-4 md:p-5">
+                <div className="moovu-driver-map-sheet">
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="moovu-stat-card">
                       <div className="moovu-stat-label">Current GPS</div>
                       <div className="mt-2 text-sm font-medium text-slate-900">
                         {driver.lat != null && driver.lng != null
                           ? `${driver.lat}, ${driver.lng}`
-                          : "—"}
+                          : "â€”"}
                       </div>
                     </div>
 
                     <div className="moovu-stat-card">
                       <div className="moovu-stat-label">Last seen</div>
                       <div className="mt-2 text-sm font-medium text-slate-900">
-                        {driver.last_seen ? new Date(driver.last_seen).toLocaleString() : "—"}
+                        {driver.last_seen ? new Date(driver.last_seen).toLocaleString() : "â€”"}
                       </div>
                     </div>
 
                     <div className="moovu-stat-card moovu-stat-card-primary">
                       <div className="moovu-stat-label">Navigation mode</div>
                       <div className="moovu-stat-value">
-                        {currentTrip ? "Trip active" : offer ? "Offer pending" : "Standby"}
+                        {currentTrip ? tripStatusLabel(currentTrip.status) : offer ? "Offer pending" : driver.online ? "Online standby" : "Offline"}
                       </div>
                     </div>
                   </div>
@@ -1471,30 +1555,48 @@ export default function DriverHomePage() {
                 <div className="moovu-driver-active-trip p-5">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-medium text-slate-500">Active trip</div>
-                      <div className="mt-1 text-2xl font-semibold text-slate-950">
+                      <div className="moovu-section-title">Active trip</div>
+                      <div className="mt-1 text-2xl font-black text-slate-950">
                         {tripStatusLabel(currentTrip.status)}
                       </div>
+                      <p className="mt-2 text-sm font-semibold text-slate-600">
+                        {rideTypeLabel(currentTrip.ride_option)} Â· {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
+                      </p>
                     </div>
 
                     <div className="moovu-chip moovu-chip-primary">
                       <span className="moovu-chip-dot" />
-                      Fare: R{currentTrip.fare_amount ?? "—"}
+                      Fare: {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
                     </div>
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Customer</div>
+                      <div className="mt-1 text-sm font-black text-slate-900">
+                        {currentTrip.rider_name ?? "Customer"}
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-600">
+                        {currentTrip.rider_phone ?? "Phone available when captured"}
+                      </div>
+                      {currentTrip.rider_phone && (
+                        <a href={`tel:${currentTrip.rider_phone}`} className="moovu-btn moovu-btn-secondary mt-3 w-full sm:w-auto">
+                          Call customer
+                        </a>
+                      )}
+                    </div>
+
                     <div className="rounded-2xl bg-[var(--moovu-primary-soft)] p-4">
                       <div className="text-xs uppercase tracking-wide text-slate-500">Pickup</div>
                       <div className="mt-1 text-sm font-medium text-slate-900">
-                        {currentTrip.pickup_address ?? "—"}
+                        {currentTrip.pickup_address ?? "â€”"}
                       </div>
                     </div>
 
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-slate-500">Dropoff</div>
                       <div className="mt-1 text-sm font-medium text-slate-900">
-                        {currentTrip.dropoff_address ?? "—"}
+                        {currentTrip.dropoff_address ?? "â€”"}
                       </div>
                     </div>
                   </div>
@@ -1769,6 +1871,36 @@ export default function DriverHomePage() {
                 </div>
               </section>
 
+              <section className="moovu-card-interactive p-5">
+                <div className="text-sm font-medium text-slate-500">Safety and support</div>
+                <div className="mt-3 rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
+                  MOOVU keeps trips visible with customer contact, OTP trip starts, live route updates, and support tools.
+                </div>
+                <div className="mt-4 grid gap-3">
+                  <button
+                    type="button"
+                    className="moovu-btn moovu-btn-secondary justify-start"
+                    onClick={() => setInfo("Share trip is coming soon for drivers.")}
+                  >
+                    Share trip
+                  </button>
+                  <button
+                    type="button"
+                    className="moovu-btn moovu-btn-secondary justify-start"
+                    onClick={() => showDriverActionError("Emergency support is coming soon. For urgent danger, contact local emergency services immediately.")}
+                  >
+                    Emergency support
+                  </button>
+                  <button
+                    type="button"
+                    className="moovu-btn moovu-btn-secondary justify-start"
+                    onClick={() => router.push("/driver/contact")}
+                  >
+                    Help centre
+                  </button>
+                </div>
+              </section>
+
               <section id="driver-trip-offer-card" className={`moovu-driver-offer-card p-5 ${offer ? "has-offer" : ""}`}>
                 <div className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
                   Trip offers
@@ -1787,13 +1919,13 @@ export default function DriverHomePage() {
                             New request
                           </div>
                           <div className="mt-1 text-xl font-semibold text-slate-950">
-                            R{offer.fare_amount ?? "—"}
+                            R{offer.fare_amount ?? "â€”"}
                           </div>
                         </div>
 
                         <div className="moovu-chip">
                           <span className="moovu-chip-dot" />
-                          {secondsLeft != null ? `${secondsLeft}s left` : "—"}
+                          {secondsLeft != null ? `${secondsLeft}s left` : "â€”"}
                         </div>
                       </div>
 
@@ -1801,14 +1933,14 @@ export default function DriverHomePage() {
                         <div className="rounded-2xl bg-white p-3">
                           <div className="text-xs text-slate-500">Pickup</div>
                           <div className="mt-1 text-sm font-medium text-slate-900">
-                            {offer.pickup_address ?? "—"}
+                            {offer.pickup_address ?? "â€”"}
                           </div>
                         </div>
 
                         <div className="rounded-2xl bg-white p-3">
                           <div className="text-xs text-slate-500">Dropoff</div>
                           <div className="mt-1 text-sm font-medium text-slate-900">
-                            {offer.dropoff_address ?? "—"}
+                            {offer.dropoff_address ?? "â€”"}
                           </div>
                         </div>
 
@@ -1825,7 +1957,7 @@ export default function DriverHomePage() {
                           <div className="rounded-2xl bg-white p-3">
                             <div className="text-xs text-slate-500">Payment</div>
                             <div className="mt-1 text-sm font-medium text-slate-900">
-                              {offer.payment_method ?? "—"}
+                              {offer.payment_method ?? "â€”"}
                             </div>
                           </div>
 
@@ -1839,14 +1971,14 @@ export default function DriverHomePage() {
                           <div className="rounded-2xl bg-white p-3">
                             <div className="text-xs text-slate-500">Distance</div>
                             <div className="mt-1 text-sm font-medium text-slate-900">
-                              {offer.distance_km == null ? "—" : `${Number(offer.distance_km).toFixed(1)} km`}
+                              {offer.distance_km == null ? "â€”" : `${Number(offer.distance_km).toFixed(1)} km`}
                             </div>
                           </div>
 
                           <div className="rounded-2xl bg-white p-3">
                             <div className="text-xs text-slate-500">Duration</div>
                             <div className="mt-1 text-sm font-medium text-slate-900">
-                              {offer.duration_min == null ? "—" : `${Math.round(Number(offer.duration_min))} min`}
+                              {offer.duration_min == null ? "â€”" : `${Math.round(Number(offer.duration_min))} min`}
                             </div>
                           </div>
                         </div>
@@ -1896,3 +2028,4 @@ export default function DriverHomePage() {
     </main>
   );
 }
+

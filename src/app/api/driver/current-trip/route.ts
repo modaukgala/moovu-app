@@ -18,6 +18,8 @@ type DriverCurrentTripResponse = {
   dropoff_lng: number | null;
   fare_amount: number | null;
   payment_method: string | null;
+  rider_name?: string | null;
+  rider_phone?: string | null;
   created_at: string | null;
   driver_arrived_at?: string | null;
   no_show_eligible_at?: string | null;
@@ -40,6 +42,8 @@ const CURRENT_TRIP_SELECT = `
   dropoff_lng,
   fare_amount,
   payment_method,
+  rider_name,
+  rider_phone,
   created_at,
   ride_option,
   stops,
@@ -61,6 +65,8 @@ const LEGACY_CURRENT_TRIP_SELECT = `
   dropoff_lng,
   fare_amount,
   payment_method,
+  rider_name,
+  rider_phone,
   created_at
 `;
 

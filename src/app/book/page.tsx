@@ -44,8 +44,8 @@ type StopInput = Omit<ResolvedLocation, "lat" | "lng"> & {
 const DEFAULT_CENTER = { lat: -26.188, lng: 28.3206 };
 
 // Bottom-sheet snap positions (% of viewport height the sheet top sits at)
-const SNAP_COLLAPSED = 70;
-const SNAP_EXPANDED = 16;
+const SNAP_COLLAPSED = 42;
+const SNAP_EXPANDED = 28;
 
 function money(v: number | null | undefined) {
   return v == null ? "R--" : `R${Math.round(Number(v))}`;
@@ -130,7 +130,7 @@ export default function RiderBookingPage() {
   const [routeVisible, setRouteVisible] = useState(false);
 
   // ── Bottom sheet drag state ──────────────────────────────────────
-  const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">("collapsed");
+  const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">("expanded");
   const [dragY, setDragY] = useState<number | null>(null); // live drag offset in px
   const dragStartYRef = useRef<number>(0);
   const dragStartSnapRef = useRef<"collapsed" | "expanded">("collapsed");
@@ -917,10 +917,6 @@ export default function RiderBookingPage() {
     setBusy(false);
   }
 
-  function showFavoritePlaceholder(label: string) {
-    setMsg(`${label} favorite places coming soon.`);
-  }
-
   // ── Map ──────────────────────────────────────────────────────────
   function clearMapVisuals() {
     directionsRendererRef.current?.setMap(null); directionsRendererRef.current = null;
@@ -1173,57 +1169,50 @@ export default function RiderBookingPage() {
           <div className="grid grid-cols-2 gap-2">
             {RIDE_OPTIONS.map((opt) => {
               const active = selectedRideOption === opt.id;
+              const optionFare = Math.round(
+                calculateTripFare({
+                  distanceKm: originalDistanceKm ?? distanceKm,
+                  durationMin: originalDurationMin ?? durationMin,
+                  rideOptionId: opt.id,
+                  surgeLabel: activeSurge.mode,
+                  surgeMultiplier: activeSurge.multiplier,
+                }).totalFare +
+                  (stopCount > 0
+                    ? calculateAddStopIncrease({
+                        rideOptionId: opt.id,
+                        originalDistanceKm: originalDistanceKm ?? distanceKm,
+                        originalDurationMin: originalDurationMin ?? durationMin,
+                        routeDistanceKm: distanceKm,
+                        routeDurationMin: durationMin,
+                        stopCount,
+                      }).finalAddStopIncrease
+                    : 0)
+              );
+              const description = opt.id === "group" ? "More space for groups" : "Everyday local trips";
               return (
                 <button key={opt.id} type="button"
                   className={`moovu-ride-option-card text-left${active ? " active" : ""}`}
                   onClick={() => setSelectedRideOption(opt.id)} aria-pressed={active}
                 >
-                  <div className="grid gap-3">
+                  {active && <span className="moovu-selected-check" aria-hidden="true">✓</span>}
+                  <div className="grid gap-2">
                     <Image
                       src={opt.id === "group" ? "/icons/moovu-go-xl-clean.png" : "/icons/moovu-go-clean.png"}
                       alt={opt.name}
-                      width={220}
-                      height={220}
+                      width={150}
+                      height={150}
                       className="moovu-ride-vehicle-art"
                     />
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-black text-slate-950">{opt.capacity}</div>
-                        <div className="mt-1 text-xs font-semibold text-slate-500">
-                          {opt.id === "group" ? "More space for groups" : "Everyday local trips"}
-                        </div>
-                      </div>
-                      <div className="text-sm font-black text-[var(--moovu-primary)]">
-                        {money(opt.baseFare)}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-white/86 px-3 py-2 text-sm font-black text-[var(--moovu-primary)]">
-                      {money(
-                        Math.round(
-                          calculateTripFare({
-                            distanceKm: originalDistanceKm ?? distanceKm,
-                            durationMin: originalDurationMin ?? durationMin,
-                            rideOptionId: opt.id,
-                            surgeLabel: activeSurge.mode,
-                            surgeMultiplier: activeSurge.multiplier,
-                          }).totalFare +
-                            (stopCount > 0
-                              ? calculateAddStopIncrease({
-                                  rideOptionId: opt.id,
-                                  originalDistanceKm: originalDistanceKm ?? distanceKm,
-                                  originalDurationMin: originalDurationMin ?? durationMin,
-                                  routeDistanceKm: distanceKm,
-                                  routeDurationMin: durationMin,
-                                  stopCount,
-                                }).finalAddStopIncrease
-                              : 0)
-                        )
-                      )}
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-black text-slate-950">{opt.name}</div>
+                      <div className="moovu-ride-price">{money(optionFare)}</div>
+                      <div className="mt-1 text-xs font-black text-slate-700">{opt.capacity}</div>
+                      <div className="mt-0.5 text-[11px] font-semibold leading-4 text-slate-500">{description}</div>
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <span className="moovu-mini-pill">From {money(opt.baseFare)}</span>
-                    <span className="moovu-mini-pill">Pickup estimate after route</span>
+                    {active && <span className="moovu-mini-pill moovu-mini-pill-selected">Selected</span>}
                   </div>
                 </button>
               );
@@ -1413,45 +1402,6 @@ export default function RiderBookingPage() {
             </div>
           </div>
 
-          <div className="mx-4 mb-3">
-            <div className="moovu-booking-steps compact" aria-label="Booking steps">
-              {bookingSteps.map((step, index) => (
-                <span
-                  key={step.label}
-                  className={`moovu-booking-step${step.active ? " active" : ""}${index < bookingStep ? " complete" : ""}`}
-                >
-                  <b>{index + 1}</b>
-                  <small>{step.label}</small>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="mx-4 mb-3 rounded-[22px] border border-blue-100 bg-blue-50/80 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
-                  Favorite places
-                </div>
-                <p className="mt-1 text-xs font-semibold text-blue-800">
-                  MOOVU connects you with verified local drivers.
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {["Home", "Work", "Add favorite"].map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  className="min-h-11 rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm active:scale-[0.98]"
-                  onClick={() => showFavoritePlaceholder(label)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Route inputs box */}
           <div className="mx-4 rounded-[24px] border border-[var(--moovu-border)] bg-white p-3 shadow-sm">
             {/* PICKUP */}
@@ -1619,24 +1569,14 @@ export default function RiderBookingPage() {
             </div>
           </div>
 
-          {/* Expanded details (hidden when collapsed) */}
-          {sheetSnap === "expanded" && (
-            <div className="px-4 pb-4">{expandedDetails}</div>
-          )}
-
-          {/* Swipe hint when collapsed but both locations set */}
-          {sheetSnap === "collapsed" && bothLocationsSet && displayFare != null && (
-            <div className="mx-4 mt-3 flex items-center justify-center gap-2 text-xs font-bold text-slate-500">
-              <span>↑ Swipe up to see ride options</span>
-            </div>
-          )}
+          <div className="px-4 pb-4">{expandedDetails}</div>
         </div>
 
         {/* ── Confirm bar — always visible at bottom of sheet ── */}
         <div className="mbk-confirm-bar">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Estimated total</div>
-            <div className="text-xl font-black text-slate-950">{displayFare == null ? "Set route" : money(displayFare)}</div>
+            <div className="mbk-footer-fare">{displayFare == null ? "Set route" : money(displayFare)}</div>
           </div>
           <button
             className="moovu-confirm-button flex-1"

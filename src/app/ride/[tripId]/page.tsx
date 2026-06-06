@@ -161,6 +161,13 @@ function displayDuration(value: number | null | undefined) {
   return value == null ? "--" : `${Math.round(Number(value))} min`;
 }
 
+function rideTypeLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized === "group" || normalized === "xl" || normalized.includes("xl")) return "MOOVU Go XL";
+  if (normalized === "scheduled") return "Scheduled ride";
+  return "MOOVU Go";
+}
+
 function driverRatingLabel(driver: Driver | null) {
   const rating = Number(driver?.average_rating ?? 0);
   return rating > 0 ? `${rating.toFixed(1)} / 5` : "New Driver";
@@ -783,6 +790,78 @@ export default function RideTrackingPage() {
     }
   }, [trip?.status]);
 
+  const stageDetail = useMemo(() => {
+    switch (trip?.status) {
+      case "requested":
+      case "offered":
+        return {
+          eyebrow: "Live request",
+          title: "Looking for nearby MOOVU drivers",
+          body: "Your request is being sent to available drivers near you.",
+          eta: "Checking availability",
+        };
+      case "assigned":
+        return {
+          eyebrow: "Driver assigned",
+          title: "Driver on the way",
+          body: "Watch the map and confirm the vehicle, plate and driver before getting in.",
+          eta: displayDuration(trip.duration_min),
+        };
+      case "arrived":
+        return {
+          eyebrow: "Pickup",
+          title: "Driver has arrived",
+          body: "Give the start OTP only when you are ready to begin the ride.",
+          eta: "At pickup",
+        };
+      case "ongoing":
+        return {
+          eyebrow: "On trip",
+          title: "Trip started",
+          body: "Your ride is in progress. Keep trip details visible until completion.",
+          eta: displayDuration(trip.duration_min),
+        };
+      case "completed":
+        return {
+          eyebrow: "Receipt ready",
+          title: "Trip completed",
+          body: "Your trip is complete. You can open the receipt or rate the ride.",
+          eta: "Done",
+        };
+      case "cancelled":
+        return {
+          eyebrow: "Closed",
+          title: "Trip cancelled",
+          body: "This request has been closed. Cancellation details are shown below.",
+          eta: "Cancelled",
+        };
+      default:
+        return {
+          eyebrow: "Ride status",
+          title: statusLabel(trip?.status),
+          body: statusCta,
+          eta: "Live",
+        };
+    }
+  }, [statusCta, trip?.duration_min, trip?.status]);
+
+  const progressSteps = useMemo(() => {
+    const order = ["requested", "assigned", "arrived", "ongoing", "completed"];
+    const labels = ["Request", "Driver", "Pickup", "Trip", "Done"];
+    const currentIndex =
+      trip?.status === "offered"
+        ? 0
+        : trip?.status === "cancelled"
+          ? -1
+          : Math.max(0, order.indexOf(trip?.status ?? "requested"));
+
+    return labels.map((label, index) => ({
+      label,
+      active: currentIndex >= index,
+      current: currentIndex === index,
+    }));
+  }, [trip?.status]);
+
   const otpCards = useMemo(() => {
     if (!trip || trip.status === "completed" || trip.status === "cancelled") return [];
 
@@ -791,7 +870,7 @@ export default function RideTrackingPage() {
         {
           label: "Start OTP",
           value: trip.start_otp ?? "--",
-          helper: "Share this with the driver only when you are ready to start.",
+          helper: "Give this code to your driver to start the trip.",
           tone: "primary",
         },
       ];
@@ -1026,18 +1105,43 @@ export default function RideTrackingPage() {
       )}
 
       <div className="moovu-shell">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="moovu-section-title">MOOVU Ride</div>
-            <h1 className="mt-1 text-3xl font-black text-slate-950">Track your ride</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{statusCta}</p>
+        <section className="customer-trip-hero mb-4">
+          <div className="min-w-0">
+            <div className="moovu-section-title">{stageDetail.eyebrow}</div>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+              {stageDetail.title}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
+              {stageDetail.body}
+            </p>
+            <div className="customer-trip-progress mt-5" aria-label="Trip progress">
+              {progressSteps.map((step) => (
+                <div
+                  key={step.label}
+                  className={[
+                    "customer-trip-progress-step",
+                    step.active ? "is-active" : "",
+                    step.current ? "is-current" : "",
+                  ].join(" ")}
+                >
+                  <span />
+                  <strong>{step.label}</strong>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className={statusChipClass(trip.status)}>
-            <span className="moovu-chip-dot" />
-            {statusLabel(trip.status)}
+          <div className="customer-trip-hero-side">
+            <div className={statusChipClass(trip.status)}>
+              <span className="moovu-chip-dot" />
+              {statusLabel(trip.status)}
+            </div>
+            <div className="customer-trip-eta">
+              <span>ETA</span>
+              <strong>{stageDetail.eta}</strong>
+            </div>
           </div>
-        </div>
+        </section>
 
         <div className="mb-4 grid gap-3 md:grid-cols-3">
           <section className="rounded-[24px] border border-blue-100 bg-[#eaf3ff] p-4 shadow-sm">
@@ -1060,9 +1164,12 @@ export default function RideTrackingPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-          <section className="relative min-h-[68vh] overflow-hidden rounded-[28px] border border-[var(--moovu-border)] bg-white shadow-sm">
-            <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-slate-700 shadow">
-              {tracking?.liveState || statusLabel(trip.status)}
+          <section className="customer-trip-map-card">
+            <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-black text-slate-700 shadow">
+              Live route
+            </div>
+            <div className="absolute right-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700 shadow">
+              {tracking?.liveState?.replace(/_/g, " ") || statusLabel(trip.status)}
             </div>
 
             {mapError ? (
@@ -1073,7 +1180,7 @@ export default function RideTrackingPage() {
               <div ref={mapRef} className="min-h-[68vh] w-full bg-slate-100" />
             )}
 
-            <div className="absolute bottom-0 left-0 right-0 z-10 rounded-t-[28px] border-t border-white/70 bg-white/95 p-4 shadow-[0_-16px_45px_rgba(15,23,42,0.14)] backdrop-blur md:p-5">
+            <div className="customer-trip-map-sheet">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
@@ -1232,9 +1339,12 @@ export default function RideTrackingPage() {
             <section className="moovu-card p-5">
               <div className="text-sm font-medium text-slate-500">Safety</div>
               <div className="mt-3 rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
-                MOOVU connects you with verified local drivers. Check driver details before entering the vehicle.
+                MOOVU keeps your trip visible with driver details, OTP trip starts, and live updates.
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+                Check driver details before entering the vehicle.
+              </p>
+              <div className="mt-4 grid gap-3">
                 <Link
                   href={`/ride/${trip.id}/share`}
                   className="moovu-btn moovu-btn-secondary w-full"
@@ -1248,6 +1358,12 @@ export default function RideTrackingPage() {
                 >
                   SOS soon
                 </button>
+                <Link
+                  href={`/ride/${trip.id}/support`}
+                  className="moovu-btn moovu-btn-secondary w-full"
+                >
+                  Trip support
+                </Link>
               </div>
             </section>
 
@@ -1312,6 +1428,31 @@ export default function RideTrackingPage() {
                         : "--"}
                     </div>
                   </div>
+                </div>
+              )}
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Ride type</div>
+                  <div className="mt-1 text-sm font-black text-slate-950">{rideTypeLabel(trip.ride_type)}</div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Fare</div>
+                  <div className="mt-1 text-sm font-black text-slate-950">{money(displayTotal)}</div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Distance</div>
+                  <div className="mt-1 text-sm font-black text-slate-950">{displayDistance(trip.distance_km)}</div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Duration</div>
+                  <div className="mt-1 text-sm font-black text-slate-950">{displayDuration(trip.duration_min)}</div>
+                </div>
+              </div>
+
+              {routeAddition > 0 && (
+                <div className="mt-3 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-800">
+                  Add stop applied: extra route cost discounted by 40%.
                 </div>
               )}
             </section>
@@ -1394,11 +1535,10 @@ export default function RideTrackingPage() {
         </div>
 
         <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-          {(trip.status === "completed" || trip.status === "cancelled" || routeAddition > 0) && (
           <section className="moovu-card overflow-hidden p-0">
-            <div className="bg-slate-950 p-5 text-white">
+            <div className="customer-fare-header p-5 text-white">
               <div className="text-xs font-black uppercase tracking-[0.18em] text-blue-200">
-                Ride total
+                Fare and payment
               </div>
               <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
                 <div>
@@ -1463,7 +1603,6 @@ export default function RideTrackingPage() {
               </div>
             </div>
           </section>
-          )}
 
             <section className="moovu-card p-5">
               <div className="text-sm font-medium text-slate-500">Trip controls</div>

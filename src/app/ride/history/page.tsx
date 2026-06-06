@@ -16,10 +16,17 @@ type RiderTrip = {
   pickup_address: string | null;
   dropoff_address: string | null;
   fare_amount: number | null;
+  final_fare?: number | null;
+  final_add_stop_increase?: number | null;
+  stop_waiting_fee?: number | null;
+  distance_km?: number | null;
+  duration_min?: number | null;
   payment_method: string | null;
   status: string | null;
   created_at: string | null;
   driver_id: string | null;
+  ride_type?: string | null;
+  stops?: unknown;
   cancel_reason?: string | null;
   cancellation_reason?: string | null;
   cancellation_type?: string | null;
@@ -46,6 +53,25 @@ function money(value: number | null | undefined) {
 
 function dash(value: string | null | undefined) {
   return value?.trim() || "--";
+}
+
+function rideTypeLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized === "group" || normalized === "xl" || normalized.includes("xl")) return "MOOVU Go XL";
+  if (normalized === "scheduled") return "Scheduled ride";
+  return "MOOVU Go";
+}
+
+function stopsCount(value: unknown) {
+  return Array.isArray(value) ? Math.min(value.length, 2) : 0;
+}
+
+function displayDistance(value: number | null | undefined) {
+  return value == null ? "--" : `${Number(value).toFixed(1)} km`;
+}
+
+function displayDuration(value: number | null | undefined) {
+  return value == null ? "--" : `${Math.round(Number(value))} min`;
 }
 
 function formatDate(value: string | null | undefined) {
@@ -233,11 +259,25 @@ export default function RiderHistoryPage() {
                           </div>
                         </div>
                       </div>
+
+                      <div className="customer-history-meta mt-4">
+                        <span>{rideTypeLabel(trip.ride_type)}</span>
+                        <span>{displayDistance(trip.distance_km)}</span>
+                        <span>{displayDuration(trip.duration_min)}</span>
+                        {stopsCount(trip.stops) > 0 ? <span>{stopsCount(trip.stops)} stop(s)</span> : null}
+                      </div>
                     </div>
 
                     <div className="grid gap-2 sm:min-w-48 sm:text-right">
-                      <div className="text-2xl font-black text-slate-950">{money(trip.fare_amount)}</div>
+                      <div className="text-2xl font-black text-slate-950">
+                        {money(trip.final_fare ?? trip.fare_amount)}
+                      </div>
                       <div className="text-sm font-bold text-slate-600">{dash(trip.payment_method)}</div>
+                      {Number(trip.final_add_stop_increase ?? 0) + Number(trip.stop_waiting_fee ?? 0) > 0 ? (
+                        <div className="text-xs font-black text-emerald-700">
+                          Stops included
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 

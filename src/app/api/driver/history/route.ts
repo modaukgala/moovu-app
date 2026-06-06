@@ -5,6 +5,63 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
 }
 
+function isMissingHistoryColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" && (
+    message.includes("commission_amount") ||
+    message.includes("driver_net_earnings") ||
+    message.includes("completed_at") ||
+    message.includes("ride_option")
+  );
+}
+
+const HISTORY_SELECT = `
+  id,
+  rider_name,
+  rider_phone,
+  pickup_address,
+  dropoff_address,
+  fare_amount,
+  commission_amount,
+  driver_net_earnings,
+  payment_method,
+  status,
+  created_at,
+  completed_at,
+  driver_id,
+  ride_option
+`;
+
+const LEGACY_HISTORY_SELECT = `
+  id,
+  rider_name,
+  rider_phone,
+  pickup_address,
+  dropoff_address,
+  fare_amount,
+  payment_method,
+  status,
+  created_at,
+  driver_id
+`;
+
+type DriverHistoryRow = {
+  id: string;
+  rider_name: string | null;
+  rider_phone: string | null;
+  pickup_address: string | null;
+  dropoff_address: string | null;
+  fare_amount: number | null;
+  commission_amount?: number | null;
+  driver_net_earnings?: number | null;
+  payment_method: string | null;
+  status: string | null;
+  created_at: string | null;
+  completed_at?: string | null;
+  driver_id: string | null;
+  ride_option?: string | null;
+};
+
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -61,22 +118,24 @@ export async function GET(req: Request) {
       );
     }
 
-    const { data: trips, error: tripsError } = await supabaseAdmin
+    const tripsQuery = await supabaseAdmin
       .from("trips")
-      .select(`
-        id,
-        rider_name,
-        rider_phone,
-        pickup_address,
-        dropoff_address,
-        fare_amount,
-        payment_method,
-        status,
-        created_at,
-        driver_id
-      `)
+      .select(HISTORY_SELECT)
       .eq("driver_id", mapping.driver_id)
       .order("created_at", { ascending: false });
+
+    let trips = tripsQuery.data as DriverHistoryRow[] | null;
+    let tripsError = tripsQuery.error;
+
+    if (isMissingHistoryColumn(tripsQuery.error)) {
+      const legacyTripsQuery = await supabaseAdmin
+        .from("trips")
+        .select(LEGACY_HISTORY_SELECT)
+        .eq("driver_id", mapping.driver_id)
+        .order("created_at", { ascending: false });
+      trips = legacyTripsQuery.data as DriverHistoryRow[] | null;
+      tripsError = legacyTripsQuery.error;
+    }
 
     if (tripsError) {
       return NextResponse.json(

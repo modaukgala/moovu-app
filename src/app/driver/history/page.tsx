@@ -17,10 +17,14 @@ type DriverTrip = {
   pickup_address: string | null;
   dropoff_address: string | null;
   fare_amount: number | null;
+  commission_amount?: number | null;
+  driver_net_earnings?: number | null;
   payment_method: string | null;
   status: string | null;
   created_at: string | null;
+  completed_at?: string | null;
   driver_id: string | null;
+  ride_option?: string | null;
 };
 
 function money(value: number | null | undefined) {
@@ -30,6 +34,13 @@ function money(value: number | null | undefined) {
 
 function displayDate(value: string | null) {
   return value ? new Date(value).toLocaleString() : "--";
+}
+
+function rideTypeLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized === "group" || normalized === "xl" || normalized.includes("xl")) return "MOOVU Go XL";
+  if (normalized === "scheduled") return "Scheduled ride";
+  return "MOOVU Go";
 }
 
 const FILTERS = [
@@ -331,6 +342,10 @@ export default function DriverHistoryPage() {
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
+                    <div className="text-xs font-bold text-slate-500">Ride type</div>
+                    <div className="mt-1 font-bold text-slate-950">{rideTypeLabel(trip.ride_option)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
                     <div className="text-xs font-bold text-slate-500">Rider</div>
                     <div className="mt-1 font-bold text-slate-950">{trip.rider_name ?? "--"}</div>
                   </div>
@@ -342,10 +357,22 @@ export default function DriverHistoryPage() {
                     <div className="text-xs font-bold text-slate-500">Payment</div>
                     <div className="mt-1 font-bold text-slate-950">{trip.payment_method ?? "--"}</div>
                   </div>
+                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
+                    <div className="text-xs font-bold text-slate-500">Commission</div>
+                    <div className="mt-1 font-bold text-slate-950">{money(trip.commission_amount)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
+                    <div className="text-xs font-bold text-slate-500">Driver earnings</div>
+                    <div className="mt-1 font-bold text-slate-950">{money(trip.driver_net_earnings ?? trip.fare_amount)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
+                    <div className="text-xs font-bold text-slate-500">Completed</div>
+                    <div className="mt-1 font-bold text-slate-950">{displayDate(trip.completed_at ?? trip.created_at)}</div>
+                  </div>
                 </div>
 
                 {trip.status === "completed" && (
-                  <div className="mt-4 flex justify-end">
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
                     <button
                       type="button"
                       className="moovu-btn moovu-btn-secondary"
@@ -356,6 +383,13 @@ export default function DriverHistoryPage() {
                       }}
                     >
                       Rate customer
+                    </button>
+                    <button
+                      type="button"
+                      className="moovu-btn moovu-btn-secondary"
+                      onClick={() => setMsg("Trip summary is shown on this card.")}
+                    >
+                      Trip summary
                     </button>
                   </div>
                 )}
