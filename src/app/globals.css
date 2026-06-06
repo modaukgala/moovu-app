@@ -865,6 +865,77 @@ tr:last-child td {
   color: var(--moovu-primary-strong);
 }
 
+.moovu-driver-home-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.moovu-driver-home-stack > * {
+  margin: 0 !important;
+}
+
+.moovu-driver-home-stack .moovu-driver-map-card {
+  order: -3;
+}
+
+.moovu-driver-home-stack .moovu-driver-active-trip {
+  order: -2;
+}
+
+.moovu-driver-big-money {
+  margin-top: 6px;
+  color: #050505;
+  font-size: clamp(36px, 6vw, 58px);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 0.95;
+}
+
+.moovu-driver-soft-stat {
+  display: flex;
+  min-height: 76px;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid rgba(207, 228, 255, 0.82);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 12px;
+  text-align: left;
+  box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-driver-soft-stat span {
+  color: var(--moovu-text-soft);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.moovu-driver-soft-stat strong {
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--moovu-text);
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moovu-driver-soft-stat.is-action {
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.moovu-driver-soft-stat.is-action:hover {
+  border-color: rgba(31, 116, 201, 0.42);
+  box-shadow: 0 18px 38px rgba(31, 116, 201, 0.12);
+  transform: translateY(-1px);
+}
+
 .moovu-driver-map-card {
   position: relative;
   overflow: hidden;
@@ -872,6 +943,47 @@ tr:last-child td {
   border-radius: 34px;
   background: #fff;
   box-shadow: 0 18px 60px rgba(15, 23, 42, 0.1);
+}
+
+.moovu-driver-map-status {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 10;
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 12px 14px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(16px);
+}
+
+.moovu-driver-map-status span {
+  color: var(--moovu-primary-strong);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+}
+
+.moovu-driver-map-status strong {
+  color: var(--moovu-text);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.moovu-driver-map-status.is-online span {
+  color: #047857;
+}
+
+.moovu-driver-map-status.is-busy span,
+.moovu-driver-map-status.is-offer span {
+  color: #b45309;
+}
+
+.moovu-driver-map-status.is-offline span {
+  color: #64748b;
 }
 
 .moovu-driver-map-sheet {
@@ -885,6 +997,87 @@ tr:last-child td {
   padding: 16px;
   box-shadow: 0 -16px 45px rgba(15, 23, 42, 0.14);
   backdrop-filter: blur(16px);
+}
+
+.moovu-driver-map-sheet-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.58fr) minmax(180px, 0.62fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.moovu-driver-earnings-mini {
+  border: 1px solid rgba(207, 228, 255, 0.82);
+  border-radius: 24px;
+  background: #fff;
+  padding: 14px;
+  box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-driver-earnings-mini span,
+.moovu-driver-earnings-mini small {
+  display: block;
+  color: var(--moovu-text-soft);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.moovu-driver-earnings-mini strong {
+  display: block;
+  margin-top: 4px;
+  color: #050505;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.moovu-driver-earnings-mini small {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.moovu-driver-go-panel {
+  min-width: 0;
+}
+
+.moovu-driver-go-button {
+  display: inline-flex;
+  min-height: 64px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 24px;
+  background: linear-gradient(135deg, var(--moovu-primary), #24b8a5);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  box-shadow: 0 18px 40px rgba(31, 116, 201, 0.26);
+  transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+}
+
+.moovu-driver-go-button.is-online {
+  background: linear-gradient(135deg, #0f766e, #16a34a);
+}
+
+.moovu-driver-go-button:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+
+.moovu-driver-go-button:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.moovu-driver-go-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
 }
 
 .moovu-admin-shell {
@@ -2125,6 +2318,10 @@ tr:last-child td {
   .moovu-driver-metric-grid-5 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .moovu-driver-map-sheet-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2216,11 +2413,27 @@ tr:last-child td {
   }
 
   .moovu-driver-map-card .h-\[58vh\] {
-    height: 62svh;
+    height: 70svh;
+    min-height: 560px;
   }
 
   .moovu-driver-map-sheet {
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .moovu-driver-map-status {
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    max-width: none;
+  }
+
+  .moovu-driver-earnings-mini strong {
+    font-size: 32px;
+  }
+
+  .moovu-driver-soft-stat {
+    min-height: 68px;
   }
 }
 
@@ -2232,6 +2445,10 @@ tr:last-child td {
 
   .moovu-driver-bottom-nav .moovu-customer-nav-dot {
     display: none;
+  }
+
+  .moovu-driver-map-card .h-\[58vh\] {
+    min-height: 540px;
   }
 }
 
