@@ -59,12 +59,12 @@ export default function RateTripPage() {
   }
 
   return (
-    <main className="moovu-page pb-28 text-slate-950">
+    <main className="moovu-app-screen">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="moovu-shell max-w-2xl space-y-6 py-6">
-        <section className="moovu-card overflow-hidden p-0">
-          <div className="bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 sm:p-7">
+      <div className="moovu-app-container max-w-2xl space-y-5">
+        <section className="moovu-app-card overflow-hidden p-0">
+          <div className="moovu-customer-task-hero">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="moovu-section-title">MOOVU Rating</div>
@@ -80,7 +80,7 @@ export default function RateTripPage() {
           </div>
         </section>
 
-        <section className="moovu-card p-5 sm:p-6">
+        <section className="moovu-app-card p-5 sm:p-6">
           <div className="space-y-4">
             <label className="block">
               <span className="mb-2 block text-sm font-black text-slate-700">Rating</span>

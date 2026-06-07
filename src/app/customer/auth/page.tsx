@@ -227,8 +227,8 @@ export default function CustomerAuthPage() {
     <main className="moovu-auth-shell text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="moovu-auth-card">
-        <div className="mb-6 rounded-[26px] bg-[linear-gradient(135deg,#eaf3ff,#f0fffa)] p-5 ring-1 ring-[#d7e2ea]">
+      <div className="moovu-auth-card moovu-customer-auth-card">
+        <div className="moovu-customer-task-hero mb-6">
           <div className="moovu-section-title">MOOVU Customer</div>
           <h1 className="mt-3 text-3xl font-black text-slate-950">
             Login or create account
@@ -242,7 +242,7 @@ export default function CustomerAuthPage() {
         <section className="space-y-4">
           {step === "phone" && (
             <>
-              <div className="moovu-card-soft p-4">
+              <div className="moovu-auth-step-card">
                 <h2 className="text-lg font-semibold text-slate-900">
                   Step 1: Email or cellphone
                 </h2>
@@ -270,7 +270,7 @@ export default function CustomerAuthPage() {
 
           {step === "login" && (
             <>
-              <div className="moovu-card-soft p-4">
+              <div className="moovu-auth-step-card">
                 <h2 className="text-lg font-semibold text-slate-900">Welcome back</h2>
                   <p className="mt-2 text-sm text-slate-600">
                   {existingName || "Customer"} was found for {phone.trim()}.
@@ -311,12 +311,12 @@ export default function CustomerAuthPage() {
 
           {step === "signup" && (
             <>
-              <div className="moovu-card-soft p-4">
+              <div className="moovu-auth-step-card">
                 <h2 className="text-lg font-semibold text-slate-900">
                   Create your customer account
                 </h2>
                 <p className="mt-2 text-sm text-slate-600">
-                  We could not find this number, so let’s create a new account.
+                  We could not find this account, so let us create a new one.
                 </p>
               </div>
 

@@ -216,7 +216,7 @@ export default function TripReceiptPage() {
         {/* Print controls */}
         <div className="moovu-no-print mb-4 flex flex-wrap items-center justify-between gap-3">
           <Link href={`/ride/${trip.id}`} className="moovu-btn moovu-btn-secondary">
-            ← Back to trip
+            Back to trip
           </Link>
           <button type="button" onClick={() => window.print()} className="moovu-btn moovu-btn-primary">
             Print receipt
@@ -224,13 +224,13 @@ export default function TripReceiptPage() {
         </div>
 
         <div className="moovu-receipt-doc">
-          {/* ── HEADER ────────────────────────────────────────────── */}
+          {/* HEADER */}
           <div className="moovu-receipt-doc-header">
             <div className="moovu-receipt-logo-row">
               <Image src="/logo.png" alt="MOOVU Kasi Rides" width={64} height={64} priority className="moovu-receipt-logo-img" />
               <div>
                 <div className="moovu-receipt-brand">MOOVU Kasi Rides</div>
-                <div className="moovu-receipt-tagline">Safe · Fast · Trusted</div>
+                <div className="moovu-receipt-tagline">Safe - Fast - Trusted</div>
               </div>
             </div>
             <div className="moovu-receipt-doc-meta">
@@ -240,10 +240,6 @@ export default function TripReceiptPage() {
                   <tr>
                     <td>Receipt No.</td>
                     <td><strong>{receiptNumber}</strong></td>
-                  </tr>
-                  <tr>
-                    <td>Trip ID</td>
-                    <td className="moovu-receipt-mono">{trip.id}</td>
                   </tr>
                   <tr>
                     <td>Issued</td>
@@ -264,7 +260,7 @@ export default function TripReceiptPage() {
 
           <div className="moovu-receipt-divider" />
 
-          {/* ── ROUTE ─────────────────────────────────────────────── */}
+          {/* ROUTE */}
           <div className="moovu-receipt-section-title">Route</div>
           <div className="moovu-receipt-route">
             <div className="moovu-receipt-route-row">
@@ -298,7 +294,7 @@ export default function TripReceiptPage() {
 
           <div className="moovu-receipt-divider" />
 
-          {/* ── TRIP STATS ────────────────────────────────────────── */}
+          {/* TRIP STATS */}
           <div className="moovu-receipt-stats">
             <div className="moovu-receipt-stat">
               <div className="moovu-receipt-stat-label">Ride type</div>
@@ -320,7 +316,7 @@ export default function TripReceiptPage() {
 
           <div className="moovu-receipt-divider" />
 
-          {/* ── PEOPLE + VEHICLE ──────────────────────────────────── */}
+          {/* PEOPLE + VEHICLE */}
           <div className="moovu-receipt-people">
             <div>
               <div className="moovu-receipt-section-title">Rider</div>
@@ -338,14 +334,14 @@ export default function TripReceiptPage() {
               <div className="moovu-receipt-person-sub">
                 {[driver?.vehicle_year, driver?.vehicle_color, driver?.vehicle_registration]
                   .filter(Boolean)
-                  .join(" · ") || "--"}
+                  .join(" - ") || "--"}
               </div>
             </div>
           </div>
 
           <div className="moovu-receipt-divider" />
 
-          {/* ── TIMESTAMPS ────────────────────────────────────────── */}
+          {/* TIMESTAMPS */}
           <div className="moovu-receipt-times">
             <div>
               <span className="moovu-receipt-time-label">Booked:</span>
@@ -359,7 +355,7 @@ export default function TripReceiptPage() {
 
           <div className="moovu-receipt-divider" />
 
-          {/* ── FARE TOTAL ────────────────────────────────────────── */}
+          {/* FARE TOTAL */}
           <div className="moovu-receipt-fare-block">
             <div className="moovu-receipt-fare-row">
               <span>Trip fare (excl. VAT)</span>
@@ -399,7 +395,7 @@ export default function TripReceiptPage() {
             </div>
           </div>
 
-          {/* ── FOOTER ────────────────────────────────────────────── */}
+          {/* FOOTER */}
           <div className="moovu-receipt-doc-footer">
             Thank you for riding with MOOVU Kasi Rides.
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -30,7 +30,14 @@ type CustomerMe = {
 
 type Prediction = { description: string; place_id: string };
 type LocationKind = "pickup" | "dropoff";
+type PasteTarget = LocationKind | "stop";
 type ResolvedLocation = { address: string; placeId: string; lat: number; lng: number };
+type PendingPastedLocation = {
+  target: PasteTarget;
+  stopIndex?: number;
+  source: string;
+  resolved: ResolvedLocation;
+};
 type StopInput = Omit<ResolvedLocation, "lat" | "lng"> & {
   lat: number | null;
   lng: number | null;
@@ -42,6 +49,12 @@ type StopInput = Omit<ResolvedLocation, "lat" | "lng"> & {
 };
 
 const DEFAULT_CENTER = { lat: -26.188, lng: 28.3206 };
+const FAVORITE_PLACE_SHORTCUTS = [
+  { label: "Home", detail: "Save your usual pickup" },
+  { label: "Work", detail: "Fast weekday trips" },
+  { label: "School", detail: "Daily local routes" },
+  { label: "Add Favourite", detail: "Coming soon" },
+] as const;
 
 // Bottom-sheet snap positions (% of viewport height the sheet top sits at)
 const SNAP_COLLAPSED = 42;
@@ -72,6 +85,49 @@ function selectedPlaceLabel(description: string, detailName?: unknown) {
   if (name && !/^south africa$/i.test(name)) return name;
   const [firstPart] = description.split(",");
   return firstPart?.trim() || description;
+}
+
+function parseCoordinatesFromText(value: string): { lat: number; lng: number } | null {
+  const match = value.match(/(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)/);
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+function extractLocationCandidate(value: string) {
+  const input = value.trim();
+  if (!input) return "";
+
+  const coords = parseCoordinatesFromText(input);
+  if (coords) return `${coords.lat}, ${coords.lng}`;
+
+  try {
+    const url = new URL(input);
+    const params = url.searchParams;
+    const candidates = [
+      params.get("q"),
+      params.get("query"),
+      params.get("ll"),
+      params.get("daddr"),
+      params.get("destination"),
+      params.get("address"),
+      params.get("saddr"),
+    ].filter(Boolean);
+
+    const first = candidates[0]?.trim();
+    if (first) return first;
+
+    const pathText = decodeURIComponent(url.pathname)
+      .replace(/\/+/g, " ")
+      .replace(/@/g, " ")
+      .trim();
+    return pathText || input;
+  } catch {
+    return input;
+  }
 }
 
 function isResolvedStop(stop: StopInput): stop is StopInput & { address: string; lat: number; lng: number } {
@@ -128,6 +184,8 @@ export default function RiderBookingPage() {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [routeVisible, setRouteVisible] = useState(false);
+  const [pendingPastedLocation, setPendingPastedLocation] = useState<PendingPastedLocation | null>(null);
+  const [pasteResolving, setPasteResolving] = useState(false);
 
   // ── Bottom sheet drag state ──────────────────────────────────────
   const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">("expanded");
@@ -212,6 +270,11 @@ export default function RiderBookingPage() {
     !!customer && canCalculate && distanceKm != null && durationMin != null && displayFare != null &&
     !legalAcceptanceRequired && !(rideType === "scheduled" && !scheduledFor)
   ), [customer, canCalculate, distanceKm, durationMin, displayFare, legalAcceptanceRequired, rideType, scheduledFor]);
+
+  const loyaltyTitle = useMemo(() => {
+    const name = customer?.first_name?.trim();
+    return name ? `${name}, your MOOVU profile is ready` : "Your MOOVU profile is ready";
+  }, [customer?.first_name]);
 
   const progressText = useMemo(() => {
     if (!pickupAddress.trim()) return "Set your pickup point";
@@ -734,6 +797,144 @@ export default function RiderBookingPage() {
     resetRouteState();
   }
 
+  async function resolvePastedLocation(
+    target: PasteTarget,
+    rawValue: string,
+    stopIndex?: number,
+  ) {
+    const source = rawValue.trim();
+    if (!source) return;
+
+    setMsg(null);
+    setPasteResolving(true);
+
+    try {
+      const candidate = extractLocationCandidate(source);
+      const coords = parseCoordinatesFromText(candidate) ?? parseCoordinatesFromText(source);
+
+      if (coords) {
+        const json = await reverseGeocode(coords.lat, coords.lng).catch(() => null);
+        const resolved = {
+          address: json?.ok && json.address ? selectedPlaceLabel(json.address, json.name) : `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`,
+          placeId: "",
+          lat: coords.lat,
+          lng: coords.lng,
+        };
+        setPendingPastedLocation({ target, stopIndex, source, resolved });
+        return;
+      }
+
+      const acRes = await fetch("/api/maps/autocomplete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: candidate }),
+      });
+      const acJson = await acRes.json().catch(() => null);
+      const first = acJson?.ok && acJson.predictions?.length > 0
+        ? (acJson.predictions[0] as Prediction)
+        : null;
+
+      if (first?.place_id) {
+        const detailRes = await fetch("/api/maps/place-details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ place_id: first.place_id }),
+        });
+        const detail = await detailRes.json().catch(() => null);
+        if (detail?.ok && typeof detail.lat === "number" && typeof detail.lng === "number") {
+          setPendingPastedLocation({
+            target,
+            stopIndex,
+            source,
+            resolved: {
+              address: selectedPlaceLabel(first.description, detail.name),
+              placeId: detail.place_id || first.place_id,
+              lat: detail.lat,
+              lng: detail.lng,
+            },
+          });
+          return;
+        }
+      }
+
+      const geoRes = await fetch("/api/maps/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place: candidate }),
+      });
+      const geo = await geoRes.json().catch(() => null);
+
+      if (geo?.ok && typeof geo.lat === "number" && typeof geo.lng === "number") {
+        setPendingPastedLocation({
+          target,
+          stopIndex,
+          source,
+          resolved: {
+            address: selectedPlaceLabel(geo.address || candidate, geo.name),
+            placeId: "",
+            lat: geo.lat,
+            lng: geo.lng,
+          },
+        });
+        return;
+      }
+
+      setMsg("We couldn't identify that location. Try a map link, coordinates, or full address.");
+    } finally {
+      setPasteResolving(false);
+    }
+  }
+
+  function handleLocationPaste(
+    event: ClipboardEvent<HTMLInputElement>,
+    target: PasteTarget,
+    stopIndex?: number,
+  ) {
+    const text = event.clipboardData.getData("text");
+    if (!text.trim()) return;
+    event.preventDefault();
+    void resolvePastedLocation(target, text, stopIndex);
+  }
+
+  function applyPastedLocation() {
+    if (!pendingPastedLocation) return;
+    const { target, stopIndex, resolved } = pendingPastedLocation;
+
+    if (target === "pickup") {
+      setPickupAddress(resolved.address);
+      setPickupPlaceId(resolved.placeId);
+      setPickupLat(resolved.lat);
+      setPickupLng(resolved.lng);
+      setPickupPredictions([]);
+      setShowPickupDropdown(false);
+      setPickupError(null);
+    } else if (target === "dropoff") {
+      setDropoffAddress(resolved.address);
+      setDropoffPlaceId(resolved.placeId);
+      setDropoffLat(resolved.lat);
+      setDropoffLng(resolved.lng);
+      setDropoffPredictions([]);
+      setShowDropoffDropdown(false);
+      setDropoffError(null);
+    } else if (typeof stopIndex === "number") {
+      const validationError = validateStopLocation(stopIndex, resolved);
+      if (validationError) {
+        updateStop(stopIndex, { error: validationError });
+        setPendingPastedLocation(null);
+        return;
+      }
+      updateStop(stopIndex, {
+        ...resolved,
+        predictions: [],
+        open: false,
+        error: null,
+      });
+    }
+
+    setPendingPastedLocation(null);
+    resetRouteState();
+  }
+
   function currentResolvedLocation(kind: LocationKind): ResolvedLocation | null {
     if (kind === "pickup") {
       if (pickupLat == null || pickupLng == null) return null;
@@ -1153,6 +1354,17 @@ export default function RiderBookingPage() {
         </div>
       </div>
       {/* Ride options — only shown after fare calculated */}
+      <div className="customer-loyalty-strip mt-3">
+        <div>
+          <span>MOOVU Local Member</span>
+          <strong>{loyaltyTitle}</strong>
+        </div>
+        <div>
+          <span>Rewards</span>
+          <strong>Future rewards coming soon</strong>
+        </div>
+      </div>
+
       {distanceKm != null && durationMin != null && (
         <div className="mbk-ride-options">
           <div className="flex items-center justify-between gap-3 mb-3">
@@ -1227,21 +1439,21 @@ export default function RiderBookingPage() {
       )}
 
       {stopCount > 0 && (
-        <div className="mt-4 rounded-[22px] border border-emerald-100 bg-emerald-50 p-4">
+        <div className="moovu-booking-addstop-card mt-4">
           <div className="text-sm font-black text-emerald-900">Add stop applied</div>
           <div className="mt-1 text-xs font-semibold text-emerald-800">
             Extra route cost discounted by 40%. First 3 minutes waiting at each stop are free.
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">
-            <div className="rounded-2xl bg-white/80 p-3">
+            <div className="moovu-fare-mini-card">
               <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">Original fare</div>
               <div className="mt-1 text-sm font-black text-slate-950">{money(originalFare)}</div>
             </div>
-            <div className="rounded-2xl bg-white/80 p-3">
+            <div className="moovu-fare-mini-card">
               <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">Add stop</div>
               <div className="mt-1 text-sm font-black text-slate-950">+{money(addStopBreakdown?.finalAddStopIncrease ?? addStopIncrease)}</div>
             </div>
-            <div className="rounded-2xl bg-white p-3">
+            <div className="moovu-fare-mini-card is-total">
               <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">Total</div>
               <div className="mt-1 text-sm font-black text-[var(--moovu-primary)]">{money(displayFare)}</div>
             </div>
@@ -1267,9 +1479,12 @@ export default function RiderBookingPage() {
       </div>
 
       {rideType === "scheduled" && (
-        <div className="mt-3">
+        <div className="customer-schedule-card mt-3">
           <label className="moovu-field-label" htmlFor="scheduled-for">Scheduled pickup</label>
           <input id="scheduled-for" type="datetime-local" className="moovu-input mt-2" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
+          <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">
+            Schedule rides are released to nearby drivers before pickup time. Fare is confirmed securely when you submit.
+          </p>
         </div>
       )}
 
@@ -1282,7 +1497,7 @@ export default function RiderBookingPage() {
       )}
 
       {/* Trip summary */}
-      <div className="mt-3 rounded-[20px] border border-[#d7e2ea] bg-[#f6fafc] p-4">
+      <div className="moovu-booking-summary-card mt-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Trip summary</div>
@@ -1303,7 +1518,7 @@ export default function RiderBookingPage() {
       </div>
 
       {/* Push notifications */}
-      <div className="mt-3 rounded-[20px] border border-[#d7e2ea] bg-white p-4">
+      <div className="moovu-booking-summary-card mt-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-bold text-slate-950">Ride updates</div>
@@ -1317,6 +1532,41 @@ export default function RiderBookingPage() {
   return (
     <main className="mbk-page">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {pendingPastedLocation && (
+        <div className="customer-detail-overlay" onClick={() => setPendingPastedLocation(null)}>
+          <section
+            className="customer-detail-sheet max-w-md"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="customer-detail-handle" />
+            <div className="moovu-section-title">Location Found</div>
+            <h2 className="mt-2 text-2xl font-black text-slate-950">
+              Use this {pendingPastedLocation.target === "dropoff" ? "destination" : pendingPastedLocation.target}?
+            </h2>
+            <div className="mt-4 rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
+              {pendingPastedLocation.resolved.address}
+            </div>
+            <div className="mt-2 text-xs font-semibold text-slate-500">
+              {pendingPastedLocation.resolved.lat.toFixed(5)}, {pendingPastedLocation.resolved.lng.toFixed(5)}
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button type="button" className="moovu-btn moovu-btn-primary" onClick={applyPastedLocation}>
+                Use This Location
+              </button>
+              <button type="button" className="moovu-btn moovu-btn-secondary" onClick={() => setPendingPastedLocation(null)}>
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {pasteResolving && (
+        <div className="fixed left-1/2 top-5 z-[10000] -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-black text-[var(--moovu-primary)] shadow-xl">
+          Resolving pasted location...
+        </div>
+      )}
       {legalAcceptanceRequired && (
         <div className="legal-booking-gate" role="dialog" aria-modal="true" aria-label="MOOVU legal acceptance">
           <div className="legal-booking-card">
@@ -1424,6 +1674,7 @@ export default function RiderBookingPage() {
                 </div>
                 <input id="pickup-input" className="moovu-route-input" placeholder="Pickup location"
                   value={pickupAddress} onChange={(e) => onPickupInputChange(e.target.value)}
+                  onPaste={(e) => handleLocationPaste(e, "pickup")}
                   onBlur={() => void onPickupBlur()}
                   onFocus={() => { if (pickupPredictions.length > 0) setShowPickupDropdown(true); }}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onPickupBlur(); } }} />
@@ -1495,6 +1746,7 @@ export default function RiderBookingPage() {
                     placeholder="Add a stop"
                     value={stop.address}
                     onChange={(e) => onStopInputChange(index, e.target.value)}
+                    onPaste={(e) => handleLocationPaste(e, "stop", index)}
                     onBlur={() => {
                       updateStop(index, { open: false });
                       if (stop.address.trim() && !isResolvedStop(stop)) void resolveStop(index);
@@ -1514,17 +1766,25 @@ export default function RiderBookingPage() {
                   {stop.error && <div className="moovu-field-error">{stop.error}</div>}
                   {stop.open && stop.predictions.length > 0 && (
                     <div className="moovu-place-menu">
-                      {stop.predictions.map((item) => (
-                        <button
-                          key={item.place_id}
-                          type="button"
-                          className="moovu-place-option"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => void chooseStopPlace(index, item.place_id, item.description)}
-                        >
-                          {item.description}
-                        </button>
-                      ))}
+                    {stop.predictions.map((item) => (
+                      <button
+                        key={item.place_id}
+                        type="button"
+                        className="moovu-place-option"
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            void chooseStopPlace(index, item.place_id, item.description);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              void chooseStopPlace(index, item.place_id, item.description);
+                            }
+                          }}
+                      >
+                        {item.description}
+                      </button>
+                    ))}
                     </div>
                   )}
                 </div>
@@ -1540,6 +1800,7 @@ export default function RiderBookingPage() {
                 <label className="moovu-field-label" htmlFor="dropoff-input">Destination</label>
                 <input id="dropoff-input" className="moovu-route-input" placeholder="Where are you going?"
                   value={dropoffAddress} onChange={(e) => onDropoffInputChange(e.target.value)}
+                  onPaste={(e) => handleLocationPaste(e, "dropoff")}
                   onBlur={() => void onDropoffBlur()}
                   onFocus={() => { if (dropoffPredictions.length > 0) setShowDropoffDropdown(true); }}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onDropoffBlur(); } }} />
@@ -1566,6 +1827,31 @@ export default function RiderBookingPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="mx-4 mt-3 customer-booking-favorites">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="moovu-field-label">Favourite places</div>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Quick places are being prepared for your account.
+                </p>
+              </div>
+              <span className="moovu-mini-pill">Local shortcuts</span>
+            </div>
+            <div className="customer-favorite-grid mt-3">
+              {FAVORITE_PLACE_SHORTCUTS.map((favorite) => (
+                <button
+                  key={favorite.label}
+                  type="button"
+                  className="customer-favorite-chip"
+                  onClick={() => setMsg(`${favorite.label} favourite places are coming soon.`)}
+                >
+                  <strong>{favorite.label}</strong>
+                  <span>{favorite.detail}</span>
+                </button>
+              ))}
             </div>
           </div>
 

@@ -174,6 +174,20 @@ export default function RiderHistoryPage() {
           actionLabel="Book"
         />
 
+        <section className="customer-history-hero">
+          <div>
+            <div className="moovu-kicker">MOOVU local ride log</div>
+            <h1>Every trip, receipt and status in one place.</h1>
+            <p>
+              MOOVU keeps your local township trips easy to review, with receipts,
+              cancellation notes, stops and live trip access kept together.
+            </p>
+          </div>
+          <Link href="/book" className="moovu-btn moovu-btn-primary">
+            Book another ride
+          </Link>
+        </section>
+
         <section className="grid gap-3 sm:grid-cols-3">
           <div className="moovu-app-metric moovu-app-metric-primary">
             <div className="moovu-app-metric-label">Total trips</div>
@@ -213,8 +227,8 @@ export default function RiderHistoryPage() {
           {filteredTrips.length === 0 ? (
             <div className="mt-5">
               <EmptyState
-                title="No trips found"
-                description="Trips will appear here after you request a MOOVU ride."
+                title="No MOOVU trips yet"
+                description="Your completed, cancelled and active rides will appear here after your first booking."
                 action={
                   <Link href="/book" className="moovu-btn moovu-btn-primary">
                     Book a ride

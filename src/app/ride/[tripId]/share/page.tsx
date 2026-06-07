@@ -82,12 +82,12 @@ export default function ShareTripPage() {
   }
 
   return (
-    <main className="moovu-page pb-28 text-slate-950">
+    <main className="moovu-app-screen">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="moovu-shell max-w-3xl space-y-6 py-6">
-        <section className="moovu-card overflow-hidden p-0">
-          <div className="bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 sm:p-7">
+      <div className="moovu-app-container max-w-3xl space-y-5">
+        <section className="moovu-app-card overflow-hidden p-0">
+          <div className="moovu-customer-task-hero">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="moovu-section-title">MOOVU Share</div>
@@ -103,7 +103,7 @@ export default function ShareTripPage() {
           </div>
         </section>
 
-        <section className="moovu-card p-5 sm:p-6">
+        <section className="moovu-app-card p-5 sm:p-6">
           <div className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
             <input
@@ -131,7 +131,7 @@ export default function ShareTripPage() {
 
           {shareMessage && (
             <>
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="moovu-customer-soft-panel">
                 <div className="mb-2 text-sm font-black text-slate-500">Message preview</div>
                 <div className="text-sm leading-7 whitespace-pre-wrap">{shareMessage}</div>
               </div>
@@ -166,7 +166,7 @@ export default function ShareTripPage() {
               </div>
 
               {shareUrl && (
-                <div className="rounded-3xl bg-slate-50 p-4">
+                <div className="moovu-customer-soft-panel">
                   <div className="mb-2 text-sm font-black text-slate-500">Live shared trip link</div>
                   <div className="break-all text-sm">{shareUrl}</div>
                 </div>
