@@ -71,6 +71,10 @@ export async function POST(req: Request) {
       lat: result.geometry.location.lat,
       lng: result.geometry.location.lng,
       address: result.formatted_address,
+      formattedAddress: result.formatted_address,
+      placeId: result.place_id,
+      globalPlusCode: result.plus_code?.global_code ?? null,
+      compoundPlusCode: result.plus_code?.compound_code ?? null,
     });
   } catch (error: unknown) {
     return NextResponse.json(

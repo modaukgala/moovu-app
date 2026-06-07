@@ -28,6 +28,10 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       address: data.results[0].formatted_address,
+      formattedAddress: data.results[0].formatted_address,
+      placeId: data.results[0].place_id,
+      globalPlusCode: data.plus_code?.global_code ?? data.results[0].plus_code?.global_code ?? null,
+      compoundPlusCode: data.plus_code?.compound_code ?? data.results[0].plus_code?.compound_code ?? null,
       lat,
       lng,
     });

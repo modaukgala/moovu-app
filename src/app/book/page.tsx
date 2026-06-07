@@ -16,6 +16,7 @@ import {
   type RideOptionId,
   type SurgeModeConfig,
 } from "@/lib/domain/fare";
+import { bestReverseGeocodeLabel, parsePastedLocation, type ReverseGeocodeResult } from "@/lib/locationPaste";
 import { MOOVU_LEGAL_VERSION } from "@/lib/legal";
 import { gpsMarkerIcon, stopMarkerIcon } from "@/lib/maps/liveMapMarkers";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
@@ -85,49 +86,6 @@ function selectedPlaceLabel(description: string, detailName?: unknown) {
   if (name && !/^south africa$/i.test(name)) return name;
   const [firstPart] = description.split(",");
   return firstPart?.trim() || description;
-}
-
-function parseCoordinatesFromText(value: string): { lat: number; lng: number } | null {
-  const match = value.match(/(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)/);
-  if (!match) return null;
-  const lat = Number(match[1]);
-  const lng = Number(match[2]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-  return { lat, lng };
-}
-
-function extractLocationCandidate(value: string) {
-  const input = value.trim();
-  if (!input) return "";
-
-  const coords = parseCoordinatesFromText(input);
-  if (coords) return `${coords.lat}, ${coords.lng}`;
-
-  try {
-    const url = new URL(input);
-    const params = url.searchParams;
-    const candidates = [
-      params.get("q"),
-      params.get("query"),
-      params.get("ll"),
-      params.get("daddr"),
-      params.get("destination"),
-      params.get("address"),
-      params.get("saddr"),
-    ].filter(Boolean);
-
-    const first = candidates[0]?.trim();
-    if (first) return first;
-
-    const pathText = decodeURIComponent(url.pathname)
-      .replace(/\/+/g, " ")
-      .replace(/@/g, " ")
-      .trim();
-    return pathText || input;
-  } catch {
-    return input;
-  }
 }
 
 function isResolvedStop(stop: StopInput): stop is StopInput & { address: string; lat: number; lng: number } {
@@ -439,7 +397,7 @@ export default function RiderBookingPage() {
     setDropoffError(null); resetRouteState();
   }
 
-  async function reverseGeocode(lat: number, lng: number) {
+  async function reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult | null> {
     const res = await fetch("/api/maps/reverse-geocode", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lat, lng }),
@@ -809,20 +767,105 @@ export default function RiderBookingPage() {
     setPasteResolving(true);
 
     try {
-      const candidate = extractLocationCandidate(source);
-      const coords = parseCoordinatesFromText(candidate) ?? parseCoordinatesFromText(source);
+      const serverRes = await fetch("/api/resolve-map-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: source }),
+      }).catch(() => null);
+      const serverJson = await serverRes?.json().catch(() => null) as
+        | {
+            ok?: boolean;
+            error?: string;
+            location?: {
+              label?: string;
+              lat?: number;
+              lng?: number;
+              placeId?: string;
+            };
+          }
+        | null;
 
-      if (coords) {
-        const json = await reverseGeocode(coords.lat, coords.lng).catch(() => null);
+      if (
+        serverJson?.ok &&
+        typeof serverJson.location?.lat === "number" &&
+        typeof serverJson.location?.lng === "number"
+      ) {
+        setPendingPastedLocation({
+          target,
+          stopIndex,
+          source,
+          resolved: {
+            address: serverJson.location.label || `${serverJson.location.lat.toFixed(5)}, ${serverJson.location.lng.toFixed(5)}`,
+            placeId: serverJson.location.placeId || "",
+            lat: serverJson.location.lat,
+            lng: serverJson.location.lng,
+          },
+        });
+        return;
+      }
+
+      const parsed = parsePastedLocation(source);
+
+      if (parsed.kind === "coordinates") {
+        const json = await reverseGeocode(parsed.lat, parsed.lng).catch(() => null);
         const resolved = {
-          address: json?.ok && json.address ? selectedPlaceLabel(json.address, json.name) : `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`,
-          placeId: "",
-          lat: coords.lat,
-          lng: coords.lng,
+          address: json?.ok ? bestReverseGeocodeLabel(json, source) : `${parsed.lat.toFixed(5)}, ${parsed.lng.toFixed(5)}`,
+          placeId: json?.placeId || "",
+          lat: parsed.lat,
+          lng: parsed.lng,
         };
         setPendingPastedLocation({ target, stopIndex, source, resolved });
         return;
       }
+
+      if (parsed.kind === "place_id") {
+        const detailRes = await fetch("/api/maps/place-details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ place_id: parsed.placeId }),
+        });
+        const detail = await detailRes.json().catch(() => null);
+        if (detail?.ok && typeof detail.lat === "number" && typeof detail.lng === "number") {
+          setPendingPastedLocation({
+            target,
+            stopIndex,
+            source,
+            resolved: {
+              address: selectedPlaceLabel(parsed.label || detail.formatted_address || source, detail.name),
+              placeId: detail.place_id || parsed.placeId,
+              lat: detail.lat,
+              lng: detail.lng,
+            },
+          });
+          return;
+        }
+      }
+
+      if (parsed.kind === "plus_code") {
+        const geoRes = await fetch("/api/maps/geocode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ place: parsed.plusCode }),
+        });
+        const geo = await geoRes.json().catch(() => null);
+        if (geo?.ok && typeof geo.lat === "number" && typeof geo.lng === "number") {
+          const reverse = await reverseGeocode(geo.lat, geo.lng).catch(() => null);
+          setPendingPastedLocation({
+            target,
+            stopIndex,
+            source,
+            resolved: {
+              address: reverse?.ok ? bestReverseGeocodeLabel(reverse, parsed.plusCode) : geo.address || parsed.plusCode,
+              placeId: reverse?.placeId || "",
+              lat: geo.lat,
+              lng: geo.lng,
+            },
+          });
+          return;
+        }
+      }
+
+      const candidate = parsed.kind === "text" ? parsed.query : source;
 
       const acRes = await fetch("/api/maps/autocomplete", {
         method: "POST",
@@ -879,7 +922,10 @@ export default function RiderBookingPage() {
         return;
       }
 
-      setMsg("We couldn't identify that location. Try a map link, coordinates, or full address.");
+      setMsg(
+        serverJson?.error ||
+          "We couldn't identify that location. Try pasting coordinates, a full Google Maps link, or a Plus Code.",
+      );
     } finally {
       setPasteResolving(false);
     }
@@ -1550,6 +1596,9 @@ export default function RiderBookingPage() {
             </div>
             <div className="mt-2 text-xs font-semibold text-slate-500">
               {pendingPastedLocation.resolved.lat.toFixed(5)}, {pendingPastedLocation.resolved.lng.toFixed(5)}
+            </div>
+            <div className="mt-1 text-xs font-black uppercase tracking-[0.14em] text-[var(--moovu-primary)]">
+              Detected from pasted location
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <button type="button" className="moovu-btn moovu-btn-primary" onClick={applyPastedLocation}>
