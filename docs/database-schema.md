@@ -10,6 +10,9 @@ This document describes the Supabase objects the current MOOVU app expects. It i
 - `driver_accounts`: Maps Supabase auth users to `drivers.id`; required for driver ownership checks.
 - `driver_applications`: Driver application data before approval.
 - `driver_documents`: Driver document metadata and review status.
+- `driver_vehicle_photos`: Optional onboarding vehicle photo metadata for front, back, sides, interior, and number plate. Add with `docs/driver-onboarding-application-migration.sql`.
+- `driver_review_notes`: Optional admin review notes and application actions. Add with `docs/driver-onboarding-application-migration.sql`.
+- `driver_onboarding_checklist`: Optional readiness checklist for driver application review. Add with `docs/driver-onboarding-application-migration.sql`.
 - `trips`: Ride lifecycle data including customer, driver, pickup/dropoff, fare, ride status, offer state, OTP fields, and commission fields.
 - `trip_events`: Audit trail for trip status changes, offers, OTP verification, commission application, and admin actions.
 - `app_pricing_settings`: Server-managed platform pricing settings. The `manual_surge` key stores the active manual surge mode, label, multiplier, and customer message. Add with `docs/manual-surge-migration.sql`; admin APIs use service-role access and customers receive only read-only display data.
@@ -33,6 +36,10 @@ This document describes the Supabase objects the current MOOVU app expects. It i
 ## Storage Buckets
 
 - `driver-docs`: Driver identity, license, vehicle, and compliance documents.
+- `driver-documents`: Private driver identity/licence/PDP/proof-of-residence uploads for the guided onboarding flow. Add with `docs/driver-onboarding-application-migration.sql`.
+- `driver-vehicle-documents`: Private vehicle registration, licence disc, roadworthy, and insurance uploads.
+- `driver-vehicle-photos`: Private vehicle photo uploads.
+- `driver-profile-photos`: Private driver profile photo uploads.
 - `payment-proofs`: Driver proof-of-payment uploads for subscriptions and commission payments. This bucket should be private; store object paths in `driver_payment_requests.pop_file_path` and expose files to admins through short-lived signed URLs.
 
 ## Important Existing Logic
@@ -50,6 +57,7 @@ This document describes the Supabase objects the current MOOVU app expects. It i
   Existing completed trips keep their stored `commission_pct`, `commission_amount`, and wallet history unless a separate approved data migration is run.
 - Admin API access uses `requireAdminUser`.
 - Driver API ownership is based on `driver_accounts.user_id -> driver_id`.
+- Driver onboarding now uses a guided public and logged-in flow. PDP / PrDP is tracked as `uploaded`, `not_available_yet`, `applying`, `requested`, `verified`, or `rejected`, but the app does not block application submission or admin approval when PDP is missing.
 
 ## RLS Guidance
 

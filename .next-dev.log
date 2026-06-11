@@ -1,0 +1,72 @@
+
+> moovu-kasi@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.27:3000
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 26.8s
+○ Compiling /api/jobs/auto-assign ...
+ POST /api/jobs/auto-assign 401 in 4.8s (compile: 4.8s, render: 35ms)
+○ Compiling /driver/apply ...
+ GET /driver/apply 200 in 63ms (compile: 4ms, render: 59ms)
+ POST /api/jobs/auto-assign 401 in 15ms (compile: 3ms, render: 12ms)
+ POST /api/jobs/auto-assign 401 in 6ms (compile: 2ms, render: 3ms)
+ POST /api/jobs/auto-assign 401 in 6ms (compile: 3ms, render: 4ms)
+ GET /driver/apply 200 in 162ms (compile: 11ms, render: 151ms)
+ GET / 200 in 102ms (compile: 21ms, render: 81ms)
+ GET /driver/apply 200 in 67ms (compile: 7ms, render: 61ms)
+○ Compiling /book ...
+ POST /api/jobs/auto-assign 401 in 8ms (compile: 2ms, render: 6ms)
+ GET /driver/complete-profile 200 in 90ms (compile: 7ms, render: 83ms)
+ GET /driver/complete-profile 200 in 111ms (compile: 51ms, render: 60ms)
+ GET /driver/login?next=%2Fdriver%2Fcomplete-profile 200 in 575ms (compile: 542ms, render: 33ms)
+ GET / 200 in 40ms (compile: 3ms, render: 37ms)
+ GET /book 200 in 134ms (compile: 4ms, render: 130ms)
+ GET /admin/payment-reviews 200 in 378ms (compile: 6ms, render: 372ms)
+ GET /admin/receipts 200 in 383ms (compile: 30ms, render: 353ms)
+ GET /driver/earnings 200 in 387ms (compile: 53ms, render: 334ms)
+ GET /driver 200 in 396ms (compile: 74ms, render: 321ms)
+ GET /admin/settlements 200 in 334ms (compile: 97ms, render: 237ms)
+ GET /admin/subscriptions 200 in 338ms (compile: 121ms, render: 217ms)
+ GET /admin/reports 200 in 342ms (compile: 143ms, render: 199ms)
+ GET /driver/complete-profile 200 in 346ms (compile: 170ms, render: 177ms)
+ GET /admin 200 in 519ms (compile: 465ms, render: 54ms)
+ GET /admin/applications 200 in 486ms (compile: 409ms, render: 77ms)
+ GET /admin/applications 200 in 505ms (compile: 388ms, render: 117ms)
+ GET /admin/login?next=%2Fadmin%2Fapplications 200 in 738ms (compile: 659ms, render: 79ms)
+ GET / 200 in 39ms (compile: 3ms, render: 35ms)
+ GET /book 200 in 147ms (compile: 4ms, render: 143ms)
+ GET /driver 200 in 368ms (compile: 7ms, render: 361ms)
+ GET /driver/complete-profile 200 in 383ms (compile: 32ms, render: 352ms)
+ GET /admin/subscriptions 200 in 403ms (compile: 48ms, render: 355ms)
+ GET /admin/receipts 200 in 410ms (compile: 72ms, render: 338ms)
+ GET /admin/payment-reviews 200 in 417ms (compile: 90ms, render: 328ms)
+ GET /driver/earnings 200 in 402ms (compile: 195ms, render: 207ms)
+ GET /admin/reports 200 in 409ms (compile: 212ms, render: 197ms)
+ GET /admin/settlements 200 in 1204ms (compile: 233ms, render: 971ms)
+ GET /admin/applications 200 in 1212ms (compile: 254ms, render: 959ms)
+ GET /admin/applications 200 in 114ms (compile: 4ms, render: 110ms)
+ POST /api/jobs/auto-assign 401 in 7ms (compile: 2ms, render: 5ms)
+ GET /api/notifications/status?role=admin 200 in 1955ms (compile: 1112ms, render: 843ms)
+ GET /api/admin/trips/events?recent=1&limit=30 200 in 2.1s (compile: 1365ms, render: 725ms)
+ GET /api/admin/driver-applications?status=pending_review 200 in 2.5s (compile: 1059ms, render: 1432ms)
+ GET /api/admin/payment-reviews?status=all 200 in 2.6s (compile: 1310ms, render: 1312ms)
+ GET /api/admin/driver-applications?status=all 200 in 2.7s (compile: 1082ms, render: 1632ms)
+ GET /api/admin/driver-applications?status=all 200 in 868ms (compile: 3ms, render: 865ms)
+ GET /api/admin/driver-applications?status=pending_review 200 in 2.9s (compile: 1200ms, render: 1733ms)
+ GET /api/admin/trips/events?recent=1&limit=30 200 in 705ms (compile: 8ms, render: 697ms)
+ GET /api/admin/driver-applications?status=pending_review 200 in 911ms (compile: 2ms, render: 909ms)
+ GET /api/admin/trips/events?recent=1&limit=30 200 in 719ms (compile: 8ms, render: 711ms)
+ GET /api/admin/driver-applications?status=pending_review 200 in 916ms (compile: 3ms, render: 913ms)
+ GET /api/admin/trips/events?recent=1&limit=30 200 in 726ms (compile: 15ms, render: 711ms)
+ GET /api/admin/driver-applications?status=pending_review 200 in 923ms (compile: 11ms, render: 913ms)
+ GET /api/admin/driver-applications?status=pending_review 200 in 941ms (compile: 4ms, render: 937ms)
+ GET /api/admin/payment-reviews?status=all 200 in 1338ms (compile: 4ms, render: 1334ms)
+ GET /api/admin/trips/events?recent=1&limit=30 200 in 735ms (compile: 14ms, render: 721ms)
+ GET /api/admin/driver-applications?status=pending_review 200 in 963ms (compile: 3ms, render: 960ms)
+ GET /api/admin/trips/events?recent=1&limit=30 200 in 933ms (compile: 3ms, render: 930ms)
+ GET /api/admin/driver-applications?status=pending_review 200 in 1230ms (compile: 3ms, render: 1227ms)

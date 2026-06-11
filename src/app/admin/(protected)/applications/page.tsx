@@ -22,6 +22,20 @@ type ApplicationRow = {
   vehicle_color?: string | null;
   vehicle_registration?: string | null;
   created_at: string | null;
+  readiness_score?: number | null;
+  pdp_status?: string | null;
+  driver_profile?: {
+    id_number?: string | null;
+    home_address?: string | null;
+    area_name?: string | null;
+    emergency_contact_name?: string | null;
+    emergency_contact_phone?: string | null;
+    license_number?: string | null;
+    license_code?: string | null;
+    license_expiry?: string | null;
+    pdp_number?: string | null;
+    pdp_expiry?: string | null;
+  } | null;
 };
 
 export default function AdminDriverApplicationsPage() {
@@ -105,6 +119,16 @@ export default function AdminDriverApplicationsPage() {
   const selectedVehicle = useMemo(() => {
     if (!selected) return "--";
     return [selected.vehicle_make, selected.vehicle_model].filter(Boolean).join(" ") || "--";
+  }, [selected]);
+
+  const selectedPdpLabel = useMemo(() => {
+    if (!selected) return "Not available yet";
+    if (selected.driver_profile?.pdp_number) return "Uploaded";
+    if (selected.pdp_status === "applying") return "Applying for one";
+    if (selected.pdp_status === "requested") return "Requested by admin";
+    if (selected.pdp_status === "verified") return "Verified";
+    if (selected.pdp_status === "rejected") return "Rejected / needs re-upload";
+    return "Not available yet";
   }, [selected]);
 
   async function runApplicationAction(action: "approve" | "suspend" | "delete") {
@@ -298,6 +322,14 @@ export default function AdminDriverApplicationsPage() {
                       <div className="mt-3 text-sm text-slate-600">
                         Verification: {app.verification_status ?? "--"}
                       </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                          Readiness {app.readiness_score ?? 0}%
+                        </span>
+                        <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">
+                          PDP {app.driver_profile?.pdp_number ? "uploaded" : "not yet"}
+                        </span>
+                      </div>
                     </button>
                   );
                 })
@@ -339,6 +371,16 @@ export default function AdminDriverApplicationsPage() {
                     <div className="mt-2">
                       <StatusBadge status={selected.verification_status} />
                     </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm font-bold text-slate-500">Readiness Score</div>
+                    <div className="mt-1 text-xl font-black">{selected.readiness_score ?? 0}%</div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm font-bold text-slate-500">PDP / PrDP Status</div>
+                    <div className="mt-1 text-xl font-black">{selectedPdpLabel}</div>
                   </div>
 
                   <div>
@@ -385,6 +427,11 @@ export default function AdminDriverApplicationsPage() {
                       { label: "Name captured", ok: Boolean(selected.first_name || selected.last_name) },
                       { label: "Phone captured", ok: Boolean(selected.phone) },
                       { label: "Email captured", ok: Boolean(selected.email) },
+                      { label: "Identity captured", ok: Boolean(selected.driver_profile?.id_number) },
+                      { label: "Address captured", ok: Boolean(selected.driver_profile?.home_address || selected.driver_profile?.area_name) },
+                      { label: "Emergency contact captured", ok: Boolean(selected.driver_profile?.emergency_contact_name && selected.driver_profile?.emergency_contact_phone) },
+                      { label: "Licence captured", ok: Boolean(selected.driver_profile?.license_number && selected.driver_profile?.license_code && selected.driver_profile?.license_expiry) },
+                      { label: "PDP / PrDP tracked", ok: true },
                       { label: "Vehicle captured", ok: Boolean(selected.vehicle_make || selected.vehicle_model) },
                       { label: "Registration captured", ok: Boolean(selected.vehicle_registration) },
                       { label: "Profile completed", ok: Boolean(selected.profile_completed) },
@@ -401,6 +448,12 @@ export default function AdminDriverApplicationsPage() {
                     ))}
                   </div>
                 </div>
+
+                {!selected.driver_profile?.pdp_number && (
+                  <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
+                    This driver has not uploaded a PDP / PrDP yet. You can still approve if MOOVU allows this driver to operate under current business rules.
+                  </div>
+                )}
 
                 <div className="pt-2">
                   <div className="flex flex-wrap gap-3">

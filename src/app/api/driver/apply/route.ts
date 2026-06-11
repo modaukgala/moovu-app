@@ -5,6 +5,9 @@ import { notifyAdmins } from "@/lib/push-notify";
 type ExistingDriverRow = {
   id: string;
   is_deleted: boolean | null;
+  status?: string | null;
+  verification_status?: string | null;
+  profile_completed?: boolean | null;
 };
 
 function errorMessage(error: unknown) {
@@ -20,6 +23,11 @@ export async function POST(req: Request) {
     const phone = body.phone ? String(body.phone).trim() : null;
     const email = body.email ? String(body.email).trim().toLowerCase() : null;
     const notes = body.notes ? String(body.notes).trim() : null;
+    const applicationData = body.applicationData && typeof body.applicationData === "object" ? body.applicationData : null;
+    const eligibility = applicationData?.eligibility ?? {};
+    const personal = applicationData?.personal ?? {};
+    const vehicle = applicationData?.vehicle ?? {};
+    const pdpStatus = String(body.pdpStatus ?? eligibility.pdpStatus ?? "not_available_yet");
 
     if (!userId || !email) {
       return NextResponse.json(
@@ -37,7 +45,7 @@ export async function POST(req: Request) {
 
     const { data: driverByEmail } = await supabaseAdmin
       .from("drivers")
-      .select("id, is_deleted")
+      .select("id, is_deleted, status, verification_status, profile_completed")
       .eq("email", email)
       .limit(1)
       .maybeSingle();
@@ -47,7 +55,7 @@ export async function POST(req: Request) {
     } else if (phone) {
       const { data: driverByPhone } = await supabaseAdmin
         .from("drivers")
-        .select("id, is_deleted")
+        .select("id, is_deleted, status, verification_status, profile_completed")
         .eq("phone", phone)
         .limit(1)
         .maybeSingle();
@@ -58,6 +66,40 @@ export async function POST(req: Request) {
     }
 
     let driverId = existingDriver?.id ?? null;
+    const preserveApproved = existingDriver?.verification_status === "approved";
+    const nextVerificationStatus = preserveApproved
+      ? "approved"
+      : existingDriver?.verification_status || "pending_review";
+    const nextStatus = preserveApproved
+      ? existingDriver?.status || "active"
+      : "pending";
+    const nextProfileCompleted = preserveApproved
+      ? Boolean(existingDriver?.profile_completed)
+      : false;
+    const seatingCapacity = Number(vehicle.seatingCapacity);
+    const vehiclePatch = {
+      vehicle_make: vehicle.make ? String(vehicle.make).trim() : null,
+      vehicle_model: vehicle.model ? String(vehicle.model).trim() : null,
+      vehicle_year: vehicle.year ? String(vehicle.year).trim() : null,
+      vehicle_color: vehicle.color ? String(vehicle.color).trim() : null,
+      vehicle_registration: vehicle.plate ? String(vehicle.plate).trim() : null,
+      vehicle_vin: vehicle.vin ? String(vehicle.vin).trim() : null,
+      vehicle_engine_number: vehicle.engineNumber ? String(vehicle.engineNumber).trim() : null,
+      seating_capacity: Number.isFinite(seatingCapacity) ? seatingCapacity : null,
+    };
+    const structuredNotes = [
+      notes,
+      "MOOVU guided application summary:",
+      `Readiness score: ${Number(applicationData?.readinessScore ?? 0)}%`,
+      `PDP / PrDP status: ${pdpStatus}`,
+      `Valid licence: ${eligibility.validLicence ?? "unknown"}`,
+      `Vehicle access: ${eligibility.vehicleAccess ?? "unknown"}`,
+      `Operating area: ${eligibility.operatingArea ?? "not captured"}`,
+      `Vehicle ownership: ${eligibility.ownershipType ?? vehicle.ownershipType ?? "not captured"}`,
+      `Vehicle category: ${vehicle.category ?? "not captured"}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     if (!driverId) {
       const { data: insertedDriver, error: insertDriverErr } =
@@ -68,12 +110,13 @@ export async function POST(req: Request) {
             last_name: lastName,
             phone,
             email,
-            status: "pending",
-            verification_status: "pending_review",
+            status: nextStatus,
+            verification_status: nextVerificationStatus,
             profile_completed: false,
             online: false,
             busy: false,
             is_deleted: false,
+            ...vehiclePatch,
           })
           .select("id")
           .single();
@@ -98,15 +141,16 @@ export async function POST(req: Request) {
           last_name: lastName,
           phone,
           email,
-          status: "pending",
-          verification_status: "pending_review",
-          profile_completed: false,
+          status: nextStatus,
+          verification_status: nextVerificationStatus,
+          profile_completed: nextProfileCompleted,
           online: false,
           busy: false,
           is_deleted: false,
           deleted_at: null,
           delete_mode: null,
           deleted_reason: null,
+          ...vehiclePatch,
         })
         .eq("id", driverId);
 
@@ -126,6 +170,11 @@ export async function POST(req: Request) {
           first_name: firstName,
           last_name: lastName,
           phone,
+          id_number: personal.idNumber ? String(personal.idNumber).trim() : null,
+          home_address: personal.address ? String(personal.address).trim() : null,
+          area_name: eligibility.operatingArea ? String(eligibility.operatingArea).trim() : null,
+          emergency_contact_name: personal.emergencyName ? String(personal.emergencyName).trim() : null,
+          emergency_contact_phone: personal.emergencyPhone ? String(personal.emergencyPhone).trim() : null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "driver_id" }
@@ -169,7 +218,7 @@ export async function POST(req: Request) {
           full_name: fullName,
           phone,
           email,
-          notes,
+          notes: structuredNotes,
           status: "pending",
         })
         .eq("id", existingApplication.id);
@@ -188,7 +237,7 @@ export async function POST(req: Request) {
           full_name: fullName,
           phone,
           email,
-          notes,
+          notes: structuredNotes,
           status: "pending",
         });
 
