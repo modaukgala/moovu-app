@@ -31,6 +31,9 @@ yarn-error.log*
 .pnpm-debug.log*
 /dev-server.log
 /dev-server.err.log
+/.audit-dev-*.log
+/.audit-dev-*.err.log
+/.next-dev.log
 /*.zip
 
 # env files (can opt-in for committing if needed)

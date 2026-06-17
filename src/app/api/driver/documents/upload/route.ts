@@ -17,6 +17,11 @@ function safeSegment(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "document";
 }
 
+function isMissingColumnError(error: { message?: string; code?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return error?.code === "42703" || message.includes("column") || message.includes("schema cache");
+}
+
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -104,15 +109,38 @@ export async function POST(req: Request) {
 
     const { error: insertError } = await supabaseAdmin.from("driver_documents").insert(row);
     if (insertError) {
+      if (!isMissingColumnError(insertError)) {
+        console.error("[driver-doc-upload] metadata insert failed", {
+          driverId,
+          docType,
+          message: insertError.message,
+          code: insertError.code,
+        });
+        return NextResponse.json(
+          { ok: false, error: "Document uploaded, but MOOVU could not save it for review. Please try again." },
+          { status: 500 }
+        );
+      }
+
       const fallbackRow = {
         driver_id: driverId,
         doc_type: docType,
+        document_type: docType,
         file_path: path,
         status: "pending",
       };
       const { error: fallbackError } = await supabaseAdmin.from("driver_documents").insert(fallbackRow);
       if (fallbackError) {
-        return NextResponse.json({ ok: false, error: fallbackError.message }, { status: 500 });
+        console.error("[driver-doc-upload] fallback metadata insert failed", {
+          driverId,
+          docType,
+          message: fallbackError.message,
+          code: fallbackError.code,
+        });
+        return NextResponse.json(
+          { ok: false, error: "Document uploaded, but MOOVU could not save it for review. Please try again." },
+          { status: 500 }
+        );
       }
     }
 
