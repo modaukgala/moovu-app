@@ -102,6 +102,14 @@ const DOCUMENT_TYPE_ALIASES: Record<string, DriverDocumentType> = {
   other: "other",
 };
 
+const LEGACY_DOCUMENT_TYPE_VALUES: Partial<Record<DriverDocumentType, string>> = {
+  id_document: "id",
+  drivers_license: "license",
+  pdp: "prdp",
+  vehicle_registration: "vehicle_reg",
+  insurance_document: "insurance",
+};
+
 function cleanKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -129,34 +137,103 @@ function getMissingColumn(error: { message?: string } | null | undefined) {
 async function writeMetadata(
   supabase: SupabaseClient,
   mode: "insert" | "update",
-  row: Record<string, unknown>,
+  rows: Record<string, unknown>[],
   existingId?: string
 ) {
-  let nextRow = { ...row };
+  let lastError: { message?: string; code?: string } | null = null;
 
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const query =
-      mode === "update" && existingId
-        ? supabase.from("driver_documents").update(nextRow).eq("id", existingId)
-        : supabase.from("driver_documents").insert(nextRow);
+  for (const row of rows) {
+    let nextRow = { ...row };
 
-    const { error } = await query;
-    if (!error) return { ok: true as const };
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const query =
+        mode === "update" && existingId
+          ? supabase.from("driver_documents").update(nextRow).eq("id", existingId)
+          : supabase.from("driver_documents").insert(nextRow);
 
-    if (error.code === "42703") {
-      const missingColumn = getMissingColumn(error);
-      if (missingColumn && missingColumn in nextRow) {
-        const rest = { ...nextRow };
-        delete rest[missingColumn];
-        nextRow = rest;
-        continue;
+      const { error } = await query;
+      if (!error) return { ok: true as const };
+
+      lastError = error;
+
+      if (error.code === "42703") {
+        const missingColumn = getMissingColumn(error);
+        if (missingColumn && missingColumn in nextRow) {
+          const rest = { ...nextRow };
+          delete rest[missingColumn];
+          nextRow = rest;
+          continue;
+        }
       }
-    }
 
-    return { ok: false as const, error };
+      break;
+    }
   }
 
-  return { ok: false as const, error: { message: "Could not match driver_documents schema." } };
+  return { ok: false as const, error: lastError ?? { message: "Could not match driver_documents schema." } };
+}
+
+function metadataVariants(params: {
+  driverId: string;
+  documentType: DriverDocumentType;
+  path: string;
+  uploadedBy?: string | null;
+  required: boolean;
+  source: string;
+  expiresOn?: string | null;
+  now: string;
+}) {
+  const base: Record<string, unknown> = {
+    driver_id: params.driverId,
+    document_type: params.documentType,
+    doc_type: params.documentType,
+    file_path: params.path,
+    status: "pending",
+    review_status: "pending",
+    rejection_reason: null,
+    uploaded_at: params.now,
+    updated_at: params.now,
+    uploaded_by: params.uploadedBy || null,
+    source: params.source,
+    required: params.required,
+    expires_on: params.expiresOn || null,
+  };
+
+  const minimal = {
+    driver_id: params.driverId,
+    document_type: params.documentType,
+    doc_type: params.documentType,
+    file_path: params.path,
+    status: "pending",
+    review_status: "pending",
+    uploaded_at: params.now,
+  };
+
+  const variants: Record<string, unknown>[] = [
+    base,
+    { ...base, status: "uploaded" },
+    minimal,
+    { ...minimal, status: "uploaded" },
+    {
+      driver_id: params.driverId,
+      document_type: params.documentType,
+      doc_type: params.documentType,
+      file_path: params.path,
+      status: "pending",
+      uploaded_at: params.now,
+    },
+  ];
+
+  const legacyType = LEGACY_DOCUMENT_TYPE_VALUES[params.documentType];
+  if (legacyType) {
+    variants.push(
+      { ...minimal, document_type: legacyType, doc_type: legacyType },
+      { ...minimal, document_type: params.documentType, doc_type: legacyType },
+      { ...minimal, document_type: legacyType, doc_type: params.documentType }
+    );
+  }
+
+  return variants;
 }
 
 async function findExistingDocument(
@@ -249,21 +326,16 @@ export async function uploadDriverDocument({
   }
 
   const now = new Date().toISOString();
-  const metadata: Record<string, unknown> = {
-    driver_id: driverId,
-    document_type: normalizedType,
-    doc_type: normalizedType,
-    file_path: path,
-    status: "uploaded",
-    review_status: "pending",
-    rejection_reason: null,
-    uploaded_at: now,
-    updated_at: now,
-    uploaded_by: uploadedBy || null,
-    source,
+  const metadata = metadataVariants({
+    driverId,
+    documentType: normalizedType,
+    path,
+    uploadedBy,
     required,
-    expires_on: expiresOn || null,
-  };
+    source,
+    expiresOn,
+    now,
+  });
 
   const existingId = await findExistingDocument(supabase, driverId, normalizedType);
   const result = existingId
