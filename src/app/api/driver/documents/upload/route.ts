@@ -22,6 +22,54 @@ function isMissingColumnError(error: { message?: string; code?: string } | null 
   return error?.code === "42703" || message.includes("column") || message.includes("schema cache");
 }
 
+function uploadMetadataRows(driverId: string, docType: string, path: string) {
+  const uploadedAt = new Date().toISOString();
+
+  return [
+    {
+      driver_id: driverId,
+      doc_type: docType,
+      document_type: docType,
+      file_path: path,
+      status: "uploaded",
+      review_status: "pending",
+      uploaded_at: uploadedAt,
+    },
+    {
+      driver_id: driverId,
+      document_type: docType,
+      file_path: path,
+      status: "uploaded",
+      review_status: "pending",
+      uploaded_at: uploadedAt,
+    },
+    {
+      driver_id: driverId,
+      doc_type: docType,
+      document_type: docType,
+      file_path: path,
+      status: "pending",
+      review_status: "pending",
+      uploaded_at: uploadedAt,
+    },
+    {
+      driver_id: driverId,
+      document_type: docType,
+      file_path: path,
+      status: "pending",
+      review_status: "pending",
+      uploaded_at: uploadedAt,
+    },
+    {
+      driver_id: driverId,
+      document_type: docType,
+      file_path: path,
+      status: "pending",
+      uploaded_at: uploadedAt,
+    },
+  ];
+}
+
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -97,54 +145,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: uploadError.message }, { status: 500 });
     }
 
-    const row = {
-      driver_id: driverId,
-      doc_type: docType,
-      document_type: docType,
-      file_path: path,
-      status: "uploaded",
-      review_status: "pending",
-      uploaded_at: new Date().toISOString(),
-    };
-
-    const { error: insertError } = await supabaseAdmin.from("driver_documents").insert(row);
-    if (insertError) {
-      if (!isMissingColumnError(insertError)) {
-        console.error("[driver-doc-upload] metadata insert failed", {
-          driverId,
-          docType,
-          message: insertError.message,
-          code: insertError.code,
-        });
-        return NextResponse.json(
-          { ok: false, error: "Document uploaded, but MOOVU could not save it for review. Please try again." },
-          { status: 500 }
-        );
+    let lastInsertError: { message?: string; code?: string } | null = null;
+    for (const row of uploadMetadataRows(driverId, docType, path)) {
+      const { error: insertError } = await supabaseAdmin.from("driver_documents").insert(row);
+      if (!insertError) {
+        return NextResponse.json({ ok: true, path });
       }
 
-      const fallbackRow = {
-        driver_id: driverId,
-        doc_type: docType,
-        document_type: docType,
-        file_path: path,
-        status: "pending",
-      };
-      const { error: fallbackError } = await supabaseAdmin.from("driver_documents").insert(fallbackRow);
-      if (fallbackError) {
-        console.error("[driver-doc-upload] fallback metadata insert failed", {
-          driverId,
-          docType,
-          message: fallbackError.message,
-          code: fallbackError.code,
-        });
-        return NextResponse.json(
-          { ok: false, error: "Document uploaded, but MOOVU could not save it for review. Please try again." },
-          { status: 500 }
-        );
-      }
+      lastInsertError = insertError;
+      const message = String(insertError.message ?? "").toLowerCase();
+      const retryable =
+        isMissingColumnError(insertError) ||
+        insertError.code === "23502" ||
+        insertError.code === "23514" ||
+        message.includes("not-null") ||
+        message.includes("violates not-null") ||
+        message.includes("violates check constraint");
+
+      if (!retryable) break;
     }
 
-    return NextResponse.json({ ok: true, path });
+    await supabaseAdmin.storage.from("driver-docs").remove([path]).catch(() => {});
+    console.error("[driver-doc-upload] metadata insert failed", {
+      driverId,
+      docType,
+      message: lastInsertError?.message,
+      code: lastInsertError?.code,
+    });
+
+    return NextResponse.json(
+      { ok: false, error: "MOOVU could not save this document for review. Please try again." },
+      { status: 500 }
+    );
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 500 });
   }
