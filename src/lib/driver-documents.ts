@@ -110,6 +110,21 @@ const LEGACY_DOCUMENT_TYPE_VALUES: Partial<Record<DriverDocumentType, string>> =
   insurance_document: "insurance",
 };
 
+const LEGACY_DISPLAY_DOCUMENT_TYPE_VALUES: Partial<Record<DriverDocumentType, string>> = {
+  id_document: "SA ID or passport",
+  drivers_license: "Driver licence",
+  proof_of_residence: "Proof of residence",
+  profile_photo: "Profile photo",
+  pdp: "PDP / PrDP",
+  police_clearance: "Police clearance",
+  transport_permit: "Transport permit",
+  vehicle_registration: "Vehicle registration",
+  vehicle_license_disc: "Licence disc",
+  roadworthy_certificate: "Roadworthy certificate",
+  vehicle_photos: "Vehicle photos",
+  insurance_document: "Insurance proof",
+};
+
 function cleanKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -230,6 +245,15 @@ function metadataVariants(params: {
       { ...minimal, document_type: legacyType, doc_type: legacyType },
       { ...minimal, document_type: params.documentType, doc_type: legacyType },
       { ...minimal, document_type: legacyType, doc_type: params.documentType }
+    );
+  }
+
+  const displayType = LEGACY_DISPLAY_DOCUMENT_TYPE_VALUES[params.documentType];
+  if (displayType) {
+    variants.push(
+      { ...minimal, document_type: displayType, doc_type: displayType },
+      { ...minimal, document_type: params.documentType, doc_type: displayType },
+      { ...minimal, document_type: displayType, doc_type: params.documentType }
     );
   }
 

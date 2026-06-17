@@ -167,6 +167,23 @@ alter table public.driver_documents
 alter table public.driver_documents
   drop constraint if exists driver_documents_document_type_check;
 
+-- Drop any older custom check constraints on driver_documents that may still
+-- reject the new fixed document_type values. Foreign keys, primary keys, and
+-- unique indexes are left intact.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname
+    from pg_constraint
+    where conrelid = 'public.driver_documents'::regclass
+      and contype = 'c'
+  loop
+    execute format('alter table public.driver_documents drop constraint if exists %I', c.conname);
+  end loop;
+end $$;
+
 alter table public.driver_documents
   add constraint driver_documents_document_type_check
   check (document_type in (
