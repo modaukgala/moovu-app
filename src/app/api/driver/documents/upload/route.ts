@@ -1,73 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
-const MAX_FILE_BYTES = 8 * 1024 * 1024;
-const ALLOWED_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+import { uploadDriverDocument } from "@/lib/driver-documents";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
-}
-
-function safeSegment(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "document";
-}
-
-function isMissingColumnError(error: { message?: string; code?: string } | null | undefined) {
-  const message = String(error?.message ?? "").toLowerCase();
-  return error?.code === "42703" || message.includes("column") || message.includes("schema cache");
-}
-
-function uploadMetadataRows(driverId: string, docType: string, path: string) {
-  const uploadedAt = new Date().toISOString();
-
-  return [
-    {
-      driver_id: driverId,
-      doc_type: docType,
-      document_type: docType,
-      file_path: path,
-      status: "uploaded",
-      review_status: "pending",
-      uploaded_at: uploadedAt,
-    },
-    {
-      driver_id: driverId,
-      document_type: docType,
-      file_path: path,
-      status: "uploaded",
-      review_status: "pending",
-      uploaded_at: uploadedAt,
-    },
-    {
-      driver_id: driverId,
-      doc_type: docType,
-      document_type: docType,
-      file_path: path,
-      status: "pending",
-      review_status: "pending",
-      uploaded_at: uploadedAt,
-    },
-    {
-      driver_id: driverId,
-      document_type: docType,
-      file_path: path,
-      status: "pending",
-      review_status: "pending",
-      uploaded_at: uploadedAt,
-    },
-    {
-      driver_id: driverId,
-      document_type: docType,
-      file_path: path,
-      status: "pending",
-      uploaded_at: uploadedAt,
-    },
-  ];
 }
 
 export async function POST(req: Request) {
@@ -96,7 +32,8 @@ export async function POST(req: Request) {
 
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } }
     );
 
     const { data: mapping, error: mappingError } = await supabaseAdmin
@@ -106,7 +43,12 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (mappingError) {
-      return NextResponse.json({ ok: false, error: mappingError.message }, { status: 500 });
+      console.error("[driver-doc-upload] account mapping failed", {
+        userId: user.id,
+        message: mappingError.message,
+        code: mappingError.code,
+      });
+      return NextResponse.json({ ok: false, error: "Could not verify your driver account." }, { status: 500 });
     }
 
     if (!mapping?.driver_id) {
@@ -115,69 +57,35 @@ export async function POST(req: Request) {
 
     const form = await req.formData();
     const file = form.get("file") as File | null;
-    const docType = String(form.get("docType") ?? "").trim();
+    const documentType = form.get("documentType") ?? form.get("docType");
+    const required = String(form.get("required") ?? "false") === "true";
 
-    if (!file || !docType) {
+    if (!file) {
       return NextResponse.json({ ok: false, error: "Choose a document to upload." }, { status: 400 });
     }
 
-    if (file.size > MAX_FILE_BYTES) {
-      return NextResponse.json({ ok: false, error: "File must be 8MB or smaller." }, { status: 400 });
-    }
-
-    if (file.type && !ALLOWED_TYPES.has(file.type)) {
-      return NextResponse.json({ ok: false, error: "Upload a PDF, JPG, PNG, or WEBP file." }, { status: 400 });
-    }
-
-    const driverId = mapping.driver_id;
-    const extension = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-    const path = `drivers/${driverId}/${safeSegment(docType)}/${Date.now()}.${safeSegment(extension || "bin")}`;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("driver-docs")
-      .upload(path, bytes, {
-        contentType: file.type || "application/octet-stream",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      return NextResponse.json({ ok: false, error: uploadError.message }, { status: 500 });
-    }
-
-    let lastInsertError: { message?: string; code?: string } | null = null;
-    for (const row of uploadMetadataRows(driverId, docType, path)) {
-      const { error: insertError } = await supabaseAdmin.from("driver_documents").insert(row);
-      if (!insertError) {
-        return NextResponse.json({ ok: true, path });
-      }
-
-      lastInsertError = insertError;
-      const message = String(insertError.message ?? "").toLowerCase();
-      const retryable =
-        isMissingColumnError(insertError) ||
-        insertError.code === "23502" ||
-        insertError.code === "23514" ||
-        message.includes("not-null") ||
-        message.includes("violates not-null") ||
-        message.includes("violates check constraint");
-
-      if (!retryable) break;
-    }
-
-    await supabaseAdmin.storage.from("driver-docs").remove([path]).catch(() => {});
-    console.error("[driver-doc-upload] metadata insert failed", {
-      driverId,
-      docType,
-      message: lastInsertError?.message,
-      code: lastInsertError?.code,
+    const result = await uploadDriverDocument({
+      supabase: supabaseAdmin,
+      driverId: String(mapping.driver_id),
+      documentType,
+      file,
+      uploadedBy: user.id,
+      required,
+      source: "driver",
     });
 
-    return NextResponse.json(
-      { ok: false, error: "MOOVU could not save this document for review. Please try again." },
-      { status: 500 }
-    );
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      path: result.path,
+      documentType: result.documentType,
+      message: "Document uploaded for MOOVU review.",
+    });
   } catch (error: unknown) {
-    return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 500 });
+    console.error("[driver-doc-upload] unexpected failure", { message: errorMessage(error) });
+    return NextResponse.json({ ok: false, error: "We could not upload this document. Please try again." }, { status: 500 });
   }
 }

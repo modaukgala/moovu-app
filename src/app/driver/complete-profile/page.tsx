@@ -5,6 +5,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import {
+  getDriverDocumentLabel,
+  normalizeDriverDocumentType,
+  type DriverDocumentItem,
+} from "@/lib/driver-documents";
 
 type Driver = {
   id: string;
@@ -55,10 +60,31 @@ type DriverDocument = {
 };
 
 const steps = ["Eligibility", "Personal", "Documents", "Vehicle", "Photos", "Review"] as const;
-const requiredDocs = ["SA ID or passport", "Driver licence", "Proof of residence", "Profile photo"];
-const optionalDocs = ["PDP / PrDP", "Police clearance", "Transport permit"];
-const vehicleDocs = ["Registration", "Licence disc", "Roadworthy certificate", "Insurance proof"];
-const vehiclePhotos = ["Front", "Back", "Left side", "Right side", "Interior", "Number plate"];
+const requiredDocs: DriverDocumentItem[] = [
+  { label: "SA ID or passport", type: "id_document", required: true },
+  { label: "Driver licence", type: "drivers_license", required: true },
+  { label: "Proof of residence", type: "proof_of_residence", required: true },
+  { label: "Profile photo", type: "profile_photo", required: true },
+];
+const optionalDocs: DriverDocumentItem[] = [
+  { label: "PDP / PrDP", type: "pdp" },
+  { label: "Police clearance", type: "police_clearance" },
+  { label: "Transport permit", type: "transport_permit" },
+];
+const vehicleDocs: DriverDocumentItem[] = [
+  { label: "Vehicle registration", type: "vehicle_registration", required: true },
+  { label: "Licence disc", type: "vehicle_license_disc", required: true },
+  { label: "Roadworthy certificate", type: "roadworthy_certificate", required: true },
+  { label: "Insurance proof", type: "insurance_document" },
+];
+const vehiclePhotos: DriverDocumentItem[] = [
+  { label: "Front", type: "vehicle_photos", required: true },
+  { label: "Back", type: "vehicle_photos", required: true },
+  { label: "Left side", type: "vehicle_photos", required: true },
+  { label: "Right side", type: "vehicle_photos", required: true },
+  { label: "Interior", type: "vehicle_photos", required: true },
+  { label: "Number plate", type: "vehicle_photos", required: true },
+];
 
 export default function DriverCompleteProfilePage() {
   const router = useRouter();
@@ -272,10 +298,10 @@ export default function DriverCompleteProfilePage() {
     }
   }
 
-  async function uploadDocument(docType: string, file: File | null) {
+  async function uploadDocument(item: DriverDocumentItem, file: File | null) {
     if (!file) return;
 
-    setUploadingDoc(docType);
+    setUploadingDoc(item.label);
     setMsg(null);
     try {
       const token = await getToken();
@@ -285,7 +311,8 @@ export default function DriverCompleteProfilePage() {
       }
 
       const form = new FormData();
-      form.set("docType", docType);
+      form.set("documentType", item.type);
+      form.set("required", item.required ? "true" : "false");
       form.set("file", file);
 
       const res = await fetch("/api/driver/documents/upload", {
@@ -299,7 +326,7 @@ export default function DriverCompleteProfilePage() {
         return;
       }
 
-      setMsg(`${docType} uploaded for admin review.`);
+      setMsg(`${item.label} uploaded for admin review.`);
       await loadProfile();
     } catch {
       setMsg("Could not upload this document.");
@@ -450,7 +477,7 @@ export default function DriverCompleteProfilePage() {
             <Panel title="Vehicle Photos" text="MOOVU needs clear vehicle photos before the vehicle is cleared for trips.">
               <UploadChecklist
                 title="Vehicle photo checklist"
-                items={vehiclePhotos.map((item) => `Vehicle photo - ${item}`)}
+                items={vehiclePhotos.map((item) => ({ ...item, label: `Vehicle photo - ${item.label}` }))}
                 documents={documents}
                 uploadingDoc={uploadingDoc}
                 onUpload={uploadDocument}
@@ -593,23 +620,26 @@ function UploadChecklist({
   onUpload,
 }: {
   title: string;
-  items: string[];
+  items: DriverDocumentItem[];
   documents: DriverDocument[];
   uploadingDoc: string | null;
-  onUpload: (docType: string, file: File | null) => void;
+  onUpload: (item: DriverDocumentItem, file: File | null) => void;
 }) {
   return (
     <div>
       <h3 className="text-lg font-black">{title}</h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => {
-          const latest = documents.find((doc) => (doc.document_type || doc.doc_type) === item);
+          const latest = documents.find((doc) => normalizeDriverDocumentType(doc.document_type || doc.doc_type) === item.type);
           const status = latest?.review_status || latest?.status || "missing";
           return (
-            <div key={item} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div key={`${item.type}-${item.label}`} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="font-black text-slate-950">{item}</div>
+                  <div className="font-black text-slate-950">{item.label}</div>
+                  <div className="mt-1 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    {getDriverDocumentLabel(item.type)}
+                  </div>
                   <div className="mt-1 text-xs font-bold text-slate-500">
                     {latest?.uploaded_at ? `Uploaded ${new Date(latest.uploaded_at).toLocaleDateString()}` : "No file uploaded yet"}
                   </div>
@@ -624,12 +654,12 @@ function UploadChecklist({
                 </div>
               )}
               <label className="mt-3 block">
-                <span className="sr-only">Upload {item}</span>
+                <span className="sr-only">Upload {item.label}</span>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,application/pdf"
                   className="block w-full text-xs font-bold text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-sky-50 file:px-3 file:py-2 file:text-xs file:font-black file:text-[var(--moovu-primary)]"
-                  disabled={uploadingDoc === item}
+                  disabled={uploadingDoc === item.label}
                   onChange={(event) => {
                     const file = event.target.files?.[0] ?? null;
                     onUpload(item, file);
@@ -637,7 +667,7 @@ function UploadChecklist({
                   }}
                 />
               </label>
-              {uploadingDoc === item && <div className="mt-2 text-xs font-black text-slate-500">Uploading...</div>}
+              {uploadingDoc === item.label && <div className="mt-2 text-xs font-black text-slate-500">Uploading...</div>}
             </div>
           );
         })}

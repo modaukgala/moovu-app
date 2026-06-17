@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { DRIVER_DOCUMENT_LABELS, DRIVER_DOCUMENT_TYPES, type DriverDocumentType } from "@/lib/driver-documents";
 
-const DOC_TYPES = ["id", "license", "prdp", "vehicle_reg", "insurance", "other"] as const;
-type DocType = (typeof DOC_TYPES)[number];
-
-function isDocType(value: string): value is DocType {
-  return DOC_TYPES.includes(value as DocType);
+function isDocType(value: string): value is DriverDocumentType {
+  return DRIVER_DOCUMENT_TYPES.includes(value as DriverDocumentType);
 }
 
 export default function UploadDriverDocPage() {
@@ -15,7 +13,7 @@ export default function UploadDriverDocPage() {
   const driverId = params.id;
   const router = useRouter();
 
-  const [docType, setDocType] = useState<DocType>("license");
+  const [docType, setDocType] = useState<DriverDocumentType>("drivers_license");
   const [expiresOn, setExpiresOn] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,7 +32,7 @@ export default function UploadDriverDocPage() {
 
     const form = new FormData();
     form.append("driverId", driverId);
-    form.append("docType", docType);
+    form.append("documentType", docType);
     form.append("expiresOn", expiresOn);
     form.append("file", file);
 
@@ -72,9 +70,9 @@ export default function UploadDriverDocPage() {
               }
             }}
           >
-            {DOC_TYPES.map((t) => (
+            {DRIVER_DOCUMENT_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {DRIVER_DOCUMENT_LABELS[t]}
               </option>
             ))}
           </select>

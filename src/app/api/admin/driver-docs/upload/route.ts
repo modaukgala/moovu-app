@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { uploadDriverDocument } from "@/lib/driver-documents";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
 
     const driverId = String(form.get("driverId") ?? "");
-    const docType = String(form.get("docType") ?? "");
+    const docType = form.get("documentType") ?? form.get("docType");
     const expiresOn = String(form.get("expiresOn") ?? "");
     const file = form.get("file") as File | null;
 
@@ -24,35 +25,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing fields." }, { status: 400 });
     }
 
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-    const path = `kasi/${driverId}/${Date.now()}_${safeName}`;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-
-    const { error: upErr } = await supabaseAdmin.storage
-      .from("driver-docs")
-      .upload(path, bytes, {
-        contentType: file.type || "application/octet-stream",
-        upsert: false,
-      });
-
-    if (upErr) {
-      return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 });
-    }
-
-    const { error: dbErr } = await supabaseAdmin.from("driver_documents").insert({
-      driver_id: driverId,
-      doc_type: docType,
-      file_path: path,
-      expires_on: expiresOn || null,
-      status: "pending",
+    const result = await uploadDriverDocument({
+      supabase: supabaseAdmin,
+      driverId,
+      documentType: docType,
+      file,
+      uploadedBy: auth.user.id,
+      required: false,
+      source: "admin",
+      expiresOn: expiresOn || null,
     });
 
-    if (dbErr) {
-      return NextResponse.json({ ok: false, error: dbErr.message }, { status: 500 });
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, path });
+    return NextResponse.json({ ok: true, path: result.path, documentType: result.documentType });
   } catch (e: unknown) {
-    return NextResponse.json({ ok: false, error: errorMessage(e, "Server error") }, { status: 500 });
+    console.error("[admin-driver-doc-upload] unexpected failure", { message: errorMessage(e, "Server error") });
+    return NextResponse.json({ ok: false, error: "We could not save this document. Please try again." }, { status: 500 });
   }
 }
