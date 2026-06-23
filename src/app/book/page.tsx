@@ -1858,6 +1858,10 @@ export default function RiderBookingPage() {
                 {dropoffLoading && <div className="moovu-field-hint">Searching…</div>}
                 {dropoffResolving && <div className="moovu-field-hint">Resolving…</div>}
                 {dropoffError && <div className="moovu-field-error">{dropoffError}</div>}
+                <div className="customer-destination-help">
+                  If you cannot find the exact destination, enter a nearby school, tavern,
+                  clinic, shop, or landmark close to where you are going.
+                </div>
                 {showDropoffDropdown && dropoffPredictions.length > 0 && (
                   <div className="moovu-place-menu">
                     {dropoffPredictions.map((item) => (
