@@ -58,8 +58,8 @@ const FAVORITE_PLACE_SHORTCUTS = [
 ] as const;
 
 // Bottom-sheet snap positions (% of viewport height the sheet top sits at)
-const SNAP_COLLAPSED = 42;
-const SNAP_EXPANDED = 28;
+const SNAP_COLLAPSED = 66;
+const SNAP_EXPANDED = 48;
 
 function money(v: number | null | undefined) {
   return v == null ? "R--" : `R${Math.round(Number(v))}`;
@@ -1365,6 +1365,8 @@ export default function RiderBookingPage() {
     );
   }
 
+  const selectedRide = RIDE_OPTIONS.find((option) => option.id === selectedRideOption) ?? RIDE_OPTIONS[0];
+
   // ── Expanded-only section (hidden when collapsed) ────────────────
   const expandedDetails = (
     <>
@@ -1424,7 +1426,7 @@ export default function RiderBookingPage() {
               {fmtDist(distanceKm)} · {fmtDur(durationMin)}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="customer-ride-option-list">
             {RIDE_OPTIONS.map((opt) => {
               const active = selectedRideOption === opt.id;
               const optionFare = Math.round(
@@ -1702,7 +1704,7 @@ export default function RiderBookingPage() {
           </div>
 
           {/* Route inputs box */}
-          <div className="mx-4 rounded-[24px] border border-[var(--moovu-border)] bg-white p-3 shadow-sm">
+          <div className="customer-floating-route-card mx-4 rounded-[24px] border border-[var(--moovu-border)] bg-white p-3 shadow-sm">
             {/* PICKUP */}
             <div className="moovu-route-field" ref={pickupBoxRef}>
               <div className="moovu-route-marker-wrap">
@@ -1879,7 +1881,7 @@ export default function RiderBookingPage() {
             </div>
           </div>
 
-          <div className="mx-4 mt-3 customer-booking-favorites">
+          <div className="mx-4 mt-3 customer-booking-favorites customer-booking-favorites-compact">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="moovu-field-label">Favourite places</div>
@@ -1909,6 +1911,13 @@ export default function RiderBookingPage() {
 
         {/* ── Confirm bar — always visible at bottom of sheet ── */}
         <div className="mbk-confirm-bar">
+          <div className="customer-booking-payment-strip">
+            <div>
+              <span>Cash</span>
+              <strong>Personal trip</strong>
+            </div>
+            <small>{selectedRide.name}</small>
+          </div>
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Estimated total</div>
             <div className="mbk-footer-fare">{displayFare == null ? "Set route" : money(displayFare)}</div>
@@ -1920,7 +1929,7 @@ export default function RiderBookingPage() {
           >
             {busy
               ? rideType === "scheduled" ? "Scheduling…" : "Booking…"
-              : rideType === "scheduled" ? "Schedule ride" : "Confirm ride"}
+              : rideType === "scheduled" ? `Schedule ${selectedRide.name}` : `Book ${selectedRide.name}`}
           </button>
         </div>
       </div>
