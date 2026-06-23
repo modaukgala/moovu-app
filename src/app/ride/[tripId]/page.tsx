@@ -1683,11 +1683,11 @@ export default function RideTrackingPage() {
             </div>
 
             {mapError ? (
-              <div className="flex min-h-[68vh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">
+              <div className="flex min-h-[52svh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700 sm:min-h-[60vh] xl:min-h-[68vh]">
                 {mapError}
               </div>
             ) : (
-              <div ref={mapRef} className="min-h-[68vh] w-full bg-slate-100" />
+              <div ref={mapRef} className="min-h-[52svh] w-full bg-slate-100 sm:min-h-[60vh] xl:min-h-[68vh]" />
             )}
 
             <div className="customer-trip-map-sheet">
@@ -1726,24 +1726,47 @@ export default function RideTrackingPage() {
           </section>
 
           <aside className="space-y-4">
-            <section id="customer-driver-card" className="moovu-card p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className={canShowDriverDetails ? "customer-driver-avatar is-live" : "customer-driver-avatar"}>
-                    {canShowDriverDetails ? driverInitials(driver) : <span />}
+            <section id="customer-driver-card" className="customer-trip-summary-card">
+              <div className="customer-trip-summary-top">
+                <div className="min-w-0">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                    {rideTypeLabel(trip.ride_type)}
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-sm text-slate-500">Driver</div>
-                    <div className="mt-1 truncate text-2xl font-black text-slate-950">
-                      {canShowDriverDetails ? driverName : "Searching for driver"}
-                    </div>
-                  </div>
+                  <h2 className="mt-2 truncate text-2xl font-black text-slate-950">
+                    {canShowDriverDetails ? `With ${driverName}` : "Looking for driver"}
+                  </h2>
+                  <p className="mt-1 text-sm font-bold text-slate-500">
+                    {trip.created_at ? new Date(trip.created_at).toLocaleString() : "Live trip"}
+                  </p>
+                </div>
+                <div className={canShowDriverDetails ? "customer-driver-avatar is-live" : "customer-driver-avatar"}>
+                  {canShowDriverDetails ? driverInitials(driver) : <span />}
+                </div>
+              </div>
+
+              <div className="customer-trip-summary-money">
+                <div>
+                  <span>{tripTotalLabel}</span>
+                  <strong>{money(displayTotal)}</strong>
                 </div>
                 <div className={statusChipClass(trip.status)}>
                   <span className="moovu-chip-dot" />
                   {statusLabel(trip.status)}
                 </div>
               </div>
+
+              {canShowDriverDetails && (
+                <div className="customer-trip-summary-vehicle">
+                  <div>
+                    <span>Vehicle</span>
+                    <strong>{carText}</strong>
+                  </div>
+                  <div>
+                    <span>Plate</span>
+                    <strong>{displayValue(driver?.vehicle_registration)}</strong>
+                  </div>
+                </div>
+              )}
 
               {!canShowDriverDetails ? (
                 <div className="mt-4 rounded-[24px] border border-blue-100 bg-[#eaf3ff] p-4">
@@ -1852,20 +1875,7 @@ export default function RideTrackingPage() {
             </section>
 
             <section className="moovu-card p-5">
-              <div className="text-sm font-medium text-slate-500">Trip actions</div>
-              <div className="customer-command-actions mt-4">
-                {(["route", "fare", "safety", "support", "receipt"] as const).map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    className="customer-command-button"
-                    onClick={() => setActiveDetailModal(action)}
-                  >
-                    {action}
-                  </button>
-                ))}
-              </div>
-
+              <div className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">Next step</div>
               <div className="mt-4 grid gap-3">
                 {startOtpAvailable && (
                   <button
@@ -1908,7 +1918,39 @@ export default function RideTrackingPage() {
         </div>
 
         <div className="mt-4">
-          <section className="moovu-card p-5">
+          <section className="customer-route-summary-card">
+            <div>
+              <div className="moovu-section-title">Route summary</div>
+              <h2 className="mt-2 text-2xl font-black text-slate-950">Pickup to destination</h2>
+            </div>
+            <div className="customer-route-summary-list">
+              <div>
+                <span className="pickup" />
+                <div>
+                  <strong>Pickup</strong>
+                  <p>{displayValue(trip.pickup_address)}</p>
+                </div>
+              </div>
+              {tripStops.map((stop, index) => (
+                <div key={`${stop.address}-${index}-summary`}>
+                  <span className="stop">{index + 1}</span>
+                  <div>
+                    <strong>Stop {index + 1}</strong>
+                    <p>{displayValue(stop.address)}</p>
+                  </div>
+                </div>
+              ))}
+              <div>
+                <span className="dropoff" />
+                <div>
+                  <strong>Destination</strong>
+                  <p>{displayValue(trip.dropoff_address)}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="moovu-card mt-4 p-5">
               <div className="text-sm font-medium text-slate-500">Trip controls</div>
 
               {canAddStop && (

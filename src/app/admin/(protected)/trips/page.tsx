@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -70,6 +70,23 @@ function parseTripStops(value: unknown): TripStop[] {
       return { address: typeof item.address === "string" ? item.address : "" };
     })
     .filter((stop) => stop.address.trim());
+}
+
+function AdminTripMobileField({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`admin-trip-mobile-field ${className}`}>
+      <span>{label}</span>
+      <strong>{children}</strong>
+    </div>
+  );
 }
 
 export default function TripsPage() {
@@ -455,9 +472,9 @@ export default function TripsPage() {
 
           <section className="grid gap-3 xl:hidden">
             {trips.map((trip) => (
-              <article key={trip.id} className="moovu-card-interactive overflow-hidden p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+              <article key={trip.id} className="admin-trip-mobile-card moovu-card-interactive">
+                <div className="admin-trip-mobile-header">
+                  <div className="min-w-0">
                     <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                       Trip {trip.id.slice(0, 8)}
                     </div>
@@ -465,64 +482,43 @@ export default function TripsPage() {
                       <StatusBadge status={trip.status} />
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs text-slate-500">Fare</div>
-                    <div className="text-lg font-black text-slate-950">{money(trip.fare_amount)}</div>
+                  <div className="admin-trip-mobile-fare">
+                    <span>Fare</span>
+                    <strong>{money(trip.fare_amount)}</strong>
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-3">
-                  <div className="moovu-route-line min-w-0">
-                    <div className="moovu-route-line-marker" />
-                    <div className="min-w-0">
-                      <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Pickup</div>
-                      <div className="mt-1 break-words text-sm font-semibold text-slate-950">{trip.pickup_address}</div>
-                    </div>
-                  </div>
+                <div className="admin-trip-mobile-route">
+                  <AdminTripMobileField label="Pickup">
+                    {trip.pickup_address || "--"}
+                  </AdminTripMobileField>
                   {parseTripStops(trip.stops).map((stop, index) => (
-                    <div className="moovu-route-line min-w-0" key={`${trip.id}-mobile-stop-${index}`}>
-                      <div className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--moovu-primary)] text-[10px] font-black text-white">
-                        {index + 1}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Stop {index + 1}</div>
-                        <div className="mt-1 break-words text-sm font-semibold text-slate-950">{stop.address}</div>
-                      </div>
-                    </div>
+                    <AdminTripMobileField
+                      key={`${trip.id}-mobile-stop-${index}`}
+                      label={`Stop ${index + 1}`}
+                    >
+                      {stop.address}
+                    </AdminTripMobileField>
                   ))}
-                  <div className="moovu-route-line min-w-0">
-                    <div className="moovu-route-line-marker" />
-                    <div className="min-w-0">
-                      <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Dropoff</div>
-                      <div className="mt-1 break-words text-sm font-semibold text-slate-950">{trip.dropoff_address}</div>
-                    </div>
-                  </div>
+                  <AdminTripMobileField label="Dropoff">
+                    {trip.dropoff_address || "--"}
+                  </AdminTripMobileField>
                 </div>
 
-                <div className="mt-4 grid gap-2 rounded-3xl border border-[var(--moovu-border)] bg-slate-50/80 p-3 text-sm text-slate-700">
-                  <div className="min-w-0">
-                    <span className="moovu-data-label">Rider</span>
-                    <strong className="moovu-data-value block">{trip.rider_name ?? "--"}</strong>
-                  </div>
-                  <div className="min-w-0">
-                    <span className="moovu-data-label">Driver</span>
-                    <strong className="moovu-data-value block">
-                      {trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="moovu-data-label">Payment</span>
-                    <strong className="moovu-data-value block capitalize">{trip.payment_method}</strong>
-                  </div>
-                  <div>
-                    <span className="moovu-data-label">Created</span>
-                    <strong className="moovu-data-value block">{displayDate(trip.created_at)}</strong>
-                  </div>
+                <div className="admin-trip-mobile-meta">
+                  <AdminTripMobileField label="Rider">{trip.rider_name ?? "--"}</AdminTripMobileField>
+                  <AdminTripMobileField label="Driver">
+                    {trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}
+                  </AdminTripMobileField>
+                  <AdminTripMobileField label="Payment" className="capitalize">
+                    {trip.payment_method || "--"}
+                  </AdminTripMobileField>
+                  <AdminTripMobileField label="Created">{displayDate(trip.created_at)}</AdminTripMobileField>
                 </div>
 
                 {!trip.driver_id && (
                   <select
-                    className="mt-4 w-full rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm"
+                    className="mt-4 min-h-[48px] w-full rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm font-bold text-slate-800"
                     defaultValue=""
                     disabled={actionLoadingId === trip.id}
                     onChange={(event) => {
@@ -541,7 +537,7 @@ export default function TripsPage() {
                   </select>
                 )}
 
-                <div className="mt-4">{renderActions(trip)}</div>
+                <div className="admin-trip-mobile-actions mt-4">{renderActions(trip)}</div>
               </article>
             ))}
           </section>

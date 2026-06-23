@@ -3078,6 +3078,163 @@ tr:last-child td {
   font-weight: 900;
 }
 
+.customer-trip-summary-card {
+  border: 1px solid rgba(207, 228, 255, 0.96);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 96% 0%, rgba(69, 188, 226, 0.16), transparent 34%),
+    linear-gradient(180deg, #ffffff, #f8fbff);
+  padding: 18px;
+  box-shadow: 0 18px 52px rgba(15, 23, 42, 0.09);
+}
+
+.customer-trip-summary-top,
+.customer-trip-summary-money,
+.customer-trip-summary-vehicle {
+  display: grid;
+  gap: 14px;
+}
+
+.customer-trip-summary-top {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.customer-trip-summary-money {
+  margin-top: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid rgba(207, 228, 255, 0.92);
+  border-radius: 24px;
+  background: #fff;
+  padding: 14px;
+}
+
+.customer-trip-summary-money span,
+.customer-trip-summary-vehicle span {
+  display: block;
+  color: var(--moovu-text-soft);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.customer-trip-summary-money strong {
+  display: block;
+  margin-top: 6px;
+  color: #0f172a;
+  font-size: clamp(28px, 8vw, 38px);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.customer-trip-summary-vehicle {
+  margin-top: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.customer-trip-summary-vehicle div {
+  min-width: 0;
+  border: 1px solid rgba(215, 226, 234, 0.9);
+  border-radius: 18px;
+  background: rgba(248, 251, 255, 0.92);
+  padding: 12px;
+}
+
+.customer-trip-summary-vehicle strong {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: break-word;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.customer-route-summary-card {
+  border: 1px solid rgba(207, 228, 255, 0.96);
+  border-radius: 30px;
+  background: #fff;
+  padding: 18px;
+  box-shadow: 0 18px 52px rgba(15, 23, 42, 0.08);
+}
+
+.customer-route-summary-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.customer-route-summary-list > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.customer-route-summary-list span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.customer-route-summary-list span.pickup {
+  background: var(--moovu-primary);
+}
+
+.customer-route-summary-list span.pickup::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.customer-route-summary-list span.stop {
+  background: #45bce2;
+}
+
+.customer-route-summary-list span.dropoff {
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.customer-route-summary-list span.dropoff::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.customer-route-summary-list strong,
+.customer-route-summary-list p {
+  display: block;
+}
+
+.customer-route-summary-list strong {
+  color: var(--moovu-text-soft);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.customer-route-summary-list p {
+  margin-top: 4px;
+  overflow-wrap: break-word;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
 .customer-detail-overlay,
 .customer-otp-overlay {
   position: fixed;
@@ -3320,12 +3477,31 @@ tr:last-child td {
     min-height: 62svh;
   }
 
+  .customer-trip-map-card .min-h-\[52svh\] {
+    min-height: 52svh;
+  }
+
   .customer-trip-map-sheet {
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 
   .customer-command-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .customer-command-button {
+    border-radius: 999px;
+    font-size: 11px;
+  }
+
+  .customer-trip-summary-money,
+  .customer-trip-summary-vehicle {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-trip-summary-money > .moovu-status-chip,
+  .customer-trip-summary-money > [class*="status"] {
+    justify-self: start;
   }
 
   .customer-detail-overlay {
@@ -3483,7 +3659,7 @@ tr:last-child td {
   font-weight: 950;
 }
 
-.moovu-action-row {
+.moovu-home-action-row {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 12px;
@@ -3494,17 +3670,17 @@ tr:last-child td {
   padding: 12px;
 }
 
-.moovu-action-row strong,
-.moovu-action-row small {
+.moovu-home-action-row strong,
+.moovu-home-action-row small {
   display: block;
 }
 
-.moovu-action-row strong {
+.moovu-home-action-row strong {
   color: #050505;
   font-size: 14px;
 }
 
-.moovu-action-row small {
+.moovu-home-action-row small {
   margin-top: 3px;
   color: var(--moovu-text-soft);
   font-size: 12px;
@@ -3550,6 +3726,13 @@ tr:last-child td {
   gap: 8px;
   overflow-x: auto;
   padding-bottom: 2px;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.moovu-filter-row::-webkit-scrollbar {
+  display: none;
 }
 
 .moovu-filter-chip {
@@ -3568,6 +3751,118 @@ tr:last-child td {
   border-color: #cfe4ff;
   background: #eaf3ff;
   color: #244f9e;
+}
+
+.admin-trip-mobile-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.admin-trip-mobile-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-trip-mobile-fare {
+  min-width: 92px;
+  border: 1px solid rgba(207, 228, 255, 0.95);
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff, #f3f9ff);
+  padding: 10px 12px;
+  text-align: right;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.admin-trip-mobile-fare span,
+.admin-trip-mobile-field span {
+  display: block;
+  color: var(--moovu-text-soft);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.admin-trip-mobile-fare strong {
+  display: block;
+  margin-top: 5px;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.admin-trip-mobile-route,
+.admin-trip-mobile-meta {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-trip-mobile-field {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid rgba(215, 226, 234, 0.92);
+  border-radius: 20px;
+  background: #f8fbff;
+  padding: 12px;
+}
+
+.admin-trip-mobile-field strong {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: break-word;
+  word-break: normal;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.admin-trip-mobile-meta {
+  border: 1px solid rgba(215, 226, 234, 0.92);
+  border-radius: 24px;
+  background: rgba(248, 251, 255, 0.82);
+  padding: 10px;
+}
+
+.admin-trip-mobile-meta .admin-trip-mobile-field {
+  border-color: transparent;
+  background: #fff;
+}
+
+.admin-trip-mobile-actions .moovu-action-row {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .admin-trip-mobile-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-trip-mobile-fare {
+    width: 100%;
+    text-align: left;
+  }
+
+  .admin-trip-mobile-actions .moovu-action-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-trip-mobile-actions .moovu-action-row .moovu-btn,
+  .admin-trip-mobile-actions .moovu-action-row button,
+  .admin-trip-mobile-actions .moovu-action-row a {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .admin-trip-mobile-actions .moovu-action-row a:last-child {
+    grid-column: 1 / -1;
+  }
 }
 
 .moovu-ride-option-card {
