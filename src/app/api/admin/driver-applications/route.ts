@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import {
+  readinessScoreFromIssues,
+  validateDriverDocumentsForApproval,
+  validateDriverProfileFields,
+  type DriverDocumentStatusInput,
+} from "@/lib/driver-validation";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -19,6 +25,9 @@ type DriverApplicationRow = {
   vehicle_year: string | null;
   vehicle_color: string | null;
   vehicle_registration: string | null;
+  vehicle_vin?: string | null;
+  vehicle_engine_number?: string | null;
+  seating_capacity?: number | null;
   created_at: string | null;
   is_deleted: boolean | null;
 };
@@ -67,6 +76,9 @@ export async function GET(req: Request) {
         vehicle_year,
         vehicle_color,
         vehicle_registration,
+        vehicle_vin,
+        vehicle_engine_number,
+        seating_capacity,
         created_at,
         is_deleted
       `)
@@ -89,6 +101,7 @@ export async function GET(req: Request) {
     const rows = (applications ?? []) as DriverApplicationRow[];
     const driverIds = rows.map((row) => row.id);
     const profileByDriver: Record<string, DriverProfileLite> = {};
+    const documentsByDriver: Record<string, DriverDocumentStatusInput[]> = {};
 
     if (driverIds.length > 0) {
       const { data: profiles } = await supabaseAdmin
@@ -111,23 +124,31 @@ export async function GET(req: Request) {
       ((profiles ?? []) as DriverProfileLite[]).forEach((profile) => {
         profileByDriver[profile.driver_id] = profile;
       });
+
+      const { data: documents } = await supabaseAdmin
+        .from("driver_documents")
+        .select("driver_id,doc_type,document_type,status,review_status")
+        .in("driver_id", driverIds);
+
+      ((documents ?? []) as (DriverDocumentStatusInput & { driver_id: string })[]).forEach((document) => {
+        documentsByDriver[document.driver_id] = documentsByDriver[document.driver_id] ?? [];
+        documentsByDriver[document.driver_id].push(document);
+      });
     }
 
     const enriched = rows.map((row) => {
       const profile = profileByDriver[row.id] ?? null;
-      const readinessChecks = [
-        Boolean(row.first_name || row.last_name),
-        Boolean(row.phone),
-        Boolean(row.email),
-        Boolean(profile?.id_number),
-        Boolean(profile?.home_address || profile?.area_name),
-        Boolean(profile?.emergency_contact_name && profile?.emergency_contact_phone),
-        Boolean(profile?.license_number && profile?.license_code && profile?.license_expiry),
-        Boolean(row.vehicle_make && row.vehicle_model && row.vehicle_registration),
+      const validationIssues = [
+        ...validateDriverProfileFields(
+          {
+            ...row,
+            ...(profile ?? {}),
+          },
+          { requirePdp: true },
+        ),
+        ...validateDriverDocumentsForApproval(documentsByDriver[row.id] ?? []),
       ];
-      const readiness_score = Math.round(
-        (readinessChecks.filter(Boolean).length / readinessChecks.length) * 100
-      );
+      const readiness_score = readinessScoreFromIssues(validationIssues);
       const pdp_status = profile?.pdp_number
         ? "uploaded"
         : row.verification_status === "approved"
@@ -137,6 +158,8 @@ export async function GET(req: Request) {
       return {
         ...row,
         driver_profile: profile,
+        validation_issues: validationIssues,
+        approval_blockers: validationIssues.filter((item) => item.severity === "blocked"),
         readiness_score,
         pdp_status,
       };

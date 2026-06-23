@@ -42,13 +42,14 @@ const sections = [
     paragraphs: [
       "MOOVU shares only the driver information needed to operate trips, support customers, review payments, and manage safety. Customers may see assigned driver details after a trip is accepted. Admin users may see driver application, trip, payment, subscription, commission, document, and support records for operational purposes.",
       "MOOVU does not sell driver personal information.",
+      "MOOVU does not use advertising identifiers, cross-app tracking, or third-party advertising tracking to follow drivers across apps and websites owned by other companies. Driver GPS, token, trip, payment, and diagnostic data is used for MOOVU platform operations, safety, support, and notifications.",
     ],
   },
   {
     title: "Retention, safety, and driver rights",
     paragraphs: [
       "MOOVU keeps driver records for as long as needed for platform operation, legal compliance, accounting, tax, payment review, dispute handling, fraud prevention, and safety.",
-      `Drivers may contact ${MOOVU_SUPPORT_EMAIL} to ask about their data, request corrections, or ask for deletion where legally and operationally possible. Some records must be kept for receipts, payments, trips, safety, disputes, or legal reasons.`,
+      `Drivers can start an account deletion request from the Driver Account area, or contact ${MOOVU_SUPPORT_EMAIL} to ask about their data, request corrections, or ask for deletion where legally and operationally possible. Some records must be kept for receipts, payments, trips, commission, subscriptions, documents, safety, disputes, tax, accounting, or legal reasons.`,
     ],
   },
 ];

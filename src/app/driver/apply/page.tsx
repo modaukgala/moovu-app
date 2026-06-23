@@ -6,6 +6,21 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import {
+  isValidEmail,
+  isValidEngineNumber,
+  isValidSaIdNumber,
+  isValidSaMobile,
+  isValidSeatingCapacity,
+  isValidVehicleRegistration,
+  isValidVehicleYear,
+  isValidVin,
+  normalizeDriverEmail,
+  normalizeEngineNumber,
+  normalizeSaPhone,
+  normalizeVehicleRegistration,
+  normalizeVin,
+} from "@/lib/driver-validation";
 
 const steps = [
   "Eligibility",
@@ -149,14 +164,19 @@ export default function DriverApplyPage() {
   function validateBeforeSubmit() {
     if (blockers.length) return blockers[0];
     if (!form.fullName.trim()) return "Enter your full name.";
-    if (!form.phone.trim()) return "Enter your cellphone number.";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Enter a valid email address.";
+    if (!isValidSaMobile(form.phone)) return "Enter a valid South African cellphone number.";
+    if (!isValidEmail(form.email)) return "Enter a valid email address.";
     if (form.password.length < 6) return "Password must be at least 6 characters.";
     if (form.password !== form.password2) return "Passwords do not match.";
-    if (!form.idNumber.trim()) return "Enter your ID or passport number.";
+    if (!isValidSaIdNumber(form.idNumber)) return "SA ID number must be exactly 13 digits.";
     if (!form.vehicleMake.trim() || !form.vehicleModel.trim() || !form.plate.trim()) {
       return "Enter your basic vehicle details.";
     }
+    if (form.vehicleYear && !isValidVehicleYear(form.vehicleYear)) return "Vehicle year must be between 1995 and next year.";
+    if (!isValidVehicleRegistration(form.plate)) return "Number plate must be 3 to 15 letters/numbers, spaces, or hyphens.";
+    if (form.vin && !isValidVin(form.vin)) return "VIN must be exactly 17 characters and cannot contain I, O, or Q.";
+    if (form.engineNumber && !isValidEngineNumber(form.engineNumber)) return "Engine number must be 6 to 25 uppercase letters/numbers.";
+    if (form.seatingCapacity && !isValidSeatingCapacity(form.seatingCapacity)) return "Seating capacity must be between 3 and 7.";
     return null;
   }
 
@@ -172,13 +192,13 @@ export default function DriverApplyPage() {
 
     try {
       const signup = await supabaseClient.auth.signUp({
-        email: form.email.trim(),
+        email: normalizeDriverEmail(form.email),
         password: form.password,
         options: {
           data: {
             role: "driver",
             full_name: form.fullName.trim(),
-            phone: form.phone.trim(),
+            phone: normalizeSaPhone(form.phone),
           },
         },
       });
@@ -216,9 +236,9 @@ export default function DriverApplyPage() {
           model: form.vehicleModel,
           year: form.vehicleYear,
           color: form.vehicleColor,
-          plate: form.plate,
-          vin: form.vin,
-          engineNumber: form.engineNumber,
+          plate: normalizeVehicleRegistration(form.plate),
+          vin: normalizeVin(form.vin),
+          engineNumber: normalizeEngineNumber(form.engineNumber),
           seatingCapacity: form.seatingCapacity,
           category: form.vehicleCategory,
           ownershipType: form.ownershipType,
@@ -239,8 +259,8 @@ export default function DriverApplyPage() {
         body: JSON.stringify({
           userId,
           fullName: form.fullName.trim(),
-          phone: form.phone.trim(),
-          email: form.email.trim(),
+          phone: normalizeSaPhone(form.phone),
+          email: normalizeDriverEmail(form.email),
           notes: form.notes.trim(),
           applicationData,
           pdpStatus: form.pdpStatus,

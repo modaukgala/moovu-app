@@ -10,6 +10,13 @@ import {
   normalizeDriverDocumentType,
   type DriverDocumentItem,
 } from "@/lib/driver-documents";
+import {
+  normalizeEngineNumber,
+  normalizeSaPhone,
+  normalizeVehicleRegistration,
+  normalizeVin,
+  validateDriverProfileFields,
+} from "@/lib/driver-validation";
 
 type Driver = {
   id: string;
@@ -241,6 +248,41 @@ export default function DriverCompleteProfilePage() {
       return;
     }
 
+    if (submit) {
+      const issues = validateDriverProfileFields(
+        {
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          email: "driver@moovu.local",
+          id_number: idNumber,
+          home_address: homeAddress,
+          area_name: areaName,
+          emergency_contact_name: emergencyName,
+          emergency_contact_phone: emergencyPhone,
+          license_number: licenseNumber,
+          license_code: licenseCode,
+          license_expiry: licenseExpiry,
+          pdp_number: pdpStatus === "uploaded" ? pdpNumber : null,
+          pdp_expiry: pdpStatus === "uploaded" ? pdpExpiry : null,
+          vehicle_make: vehicleMake,
+          vehicle_model: vehicleModel,
+          vehicle_year: vehicleYear,
+          vehicle_color: vehicleColor,
+          vehicle_registration: vehicleRegistration,
+          vehicle_vin: vehicleVin,
+          vehicle_engine_number: vehicleEngine,
+          seating_capacity: seatingCapacity,
+        },
+        { requirePdp: false },
+      ).filter((issue) => issue.severity === "blocked");
+
+      if (issues.length > 0) {
+        setMsg(issues[0].message);
+        return;
+      }
+    }
+
     setSaving(true);
     setMsg(null);
     try {
@@ -259,13 +301,13 @@ export default function DriverCompleteProfilePage() {
         body: JSON.stringify({
           first_name: firstName,
           last_name: lastName,
-          phone,
-          alt_phone: altPhone,
+          phone: normalizeSaPhone(phone),
+          alt_phone: normalizeSaPhone(altPhone),
           id_number: idNumber,
           home_address: homeAddress,
           area_name: areaName,
           emergency_contact_name: emergencyName,
-          emergency_contact_phone: emergencyPhone,
+          emergency_contact_phone: normalizeSaPhone(emergencyPhone),
           license_number: licenseNumber,
           license_code: licenseCode,
           license_expiry: licenseExpiry,
@@ -275,9 +317,9 @@ export default function DriverCompleteProfilePage() {
           vehicle_model: vehicleModel,
           vehicle_year: vehicleYear,
           vehicle_color: vehicleColor,
-          vehicle_registration: vehicleRegistration,
-          vehicle_vin: vehicleVin,
-          vehicle_engine_number: vehicleEngine,
+          vehicle_registration: normalizeVehicleRegistration(vehicleRegistration),
+          vehicle_vin: normalizeVin(vehicleVin),
+          vehicle_engine_number: normalizeEngineNumber(vehicleEngine),
           seating_capacity: seatingCapacity,
           submit,
         }),

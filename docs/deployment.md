@@ -69,11 +69,18 @@ After generation, wire the typed database into the browser/admin Supabase client
 - Use `/api/push/test-self` from the customer, driver, and admin UI to prove each logged-in role can receive a notification on its own device.
 - Keep `PUSH_INTERNAL_API_KEY` server-only; `/api/push/send` must not be called from public browser code.
 - Firebase Cloud Messaging is supported alongside the existing web-push path. Public Firebase client variables may be exposed to the browser, but `FIREBASE_PRIVATE_KEY` and `FIREBASE_CLIENT_EMAIL` must be server-only in Vercel.
+- Native Android notifications use FCM tokens. Native iOS notifications from `@capacitor/push-notifications` use APNs device tokens and require APNs server variables:
+  - `APNS_TEAM_ID`
+  - `APNS_KEY_ID`
+  - `APNS_AUTH_KEY`
+  - `APNS_ENV=production`
+  - `APNS_CUSTOMER_BUNDLE_ID=com.moovu.customer`
+  - `APNS_DRIVER_BUNDLE_ID=com.moovu.driver`
 - Apply `docs/fcm-notifications-migration.sql` on staging/production before relying on FCM token storage.
 - Apply `docs/notification-polish-migration.sql` so `/admin/notifications` can show sent, failed, and no-token delivery history.
 - The Firebase private key must preserve newlines. In Vercel it can be stored with escaped `\n`; the server helper converts escaped newlines at runtime.
-- Browser/PWA push requires HTTPS in production. Native iOS closed-app push requires the Xcode Push Notifications capability, a Firebase iOS app with the exact bundle ID, `GoogleService-Info.plist`, and an APNs key/certificate uploaded to Firebase. See `docs/mobile-ios-stabilization.md`.
-- The server now sends high-priority APNs alert options for iOS FCM targets. Do not claim iOS closed-app push is verified until tested on a real iPhone with APNs/Firebase configured.
+- Browser/PWA push requires HTTPS in production. Native iOS closed-app push requires the Xcode Push Notifications capability, matching bundle IDs, and APNs auth key variables in Vercel. Firebase iOS `GoogleService-Info.plist` files are still required if you add Firebase Messaging native token bridging later. See `docs/mobile-ios-stabilization.md`.
+- The server sends APNs alerts for native iOS tokens and FCM alerts for Android/Web tokens. Do not claim iOS closed-app push is verified until tested on a real iPhone with APNs configured.
 
 ## Mobile Native Setup
 

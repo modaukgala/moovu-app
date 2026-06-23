@@ -36,6 +36,18 @@ type ApplicationRow = {
     pdp_number?: string | null;
     pdp_expiry?: string | null;
   } | null;
+  validation_issues?: {
+    field: string;
+    label: string;
+    message: string;
+    severity: "ready" | "warning" | "blocked";
+  }[];
+  approval_blockers?: {
+    field: string;
+    label: string;
+    message: string;
+    severity: "ready" | "warning" | "blocked";
+  }[];
 };
 
 export default function AdminDriverApplicationsPage() {
@@ -326,6 +338,11 @@ export default function AdminDriverApplicationsPage() {
                         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
                           Readiness {app.readiness_score ?? 0}%
                         </span>
+                        {(app.approval_blockers?.length ?? 0) > 0 && (
+                          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">
+                            {app.approval_blockers?.length} blocker(s)
+                          </span>
+                        )}
                         <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">
                           PDP {app.driver_profile?.pdp_number ? "uploaded" : "not yet"}
                         </span>
@@ -449,9 +466,31 @@ export default function AdminDriverApplicationsPage() {
                   </div>
                 </div>
 
+                {(selected.validation_issues?.length ?? 0) > 0 && (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                    <div className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                      Approval blockers and warnings
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {selected.validation_issues?.slice(0, 12).map((item) => (
+                        <div
+                          key={`${item.field}-${item.message}`}
+                          className={`rounded-2xl px-3 py-2 text-sm font-bold ${
+                            item.severity === "blocked"
+                              ? "bg-red-50 text-red-800"
+                              : "bg-amber-50 text-amber-900"
+                          }`}
+                        >
+                          <span className="font-black">{item.label}:</span> {item.message}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {!selected.driver_profile?.pdp_number && (
                   <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
-                    This driver has not uploaded a PDP / PrDP yet. You can still approve if MOOVU allows this driver to operate under current business rules.
+                    This driver has not captured PDP / PrDP details yet. Under the current admin validation rules, final approval is blocked until PDP / PrDP details are valid.
                   </div>
                 )}
 

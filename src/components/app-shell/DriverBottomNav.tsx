@@ -7,7 +7,7 @@ const items = [
   { href: "/driver", label: "Home" },
   { href: "/driver/history", label: "Trips" },
   { href: "/driver/earnings", label: "Earnings" },
-  { href: "/driver/complete-profile", label: "Account" },
+  { href: "/driver/account", label: "Account" },
 ] as const;
 
 function isActive(pathname: string, href: string) {

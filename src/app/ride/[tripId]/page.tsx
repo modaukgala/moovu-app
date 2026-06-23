@@ -91,6 +91,16 @@ type Rating = {
   comment: string | null;
 };
 
+type SafetyAudioRecording = {
+  id: string;
+  file_name: string;
+  mime_type: string;
+  duration_seconds: number;
+  status: string;
+  created_at: string;
+  url: string | null;
+};
+
 type Tracking = {
   liveState: string;
   driverFresh: boolean;
@@ -173,6 +183,12 @@ function driverRatingLabel(driver: Driver | null) {
   return rating > 0 ? `${rating.toFixed(1)} / 5` : "New Driver";
 }
 
+function formatTimer(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function driverInitials(driver: Driver | null) {
   const first = driver?.first_name?.trim()?.[0] ?? "";
   const last = driver?.last_name?.trim()?.[0] ?? "";
@@ -238,6 +254,14 @@ export default function RideTrackingPage() {
   const [activeDetailModal, setActiveDetailModal] = useState<DetailModal>(null);
   const [activeOtpModal, setActiveOtpModal] = useState<OtpModal>(null);
   const [dismissedOtpModal, setDismissedOtpModal] = useState<OtpModal>(null);
+  const [audioRecordings, setAudioRecordings] = useState<SafetyAudioRecording[]>([]);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioUploading, setAudioUploading] = useState(false);
+  const [audioDeletingId, setAudioDeletingId] = useState<string | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [audioSavedMessage, setAudioSavedMessage] = useState<string | null>(null);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -253,6 +277,11 @@ export default function RideTrackingPage() {
     endOtpVerified: boolean;
   } | null>(null);
   const ongoingStartedAtRef = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimerRef = useRef<number | null>(null);
+  const recordingSecondsRef = useRef(0);
 
   const tripStops = useMemo<TripStop[]>(() => {
     if (!Array.isArray(trip?.stops)) return [];
@@ -277,6 +306,214 @@ export default function RideTrackingPage() {
 
     return session?.access_token || "";
   }, []);
+
+  const canUseSafetyRecording = useMemo(() => {
+    const status = String(trip?.status ?? "").toLowerCase();
+    if (["assigned", "arrived", "ongoing"].includes(status)) return true;
+    if (status !== "completed") return false;
+
+    const completedAt = trip?.completed_at || trip?.fare_finalized_at || trip?.created_at;
+    if (!completedAt) return false;
+
+    const completedMs = new Date(completedAt).getTime();
+    return Number.isFinite(completedMs) && Date.now() - completedMs <= 24 * 60 * 60 * 1000;
+  }, [trip?.completed_at, trip?.created_at, trip?.fare_finalized_at, trip?.status]);
+
+  const stopAudioTracks = useCallback(() => {
+    audioStreamRef.current?.getTracks().forEach((track) => track.stop());
+    audioStreamRef.current = null;
+  }, []);
+
+  const clearRecordingTimer = useCallback(() => {
+    if (recordingTimerRef.current != null) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }, []);
+
+  const loadAudioRecordings = useCallback(async () => {
+    if (!tripId) return;
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    setAudioLoading(true);
+    setAudioError(null);
+
+    try {
+      const res = await fetch(`/api/customer/trip-audio?tripId=${encodeURIComponent(tripId)}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        setAudioError(json?.error || "Could not load safety recordings.");
+        return;
+      }
+
+      setAudioRecordings((json.recordings ?? []) as SafetyAudioRecording[]);
+    } catch (error) {
+      console.error("[ride-safety-audio] load failed", error);
+      setAudioError("Could not load safety recordings.");
+    } finally {
+      setAudioLoading(false);
+    }
+  }, [getAccessToken, tripId]);
+
+  const uploadAudioRecording = useCallback(async (blob: Blob, durationSeconds: number) => {
+    const accessToken = await getAccessToken();
+    if (!accessToken || !tripId) {
+      setAudioError("Please sign in again before saving this recording.");
+      return;
+    }
+
+    setAudioUploading(true);
+    setAudioError(null);
+    setAudioSavedMessage(null);
+
+    try {
+      const form = new FormData();
+      form.append("tripId", tripId);
+      form.append("durationSeconds", String(durationSeconds));
+      form.append("file", blob, `moovu-safety-recording-${Date.now()}.webm`);
+
+      const res = await fetch("/api/customer/trip-audio", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: form,
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        setAudioError(json?.error || "Could not save this recording. Please try again.");
+        return;
+      }
+
+      setAudioRecordings((current) => [json.recording as SafetyAudioRecording, ...current]);
+      setAudioSavedMessage("Recording saved securely with this trip.");
+      notifyInApp({
+        title: "Safety recording saved",
+        body: "Your audio recording is linked to this trip.",
+        tone: "success",
+      });
+    } catch (error) {
+      console.error("[ride-safety-audio] upload failed", error);
+      setAudioError("Could not save this recording. Please try again.");
+    } finally {
+      setAudioUploading(false);
+    }
+  }, [getAccessToken, tripId]);
+
+  const startSafetyRecording = useCallback(async () => {
+    setAudioError(null);
+    setAudioSavedMessage(null);
+
+    if (!canUseSafetyRecording) {
+      setAudioError("Safety recording is only available during active trips or shortly after completion.");
+      return;
+    }
+
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setAudioError("Audio recording is not supported on this device or browser.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preferredType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "";
+      const recorder = preferredType ? new MediaRecorder(stream, { mimeType: preferredType }) : new MediaRecorder(stream);
+
+      audioChunksRef.current = [];
+      audioStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      setRecordingSeconds(0);
+      setIsRecordingAudio(true);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      recorder.onerror = (event) => {
+        console.error("[ride-safety-audio] recorder error", event);
+        setAudioError("Recording stopped unexpectedly. Please try again.");
+      };
+
+      recorder.onstop = () => {
+        const duration = recordingSecondsRef.current;
+        const blobType = recorder.mimeType || "audio/webm";
+        const blob = new Blob(audioChunksRef.current, { type: blobType });
+        audioChunksRef.current = [];
+        stopAudioTracks();
+        clearRecordingTimer();
+        setIsRecordingAudio(false);
+
+        if (blob.size <= 0) {
+          setAudioError("No audio was captured. Please try again.");
+          return;
+        }
+
+        void uploadAudioRecording(blob, duration);
+      };
+
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingSeconds((value) => value + 1);
+      }, 1000);
+      recorder.start();
+    } catch (error) {
+      console.error("[ride-safety-audio] permission/start failed", error);
+      stopAudioTracks();
+      clearRecordingTimer();
+      setIsRecordingAudio(false);
+      setAudioError("Microphone permission is needed to record audio. Please allow microphone access and try again.");
+    }
+  }, [canUseSafetyRecording, clearRecordingTimer, stopAudioTracks, uploadAudioRecording]);
+
+  const stopSafetyRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    recorder.stop();
+  }, []);
+
+  const deleteAudioRecording = useCallback(async (id: string) => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setAudioError("Please sign in again before deleting this recording.");
+      return;
+    }
+
+    setAudioDeletingId(id);
+    setAudioError(null);
+
+    try {
+      const res = await fetch("/api/customer/trip-audio", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        setAudioError(json?.error || "Could not delete this recording. Please try again.");
+        return;
+      }
+
+      setAudioRecordings((current) => current.filter((recording) => recording.id !== id));
+      setAudioSavedMessage("Recording removed from your trip view.");
+    } catch (error) {
+      console.error("[ride-safety-audio] delete failed", error);
+      setAudioError("Could not delete this recording. Please try again.");
+    } finally {
+      setAudioDeletingId(null);
+    }
+  }, [getAccessToken]);
 
   const loadTrip = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -462,6 +699,26 @@ export default function RideTrackingPage() {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    recordingSecondsRef.current = recordingSeconds;
+  }, [recordingSeconds]);
+
+  useEffect(() => {
+    if (activeDetailModal === "safety") {
+      void loadAudioRecordings();
+    }
+  }, [activeDetailModal, loadAudioRecordings]);
+
+  useEffect(() => {
+    return () => {
+      clearRecordingTimer();
+      stopAudioTracks();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, [clearRecordingTimer, stopAudioTracks]);
 
   useEffect(() => {
     if (trip?.status === "ongoing") {
@@ -1206,6 +1463,124 @@ export default function RideTrackingPage() {
               <div className="customer-detail-body">
                 <div className="rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
                   Check driver details before entering the vehicle. MOOVU uses driver details, OTP trip starts, and live updates to help protect your trip.
+                </div>
+                <div className="rounded-[28px] border border-red-100 bg-white p-4 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-red-500">
+                        Safety Audio Recording
+                      </div>
+                      <h3 className="mt-2 text-xl font-black text-slate-950">Record Audio</h3>
+                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                        Use this only if you feel unsafe during a trip. Your recording will be saved securely with this trip.
+                      </p>
+                    </div>
+                    {isRecordingAudio && (
+                      <div className="rounded-full bg-red-50 px-4 py-2 text-sm font-black text-red-700">
+                        <span className="mr-2 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+                        Recording {formatTimer(recordingSeconds)}
+                      </div>
+                    )}
+                  </div>
+
+                  {!canUseSafetyRecording && (
+                    <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm font-semibold leading-6 text-slate-600">
+                      Audio recording is only available during an assigned, arrived, ongoing, or recently completed trip.
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {!isRecordingAudio ? (
+                      <button
+                        type="button"
+                        className="moovu-btn moovu-btn-primary"
+                        disabled={!canUseSafetyRecording || audioUploading}
+                        onClick={startSafetyRecording}
+                      >
+                        {audioUploading ? "Saving..." : "Record Audio"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="moovu-btn bg-red-600 text-white shadow-lg shadow-red-200 hover:bg-red-700"
+                        onClick={stopSafetyRecording}
+                      >
+                        Stop Recording
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="moovu-btn moovu-btn-secondary"
+                      onClick={() => void loadAudioRecordings()}
+                      disabled={audioLoading}
+                    >
+                      {audioLoading ? "Loading..." : "Refresh Recordings"}
+                    </button>
+                  </div>
+
+                  {audioError && (
+                    <div className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold leading-6 text-red-700">
+                      {audioError}
+                    </div>
+                  )}
+                  {audioSavedMessage && (
+                    <div className="mt-4 rounded-2xl bg-emerald-50 p-3 text-sm font-semibold leading-6 text-emerald-700">
+                      {audioSavedMessage}
+                    </div>
+                  )}
+
+                  <div className="mt-5 space-y-3">
+                    {audioLoading && audioRecordings.length === 0 && (
+                      <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+                        Loading saved recordings...
+                      </div>
+                    )}
+                    {!audioLoading && audioRecordings.length === 0 && (
+                      <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+                        No safety recordings saved for this trip yet.
+                      </div>
+                    )}
+                    {audioRecordings.map((recording) => (
+                      <div key={recording.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-black text-slate-950">
+                              {new Date(recording.created_at).toLocaleString()}
+                            </div>
+                            <div className="text-xs font-bold text-slate-500">
+                              Duration {formatTimer(Number(recording.duration_seconds ?? 0))}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700"
+                            disabled={audioDeletingId === recording.id}
+                            onClick={() => void deleteAudioRecording(recording.id)}
+                          >
+                            {audioDeletingId === recording.id ? "Removing..." : "Delete"}
+                          </button>
+                        </div>
+                        {recording.url ? (
+                          <div className="mt-3 space-y-2">
+                            <audio controls className="w-full" src={recording.url}>
+                              <track kind="captions" />
+                            </audio>
+                            <a
+                              href={recording.url}
+                              download={recording.file_name}
+                              className="inline-flex text-sm font-black text-blue-700 underline"
+                            >
+                              Download recording
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="mt-3 rounded-xl bg-white p-3 text-sm font-semibold text-slate-600">
+                            Playback link expired. Refresh recordings to generate a new secure link.
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Link href={`/ride/${trip.id}/share`} className="moovu-btn moovu-btn-primary justify-center">

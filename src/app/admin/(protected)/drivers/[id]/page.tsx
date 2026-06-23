@@ -17,6 +17,14 @@ type DriverProfile = {
   busy: boolean | null;
   profile_completed: boolean | null;
   verification_status: string | null;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
+  vehicle_year?: string | null;
+  vehicle_color?: string | null;
+  vehicle_registration?: string | null;
+  vehicle_vin?: string | null;
+  vehicle_engine_number?: string | null;
+  seating_capacity?: number | null;
   subscription_status?: string | null;
   subscription_plan?: string | null;
   subscription_expires_at?: string | null;
@@ -29,11 +37,44 @@ type DriverProfile = {
   delete_mode?: string | null;
   deleted_reason?: string | null;
   driver_profile?: {
+    id_number?: string | null;
+    home_address?: string | null;
+    area_name?: string | null;
+    emergency_contact_name?: string | null;
+    emergency_contact_phone?: string | null;
+    license_number?: string | null;
+    license_code?: string | null;
     license_expiry?: string | null;
+    pdp_number?: string | null;
     pdp_expiry?: string | null;
     vehicle_license_expiry?: string | null;
     insurance_expiry?: string | null;
   } | null;
+};
+
+type ValidationIssue = {
+  field: string;
+  label: string;
+  message: string;
+  severity: "ready" | "warning" | "blocked";
+};
+
+type CorrectionRow = {
+  id: string;
+  table_name: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  correction_reason: string;
+  corrected_at: string;
+};
+
+type CorrectionDraft = {
+  fieldName: string;
+  label: string;
+  currentValue: string;
+  newValue: string;
+  reason: string;
 };
 
 type SubscriptionPayment = {
@@ -94,9 +135,14 @@ export default function AdminDriverProfilePage() {
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [subscriptionPayments, setSubscriptionPayments] = useState<SubscriptionPayment[]>([]);
   const [subscriptionRequests, setSubscriptionRequests] = useState<SubscriptionRequest[]>([]);
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+  const [corrections, setCorrections] = useState<CorrectionRow[]>([]);
+  const [correctionsReady, setCorrectionsReady] = useState(true);
+  const [readinessScore, setReadinessScore] = useState(0);
   const [busy, setBusy] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [correctionDraft, setCorrectionDraft] = useState<CorrectionDraft | null>(null);
 
   const [planType, setPlanType] = useState<"day" | "week" | "month">("month");
   const [amountPaid, setAmountPaid] = useState("300");
@@ -142,8 +188,55 @@ export default function AdminDriverProfilePage() {
     setProfile(profileJson.profile ?? null);
     setSubscriptionPayments(profileJson.subscription_payments ?? []);
     setSubscriptionRequests(profileJson.subscription_requests ?? []);
+    setValidationIssues(profileJson.validation_issues ?? []);
+    setCorrections(profileJson.corrections ?? []);
+    setCorrectionsReady(Boolean(profileJson.corrections_ready));
+    setReadinessScore(Number(profileJson.readiness_score ?? 0));
     setBusy(false);
   }, [driverId, getAccessToken]);
+
+  async function saveCorrection() {
+    if (!correctionDraft) return;
+    if (correctionDraft.reason.trim().length < 8) {
+      setMsg("Add a clear correction reason before saving.");
+      return;
+    }
+
+    setActionBusy(true);
+    setMsg(null);
+
+    const token = await getAccessToken();
+    if (!token) {
+      setActionBusy(false);
+      setMsg("Missing access token.");
+      return;
+    }
+
+    const res = await fetch("/api/admin/driver-corrections", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        driverId,
+        fieldName: correctionDraft.fieldName,
+        newValue: correctionDraft.newValue,
+        reason: correctionDraft.reason,
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    setActionBusy(false);
+
+    if (!res.ok || !json?.ok) {
+      setMsg(json?.error || "Could not save this correction.");
+      return;
+    }
+
+    setCorrectionDraft(null);
+    setMsg("Driver correction saved with audit record.");
+    await loadAll();
+  }
 
   async function activateSubscription(requestId?: string) {
     if (!amountPaid || Number(amountPaid) <= 0) {
@@ -204,6 +297,34 @@ export default function AdminDriverProfilePage() {
     return `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() || "Unnamed Driver";
   }, [profile]);
 
+  const editableFields = useMemo(
+    () => [
+      ["first_name", "First name", profile?.first_name],
+      ["last_name", "Last name", profile?.last_name],
+      ["phone", "Phone", profile?.phone],
+      ["email", "Email", profile?.email],
+      ["area_name", "Area / township", profile?.driver_profile?.area_name],
+      ["home_address", "Home address", profile?.driver_profile?.home_address],
+      ["emergency_contact_name", "Emergency contact", profile?.driver_profile?.emergency_contact_name],
+      ["emergency_contact_phone", "Emergency phone", profile?.driver_profile?.emergency_contact_phone],
+      ["id_number", "ID number", profile?.driver_profile?.id_number],
+      ["license_number", "Licence number", profile?.driver_profile?.license_number],
+      ["license_code", "Licence code", profile?.driver_profile?.license_code],
+      ["license_expiry", "Licence expiry", profile?.driver_profile?.license_expiry],
+      ["pdp_number", "PDP / PrDP number", profile?.driver_profile?.pdp_number],
+      ["pdp_expiry", "PDP / PrDP expiry", profile?.driver_profile?.pdp_expiry],
+      ["vehicle_make", "Vehicle make", profile?.vehicle_make],
+      ["vehicle_model", "Vehicle model", profile?.vehicle_model],
+      ["vehicle_year", "Vehicle year", profile?.vehicle_year],
+      ["vehicle_color", "Vehicle colour", profile?.vehicle_color],
+      ["vehicle_registration", "Number plate", profile?.vehicle_registration],
+      ["vehicle_vin", "VIN", profile?.vehicle_vin],
+      ["vehicle_engine_number", "Engine number", profile?.vehicle_engine_number],
+      ["seating_capacity", "Seating capacity", profile?.seating_capacity == null ? null : String(profile.seating_capacity)],
+    ] as const,
+    [profile],
+  );
+
   if (busy) {
     return (
       <main className="min-h-screen px-6 py-10 text-black">
@@ -245,6 +366,51 @@ export default function AdminDriverProfilePage() {
         </div>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
+        {correctionDraft && (
+          <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+            <section className="w-full max-w-lg rounded-[30px] bg-white p-5 shadow-2xl">
+              <div className="moovu-section-title">Admin correction</div>
+              <h2 className="mt-2 text-2xl font-black text-slate-950">{correctionDraft.label}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Corrections are audited with the original value, new value, admin user, timestamp, and reason.
+              </p>
+              <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm">
+                <div className="font-bold text-slate-500">Current value</div>
+                <div className="mt-1 font-black text-slate-950">{correctionDraft.currentValue || "--"}</div>
+              </div>
+              <label className="mt-4 block">
+                <span className="text-sm font-black text-slate-700">New value</span>
+                <input
+                  className="moovu-input mt-2"
+                  value={correctionDraft.newValue}
+                  onChange={(event) =>
+                    setCorrectionDraft((current) => current ? { ...current, newValue: event.target.value } : current)
+                  }
+                />
+              </label>
+              <label className="mt-4 block">
+                <span className="text-sm font-black text-slate-700">Correction reason</span>
+                <textarea
+                  className="moovu-input mt-2 min-h-28"
+                  value={correctionDraft.reason}
+                  onChange={(event) =>
+                    setCorrectionDraft((current) => current ? { ...current, reason: event.target.value } : current)
+                  }
+                  placeholder="Example: Corrected spelling after checking uploaded ID document."
+                />
+              </label>
+              <div className="mt-5 flex flex-wrap justify-end gap-3">
+                <button className="moovu-btn moovu-btn-secondary" disabled={actionBusy} onClick={() => setCorrectionDraft(null)}>
+                  Cancel
+                </button>
+                <button className="moovu-btn moovu-btn-primary" disabled={actionBusy} onClick={() => void saveCorrection()}>
+                  {actionBusy ? "Saving..." : "Save correction"}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
 
         <section className="grid md:grid-cols-4 gap-4">
           <div className="border rounded-2xl p-5 bg-white shadow-sm">
@@ -300,6 +466,115 @@ export default function AdminDriverProfilePage() {
               );
             })}
           </div>
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold">Driver verification review</h2>
+              <p className="mt-1 text-sm text-gray-700">
+                Review saved profile, vehicle, documents, and approval blockers before approving this driver.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-sky-50 px-4 py-3 text-right">
+              <div className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">Readiness</div>
+              <div className="text-2xl font-black text-slate-950">{readinessScore}%</div>
+            </div>
+          </div>
+
+          {validationIssues.length > 0 ? (
+            <div className="grid gap-2 md:grid-cols-2">
+              {validationIssues.map((item) => (
+                <div
+                  key={`${item.field}-${item.message}`}
+                  className={`rounded-2xl px-3 py-2 text-sm font-bold ${
+                    item.severity === "blocked"
+                      ? "bg-red-50 text-red-800"
+                      : "bg-amber-50 text-amber-900"
+                  }`}
+                >
+                  <span className="font-black">{item.label}:</span> {item.message}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-black text-emerald-800">
+              No validation blockers found.
+            </div>
+          )}
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold">Profile and vehicle corrections</h2>
+              <p className="mt-1 text-sm text-gray-700">
+                Use corrections for small verified fixes only. Every change requires an audit reason.
+              </p>
+            </div>
+            {!correctionsReady && (
+              <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-black text-amber-800">
+                Run corrections SQL
+              </span>
+            )}
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {editableFields.map(([fieldName, label, currentValue]) => (
+              <div key={fieldName} className="rounded-2xl border border-[var(--moovu-border)] bg-white p-4">
+                <div className="text-sm font-bold text-gray-500">{label}</div>
+                <div className="mt-1 break-words text-lg font-semibold">{currentValue || "--"}</div>
+                <button
+                  type="button"
+                  className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[var(--moovu-primary)]"
+                  onClick={() =>
+                    setCorrectionDraft({
+                      fieldName,
+                      label,
+                      currentValue: String(currentValue ?? ""),
+                      newValue: String(currentValue ?? ""),
+                      reason: "",
+                    })
+                  }
+                >
+                  Correct
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+          <h2 className="text-2xl font-semibold">Correction history</h2>
+          {!correctionsReady ? (
+            <div className="rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-900">
+              Correction audit table is not available yet. Run `docs/driver-admin-corrections-migration.sql`.
+            </div>
+          ) : corrections.length === 0 ? (
+            <div className="rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-600">
+              No admin corrections recorded yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {corrections.map((row) => (
+                <div key={row.id} className="rounded-2xl border border-[var(--moovu-border)] bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="font-black text-slate-950">{row.field_name.replaceAll("_", " ")}</div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        {row.old_value || "--"} {"->"} {row.new_value || "--"}
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold text-slate-500">
+                      {new Date(row.corrected_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="mt-2 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
+                    {row.correction_reason}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">

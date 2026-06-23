@@ -10,9 +10,20 @@ This checklist records the final manual items that must be completed before Goog
 - `npm run ios:customer:doctor`: confirms the customer iOS target folder exists.
 - `npm run ios:driver:doctor`: confirms the driver iOS target folder exists.
 
-## iOS Firebase and APNs
+## iOS APNs and Firebase
 
-The repo must contain the real Firebase plist files before iOS closed-app push can be tested:
+Native iOS closed-app push uses APNs device tokens from Capacitor Push Notifications. Configure Vercel with:
+
+- `APNS_TEAM_ID`
+- `APNS_KEY_ID`
+- `APNS_AUTH_KEY`
+- `APNS_ENV=production`
+- `APNS_CUSTOMER_BUNDLE_ID=com.moovu.customer`
+- `APNS_DRIVER_BUNDLE_ID=com.moovu.driver`
+
+Enable the Push Notifications capability on both Xcode targets, then test foreground, background, and closed-app delivery on real iPhones.
+
+Firebase plist files are only required if MOOVU later adds native Firebase Messaging token bridging:
 
 - Customer app: `ios-customer/App/App/GoogleService-Info.plist`
 - Driver app: `ios-driver/App/App/GoogleService-Info.plist`
@@ -22,14 +33,16 @@ These files must be downloaded from Firebase for the exact bundle IDs:
 - Customer: `com.moovu.customer`
 - Driver: `com.moovu.driver`
 
-After adding them in Xcode:
-
-- Enable the Push Notifications capability on both targets.
-- Configure signing with the correct Apple Developer team.
-- Upload the APNs auth key or certificate to Firebase.
-- Test foreground, background, and closed-app notifications on real iPhones.
-
 Do not claim iOS notification readiness from browser/PWA tests only.
+
+## Apple Account Deletion
+
+Run and verify `docs/account-deletion-migration.sql` before submitting an Apple build for review. Apple reviewers must be able to open:
+
+- Customer: Account > Request account deletion
+- Driver: Driver Account > Request driver account deletion
+
+The feature intentionally creates a deletion request rather than immediately deleting rows because MOOVU may need to retain trip, receipt, payment, tax, fraud-prevention, dispute, support, safety, and legal records.
 
 ## Android Packaging
 
@@ -108,4 +121,3 @@ Use safe local or staging data only. Do not seed production blindly.
 21. Driver submits commission payment proof.
 22. Admin approves/rejects commission payment.
 23. Admin receipts, reports, payments, trips, dispatch, and notifications pages load without protected-table errors.
-

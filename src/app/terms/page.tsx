@@ -128,6 +128,7 @@ const sections = [
     paragraphs: [
       "MOOVU may suspend, restrict, deactivate, or terminate access if a user violates these Terms, creates safety risk, provides false information, abuses the platform, fails to pay required amounts, receives repeated complaints, manipulates trip workflows, or creates legal, payment, or operational risk.",
       "MOOVU may also pause or restrict features during investigations, maintenance, system outages, payment reviews, driver verification, security incidents, or legal requests.",
+      "Users may request account deletion from the customer or driver Account area. MOOVU may retain trip, receipt, payment, tax, accounting, fraud-prevention, support, dispute, legal, and safety records where required before deleting or anonymizing remaining account data.",
     ],
   },
   {

@@ -7,7 +7,7 @@ const items = [
   { href: "/", label: "Home" },
   { href: "/book", label: "Book" },
   { href: "/ride/history", label: "Trips" },
-  { href: "/customer/auth", label: "Account" },
+  { href: "/account", label: "Account" },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -37,4 +37,3 @@ export default function CustomerBottomNav() {
     </nav>
   );
 }
-

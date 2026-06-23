@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  normalizeDriverProfileInput,
+  validateDriverProfileFields,
+} from "@/lib/driver-validation";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
@@ -104,15 +108,17 @@ export async function POST(req: Request) {
     const driverId = mapping.driver_id;
     const submit = !!body.submit;
 
-    const first_name = cleanText(body.first_name);
-    const last_name = cleanText(body.last_name);
-    const phone = cleanText(body.phone);
-    const alt_phone = cleanText(body.alt_phone);
+    const normalizedBody = normalizeDriverProfileInput(body as Record<string, unknown>);
+
+    const first_name = cleanText(normalizedBody.first_name);
+    const last_name = cleanText(normalizedBody.last_name);
+    const phone = cleanText(normalizedBody.phone);
+    const alt_phone = cleanText(normalizedBody.alt_phone);
     const id_number = cleanText(body.id_number);
     const home_address = cleanText(body.home_address);
     const area_name = cleanText(body.area_name);
     const emergency_contact_name = cleanText(body.emergency_contact_name);
-    const emergency_contact_phone = cleanText(body.emergency_contact_phone);
+    const emergency_contact_phone = cleanText(normalizedBody.emergency_contact_phone);
     const license_number = cleanText(body.license_number);
     const license_code = cleanText(body.license_code);
     const license_expiry = cleanDate(body.license_expiry);
@@ -123,9 +129,9 @@ export async function POST(req: Request) {
     const vehicle_model = cleanText(body.vehicle_model);
     const vehicle_year = cleanText(body.vehicle_year);
     const vehicle_color = cleanText(body.vehicle_color);
-    const vehicle_registration = cleanText(body.vehicle_registration);
-    const vehicle_vin = cleanText(body.vehicle_vin);
-    const vehicle_engine_number = cleanText(body.vehicle_engine_number);
+    const vehicle_registration = cleanText(normalizedBody.vehicle_registration);
+    const vehicle_vin = cleanText(normalizedBody.vehicle_vin);
+    const vehicle_engine_number = cleanText(normalizedBody.vehicle_engine_number);
     const seating_capacity = cleanNumber(body.seating_capacity);
 
     if (submit) {
@@ -155,6 +161,45 @@ export async function POST(req: Request) {
             error: `Please complete all required fields before submitting. Missing: ${missingRequired.join(", ")}.`,
           },
           { status: 400 }
+        );
+      }
+
+      const validationIssues = validateDriverProfileFields(
+        {
+          first_name,
+          last_name,
+          phone,
+          email: user.email ?? null,
+          id_number,
+          home_address,
+          area_name,
+          emergency_contact_name,
+          emergency_contact_phone,
+          license_number,
+          license_code,
+          license_expiry,
+          pdp_number,
+          pdp_expiry,
+          vehicle_make,
+          vehicle_model,
+          vehicle_year,
+          vehicle_color,
+          vehicle_registration,
+          vehicle_vin,
+          vehicle_engine_number,
+          seating_capacity,
+        },
+        { requirePdp: false },
+      ).filter((item) => item.severity === "blocked");
+
+      if (validationIssues.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: validationIssues[0].message,
+            validationIssues,
+          },
+          { status: 400 },
         );
       }
     }

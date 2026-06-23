@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import {
+  readinessScoreFromIssues,
+  validateDriverDocumentsForApproval,
+  validateDriverProfileFields,
+} from "@/lib/driver-validation";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -78,6 +83,7 @@ export async function GET(req: NextRequest) {
       profileResult,
       { data: subscriptionPayments, error: subscriptionErr },
       { data: subscriptionRequests, error: requestsErr },
+      { data: documents, error: documentsErr },
     ] = await Promise.all([
       supabaseAdmin
         .from("drivers")
@@ -148,6 +154,10 @@ export async function GET(req: NextRequest) {
         .eq("driver_id", driverId)
         .order("created_at", { ascending: false })
         .limit(20),
+      supabaseAdmin
+        .from("driver_documents")
+        .select("id,doc_type,document_type,status,review_status,rejection_reason,uploaded_at")
+        .eq("driver_id", driverId),
     ]);
 
     let profile: unknown = profileResult.data;
@@ -179,6 +189,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: requestsErr.message }, { status: 500 });
     }
 
+    if (documentsErr) {
+      return NextResponse.json({ ok: false, error: documentsErr.message }, { status: 500 });
+    }
+
+    const validationIssues = [
+      ...validateDriverProfileFields(
+        {
+          ...(driver ?? {}),
+          ...((profile as Record<string, unknown> | null) ?? {}),
+        },
+        { requirePdp: true },
+      ),
+      ...validateDriverDocumentsForApproval(documents ?? []),
+    ];
+
+    const { data: corrections, error: correctionsErr } = await supabaseAdmin
+      .from("driver_profile_corrections")
+      .select("id,table_name,field_name,old_value,new_value,correction_reason,corrected_by,corrected_at")
+      .eq("driver_id", driverId)
+      .order("corrected_at", { ascending: false })
+      .limit(20);
+
     return NextResponse.json({
       ok: true,
       profile: {
@@ -187,6 +219,12 @@ export async function GET(req: NextRequest) {
       },
       subscription_payments: subscriptionPayments ?? [],
       subscription_requests: subscriptionRequests ?? [],
+      documents: documents ?? [],
+      validation_issues: validationIssues,
+      approval_blockers: validationIssues.filter((item) => item.severity === "blocked"),
+      readiness_score: readinessScoreFromIssues(validationIssues),
+      corrections: correctionsErr ? [] : corrections ?? [],
+      corrections_ready: !correctionsErr,
     });
   } catch (e: unknown) {
     return NextResponse.json({ ok: false, error: errorMessage(e, "Server error") }, { status: 500 });

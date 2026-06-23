@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notifyAdmins } from "@/lib/push-notify";
+import {
+  isValidEmail,
+  isValidEngineNumber,
+  isValidSaIdNumber,
+  isValidSaMobile,
+  isValidSeatingCapacity,
+  isValidVehicleRegistration,
+  isValidVehicleYear,
+  isValidVin,
+  normalizeDriverEmail,
+  normalizeEngineNumber,
+  normalizeSaPhone,
+  normalizeVehicleRegistration,
+  normalizeVin,
+} from "@/lib/driver-validation";
 
 type ExistingDriverRow = {
   id: string;
@@ -20,8 +35,8 @@ export async function POST(req: Request) {
 
     const userId = String(body.userId ?? body.userid ?? "").trim();
     const rawFullName = body.fullName ? String(body.fullName).trim() : "";
-    const phone = body.phone ? String(body.phone).trim() : null;
-    const email = body.email ? String(body.email).trim().toLowerCase() : null;
+    const phone = body.phone ? normalizeSaPhone(body.phone) : null;
+    const email = body.email ? normalizeDriverEmail(body.email) : null;
     const notes = body.notes ? String(body.notes).trim() : null;
     const applicationData = body.applicationData && typeof body.applicationData === "object" ? body.applicationData : null;
     const eligibility = applicationData?.eligibility ?? {};
@@ -34,6 +49,38 @@ export async function POST(req: Request) {
         { ok: false, error: "Missing userId/email" },
         { status: 400 }
       );
+    }
+
+    if (!isValidEmail(email)) {
+      return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 400 });
+    }
+
+    if (!isValidSaMobile(phone)) {
+      return NextResponse.json({ ok: false, error: "Enter a valid South African cellphone number." }, { status: 400 });
+    }
+
+    if (personal.idNumber && !isValidSaIdNumber(personal.idNumber)) {
+      return NextResponse.json({ ok: false, error: "SA ID number must be exactly 13 digits." }, { status: 400 });
+    }
+
+    if (vehicle.year && !isValidVehicleYear(vehicle.year)) {
+      return NextResponse.json({ ok: false, error: "Vehicle year must be between 1995 and next year." }, { status: 400 });
+    }
+
+    if (vehicle.plate && !isValidVehicleRegistration(vehicle.plate)) {
+      return NextResponse.json({ ok: false, error: "Number plate must be 3 to 15 letters/numbers, spaces, or hyphens." }, { status: 400 });
+    }
+
+    if (vehicle.vin && !isValidVin(vehicle.vin)) {
+      return NextResponse.json({ ok: false, error: "VIN must be exactly 17 characters and cannot contain I, O, or Q." }, { status: 400 });
+    }
+
+    if (vehicle.engineNumber && !isValidEngineNumber(vehicle.engineNumber)) {
+      return NextResponse.json({ ok: false, error: "Engine number must be 6 to 25 uppercase letters/numbers." }, { status: 400 });
+    }
+
+    if (vehicle.seatingCapacity && !isValidSeatingCapacity(vehicle.seatingCapacity)) {
+      return NextResponse.json({ ok: false, error: "Seating capacity must be between 3 and 7." }, { status: 400 });
     }
 
     const fullName = rawFullName || "Unnamed Driver";
@@ -82,9 +129,9 @@ export async function POST(req: Request) {
       vehicle_model: vehicle.model ? String(vehicle.model).trim() : null,
       vehicle_year: vehicle.year ? String(vehicle.year).trim() : null,
       vehicle_color: vehicle.color ? String(vehicle.color).trim() : null,
-      vehicle_registration: vehicle.plate ? String(vehicle.plate).trim() : null,
-      vehicle_vin: vehicle.vin ? String(vehicle.vin).trim() : null,
-      vehicle_engine_number: vehicle.engineNumber ? String(vehicle.engineNumber).trim() : null,
+      vehicle_registration: vehicle.plate ? normalizeVehicleRegistration(vehicle.plate) : null,
+      vehicle_vin: vehicle.vin ? normalizeVin(vehicle.vin) : null,
+      vehicle_engine_number: vehicle.engineNumber ? normalizeEngineNumber(vehicle.engineNumber) : null,
       seating_capacity: Number.isFinite(seatingCapacity) ? seatingCapacity : null,
     };
     const structuredNotes = [

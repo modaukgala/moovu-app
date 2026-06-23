@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import {
+  validateDriverDocumentsForApproval,
+  validateDriverProfileFields,
+} from "@/lib/driver-validation";
 
 const ALLOWED = ["pending_review", "approved", "needs_more_info", "rejected"] as const;
 
@@ -35,6 +39,90 @@ export async function POST(req: Request) {
         : "pending";
 
     const profileCompleted = verificationStatus === "approved";
+
+    if (verificationStatus === "approved") {
+      const [{ data: driver, error: driverLoadError }, { data: profile, error: profileLoadError }, { data: documents, error: documentsError }] =
+        await Promise.all([
+          supabaseAdmin
+            .from("drivers")
+            .select(`
+              id,
+              first_name,
+              last_name,
+              phone,
+              email,
+              status,
+              verification_status,
+              profile_completed,
+              is_deleted,
+              vehicle_make,
+              vehicle_model,
+              vehicle_year,
+              vehicle_color,
+              vehicle_registration,
+              vehicle_vin,
+              vehicle_engine_number,
+              seating_capacity
+            `)
+            .eq("id", driverId)
+            .maybeSingle(),
+          supabaseAdmin
+            .from("driver_profiles")
+            .select(`
+              driver_id,
+              id_number,
+              home_address,
+              area_name,
+              emergency_contact_name,
+              emergency_contact_phone,
+              license_number,
+              license_code,
+              license_expiry,
+              pdp_number,
+              pdp_expiry
+            `)
+            .eq("driver_id", driverId)
+            .maybeSingle(),
+          supabaseAdmin
+            .from("driver_documents")
+            .select("doc_type,document_type,status,review_status")
+            .eq("driver_id", driverId),
+        ]);
+
+      if (driverLoadError || profileLoadError || documentsError) {
+        return NextResponse.json(
+          { ok: false, error: "Could not validate driver readiness. Please refresh and try again." },
+          { status: 500 },
+        );
+      }
+
+      if (!driver) {
+        return NextResponse.json({ ok: false, error: "Driver not found." }, { status: 404 });
+      }
+
+      const validationIssues = [
+        ...validateDriverProfileFields(
+          {
+            ...driver,
+            ...(profile ?? {}),
+          },
+          { requirePdp: true },
+        ),
+        ...validateDriverDocumentsForApproval(documents ?? []),
+      ];
+      const blockers = validationIssues.filter((item) => item.severity === "blocked");
+
+      if (blockers.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Driver cannot be approved yet: ${blockers[0].message}`,
+            validationIssues,
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     const { error: driverError } = await supabaseAdmin
       .from("drivers")

@@ -24,7 +24,7 @@ const sections = [
       "Customer trip information, including pickup and destination addresses, coordinates, ride option, route, fare, payment method, OTP workflow, trip status, cancellation reason, ratings, receipts, support requests, and trip history.",
       "Driver and applicant information, including contact details, profile completion, vehicle details, driver approval status, online availability, subscription status, payment proof uploads, commission records, earnings, settlement records, quality metrics, and driver account links.",
       "Location information, including customer-selected pickup/dropoff coordinates, driver online location, active trip location checks, distance calculations, route estimates, and location timestamps.",
-      "Communications data, including trip chat messages, support messages, operational notes, admin review notes, message read status, notification delivery logs, and related timestamps.",
+      "Communications and safety data, including trip chat messages, support messages, customer-started safety audio recordings, operational notes, admin review notes, message read status, notification delivery logs, and related timestamps.",
       "Device and technical information, including app platform, browser or device type, FCM token, push subscription data, device identifier where available, service worker state, IP-derived diagnostics, logs, and error details.",
       "Payment and financial information used by MOOVU, including fares, receipts, payment review status, driver subscription payments, commission balances, proof-of-payment files, settlement references, and related audit records.",
     ],
@@ -71,7 +71,8 @@ const sections = [
   {
     title: "7. Chat, Support, Ratings, and Safety Records",
     paragraphs: [
-      "MOOVU may store trip chat messages between the assigned customer and driver, message read state, support requests, ratings, complaints, incident notes, and admin review records. These records help complete trips, resolve disputes, support safety reviews, and investigate misuse.",
+      "MOOVU may store trip chat messages between the assigned customer and driver, message read state, support requests, ratings, complaints, incident notes, customer-started safety audio recordings, and admin review records. These records help complete trips, resolve disputes, support safety reviews, and investigate misuse.",
+      "Safety audio recording only starts when the customer chooses to record during an eligible trip. MOOVU does not secretly record in the background. Recordings are linked to the relevant trip and should only be reviewed by authorized admin or support users when needed for safety or support handling.",
       "Do not send passwords, bank card numbers, government identity numbers, or unnecessary sensitive information in chat or support messages. MOOVU may restrict, review, or preserve communications where required for safety, fraud prevention, legal compliance, or dispute handling.",
     ],
   },
@@ -84,21 +85,24 @@ const sections = [
       "With payment, accounting, tax, legal, insurance, safety, fraud prevention, or regulatory parties where necessary and lawful.",
       "With law enforcement, regulators, courts, or other authorities if required by law, legal process, safety risk, fraud investigation, or protection of rights.",
     ],
-    paragraphs: ["MOOVU does not sell personal information."],
+    paragraphs: [
+      "MOOVU does not sell personal information.",
+      "MOOVU does not use advertising identifiers, cross-app tracking, or third-party advertising tracking to follow users across apps and websites owned by other companies. Operational location, trip, device token, and diagnostic data is used to provide MOOVU rides, safety, support, notifications, and platform operations.",
+    ],
   },
   {
     title: "9. Legal Basis and POPIA-Style Rights",
     paragraphs: [
       "MOOVU processes personal information to provide the service, perform user agreements, protect legitimate business and safety interests, comply with legal obligations, and where needed, based on consent such as notification permission or location permission.",
       "Subject to applicable law, including South African privacy principles, you may request access to your personal information, correction of inaccurate information, deletion where legally possible, restriction or objection to certain processing, and information about how your data is used.",
-      `To make a privacy request, email ${MOOVU_SUPPORT_EMAIL}. We may need to verify your identity before acting on the request. Some records must be retained for legal, accounting, fraud prevention, dispute, or safety reasons.`,
+      `You can start an account deletion request from the Account area in the MOOVU app, or email ${MOOVU_SUPPORT_EMAIL}. We may need to verify your identity before acting on the request. Some records must be retained for legal, accounting, fraud prevention, dispute, payment, receipt, or safety reasons.`,
     ],
   },
   {
     title: "10. Retention",
     paragraphs: [
-      "MOOVU keeps account, trip, receipt, payment, commission, driver, support, legal acceptance, notification, chat, and audit records for as long as needed to operate the platform, provide support, resolve disputes, detect fraud, satisfy tax/accounting obligations, enforce terms, and comply with law.",
-      "When information is no longer needed, MOOVU will delete, archive, anonymize, or restrict it where reasonably possible. Backup copies and logs may remain for a limited period as part of normal security and disaster recovery processes.",
+      "MOOVU keeps account, trip, receipt, payment, commission, driver, support, legal acceptance, notification, chat, safety audio, and audit records for as long as needed to operate the platform, provide support, resolve disputes, detect fraud, satisfy tax/accounting obligations, enforce terms, and comply with law.",
+      "When a deletion request is approved, MOOVU will delete, anonymize, archive, or restrict account data where reasonably possible. Trip, receipt, payment, commission, driver, safety, support, fraud-prevention, legal acceptance, and audit records may be retained where required for legal, tax, accounting, dispute, safety, or platform integrity reasons. Backup copies and logs may remain for a limited period as part of normal security and disaster recovery processes.",
     ],
   },
   {

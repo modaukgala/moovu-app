@@ -16,6 +16,7 @@ This document supports Google Play and Apple App Store data safety forms. It is 
 - Account information: name, cellphone number, auth user ID, account status.
 - Location data: customer pickup location, typed pickup/destination, driver GPS/manual availability while using the app.
 - Trip data: pickup, destination, route, distance, duration, fare, ride option, trip status, timestamps, OTP workflow status, driver/customer references.
+- Safety audio data: customer-started trip safety recordings linked to a trip, only when the customer intentionally records during an eligible trip.
 - Driver data: application details, vehicle details, documents, approval status, online status, earnings, commission, subscription status.
 - Payment and receipt data: private payment proof uploads, review status, receipts, fares, commission records, subscription payment records.
 - Notifications: push subscription endpoint/token and role context used for ride/payment alerts.
@@ -30,6 +31,7 @@ This document supports Google Play and Apple App Store data safety forms. It is 
 - Review driver applications, payments, commissions, subscriptions, settlements, and receipts.
 - Send operational push notifications.
 - Provide support, safety review, fraud prevention, and compliance records.
+- Store customer-started safety audio recordings for trip safety/support review where needed.
 
 ## Linked to User
 
@@ -55,7 +57,14 @@ MOOVU does not sell personal information.
 - OTP trip security.
 - Protected admin payment review flows.
 - Storage bucket access should be restricted by Supabase policies. Driver documents and payment proofs should remain private; admins should view payment proofs through short-lived signed URLs.
+- Trip safety audio recordings should remain in a private Supabase Storage bucket. Customers should access their own recordings through short-lived signed URLs; drivers should not access customer safety recordings by default.
 
 ## Deletion and Support Process
 
-Users may request access, correction, or deletion by emailing admin@moovurides.co.za. Some records may be retained when required for legal, tax, financial, fraud-prevention, support, or safety reasons.
+Users may request access, correction, or deletion inside the app from the Account area, or by emailing admin@moovurides.co.za. Some records may be retained when required for legal, tax, financial, fraud-prevention, support, receipt, payment, dispute, or safety reasons.
+
+## Apple Tracking Declaration
+
+Based on the current source audit, MOOVU does not include ATT/IDFA access, ad network SDKs, cross-app advertising SDKs, or third-party advertising tracking. Operational data is used for MOOVU ride-hailing, payments, safety, support, maps, push notifications, and diagnostics.
+
+For App Store Connect, answer **No** to "Data Used to Track You" unless MOOVU later adds an advertising, attribution, or third-party analytics SDK that links user/device data with third-party data for tracking under Apple's definition.

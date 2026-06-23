@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
 import type { PushRole } from "@/lib/push-auth";
+import { sendApnsToDeviceToken } from "@/lib/apns-server";
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
 import { createNativeNotificationActionToken } from "@/lib/native-notification-actions";
 
@@ -358,6 +359,8 @@ async function sendFcmToTargets(params: SendPushParams) {
   for (const row of tokens) {
     const relativeUrl = params.url || "/";
     const clickUrl = absoluteAppUrl(relativeUrl);
+    const androidNativeToken = isAndroidNativeToken(row);
+    const iosNativeToken = isIosNativeToken(row);
 
     try {
       const baseData = stringData(params.data, {
@@ -366,8 +369,48 @@ async function sendFcmToTargets(params: SendPushParams) {
         url: relativeUrl,
         role: params.role || String(row.role || ""),
       });
-      const androidNativeToken = isAndroidNativeToken(row);
-      const iosNativeToken = isIosNativeToken(row);
+
+      if (iosNativeToken) {
+        const apnsResult = await sendApnsToDeviceToken({
+          token: String(row.token),
+          appType: row.app_type,
+          title: params.title,
+          body: params.body,
+          url: relativeUrl,
+          data: baseData,
+          sound: MOOVU_NOTIFICATION_SOUND_FILE,
+        });
+
+        if (!apnsResult.ok) {
+          failed += 1;
+          failures.push({ subscriptionId: String(row.id), reason: apnsResult.reason });
+          console.error("[apns] send failed", {
+            tokenId: row.id,
+            userId: row.user_id,
+            role: row.role,
+            appType: row.app_type,
+            status: apnsResult.status,
+            reason: apnsResult.reason,
+          });
+
+          if (apnsResult.removeToken) {
+            await supabase
+              .from("fcm_tokens")
+              .update({ is_active: false, updated_at: new Date().toISOString() })
+              .eq("id", row.id);
+            removed += 1;
+          }
+        } else {
+          delivered += 1;
+          await supabase
+            .from("fcm_tokens")
+            .update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq("id", row.id);
+        }
+
+        continue;
+      }
+
       const data = androidNativeToken
         ? await withNativeActionData({
             supabase,
@@ -403,7 +446,6 @@ async function sendFcmToTargets(params: SendPushParams) {
                 },
               }),
         },
-        ...(iosNativeToken ? { apns: apnsOptions() } : {}),
         webpush: {
           notification: {
             title: params.title,
