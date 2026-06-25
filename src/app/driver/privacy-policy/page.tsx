@@ -49,7 +49,7 @@ const sections = [
     title: "Retention, safety, and driver rights",
     paragraphs: [
       "MOOVU keeps driver records for as long as needed for platform operation, legal compliance, accounting, tax, payment review, dispute handling, fraud prevention, and safety.",
-      `Drivers can start an account deletion request from the Driver Account area, or contact ${MOOVU_SUPPORT_EMAIL} to ask about their data, request corrections, or ask for deletion where legally and operationally possible. Some records must be kept for receipts, payments, trips, commission, subscriptions, documents, safety, disputes, tax, accounting, or legal reasons.`,
+      `Drivers can delete their account directly from Driver Account > Delete Account, or contact ${MOOVU_SUPPORT_EMAIL} to ask about their data or request corrections. Some records must be kept for receipts, payments, trips, commission, subscriptions, documents, safety, disputes, tax, accounting, or legal reasons.`,
     ],
   },
 ];

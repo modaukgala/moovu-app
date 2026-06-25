@@ -54,12 +54,14 @@ function legacyAppType(role: NotificationRole) {
   return null;
 }
 
-function deviceId() {
+export function getPushDeviceId() {
   try {
     const key = "moovu:push-device-id";
     const current = window.localStorage.getItem(key);
     if (current) return current;
-    const next = crypto.randomUUID();
+    const next = typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     window.localStorage.setItem(key, next);
     return next;
   } catch {
@@ -73,6 +75,7 @@ async function saveToken(params: {
   token: string;
 }) {
   const platform = platformName();
+  const currentDeviceId = getPushDeviceId();
   const response = await fetch("/api/push/fcm/register", {
     method: "POST",
     headers: {
@@ -85,8 +88,9 @@ async function saveToken(params: {
       platform,
       appSource: appSource(params.role),
       appType: legacyAppType(params.role),
-      deviceId: deviceId(),
+      deviceId: currentDeviceId,
       deviceLabel: platform === "web" ? navigator.userAgent : `${platform} native app`,
+      appVersion: process.env.NEXT_PUBLIC_APP_VERSION || null,
     }),
   });
 
@@ -227,7 +231,11 @@ export async function registerForPushNotifications({
       message: "Notifications enabled successfully.",
     };
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to enable notifications.";
+    const rawMessage = error instanceof Error ? error.message : "Failed to enable notifications.";
+    const lowerMessage = rawMessage.toLowerCase();
+    const message = lowerMessage.includes("aps-environment")
+      ? "iOS push notifications are not enabled for this app build. Rebuild after enabling the Push Notifications entitlement and using a push-enabled provisioning profile."
+      : rawMessage;
     const status = message.toLowerCase().includes("environment variables") ? "config-missing" : "failed";
     console.error("[push-registration] failed", { role, error: message });
     return { ok: false, status, message };

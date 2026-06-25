@@ -21,11 +21,7 @@ type DriverProfile = {
 export default function DriverAccountPage() {
   const [driver, setDriver] = useState<DriverProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [reason, setReason] = useState("");
-  const [confirmText, setConfirmText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,49 +59,6 @@ export default function DriverAccountPage() {
     window.location.href = "/driver/login";
   }
 
-  async function requestDeletion() {
-    if (confirmText.trim().toUpperCase() !== "DELETE") {
-      setMessage("Type DELETE to confirm this driver account deletion request.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage(null);
-
-    try {
-      const {
-        data: { session },
-      } = await supabaseClient.auth.getSession();
-
-      if (!session) {
-        window.location.href = "/driver/login?next=/driver/account";
-        return;
-      }
-
-      const res = await fetch("/api/driver/account/delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ reason }),
-      });
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok || !json?.ok) {
-        setMessage(json?.error || "We could not submit your deletion request. Please try again.");
-        return;
-      }
-
-      setSubmitted(true);
-      setMessage(json.message || "Your driver account deletion request was submitted.");
-    } catch {
-      setMessage("We could not submit your deletion request. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <main className="moovu-page min-h-screen pb-32 text-slate-950">
       {message && <CenteredMessageBox message={message} onClose={() => setMessage(null)} />}
@@ -115,7 +68,7 @@ export default function DriverAccountPage() {
           <div className="moovu-section-title">Driver account</div>
           <h1 className="mt-2 text-3xl font-black">Account and privacy</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Manage your MOOVU Driver account, profile, support links, and deletion request.
+            Manage your MOOVU Driver account, profile, support links, and account deletion.
           </p>
         </section>
 
@@ -147,40 +100,14 @@ export default function DriverAccountPage() {
 
         <section className="moovu-card border border-red-100 bg-red-50/50 p-5 sm:p-7">
           <div className="moovu-section-title text-red-700">Delete account</div>
-          <h2 className="mt-2 text-2xl font-black">Request driver account deletion</h2>
+          <h2 className="mt-2 text-2xl font-black">Delete Account</h2>
           <p className="mt-3 text-sm leading-6 text-slate-700">
-            MOOVU will review active trips, payments, subscriptions, commission, receipts, documents,
-            safety records, and legal retention duties before final deletion or anonymization.
+            Permanently delete your driver account from inside the app. MOOVU removes profile, vehicle, and document
+            data where permitted, while retaining legally required trip, receipt, tax, fraud-prevention, and safety records.
           </p>
-
-          {submitted ? (
-            <div className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
-              Deletion request submitted. MOOVU support will handle the final review.
-            </div>
-          ) : (
-            <div className="mt-5 space-y-3">
-              <textarea
-                className="moovu-input min-h-24"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                placeholder="Optional reason"
-              />
-              <input
-                className="moovu-input"
-                value={confirmText}
-                onChange={(event) => setConfirmText(event.target.value)}
-                placeholder="Type DELETE to confirm"
-              />
-              <button
-                type="button"
-                className="moovu-btn bg-red-600 text-white disabled:opacity-60"
-                disabled={busy}
-                onClick={requestDeletion}
-              >
-                {busy ? "Submitting..." : "Request driver account deletion"}
-              </button>
-            </div>
-          )}
+          <Link href="/driver/account/delete" className="moovu-btn mt-5 bg-red-600 text-white">
+            Delete Account
+          </Link>
         </section>
       </div>
 

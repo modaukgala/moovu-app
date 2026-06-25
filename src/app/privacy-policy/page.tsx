@@ -95,14 +95,14 @@ const sections = [
     paragraphs: [
       "MOOVU processes personal information to provide the service, perform user agreements, protect legitimate business and safety interests, comply with legal obligations, and where needed, based on consent such as notification permission or location permission.",
       "Subject to applicable law, including South African privacy principles, you may request access to your personal information, correction of inaccurate information, deletion where legally possible, restriction or objection to certain processing, and information about how your data is used.",
-      `You can start an account deletion request from the Account area in the MOOVU app, or email ${MOOVU_SUPPORT_EMAIL}. We may need to verify your identity before acting on the request. Some records must be retained for legal, accounting, fraud prevention, dispute, payment, receipt, or safety reasons.`,
+      `You can delete your account directly from Account > Delete Account in the MOOVU app. MOOVU verifies your identity before deletion. Some records must be retained for legal, accounting, fraud prevention, dispute, payment, receipt, or safety reasons.`,
     ],
   },
   {
     title: "10. Retention",
     paragraphs: [
       "MOOVU keeps account, trip, receipt, payment, commission, driver, support, legal acceptance, notification, chat, safety audio, and audit records for as long as needed to operate the platform, provide support, resolve disputes, detect fraud, satisfy tax/accounting obligations, enforce terms, and comply with law.",
-      "When a deletion request is approved, MOOVU will delete, anonymize, archive, or restrict account data where reasonably possible. Trip, receipt, payment, commission, driver, safety, support, fraud-prevention, legal acceptance, and audit records may be retained where required for legal, tax, accounting, dispute, safety, or platform integrity reasons. Backup copies and logs may remain for a limited period as part of normal security and disaster recovery processes.",
+      "When an account is deleted, MOOVU will delete, anonymize, archive, or restrict account data where reasonably possible. Trip, receipt, payment, commission, driver, safety, support, fraud-prevention, legal acceptance, and audit records may be retained where required for legal, tax, accounting, dispute, safety, or platform integrity reasons. Backup copies and logs may remain for a limited period as part of normal security and disaster recovery processes.",
     ],
   },
   {

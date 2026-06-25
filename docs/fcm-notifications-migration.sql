@@ -8,6 +8,7 @@ create table if not exists public.fcm_tokens (
   token text not null unique,
   platform text not null default 'unknown',
   device_id text null,
+  app_version text null,
   app_source text null,
   app_type text null check (
     app_type is null or app_type in (
@@ -25,6 +26,7 @@ create table if not exists public.fcm_tokens (
   user_agent text null,
   device_label text null,
   is_active boolean not null default true,
+  enabled boolean not null default true,
   last_used_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
@@ -34,11 +36,13 @@ create table if not exists public.fcm_tokens (
 alter table public.fcm_tokens
   add column if not exists platform text not null default 'unknown',
   add column if not exists device_id text,
+  add column if not exists app_version text,
   add column if not exists app_source text,
   add column if not exists app_type text,
   add column if not exists user_agent text,
   add column if not exists device_label text,
   add column if not exists is_active boolean not null default true,
+  add column if not exists enabled boolean not null default true,
   add column if not exists last_used_at timestamptz not null default now(),
   add column if not exists last_seen_at timestamptz not null default now(),
   add column if not exists created_at timestamptz not null default now(),
@@ -86,6 +90,14 @@ create index if not exists fcm_tokens_app_type_idx
 create index if not exists fcm_tokens_app_source_idx
   on public.fcm_tokens(app_source)
   where is_active = true;
+
+create unique index if not exists fcm_tokens_user_device_token_unique
+  on public.fcm_tokens(user_id, device_id, token)
+  where device_id is not null;
+
+create index if not exists fcm_tokens_user_role_device_active_idx
+  on public.fcm_tokens(user_id, role, device_id)
+  where is_active = true and enabled = true;
 
 alter table public.fcm_tokens enable row level security;
 

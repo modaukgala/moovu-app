@@ -1,4 +1,4 @@
--- MOOVU account deletion request support
+-- MOOVU account deletion compliance support
 -- Review-only migration. Do not run blindly in production.
 -- Run on staging first, then production after confirming policies and admin workflow.
 
@@ -75,12 +75,12 @@ end $$;
 
 alter table public.account_deletion_requests enable row level security;
 
--- The app currently writes deletion requests through server routes using service-role access.
+-- The app performs immediate verified account deletion through server routes using service-role access.
 -- Keep direct table access restricted. Add staff/admin select policies only if your existing
 -- admin role helper is non-recursive in this Supabase project.
 
 comment on table public.account_deletion_requests is
-  'User-initiated customer/driver account deletion requests. Final deletion/anonymization is reviewed by MOOVU because trip, payment, receipt, tax, fraud-prevention, and safety records may need retention.';
+  'Legacy audit table for earlier account deletion workflow. Current app flow deletes the auth login immediately after verification and anonymizes retained legal, trip, payment, receipt, tax, fraud-prevention, and safety records.';
 
 comment on column public.account_deletion_requests.retained_records_note is
   'Admin note explaining which records must be retained for legal, tax, payment, dispute, fraud-prevention, or safety reasons.';

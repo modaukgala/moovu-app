@@ -31,17 +31,17 @@ Implemented source changes:
 
 - Customer app has a visible Account area at `/account`.
 - Driver app has a visible Driver Account area at `/driver/account`.
-- Both pages include a "Request account deletion" action.
-- Server routes validate the logged-in user and block requests while active trips are in progress.
-- Deletion is a review workflow because ride, receipt, payment, tax, fraud-prevention, dispute, safety, and legal records may need retention.
+- Both pages include a "Delete Account" action.
+- Server routes validate the logged-in user, require password verification, require exact `DELETE` confirmation, and block deletion while active trips are in progress.
+- Deletion is initiated directly in-app. Profile, device, preferences, documents, and removable messages are deleted or anonymized immediately; legally required ride, receipt, payment, tax, fraud-prevention, dispute, safety, and legal records may be retained in anonymized or restricted form.
 
 Manual database step required before production:
 
-- Run `docs/account-deletion-migration.sql` in Supabase after staging review.
+- No new SQL is required for the direct in-app deletion flow. The older `docs/account-deletion-migration.sql` file is retained only as legacy review material for the previous request-table workflow.
 
 Suggested review note:
 
-> Account deletion is available in-app. In the Customer app, open Account > Delete account. In the Driver app, open Driver Account > Delete account. MOOVU records a deletion request and reviews legally required trip, receipt, payment, safety, tax, fraud-prevention, and dispute records before deleting, anonymizing, or restricting remaining account data.
+> Account deletion is available in-app. In the Customer app, open Account > Delete Account. In the Driver app, open Driver Account > Delete Account. The user verifies their password, types DELETE, and the app deletes the login account immediately while deleting or anonymizing profile data. Legally required trip, receipt, payment, safety, tax, fraud-prevention, and dispute records may be retained in anonymized or restricted form.
 
 ## 3. Apple 2.3.6 Age Rating Answers
 

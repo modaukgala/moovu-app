@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
-import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { getNoShowFee } from "@/lib/finance/cancellationFees";
@@ -345,6 +344,7 @@ export default function DriverHomePage() {
   const [endOtp, setEndOtp] = useState("");
   const [showEndOtp, setShowEndOtp] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<"pickup" | "dropoff" | null>(null);
+  const [driverToolsOpen, setDriverToolsOpen] = useState(false);
 
   const subscriptionReminder = subscriptionTone(driver);
   const driverLevel = getDriverLevel(earningsSnapshot.completedTrips);
@@ -798,15 +798,6 @@ export default function DriverHomePage() {
       { tripId },
       "Customer no-show recorded."
     );
-  }
-
-  async function logout() {
-    try {
-      await supabaseClient.auth.signOut({ scope: "local" });
-    } catch {
-      // ignore
-    }
-    window.location.href = "/driver/login";
   }
 
   function clearMapLayers() {
@@ -1319,45 +1310,6 @@ export default function DriverHomePage() {
       )}
 
       <div className="moovu-shell">
-        <section className="moovu-driver-os-hero mb-4">
-          <div className="min-w-0">
-            <div className="moovu-section-title">{stageDetail.eyebrow}</div>
-            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-              {stageDetail.title}
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
-              {stageDetail.body}
-            </p>
-            <div className="mt-5 grid gap-2 sm:grid-cols-5">
-              {["Online", "Offer", "Pickup", "Trip", "Complete"].map((step, index) => {
-                const active =
-                  (index === 0 && !!driver?.online) ||
-                  (index === 1 && !!offer) ||
-                  (index === 2 && currentTrip?.status === "assigned") ||
-                  (index === 3 && (currentTrip?.status === "arrived" || currentTrip?.status === "ongoing")) ||
-                  (index === 4 && currentTrip?.status === "completed");
-                return (
-                  <div key={step} className={active ? "moovu-driver-step is-active" : "moovu-driver-step"}>
-                    <span />
-                    <strong>{step}</strong>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="moovu-driver-os-side">
-            <div className="moovu-driver-os-action">
-              <span>Next action</span>
-              <strong>{stageDetail.action}</strong>
-            </div>
-            <EnableNotificationsButton role="driver" variant="inline" />
-            <button className="moovu-btn moovu-btn-secondary" onClick={logout}>
-              Logout
-            </button>
-          </div>
-        </section>
-
         {(info || gpsInfo) && (
           <div className="mb-4 grid gap-3 md:grid-cols-2">
             {info && (
@@ -1393,7 +1345,17 @@ export default function DriverHomePage() {
         ) : (
           <div className="grid gap-6 xl:grid-cols-[1.28fr_0.72fr]">
             <section className="moovu-driver-home-stack">
-              <div className={`moovu-driver-cockpit p-5 ${driver.online ? "is-online" : ""}`}>
+              <div className={`moovu-driver-cockpit p-5 ${driver.online ? "is-online" : ""} ${driverToolsOpen ? "" : "hidden"}`}>
+                <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <div className="moovu-section-title">Driver status</div>
+                  <div className="mt-1 text-xl font-black tracking-tight text-slate-950">
+                    {driverMode}
+                  </div>
+                  <div className="mt-1 text-sm font-bold text-blue-800">
+                    {driverModeCopy}
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap items-start justify-between gap-5">
                   <div>
                     <div className="moovu-section-title">Today Earnings</div>
@@ -1482,21 +1444,14 @@ export default function DriverHomePage() {
 
                 <div className="moovu-driver-map-sheet">
                   <div className="moovu-driver-map-sheet-grid">
-                    <div>
-                      <div className="moovu-section-title">Status</div>
-                      <div className="mt-1 text-2xl font-black tracking-tight text-slate-950">
-                        {driverMode}
-                      </div>
-                      <div className="mt-1 text-sm font-bold text-slate-600">
-                        {driverModeCopy}
-                      </div>
-                    </div>
-
-                    <div className="moovu-driver-earnings-mini">
-                      <span>Today</span>
-                      <strong>{money(earningsSnapshot.todayEarnings)}</strong>
-                      <small>{earningsSnapshot.todayTrips} trips - Owed {money(earningsSnapshot.amountOwed)}</small>
-                    </div>
+                    <button
+                      type="button"
+                      className="moovu-driver-map-menu-button"
+                      onClick={() => setDriverToolsOpen((value) => !value)}
+                    >
+                      <span>Driver menu</span>
+                      <strong>{driverToolsOpen ? "Hide tools" : "Show tools"}</strong>
+                    </button>
 
                     <div className="moovu-driver-go-panel">
                       <button
@@ -1777,6 +1732,8 @@ export default function DriverHomePage() {
             </section>
 
             <aside className="space-y-4">
+              {driverToolsOpen && (
+                <>
               <section className="moovu-card-interactive p-5">
                 <div className="text-sm font-medium text-slate-500">Location tools</div>
 
@@ -1864,6 +1821,8 @@ export default function DriverHomePage() {
                   </button>
                 </div>
               </section>
+                </>
+              )}
 
               <section id="driver-trip-offer-card" className={`moovu-driver-offer-card p-5 ${offer ? "has-offer" : ""}`}>
                 <div className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">

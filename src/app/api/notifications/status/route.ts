@@ -23,6 +23,7 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url);
     const role = url.searchParams.get("role") || "";
+    const deviceId = (url.searchParams.get("deviceId") || "").trim();
     if (!isPushRole(role)) {
       return NextResponse.json({ ok: false, error: "Invalid role." }, { status: 400 });
     }
@@ -95,6 +96,9 @@ export async function GET(req: Request) {
       ok: true,
       userId: user.id,
       activeTokenCount: tokens.filter((row) => row.is_active).length,
+      activeDeviceTokenCount: deviceId
+        ? tokens.filter((row) => row.is_active && row.device_id === deviceId).length
+        : 0,
       tokens,
     });
   } catch {

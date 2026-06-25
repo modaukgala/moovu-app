@@ -17,11 +17,7 @@ type CustomerProfile = {
 export default function CustomerAccountPage() {
   const [customer, setCustomer] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [reason, setReason] = useState("");
-  const [confirmText, setConfirmText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,49 +55,6 @@ export default function CustomerAccountPage() {
     window.location.href = "/";
   }
 
-  async function requestDeletion() {
-    if (confirmText.trim().toUpperCase() !== "DELETE") {
-      setMessage("Type DELETE to confirm this account deletion request.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage(null);
-
-    try {
-      const {
-        data: { session },
-      } = await supabaseClient.auth.getSession();
-
-      if (!session) {
-        window.location.href = "/customer/auth?next=/account";
-        return;
-      }
-
-      const res = await fetch("/api/customer/account/delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ reason }),
-      });
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok || !json?.ok) {
-        setMessage(json?.error || "We could not submit your deletion request. Please try again.");
-        return;
-      }
-
-      setSubmitted(true);
-      setMessage(json.message || "Your account deletion request was submitted.");
-    } catch {
-      setMessage("We could not submit your deletion request. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <main className="moovu-page min-h-screen pb-32 text-slate-950">
       {message && <CenteredMessageBox message={message} onClose={() => setMessage(null)} />}
@@ -111,7 +64,7 @@ export default function CustomerAccountPage() {
           <div className="moovu-section-title">Customer account</div>
           <h1 className="mt-2 text-3xl font-black">Account and privacy</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Manage your MOOVU customer account, legal links, and deletion request.
+            Manage your MOOVU customer account, legal links, and account deletion.
           </p>
         </section>
 
@@ -137,40 +90,14 @@ export default function CustomerAccountPage() {
 
         <section className="moovu-card border border-red-100 bg-red-50/50 p-5 sm:p-7">
           <div className="moovu-section-title text-red-700">Delete account</div>
-          <h2 className="mt-2 text-2xl font-black">Request customer account deletion</h2>
+          <h2 className="mt-2 text-2xl font-black">Delete Account</h2>
           <p className="mt-3 text-sm leading-6 text-slate-700">
-            MOOVU will review your request and remove or anonymize account data where legally and operationally possible.
-            Trip, receipt, safety, fraud-prevention, tax, and payment records may be retained when required.
+            Permanently delete your customer account from inside the app. MOOVU removes profile data and anonymizes retained
+            trip, receipt, tax, fraud-prevention, and safety records where legally required.
           </p>
-
-          {submitted ? (
-            <div className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
-              Deletion request submitted. MOOVU support will handle the final review.
-            </div>
-          ) : (
-            <div className="mt-5 space-y-3">
-              <textarea
-                className="moovu-input min-h-24"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                placeholder="Optional reason"
-              />
-              <input
-                className="moovu-input"
-                value={confirmText}
-                onChange={(event) => setConfirmText(event.target.value)}
-                placeholder="Type DELETE to confirm"
-              />
-              <button
-                type="button"
-                className="moovu-btn bg-red-600 text-white disabled:opacity-60"
-                disabled={busy}
-                onClick={requestDeletion}
-              >
-                {busy ? "Submitting..." : "Request account deletion"}
-              </button>
-            </div>
-          )}
+          <Link href="/account/delete" className="moovu-btn mt-5 bg-red-600 text-white">
+            Delete Account
+          </Link>
         </section>
       </div>
 

@@ -114,6 +114,7 @@ export async function POST(req: Request) {
     const appSource = isRecord(body) ? String(body.appSource ?? "").trim() : "";
     const deviceId = isRecord(body) ? String(body.deviceId ?? "").trim() : "";
     const deviceLabel = isRecord(body) ? String(body.deviceLabel ?? "").trim() : "";
+    const appVersion = isRecord(body) ? String(body.appVersion ?? "").trim() : "";
 
     if (!isPushRole(role)) {
       return NextResponse.json({ ok: false, error: "Invalid role." }, { status: 400 });
@@ -163,6 +164,8 @@ export async function POST(req: Request) {
       user_agent: req.headers.get("user-agent"),
       device_label: deviceLabel || null,
       is_active: true,
+      enabled: true,
+      app_version: appVersion || null,
       last_used_at: now,
       last_seen_at: now,
       updated_at: now,
@@ -172,6 +175,20 @@ export async function POST(req: Request) {
 
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error.message }, { status: 500 });
+    }
+
+    if (deviceId) {
+      await supabase
+        .from("fcm_tokens")
+        .update({
+          is_active: false,
+          enabled: false,
+          updated_at: now,
+        })
+        .eq("user_id", user.id)
+        .eq("role", role)
+        .eq("device_id", deviceId)
+        .neq("token", fcmToken);
     }
 
     if (result.removedColumns.length > 0 || isMissingColumnError(result.removedColumns.join(","), "app_type")) {

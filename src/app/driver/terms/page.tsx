@@ -49,7 +49,7 @@ const sections = [
     paragraphs: [
       "MOOVU may suspend or remove driver access for false information, unsafe conduct, missed payment duties, subscription issues, repeated complaints, abuse, fraud, OTP misuse, payment proof manipulation, or breach of these terms.",
       "A suspended or inactive driver may still be able to log in to view account status, payments, and support information, but may not be able to go online or accept trips.",
-      "Drivers may request account deletion from the Driver Account area. MOOVU may retain required application, document, trip, receipt, payment, commission, subscription, tax, accounting, dispute, safety, fraud-prevention, and legal records before deleting or anonymizing remaining driver account data.",
+      "Drivers may delete their account from the Driver Account area. MOOVU may retain required application, document, trip, receipt, payment, commission, subscription, tax, accounting, dispute, safety, fraud-prevention, and legal records while deleting or anonymizing remaining driver account data.",
     ],
   },
   {

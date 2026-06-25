@@ -39,10 +39,10 @@ Do not claim iOS notification readiness from browser/PWA tests only.
 
 Run and verify `docs/account-deletion-migration.sql` before submitting an Apple build for review. Apple reviewers must be able to open:
 
-- Customer: Account > Request account deletion
-- Driver: Driver Account > Request driver account deletion
+- Customer: Account > Delete Account
+- Driver: Driver Account > Delete Account
 
-The feature intentionally creates a deletion request rather than immediately deleting rows because MOOVU may need to retain trip, receipt, payment, tax, fraud-prevention, dispute, support, safety, and legal records.
+The feature now initiates deletion directly in-app after password verification and exact DELETE confirmation. MOOVU may still retain legally required trip, receipt, payment, tax, fraud-prevention, dispute, support, safety, and legal records in anonymized or restricted form.
 
 ## Android Packaging
 

@@ -4,7 +4,6 @@ import { type ClipboardEvent, useEffect, useMemo, useRef, useState } from "react
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import {
   DEFAULT_RIDE_OPTION_ID,
@@ -138,6 +137,7 @@ export default function RiderBookingPage() {
   const [addStopIncrease, setAddStopIncrease] = useState(0);
   const [stops, setStops] = useState<StopInput[]>([]);
   const [stopsOpen, setStopsOpen] = useState(false);
+  const [routeCalculating, setRouteCalculating] = useState(false);
   const [routeCalculationError, setRouteCalculationError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -159,6 +159,7 @@ export default function RiderBookingPage() {
   const dropoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopTimerRefs = useRef<Array<ReturnType<typeof setTimeout> | null>>([]);
   const lastCalculatedKeyRef = useRef("");
+  const calculatingKeyRef = useRef("");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
@@ -238,9 +239,11 @@ export default function RiderBookingPage() {
     if (!pickupAddress.trim()) return "Set your pickup point";
     if (!dropoffAddress.trim()) return "Add your destination";
     if (!canCalculate) return "Resolving your locations...";
-    if (displayFare == null) return "We are calculating this trip...";
+    if (routeCalculating) return "Calculating route...";
+    if (routeCalculationError) return "Could not calculate route";
+    if (displayFare == null) return "Choose pickup and destination";
     return routeVisible ? "Route ready - choose your ride" : "Trip details ready";
-  }, [canCalculate, displayFare, dropoffAddress, pickupAddress, routeVisible]);
+  }, [canCalculate, displayFare, dropoffAddress, pickupAddress, routeCalculationError, routeCalculating, routeVisible]);
 
   const bookingStep = useMemo(() => {
     if (!pickupAddress.trim()) return 1;
@@ -384,7 +387,7 @@ export default function RiderBookingPage() {
   // ── Location helpers ─────────────────────────────────────────────
   function resetRouteState() {
     setDistanceKm(null); setDurationMin(null); setOriginalDistanceKm(null); setOriginalDurationMin(null); setBaseFare(null); setAddStopIncrease(0); setRouteCalculationError(null);
-    setRouteVisible(false); lastCalculatedKeyRef.current = "";
+    setRouteCalculating(false); setRouteVisible(false); lastCalculatedKeyRef.current = ""; calculatingKeyRef.current = "";
   }
 
   function clearPickupSelection() {
@@ -1041,51 +1044,90 @@ export default function RiderBookingPage() {
       ? { origin_place_id: route.pickup.placeId, destination_place_id: route.dropoff.placeId, waypoints }
       : { origin_lat: route.pickup.lat, origin_lng: route.pickup.lng, destination_lat: route.dropoff.lat, destination_lng: route.dropoff.lng, waypoints };
 
-    const res = await fetch("/api/maps/distance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const json = await res.json().catch(() => null);
-    if (!json?.ok) {
-      const message = json?.error || "We could not calculate this trip yet. Please check your pickup and destination.";
+    const requestKey = routeKey || [
+      route.pickup.address,
+      route.dropoff.address,
+      ...route.stops.map((stop) => stop.address),
+    ].join("|");
+    calculatingKeyRef.current = requestKey;
+    setRouteCalculating(true);
+
+    try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 12000);
+      const res = await fetch("/api/maps/distance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeout);
+      const json = await res.json().catch(() => null);
+      if (!json?.ok) {
+        const message = json?.error || "We could not calculate this route. Please check your pickup and destination.";
+        setRouteCalculationError(message);
+        lastCalculatedKeyRef.current = "";
+        if (!silent) setMsg(message);
+        return null;
+      }
+
+      const km = Number(json.distanceKm ?? 0);
+      const mins = Number(json.durationMin ?? 0);
+      const originalKm = Number(json.originalDistanceKm ?? km);
+      const originalMins = Number(json.originalDurationMin ?? mins);
+      if (![km, mins, originalKm, originalMins].every(Number.isFinite) || km <= 0 || mins <= 0) {
+        const message = "We could not calculate this route. Please check your pickup and destination.";
+        setRouteCalculationError(message);
+        lastCalculatedKeyRef.current = "";
+        if (!silent) setMsg(message);
+        return null;
+      }
+      const est = calculateTripFare({
+        distanceKm: originalKm,
+        durationMin: originalMins,
+        rideOptionId: selectedRideOption,
+        surgeLabel: activeSurge.mode,
+        surgeMultiplier: activeSurge.multiplier,
+      });
+      const stopBreakdown = calculateAddStopIncrease({
+        rideOptionId: selectedRideOption,
+        originalDistanceKm: originalKm,
+        originalDurationMin: originalMins,
+        routeDistanceKm: km,
+        routeDurationMin: mins,
+        stopCount: route.stops.length,
+      });
+      const roundedKm = Number(km.toFixed(2));
+      const roundedMins = Math.ceil(mins);
+      const roundedOriginalKm = Number(originalKm.toFixed(2));
+      const roundedOriginalMins = Math.ceil(originalMins);
+      setDistanceKm(roundedKm);
+      setDurationMin(roundedMins);
+      setOriginalDistanceKm(roundedOriginalKm);
+      setOriginalDurationMin(roundedOriginalMins);
+      setBaseFare(est.totalFare);
+      setAddStopIncrease(stopBreakdown.finalAddStopIncrease);
+      setRouteCalculationError(null);
+      lastCalculatedKeyRef.current = requestKey;
+      return {
+        distanceKm: roundedKm,
+        durationMin: roundedMins,
+        originalDistanceKm: roundedOriginalKm,
+        originalDurationMin: roundedOriginalMins,
+        addStopIncrease: stopBreakdown.finalAddStopIncrease,
+      };
+    } catch {
+      const message = "We could not calculate this route. Please check your pickup and destination.";
       setRouteCalculationError(message);
+      lastCalculatedKeyRef.current = "";
       if (!silent) setMsg(message);
       return null;
+    } finally {
+      if (calculatingKeyRef.current === requestKey) {
+        calculatingKeyRef.current = "";
+        setRouteCalculating(false);
+      }
     }
-
-    const km = Number(json.distanceKm ?? 0);
-    const mins = Number(json.durationMin ?? 0);
-    const originalKm = Number(json.originalDistanceKm ?? km);
-    const originalMins = Number(json.originalDurationMin ?? mins);
-    const est = calculateTripFare({
-      distanceKm: originalKm,
-      durationMin: originalMins,
-      rideOptionId: selectedRideOption,
-      surgeLabel: activeSurge.mode,
-      surgeMultiplier: activeSurge.multiplier,
-    });
-    const stopBreakdown = calculateAddStopIncrease({
-      rideOptionId: selectedRideOption,
-      originalDistanceKm: originalKm,
-      originalDurationMin: originalMins,
-      routeDistanceKm: km,
-      routeDurationMin: mins,
-      stopCount: route.stops.length,
-    });
-    const roundedKm = Number(km.toFixed(2));
-    const roundedMins = Math.ceil(mins);
-    const roundedOriginalKm = Number(originalKm.toFixed(2));
-    const roundedOriginalMins = Math.ceil(originalMins);
-    setDistanceKm(roundedKm);
-    setDurationMin(roundedMins);
-    setOriginalDistanceKm(roundedOriginalKm);
-    setOriginalDurationMin(roundedOriginalMins);
-    setBaseFare(est.totalFare);
-    setAddStopIncrease(stopBreakdown.finalAddStopIncrease);
-    return {
-      distanceKm: roundedKm,
-      durationMin: roundedMins,
-      originalDistanceKm: roundedOriginalKm,
-      originalDurationMin: roundedOriginalMins,
-      addStopIncrease: stopBreakdown.finalAddStopIncrease,
-    };
   }
 
   async function submitBooking() {
@@ -1346,7 +1388,7 @@ export default function RiderBookingPage() {
   useEffect(() => {
     if (!canCalculate || !routeKey) return;
     if (lastCalculatedKeyRef.current === routeKey) return;
-    lastCalculatedKeyRef.current = routeKey;
+    if (calculatingKeyRef.current === routeKey) return;
     void calculateTrip({ silent: true });
     // routeKey already captures the coordinates and addresses that should trigger fare recalculation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1370,7 +1412,7 @@ export default function RiderBookingPage() {
   // ── Expanded-only section (hidden when collapsed) ────────────────
   const expandedDetails = (
     <>
-      <div className="moovu-booking-state-card">
+      <div className="moovu-booking-state-card hidden">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.14em] text-[var(--moovu-primary)]">
@@ -1402,7 +1444,7 @@ export default function RiderBookingPage() {
         </div>
       </div>
       {/* Ride options — only shown after fare calculated */}
-      <div className="customer-loyalty-strip mt-3">
+      <div className="customer-loyalty-strip mt-3 hidden">
         <div>
           <span>MOOVU Local Member</span>
           <strong>{loyaltyTitle}</strong>
@@ -1412,6 +1454,32 @@ export default function RiderBookingPage() {
           <strong>Future rewards coming soon</strong>
         </div>
       </div>
+
+      {(routeCalculating || routeCalculationError || (canCalculate && distanceKm == null)) && (
+        <div className="moovu-booking-route-state">
+          <div>
+            <div className="text-sm font-black text-slate-950">
+              {routeCalculationError
+                ? "Could not calculate route"
+                : routeCalculating
+                  ? "Calculating route..."
+                  : "Preparing route..."}
+            </div>
+            <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+              {routeCalculationError || "Checking distance, time, and fare for MOOVU Go and MOOVU Go XL."}
+            </p>
+          </div>
+          {routeCalculationError && (
+            <button
+              type="button"
+              className="moovu-route-retry-button"
+              onClick={() => void calculateTrip({ silent: false })}
+            >
+              Try again
+            </button>
+          )}
+        </div>
+      )}
 
       {distanceKm != null && durationMin != null && (
         <div className="mbk-ride-options">
@@ -1455,7 +1523,7 @@ export default function RiderBookingPage() {
                   onClick={() => setSelectedRideOption(opt.id)} aria-pressed={active}
                 >
                   {active && <span className="moovu-selected-check" aria-hidden="true">✓</span>}
-                  <div className="grid gap-2">
+                  <div className="moovu-ride-row-main">
                     <Image
                       src={opt.id === "group" ? "/icons/moovu-go-xl-clean.png" : "/icons/moovu-go-clean.png"}
                       alt={opt.name}
@@ -1465,10 +1533,13 @@ export default function RiderBookingPage() {
                     />
                     <div className="min-w-0">
                       <div className="truncate text-sm font-black text-slate-950">{opt.name}</div>
-                      <div className="moovu-ride-price">{money(optionFare)}</div>
                       <div className="mt-1 text-xs font-black text-slate-700">{opt.capacity}</div>
                       <div className="mt-0.5 text-[11px] font-semibold leading-4 text-slate-500">{description}</div>
+                      <div className="mt-1 text-[11px] font-bold text-[var(--moovu-primary)]">
+                        {durationMin != null ? `${fmtDur(durationMin)} trip` : "Fare ready after route"}
+                      </div>
                     </div>
+                    <div className="moovu-ride-price">{money(optionFare)}</div>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span className="moovu-mini-pill">From {money(opt.baseFare)}</span>
@@ -1509,16 +1580,16 @@ export default function RiderBookingPage() {
         </div>
       )}
 
-      {/* When + Payment */}
-      <div className="mt-4 grid gap-3 grid-cols-2">
-        <div className="moovu-control-card">
+      {/* When */}
+      <div className="mt-4">
+        <div className="moovu-control-card hidden">
           <div className="moovu-field-label">When</div>
           <div className="moovu-segmented mt-2">
             <button type="button" className={rideType === "now" ? "moovu-segmented-active" : ""} onClick={() => setRideType("now")}>Ride now</button>
             <button type="button" className={rideType === "scheduled" ? "moovu-segmented-active" : ""} onClick={() => setRideType("scheduled")}>Schedule</button>
           </div>
         </div>
-        <div className="moovu-control-card">
+        <div className="moovu-control-card hidden">
           <div className="moovu-field-label">Payment</div>
           <button type="button" className="mt-2 min-h-11 w-full rounded-2xl bg-slate-100 px-4 text-sm font-bold text-slate-950" onClick={() => setPaymentMethod("cash")}>
             {paymentMethod === "cash" ? "Cash" : paymentMethod}
@@ -1537,7 +1608,7 @@ export default function RiderBookingPage() {
       )}
 
       {distanceKm != null && durationMin != null && (
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-4 hidden grid-cols-3 gap-2">
           <div className="moovu-trip-metric"><span>Distance</span><strong>{fmtDist(distanceKm)}</strong></div>
           <div className="moovu-trip-metric"><span>Time</span><strong>{fmtDur(durationMin)}</strong></div>
           <div className="moovu-trip-metric moovu-trip-metric-primary"><span>Fare</span><strong>{money(displayFare)}</strong></div>
@@ -1545,7 +1616,7 @@ export default function RiderBookingPage() {
       )}
 
       {/* Trip summary */}
-      <div className="moovu-booking-summary-card mt-3">
+      <div className="moovu-booking-summary-card mt-3 hidden">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Trip summary</div>
@@ -1565,16 +1636,6 @@ export default function RiderBookingPage() {
         )}
       </div>
 
-      {/* Push notifications */}
-      <div className="moovu-booking-summary-card mt-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-bold text-slate-950">Ride updates</div>
-            <div className="mt-1 text-xs text-slate-600">Get driver accepted, arrived, started, and completed alerts.</div>
-          </div>
-          <EnableNotificationsButton role="customer" variant="inline" />
-        </div>
-      </div>
     </>
   );
   return (
@@ -1917,24 +1978,31 @@ export default function RiderBookingPage() {
         <div className="mbk-confirm-bar">
           <div className="customer-booking-payment-strip">
             <div>
-              <span>Cash</span>
-              <strong>Personal trip</strong>
+              <span>Payment</span>
+              <strong>{paymentMethod === "cash" ? "Cash" : paymentMethod}</strong>
             </div>
-            <small>{selectedRide.name}</small>
+            <div className="text-right">
+              <span>Personal trip</span>
+              <strong>{selectedRide.name}</strong>
+            </div>
           </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Estimated total</div>
-            <div className="mbk-footer-fare">{displayFare == null ? "Set route" : money(displayFare)}</div>
+          <div className="mbk-confirm-summary">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Estimated total</div>
+              <div className="mbk-footer-fare" aria-label={displayFare == null ? "Estimate pending" : undefined}>
+                {displayFare == null ? "\u00A0" : money(displayFare)}
+              </div>
+            </div>
+            <button
+              className="moovu-confirm-button flex-1"
+              onClick={() => void submitBooking()}
+              disabled={busy || !canSubmit}
+            >
+              {busy
+                ? rideType === "scheduled" ? "Scheduling..." : "Booking..."
+                : displayFare == null ? "Book trip" : rideType === "scheduled" ? `Schedule ${selectedRide.name}` : `Book ${selectedRide.name}`}
+            </button>
           </div>
-          <button
-            className="moovu-confirm-button flex-1"
-            onClick={() => void submitBooking()}
-            disabled={busy || !canSubmit}
-          >
-            {busy
-              ? rideType === "scheduled" ? "Scheduling…" : "Booking…"
-              : rideType === "scheduled" ? `Schedule ${selectedRide.name}` : `Book ${selectedRide.name}`}
-          </button>
         </div>
       </div>
     </main>

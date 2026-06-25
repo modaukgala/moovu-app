@@ -70,5 +70,5 @@ Run these checks before Play Store or App Store submission.
 - Privacy policy URL is live.
 - Terms URL is live.
 - Contact/support URL is live.
-- Data deletion request instructions are visible on support/contact or privacy page.
+- Delete Account instructions are visible in the customer and driver Account areas and referenced from privacy/support pages.
 - No demo-only text appears on production screens.

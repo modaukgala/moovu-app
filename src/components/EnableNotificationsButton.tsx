@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { Capacitor } from "@capacitor/core";
-import { registerForPushNotifications, type NotificationRole } from "@/lib/notifications/registration";
+import { getPushDeviceId, registerForPushNotifications, type NotificationRole } from "@/lib/notifications/registration";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -15,10 +15,11 @@ type Props = {
 type NotificationStatusResponse = {
   ok?: boolean;
   activeTokenCount?: number;
+  activeDeviceTokenCount?: number;
 };
 
 function savedKey(userId: string, role: NotificationRole) {
-  return `moovu:fcm-enabled:${userId}:${role}:${Capacitor.getPlatform()}`;
+  return `moovu:fcm-enabled:${userId}:${role}:${Capacitor.getPlatform()}:${getPushDeviceId() ?? "unknown-device"}`;
 }
 
 function getSaved(userId: string, role: NotificationRole) {
@@ -68,7 +69,12 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
           return;
         }
 
-        const statusResponse = await fetch(`/api/notifications/status?role=${encodeURIComponent(role)}`, {
+        const deviceId = getPushDeviceId();
+        const statusUrl = new URL("/api/notifications/status", window.location.origin);
+        statusUrl.searchParams.set("role", role);
+        if (deviceId) statusUrl.searchParams.set("deviceId", deviceId);
+
+        const statusResponse = await fetch(statusUrl.toString(), {
           cache: "no-store",
           headers: {
             Authorization: `Bearer ${session.access_token}`,
@@ -76,7 +82,7 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
         }).catch(() => null);
 
         const statusJson = (await statusResponse?.json().catch(() => null)) as NotificationStatusResponse | null;
-        if (!cancelled && statusResponse?.ok && statusJson?.ok && Number(statusJson.activeTokenCount ?? 0) > 0) {
+        if (!cancelled && statusResponse?.ok && statusJson?.ok && Number(statusJson.activeDeviceTokenCount ?? 0) > 0) {
           markSaved(session.user.id, "Notifications are already enabled on this device.");
           return;
         }

@@ -49,6 +49,12 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    min-height: 100svh;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -796,7 +802,10 @@ tr:last-child td {
   background:
     radial-gradient(circle at 12% 0%, rgba(69, 188, 226, 0.26), transparent 32%),
     linear-gradient(135deg, #0f172a 0%, #244f9e 54%, #1f74c9 100%);
-  padding: max(18px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  padding:
+    max(44px, calc(20px + env(safe-area-inset-top)))
+    16px
+    max(24px, calc(18px + env(safe-area-inset-bottom)));
 }
 
 .moovu-driver-landing-grid {
@@ -924,7 +933,7 @@ tr:last-child td {
 .moovu-driver-home-stack {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .moovu-driver-home-stack > * {
@@ -1001,6 +1010,11 @@ tr:last-child td {
   box-shadow: 0 18px 60px rgba(15, 23, 42, 0.1);
 }
 
+.moovu-driver-map-card .h-\[58vh\] {
+  height: min(66svh, 680px);
+  min-height: 470px;
+}
+
 .moovu-driver-map-status {
   position: absolute;
   left: 16px;
@@ -1057,9 +1071,42 @@ tr:last-child td {
 
 .moovu-driver-map-sheet-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.58fr) minmax(180px, 0.62fr);
+  grid-template-columns: minmax(142px, 0.42fr) minmax(180px, 0.58fr);
   gap: 14px;
   align-items: center;
+  justify-content: end;
+}
+
+.moovu-driver-map-menu-button {
+  display: grid;
+  min-height: 58px;
+  place-items: center;
+  border: 1px solid rgba(207, 228, 255, 0.92);
+  border-radius: 22px;
+  background: #fff;
+  padding: 10px 12px;
+  text-align: center;
+  box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-driver-map-menu-button span,
+.moovu-driver-map-menu-button strong {
+  display: block;
+}
+
+.moovu-driver-map-menu-button span {
+  color: var(--moovu-text-soft);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.moovu-driver-map-menu-button strong {
+  margin-top: 4px;
+  color: var(--moovu-primary);
+  font-size: 13px;
+  font-weight: 950;
 }
 
 .moovu-driver-earnings-mini {
@@ -1423,7 +1470,10 @@ tr:last-child td {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+  padding:
+    max(44px, calc(22px + env(safe-area-inset-top)))
+    24px
+    calc(24px + env(safe-area-inset-bottom));
 }
 
 .moovu-auth-card {
@@ -2318,13 +2368,13 @@ tr:last-child td {
   z-index: 90;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
+  gap: 4px;
   width: min(calc(100% - 24px), 520px);
   margin: 0 auto;
   border: 1px solid rgba(215, 226, 234, 0.92);
-  border-radius: 24px;
+  border-radius: 22px;
   background: rgba(255, 255, 255, 0.96);
-  padding: 6px;
+  padding: 5px;
   box-shadow: 0 18px 42px rgba(5, 5, 5, 0.14);
   backdrop-filter: blur(18px);
 }
@@ -2332,13 +2382,13 @@ tr:last-child td {
 .moovu-customer-nav-item {
   display: inline-flex;
   min-width: 0;
-  min-height: 48px;
+  min-height: 46px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border-radius: 18px;
+  gap: 5px;
+  border-radius: 16px;
   color: #5b6776;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
   transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
 }
@@ -2520,7 +2570,7 @@ tr:last-child td {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   left: max(6px, env(safe-area-inset-left));
   right: max(6px, env(safe-area-inset-right));
-  width: min(calc(100% - 12px), 600px);
+  width: min(calc(100% - 12px), 560px);
   gap: 3px;
   padding: 5px;
   border-color: rgba(207, 228, 255, 0.95);
@@ -2531,11 +2581,11 @@ tr:last-child td {
 
 .moovu-driver-bottom-nav .moovu-customer-nav-item {
   min-width: 0;
-  min-height: 48px;
-  flex-direction: column;
-  gap: 3px;
-  padding: 4px 1px;
-  font-size: 10px;
+  min-height: 44px;
+  flex-direction: row;
+  gap: 4px;
+  padding: 3px 2px;
+  font-size: 9.5px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -2549,8 +2599,8 @@ tr:last-child td {
 }
 
 .moovu-driver-bottom-nav .moovu-customer-nav-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 @media (max-width: 1180px) {
@@ -2627,7 +2677,10 @@ tr:last-child td {
   }
 
   .moovu-driver-landing {
-    padding-inline: 12px;
+    padding:
+      max(44px, calc(20px + env(safe-area-inset-top)))
+      12px
+      max(24px, calc(18px + env(safe-area-inset-bottom)));
   }
 
   .moovu-driver-landing-grid {
@@ -2687,8 +2740,8 @@ tr:last-child td {
 
 @media (max-width: 380px) {
   .moovu-driver-bottom-nav .moovu-customer-nav-item {
-    min-height: 46px;
-    font-size: 9px;
+    min-height: 42px;
+    font-size: 8.8px;
   }
 
   .moovu-driver-bottom-nav .moovu-customer-nav-dot {
@@ -2846,15 +2899,25 @@ tr:last-child td {
 .customer-trip-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: 14px;
   align-items: stretch;
   border: 1px solid rgba(207, 228, 255, 0.95);
-  border-radius: 32px;
+  border-radius: 28px;
   background:
     radial-gradient(circle at 10% 0%, rgba(69, 188, 226, 0.18), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(234, 243, 255, 0.94));
-  padding: clamp(18px, 4vw, 26px);
-  box-shadow: 0 24px 70px rgba(31, 116, 201, 0.11);
+  padding: clamp(14px, 3vw, 20px);
+  box-shadow: 0 18px 48px rgba(31, 116, 201, 0.1);
+}
+
+.customer-trip-hero h1 {
+  font-size: clamp(1.45rem, 5.5vw, 2.15rem);
+  line-height: 1.02;
+}
+
+.customer-trip-hero p {
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .customer-trip-hero-side {
@@ -2868,9 +2931,9 @@ tr:last-child td {
 .customer-trip-eta {
   width: 100%;
   border: 1px solid rgba(207, 228, 255, 0.96);
-  border-radius: 24px;
+  border-radius: 20px;
   background: #fff;
-  padding: 14px;
+  padding: 11px 12px;
   box-shadow: var(--moovu-shadow-sm);
 }
 
@@ -2887,7 +2950,7 @@ tr:last-child td {
   display: block;
   margin-top: 6px;
   color: #050505;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 950;
   line-height: 1.05;
 }
@@ -2895,22 +2958,22 @@ tr:last-child td {
 .customer-trip-progress {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .customer-trip-progress-step {
   position: relative;
   display: grid;
-  gap: 7px;
+  gap: 5px;
   color: #94a3b8;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 950;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .customer-trip-progress-step span {
-  height: 7px;
+  height: 5px;
   border-radius: 999px;
   background: #dbe7f1;
 }
@@ -2928,7 +2991,7 @@ tr:last-child td {
   min-height: 68vh;
   overflow: hidden;
   border: 1px solid var(--moovu-border);
-  border-radius: 30px;
+  border-radius: 26px;
   background: #fff;
   box-shadow: 0 18px 60px rgba(15, 23, 42, 0.1);
 }
@@ -2940,9 +3003,9 @@ tr:last-child td {
   left: 0;
   z-index: 10;
   border-top: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 28px 28px 0 0;
+  border-radius: 24px 24px 0 0;
   background: rgba(255, 255, 255, 0.96);
-  padding: 16px;
+  padding: 12px;
   box-shadow: 0 -16px 45px rgba(15, 23, 42, 0.14);
   backdrop-filter: blur(16px);
 }
@@ -2954,12 +3017,12 @@ tr:last-child td {
 }
 
 .customer-command-button {
-  min-height: 44px;
+  min-height: 40px;
   border: 1px solid rgba(207, 228, 255, 0.95);
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #fff, #f8fbff);
   color: #244f9e;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 950;
   text-transform: capitalize;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
@@ -3114,11 +3177,11 @@ tr:last-child td {
 
 .customer-trip-summary-card {
   border: 1px solid rgba(207, 228, 255, 0.96);
-  border-radius: 30px;
+  border-radius: 26px;
   background:
     radial-gradient(circle at 96% 0%, rgba(69, 188, 226, 0.16), transparent 34%),
     linear-gradient(180deg, #ffffff, #f8fbff);
-  padding: 18px;
+  padding: 14px;
   box-shadow: 0 18px 52px rgba(15, 23, 42, 0.09);
 }
 
@@ -3126,7 +3189,7 @@ tr:last-child td {
 .customer-trip-summary-money,
 .customer-trip-summary-vehicle {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .customer-trip-summary-top {
@@ -3135,13 +3198,13 @@ tr:last-child td {
 }
 
 .customer-trip-summary-money {
-  margin-top: 16px;
+  margin-top: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   border: 1px solid rgba(207, 228, 255, 0.92);
-  border-radius: 24px;
+  border-radius: 20px;
   background: #fff;
-  padding: 14px;
+  padding: 11px;
 }
 
 .customer-trip-summary-money span,
@@ -3158,7 +3221,7 @@ tr:last-child td {
   display: block;
   margin-top: 6px;
   color: #0f172a;
-  font-size: clamp(28px, 8vw, 38px);
+  font-size: clamp(23px, 6vw, 32px);
   font-weight: 950;
   line-height: 1;
 }
@@ -3188,16 +3251,16 @@ tr:last-child td {
 
 .customer-route-summary-card {
   border: 1px solid rgba(207, 228, 255, 0.96);
-  border-radius: 30px;
+  border-radius: 26px;
   background: #fff;
-  padding: 18px;
+  padding: 14px;
   box-shadow: 0 18px 52px rgba(15, 23, 42, 0.08);
 }
 
 .customer-route-summary-list {
   display: grid;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .customer-route-summary-list > div {
@@ -3264,7 +3327,7 @@ tr:last-child td {
   margin-top: 4px;
   overflow-wrap: break-word;
   color: #0f172a;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 850;
   line-height: 1.45;
 }
@@ -4009,9 +4072,9 @@ tr:last-child td {
 
 .customer-ride-option-list .moovu-ride-option-card {
   position: relative;
-  min-height: 90px;
+  min-height: 82px;
   border-radius: 22px;
-  padding: 10px 92px 10px 10px;
+  padding: 9px 10px;
   background: #fff;
 }
 
@@ -4021,37 +4084,41 @@ tr:last-child td {
   box-shadow: 0 12px 28px rgba(31, 116, 201, 0.13);
 }
 
+.customer-ride-option-list .moovu-ride-row-main,
 .customer-ride-option-list .moovu-ride-option-card > .grid {
   display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
 }
 
 .customer-ride-option-list .moovu-ride-vehicle-art {
-  width: 74px;
-  height: 58px;
+  width: 72px;
+  height: 54px;
   max-height: none;
   border-radius: 14px;
   object-fit: contain;
+  object-position: center;
+  padding: 3px;
 }
 
 .customer-ride-option-list .moovu-ride-price {
-  position: absolute;
-  top: 50%;
-  right: 14px;
+  position: static;
   margin: 0;
-  transform: translateY(-50%);
+  transform: none;
   color: #0f172a;
-  font-size: 22px;
+  font-size: clamp(18px, 5vw, 23px);
   font-weight: 950;
   letter-spacing: 0;
   white-space: nowrap;
 }
 
 .customer-ride-option-list .moovu-selected-check {
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
 }
 
 .customer-ride-option-list .moovu-ride-option-card .mt-2.flex {
@@ -4061,19 +4128,30 @@ tr:last-child td {
 .mbk-confirm-bar {
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mbk-confirm-bar > div {
   min-width: 0;
 }
 
+.mbk-confirm-summary {
+  display: grid;
+  grid-template-columns: minmax(82px, auto) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
 .customer-booking-payment-strip {
   display: flex;
-  min-height: 48px;
+  min-height: 42px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  border: 1px solid rgba(215, 226, 234, 0.92);
+  border-radius: 18px;
+  background: #f8fbff;
+  padding: 8px 10px;
 }
 
 .customer-booking-payment-strip span,
@@ -4088,11 +4166,36 @@ tr:last-child td {
   display: block;
   margin-top: 2px;
   color: #0f172a;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 950;
+  line-height: 1.1;
 }
 
-.mbk-confirm-bar > button {
+.moovu-booking-route-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.98));
+  padding: 12px;
+}
+
+.moovu-route-retry-button {
+  min-height: 40px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--moovu-primary);
+  padding: 0 14px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 950;
+  box-shadow: 0 10px 22px rgba(31, 116, 201, 0.18);
+}
+
+.mbk-confirm-summary .moovu-confirm-button {
   width: 100%;
 }
 
@@ -4178,6 +4281,11 @@ tr:last-child td {
 
   .moovu-booking-state-card {
     margin-top: 8px;
+    padding: 10px;
+  }
+
+  .moovu-booking-route-state {
+    margin-bottom: 8px;
     padding: 10px;
   }
 
@@ -5434,7 +5542,10 @@ tr:last-child td {
 .customer-landing-shell {
   width: min(1180px, 100%);
   margin: 0 auto;
-  padding: calc(14px + env(safe-area-inset-top)) 16px 28px;
+  padding:
+    max(38px, calc(18px + env(safe-area-inset-top)))
+    16px
+    28px;
 }
 
 .customer-landing-header {
