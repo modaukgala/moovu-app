@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { buildDriverDocumentChecks } from "@/lib/driver-document-checks";
 import {
-  readinessScoreFromIssues,
-  validateDriverDocumentsForApproval,
-  validateDriverProfileFields,
+  buildDriverReadiness,
 } from "@/lib/driver-validation";
 
 function errorMessage(error: unknown, fallback: string) {
@@ -156,7 +155,7 @@ export async function GET(req: NextRequest) {
         .limit(20),
       supabaseAdmin
         .from("driver_documents")
-        .select("id,doc_type,document_type,status,review_status,rejection_reason,uploaded_at")
+        .select("id,doc_type,document_type,file_path,status,review_status,rejection_reason,uploaded_at,expires_on")
         .eq("driver_id", driverId),
     ]);
 
@@ -193,16 +192,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: documentsErr.message }, { status: 500 });
     }
 
-    const validationIssues = [
-      ...validateDriverProfileFields(
-        {
-          ...(driver ?? {}),
-          ...((profile as Record<string, unknown> | null) ?? {}),
-        },
-        { requirePdp: true },
-      ),
-      ...validateDriverDocumentsForApproval(documents ?? []),
-    ];
+    const readiness = buildDriverReadiness(
+      {
+        ...(driver ?? {}),
+        ...((profile as Record<string, unknown> | null) ?? {}),
+      },
+      documents ?? [],
+      { requirePdp: false },
+    );
+    const documentChecks = buildDriverDocumentChecks(
+      {
+        ...(driver ?? {}),
+        ...((profile as Record<string, unknown> | null) ?? {}),
+      },
+      documents ?? [],
+    );
 
     const { data: corrections, error: correctionsErr } = await supabaseAdmin
       .from("driver_profile_corrections")
@@ -210,6 +214,13 @@ export async function GET(req: NextRequest) {
       .eq("driver_id", driverId)
       .order("corrected_at", { ascending: false })
       .limit(20);
+
+    const { data: reviewNotes, error: reviewNotesErr } = await supabaseAdmin
+      .from("driver_review_notes")
+      .select("id,note,note_type,admin_id,created_at")
+      .eq("driver_id", driverId)
+      .order("created_at", { ascending: false })
+      .limit(30);
 
     return NextResponse.json({
       ok: true,
@@ -220,11 +231,15 @@ export async function GET(req: NextRequest) {
       subscription_payments: subscriptionPayments ?? [],
       subscription_requests: subscriptionRequests ?? [],
       documents: documents ?? [],
-      validation_issues: validationIssues,
-      approval_blockers: validationIssues.filter((item) => item.severity === "blocked"),
-      readiness_score: readinessScoreFromIssues(validationIssues),
+      validation_issues: readiness.issues,
+      approval_blockers: readiness.blockers,
+      readiness,
+      readiness_score: readiness.readiness_score,
+      document_checks: documentChecks,
       corrections: correctionsErr ? [] : corrections ?? [],
       corrections_ready: !correctionsErr,
+      review_notes: reviewNotesErr ? [] : reviewNotes ?? [],
+      review_notes_ready: !reviewNotesErr,
     });
   } catch (e: unknown) {
     return NextResponse.json({ ok: false, error: errorMessage(e, "Server error") }, { status: 500 });

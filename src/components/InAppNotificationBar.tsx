@@ -42,15 +42,17 @@ function normalizeNotice(value: InAppNotificationDetail | null | undefined) {
   };
 }
 
-function vibrate() {
+function vibrate(pattern: VibratePattern = [0, 160, 80, 220]) {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
-  navigator.vibrate([0, 160, 80, 220]);
+  navigator.vibrate(pattern);
 }
 
-function playAttentionSound() {
+type StopSound = () => void;
+
+function playAttentionSound(): StopSound {
   try {
     const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextConstructor) return;
+    if (!AudioContextConstructor) return () => undefined;
 
     const context = new AudioContextConstructor();
     const gain = context.createGain();
@@ -79,8 +81,73 @@ function playAttentionSound() {
     window.setTimeout(() => {
       void context.close().catch(() => undefined);
     }, 1500);
+    return () => {
+      void context.close().catch(() => undefined);
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        navigator.vibrate(0);
+      }
+    };
   } catch {
     // Browsers may block audio until the user interacts with the app.
+    return () => undefined;
+  }
+}
+
+function playTripOfferBuzz(): StopSound {
+  try {
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextConstructor) return () => undefined;
+
+    const context = new AudioContextConstructor();
+    const master = context.createGain();
+    master.gain.setValueAtTime(0.0001, context.currentTime);
+    master.gain.exponentialRampToValueAtTime(0.86, context.currentTime + 0.05);
+    master.gain.setValueAtTime(0.86, context.currentTime + 4.75);
+    master.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 5);
+    master.connect(context.destination);
+
+    const pattern = [
+      0, 450, 120, 450, 120, 450, 180, 650, 140, 650, 140, 650, 180, 900,
+    ];
+    vibrate(pattern);
+
+    const oscillators: OscillatorNode[] = [];
+    const scheduleBuzz = (frequency: number, type: OscillatorType, gainValue: number) => {
+      const gain = context.createGain();
+      gain.gain.setValueAtTime(gainValue, context.currentTime);
+      gain.connect(master);
+
+      for (let start = 0; start < 5; start += 0.62) {
+        const oscillator = context.createOscillator();
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, context.currentTime + start);
+        oscillator.connect(gain);
+        oscillator.start(context.currentTime + start);
+        oscillator.stop(context.currentTime + Math.min(start + 0.42, 5));
+        oscillators.push(oscillator);
+      }
+    };
+
+    scheduleBuzz(185, "sawtooth", 0.18);
+    scheduleBuzz(370, "triangle", 0.14);
+    scheduleBuzz(988, "sine", 0.08);
+
+    const stop = () => {
+      for (const oscillator of oscillators) {
+        try {
+          oscillator.stop();
+        } catch {}
+      }
+      void context.close().catch(() => undefined);
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        navigator.vibrate(0);
+      }
+    };
+
+    window.setTimeout(stop, 5100);
+    return stop;
+  } catch {
+    return () => undefined;
   }
 }
 
@@ -101,6 +168,7 @@ declare global {
 export default function InAppNotificationBar() {
   const [notice, setNotice] = useState<InAppNotificationDetail | null>(null);
   const hideTimerRef = useRef<number | null>(null);
+  const stopSoundRef = useRef<StopSound | null>(null);
 
   useEffect(() => {
     function show(detail: InAppNotificationDetail) {
@@ -110,6 +178,8 @@ export default function InAppNotificationBar() {
       if (hideTimerRef.current) {
         window.clearTimeout(hideTimerRef.current);
       }
+      stopSoundRef.current?.();
+      stopSoundRef.current = null;
 
       setNotice({
         tone: "info",
@@ -118,12 +188,18 @@ export default function InAppNotificationBar() {
       });
 
       if (safeDetail.loud !== false) {
-        vibrate();
-        playAttentionSound();
+        if (safeDetail.tone === "offer") {
+          stopSoundRef.current = playTripOfferBuzz();
+        } else {
+          vibrate();
+          stopSoundRef.current = playAttentionSound();
+        }
       }
 
       hideTimerRef.current = window.setTimeout(() => {
         setNotice(null);
+        stopSoundRef.current?.();
+        stopSoundRef.current = null;
       }, 5200);
     }
 
@@ -133,17 +209,29 @@ export default function InAppNotificationBar() {
     }
 
     function onWorkerMessage(event: MessageEvent) {
-      const data = event.data as { type?: string; title?: string; body?: string; url?: string } | null;
+      const data = event.data as {
+        type?: string;
+        title?: string;
+        body?: string;
+        url?: string;
+        nativeActionType?: string;
+      } | null;
       if (data?.type !== "MOOVU_PUSH") return;
       show({
         title: data.title || "MOOVU update",
         body: data.body,
         url: data.url,
-        tone: "message",
+        tone: data.nativeActionType === "trip_offer" ? "offer" : "message",
       });
     }
 
+    function stopTripOfferAlert() {
+      stopSoundRef.current?.();
+      stopSoundRef.current = null;
+    }
+
     window.addEventListener(MOOVU_IN_APP_NOTIFICATION_EVENT, onEvent);
+    window.addEventListener("moovu:stop-trip-offer-alert", stopTripOfferAlert);
     navigator.serviceWorker?.addEventListener("message", onWorkerMessage);
 
     const originalFetch = window.fetch.bind(window);
@@ -193,8 +281,10 @@ export default function InAppNotificationBar() {
     return () => {
       window.fetch = originalFetch;
       window.removeEventListener(MOOVU_IN_APP_NOTIFICATION_EVENT, onEvent);
+      window.removeEventListener("moovu:stop-trip-offer-alert", stopTripOfferAlert);
       navigator.serviceWorker?.removeEventListener("message", onWorkerMessage);
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+      stopSoundRef.current?.();
     };
   }, []);
 

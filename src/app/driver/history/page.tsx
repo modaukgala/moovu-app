@@ -188,6 +188,9 @@ export default function DriverHistoryPage() {
             </div>
 
             <div className="moovu-driver-toolbar-actions">
+              <Link href="/driver/trip-offers" className="moovu-btn moovu-btn-secondary">
+                Trip offers
+              </Link>
               <Link href="/driver" className="moovu-btn moovu-btn-secondary">
                 Driver dashboard
               </Link>

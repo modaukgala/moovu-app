@@ -8,6 +8,8 @@ import { supabaseClient } from "@/lib/supabase/client";
 type Trip = {
   id: string;
   driver_id: string | null;
+  rider_name: string | null;
+  rider_phone: string | null;
   pickup_address: string;
   dropoff_address: string;
   payment_method: string;
@@ -297,7 +299,15 @@ export default function TripDetailPage() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-4 gap-4">
+        <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div className="border rounded-2xl p-4 bg-white">
+            <div className="text-sm text-gray-600">Customer</div>
+            <div className="font-semibold text-black mt-1">{trip.rider_name ?? "Customer"}</div>
+            <div className="mt-1 text-sm font-bold text-slate-600">
+              {trip.rider_phone ?? "Cellphone not captured"}
+            </div>
+          </div>
+
           <div className="border rounded-2xl p-4 bg-white">
             <div className="text-sm text-gray-600">Driver</div>
             <div className="font-semibold text-black mt-1">{driverLabel}</div>

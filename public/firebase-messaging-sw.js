@@ -60,6 +60,7 @@ function notificationFromPayload(json) {
       json?.fcmOptions?.link ||
       json?.url ||
       "/",
+    nativeActionType: data.nativeActionType || json?.nativeActionType || "",
   };
 }
 
@@ -74,6 +75,7 @@ async function sendToVisibleClient(payload) {
     title: payload.title,
     body: payload.body,
     url: payload.url || "/",
+    nativeActionType: payload.nativeActionType || "",
   });
   return true;
 }
@@ -81,12 +83,19 @@ async function sendToVisibleClient(payload) {
 async function showMoovuNotification(payload) {
   if (await sendToVisibleClient(payload)) return undefined;
 
+  const isTripOffer = payload.nativeActionType === "trip_offer";
   return self.registration.showNotification(payload.title, {
     body: payload.body,
     icon: "/icon-192.png",
     badge: "/icon-192.png",
-    data: { url: payload.url || "/" },
-    requireInteraction: false,
+    data: {
+      url: payload.url || "/",
+      nativeActionType: payload.nativeActionType || "",
+    },
+    requireInteraction: isTripOffer,
+    vibrate: isTripOffer
+      ? [0, 450, 120, 450, 120, 450, 180, 650, 140, 650, 140, 650, 180, 900]
+      : [0, 160, 80, 220],
   });
 }
 

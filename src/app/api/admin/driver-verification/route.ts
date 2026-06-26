@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import {
-  validateDriverDocumentsForApproval,
-  validateDriverProfileFields,
-} from "@/lib/driver-validation";
+import { buildDriverReadiness } from "@/lib/driver-validation";
 
 const ALLOWED = ["pending_review", "approved", "needs_more_info", "rejected"] as const;
 
@@ -100,24 +97,22 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "Driver not found." }, { status: 404 });
       }
 
-      const validationIssues = [
-        ...validateDriverProfileFields(
-          {
-            ...driver,
-            ...(profile ?? {}),
-          },
-          { requirePdp: true },
-        ),
-        ...validateDriverDocumentsForApproval(documents ?? []),
-      ];
-      const blockers = validationIssues.filter((item) => item.severity === "blocked");
+      const readiness = buildDriverReadiness(
+        {
+          ...driver,
+          ...(profile ?? {}),
+        },
+        documents ?? [],
+        { requirePdp: false },
+      );
+      const blockers = readiness.blockers;
 
       if (blockers.length > 0) {
         return NextResponse.json(
           {
             ok: false,
             error: `Driver cannot be approved yet: ${blockers[0].message}`,
-            validationIssues,
+            validationIssues: readiness.issues,
           },
           { status: 400 },
         );

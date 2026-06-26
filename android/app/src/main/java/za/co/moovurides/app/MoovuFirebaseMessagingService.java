@@ -17,6 +17,7 @@ import java.util.Map;
 
 public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
     private static final String CHANNEL_ID = "moovu_premium_v1";
+    private static final String TRIP_OFFER_CHANNEL_ID = "moovu_trip_offer_buzz_v1";
 
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
@@ -30,11 +31,12 @@ public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
     }
 
     private void showNativeActionNotification(Map<String, String> data) {
-        createNotificationChannel();
-
         String title = valueOr(data.get("title"), "MOOVU");
         String body = valueOr(data.get("body"), "Open MOOVU for details.");
         String actionType = valueOr(data.get("nativeActionType"), "");
+        boolean isTripOffer = "trip_offer".equals(actionType);
+        String channelId = isTripOffer ? TRIP_OFFER_CHANNEL_ID : CHANNEL_ID;
+        createNotificationChannels();
         int notificationId = Math.abs(valueOr(data.get("tripId"), valueOr(data.get("nativeActionToken"), "moovu")).hashCode());
 
         Intent openIntent = new Intent(this, MainActivity.class);
@@ -48,7 +50,7 @@ public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
@@ -56,8 +58,8 @@ public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
-            .setVibrate(new long[] {0, 180, 80, 260})
-            .setSound(soundUri())
+            .setVibrate(isTripOffer ? tripOfferVibrationPattern() : normalVibrationPattern())
+            .setSound(soundUri(isTripOffer))
             .setContentIntent(contentIntent);
 
         if ("trip_offer".equals(actionType)) {
@@ -110,31 +112,57 @@ public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
         return intent;
     }
 
-    private void createNotificationChannel() {
+    private void createNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
 
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager == null || manager.getNotificationChannel(CHANNEL_ID) != null) return;
+        if (manager == null) return;
 
         AudioAttributes audioAttributes = new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build();
 
-        NotificationChannel channel = new NotificationChannel(
-            CHANNEL_ID,
-            "MOOVU premium ride alerts",
-            NotificationManager.IMPORTANCE_HIGH
-        );
-        channel.setDescription("Clear but softer MOOVU trip offers, chat replies, and urgent ride updates.");
-        channel.enableVibration(true);
-        channel.setVibrationPattern(new long[] {0, 180, 80, 260});
-        channel.setSound(soundUri(), audioAttributes);
-        manager.createNotificationChannel(channel);
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+            NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "MOOVU premium alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Premium MOOVU chat replies and important ride updates.");
+            channel.enableVibration(true);
+            channel.setVibrationPattern(normalVibrationPattern());
+            channel.setSound(soundUri(false), audioAttributes);
+            manager.createNotificationChannel(channel);
+        }
+
+        if (manager.getNotificationChannel(TRIP_OFFER_CHANNEL_ID) == null) {
+            NotificationChannel tripOfferChannel = new NotificationChannel(
+                TRIP_OFFER_CHANNEL_ID,
+                "MOOVU trip offer buzz",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            tripOfferChannel.setDescription("Loud MOOVU driver trip offer alerts with a 5 second premium buzz.");
+            tripOfferChannel.enableVibration(true);
+            tripOfferChannel.setVibrationPattern(tripOfferVibrationPattern());
+            tripOfferChannel.setSound(soundUri(true), audioAttributes);
+            manager.createNotificationChannel(tripOfferChannel);
+        }
     }
 
-    private Uri soundUri() {
-        return Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/" + R.raw.moovu_premium_alert);
+    private Uri soundUri(boolean tripOffer) {
+        int sound = tripOffer ? R.raw.moovu_trip_offer_buzz : R.raw.moovu_premium_alert;
+        return Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/" + sound);
+    }
+
+    private long[] normalVibrationPattern() {
+        return new long[] {0, 180, 80, 260};
+    }
+
+    private long[] tripOfferVibrationPattern() {
+        return new long[] {
+            0, 450, 120, 450, 120, 450, 180, 650, 140, 650, 140, 650, 180, 900
+        };
     }
 
     private int mutableFlag() {

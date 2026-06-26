@@ -69,8 +69,20 @@ export async function POST(req: Request) {
       }
 
       if (driver.subscription_status !== "active" && driver.subscription_status !== "grace") {
+        await supabaseAdmin
+          .from("drivers")
+          .update({
+            online: false,
+            busy: false,
+            last_seen: new Date().toISOString(),
+          })
+          .eq("id", driverId);
+
         return NextResponse.json(
-          { ok: false, error: "Subscription inactive" },
+          {
+            ok: false,
+            error: "Your subscription must be active before you can go online and receive trip offers.",
+          },
           { status: 402 }
         );
       }

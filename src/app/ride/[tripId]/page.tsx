@@ -112,7 +112,18 @@ type Tracking = {
   scheduledReleaseAt: string | null;
 };
 
-type DetailModal = "route" | "fare" | "safety" | "support" | "receipt" | null;
+type DetailModal =
+  | "route"
+  | "fare"
+  | "safety"
+  | "support"
+  | "receipt"
+  | "progress"
+  | "driver"
+  | "vehicle"
+  | "payment"
+  | "otp"
+  | null;
 type OtpModal = "start" | "end" | null;
 
 declare global {
@@ -225,6 +236,23 @@ function statusChipClass(status: string | null | undefined) {
   }
 }
 
+function detailModalTitle(value: Exclude<DetailModal, null>) {
+  switch (value) {
+    case "otp":
+      return "OTPs";
+    case "progress":
+      return "Trip progress";
+    case "driver":
+      return "Driver details";
+    case "vehicle":
+      return "Vehicle details";
+    case "payment":
+      return "Payment details";
+    default:
+      return value;
+  }
+}
+
 export default function RideTrackingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -252,6 +280,7 @@ export default function RideTrackingPage() {
   const [addStopBusy, setAddStopBusy] = useState(false);
   const [addStopError, setAddStopError] = useState<string | null>(null);
   const [activeDetailModal, setActiveDetailModal] = useState<DetailModal>(null);
+  const [detailsMenuOpen, setDetailsMenuOpen] = useState(false);
   const [activeOtpModal, setActiveOtpModal] = useState<OtpModal>(null);
   const [dismissedOtpModal, setDismissedOtpModal] = useState<OtpModal>(null);
   const [audioRecordings, setAudioRecordings] = useState<SafetyAudioRecording[]>([]);
@@ -1399,6 +1428,57 @@ export default function RideTrackingPage() {
           </section>
         </div>
       )}
+      {detailsMenuOpen && (
+        <div className="customer-detail-overlay" onClick={() => setDetailsMenuOpen(false)}>
+          <section
+            className="customer-detail-sheet customer-more-menu-sheet"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="customer-detail-handle" />
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="moovu-section-title">More details</div>
+                <h2 className="mt-2 text-2xl font-black text-slate-950">Trip menu</h2>
+              </div>
+              <button
+                type="button"
+                className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-lg font-black text-slate-600"
+                onClick={() => setDetailsMenuOpen(false)}
+                aria-label="Close trip menu"
+              >
+                x
+              </button>
+            </div>
+            <div className="customer-more-menu-grid">
+              {([
+                ["progress", "Trip progress"],
+                ["driver", "Driver details"],
+                ["vehicle", "Vehicle details"],
+                ["route", "Route"],
+                ["fare", "Fare"],
+                ["otp", "OTPs"],
+                ["safety", "Safety"],
+                ["support", "Support"],
+                ["receipt", "Receipt"],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="customer-more-menu-item"
+                  onClick={() => {
+                    setDetailsMenuOpen(false);
+                    setActiveDetailModal(key);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
       {activeDetailModal && (
         <div className="customer-detail-overlay" onClick={() => setActiveDetailModal(null)}>
           <section
@@ -1411,7 +1491,9 @@ export default function RideTrackingPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="moovu-section-title">Trip details</div>
-                <h2 className="mt-2 text-2xl font-black capitalize text-slate-950">{activeDetailModal}</h2>
+                <h2 className="mt-2 text-2xl font-black capitalize text-slate-950">
+                  {detailModalTitle(activeDetailModal)}
+                </h2>
               </div>
               <button
                 type="button"
@@ -1602,6 +1684,71 @@ export default function RideTrackingPage() {
                 <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold leading-6 text-slate-700">
                   Need help with this trip? Report an issue or contact MOOVU support from here.
                 </div>
+                {canAddStop && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                    <div className="text-sm font-black text-blue-900">Need to add a stop?</div>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-blue-800">
+                      You can add up to 2 stops. Extra route cost is discounted by 40%.
+                    </p>
+                    <button
+                      type="button"
+                      className="moovu-btn moovu-btn-primary mt-3"
+                      onClick={() => {
+                        setActiveDetailModal(null);
+                        setAddStopOpen(true);
+                      }}
+                    >
+                      Add stop
+                    </button>
+                  </div>
+                )}
+                {trip.status === "cancelled" ? (
+                  <div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">
+                    Trip cancelled. Reason: {trip.cancel_reason ?? "--"}
+                    {Number(trip.cancellation_fee_amount ?? 0) > 0 && (
+                      <div className="mt-2">Cancellation fee: {money(trip.cancellation_fee_amount)}</div>
+                    )}
+                  </div>
+                ) : trip.status === "completed" ? (
+                  <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
+                    Completed trips cannot be cancelled.
+                  </div>
+                ) : trip.status === "ongoing" ? (
+                  <div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">
+                    Once a trip has started, use support for any issue instead of cancelling here.
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                    <label className="mb-2 block text-sm font-black text-slate-700">
+                      Cancellation reason
+                    </label>
+                    <select
+                      className="moovu-input"
+                      value={cancelReason}
+                      onChange={(e) =>
+                        setCancelReason(e.target.value as (typeof CANCEL_REASONS)[number])
+                      }
+                    >
+                      {CANCEL_REASONS.map((reason) => (
+                        <option key={reason} value={reason}>
+                          {reason}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      disabled={!canCancel || cancelBusy}
+                      onClick={cancelTrip}
+                      className="moovu-btn mt-3 bg-red-600 text-white disabled:opacity-60"
+                    >
+                      {cancelBusy ? "Cancelling..." : cancellationPreview.label}
+                    </button>
+                    <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
+                      {cancellationPreview.fee > 0
+                        ? "A late cancellation fee applies because a driver has started travelling to your pickup."
+                        : "Cancellation is currently free under the MOOVU cancellation policy."}
+                    </p>
+                  </div>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Link href={`/ride/${trip.id}/support`} className="moovu-btn moovu-btn-primary justify-center">
                     Report Issue
@@ -1630,12 +1777,148 @@ export default function RideTrackingPage() {
                 </div>
               </div>
             )}
+
+            {activeDetailModal === "progress" && (
+              <div className="customer-detail-body">
+                <div className="customer-trip-progress" aria-label="Trip progress">
+                  {progressSteps.map((step) => (
+                    <div
+                      key={step.label}
+                      className={[
+                        "customer-trip-progress-step",
+                        step.active ? "is-active" : "",
+                        step.current ? "is-current" : "",
+                      ].join(" ")}
+                    >
+                      <span />
+                      <strong>{step.label}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
+                  {stageDetail.body}
+                </div>
+                <div className="customer-detail-grid">
+                  <div><span>Current status</span><strong>{statusLabel(trip.status)}</strong></div>
+                  <div><span>ETA</span><strong>{stageDetail.eta}</strong></div>
+                  <div><span>Live state</span><strong>{tracking?.liveState?.replace(/_/g, " ") || statusLabel(trip.status)}</strong></div>
+                  <div><span>Requested</span><strong>{trip.created_at ? new Date(trip.created_at).toLocaleString() : "--"}</strong></div>
+                </div>
+              </div>
+            )}
+
+            {activeDetailModal === "driver" && (
+              <div className="customer-detail-body">
+                {!canShowDriverDetails ? (
+                  <div className="rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
+                    Driver details unlock after a MOOVU driver accepts your trip.
+                  </div>
+                ) : (
+                  <>
+                    <div className="customer-verified-driver-panel">
+                      <div className="customer-verified-badge">
+                        <span />
+                        Verified MOOVU Driver
+                      </div>
+                      <p className="mt-2 text-xs font-semibold leading-5 text-emerald-800">
+                        Always confirm the vehicle, plate and driver before starting your trip.
+                      </p>
+                    </div>
+                    <div className="customer-detail-grid">
+                      <div><span>Name</span><strong>{driverName}</strong></div>
+                      <div><span>Phone</span><strong>{displayValue(driver?.phone)}</strong></div>
+                      <div><span>Completed trips</span><strong>{Number(driver?.completed_trips_count ?? 0)}</strong></div>
+                      <div><span>Rating</span><strong>{driverRatingLabel(driver)}</strong></div>
+                      <div><span>Location</span><strong>{tracking?.driverFresh ? "Online now" : "Updates pending"}</strong></div>
+                      <div><span>Driver level</span><strong>{driverLevel.label}</strong></div>
+                    </div>
+                    {driver?.phone && (
+                      <a href={`tel:${driver.phone}`} className="moovu-btn moovu-btn-primary justify-center">
+                        Call driver
+                      </a>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {activeDetailModal === "vehicle" && (
+              <div className="customer-detail-body">
+                {!canShowDriverDetails ? (
+                  <div className="rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
+                    Vehicle details unlock after a MOOVU driver accepts your trip.
+                  </div>
+                ) : (
+                  <div className="customer-detail-grid">
+                    <div><span>Vehicle</span><strong>{carText}</strong></div>
+                    <div><span>Plate</span><strong>{displayValue(driver?.vehicle_registration)}</strong></div>
+                    <div><span>Make</span><strong>{displayValue(driver?.vehicle_make)}</strong></div>
+                    <div><span>Model</span><strong>{displayValue(driver?.vehicle_model)}</strong></div>
+                    <div><span>Colour</span><strong>{displayValue(driver?.vehicle_color)}</strong></div>
+                    <div><span>Year</span><strong>{displayValue(driver?.vehicle_year)}</strong></div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeDetailModal === "payment" && (
+              <div className="customer-detail-body">
+                <div className="customer-fare-total">
+                  <span>{tripTotalLabel}</span>
+                  <strong>{money(displayTotal)}</strong>
+                  <em>{fareHelperText}</em>
+                </div>
+                <div className="customer-detail-grid">
+                  <div><span>Payment method</span><strong className="capitalize">{displayValue(trip.payment_method)}</strong></div>
+                  <div><span>Trip status</span><strong>{statusLabel(trip.status)}</strong></div>
+                  <div><span>Booked fare</span><strong>{money(trip.fare_amount)}</strong></div>
+                  <div><span>Final fare</span><strong>{money(displayTotal)}</strong></div>
+                </div>
+              </div>
+            )}
+
+            {activeDetailModal === "otp" && (
+              <div className="customer-detail-body">
+                <div className="rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">
+                  OTPs are shown as popups only when they are needed. Share them with the driver only at the correct trip stage.
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className="moovu-btn moovu-btn-primary"
+                    disabled={!startOtpAvailable}
+                    onClick={() => {
+                      setActiveDetailModal(null);
+                      setActiveOtpModal("start");
+                    }}
+                  >
+                    View Start OTP
+                  </button>
+                  <button
+                    type="button"
+                    className="moovu-btn moovu-btn-primary"
+                    disabled={!endOtpAvailable}
+                    onClick={() => {
+                      setActiveDetailModal(null);
+                      setActiveOtpModal("end");
+                    }}
+                  >
+                    View End OTP
+                  </button>
+                </div>
+                {trip.status === "ongoing" && !endOtpReady && !trip.end_otp_verified && (
+                  <div className="rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                    End OTP unlocks in {endOtpCountdown || "a moment"}.
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
       )}
 
       <div className="moovu-shell">
-        <section className="customer-trip-hero mb-4">
+        <section className="customer-trip-hero mb-4 hidden">
           <div className="min-w-0">
             <div className="moovu-section-title">{stageDetail.eyebrow}</div>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
@@ -1673,7 +1956,7 @@ export default function RideTrackingPage() {
           </div>
         </section>
 
-        <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <div className="grid gap-4">
           <section className="customer-trip-map-card">
             <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-black text-slate-700 shadow">
               Live route
@@ -1725,7 +2008,73 @@ export default function RideTrackingPage() {
             </div>
           </section>
 
-          <aside className="space-y-4">
+          <section id="customer-driver-card" className="customer-trip-compact-stack">
+            <div className="customer-trip-compact-card">
+              <div className="min-w-0">
+                <div className="customer-trip-compact-kicker">
+                  {rideTypeLabel(trip.ride_type)} {canShowDriverDetails ? `with ${driverName}` : ""}
+                </div>
+                <h2>{canShowDriverDetails ? driverName : searchingForDriver ? "Looking for nearby MOOVU drivers" : "MOOVU trip"}</h2>
+                <p>{trip.created_at ? new Date(trip.created_at).toLocaleString() : "Live trip"}</p>
+                <strong>
+                  {money(displayTotal)}
+                  {canShowDriverDetails ? ` · ${carText}` : " · Driver details after acceptance"}
+                </strong>
+                {canShowDriverDetails && (
+                  <span>{displayValue(driver?.vehicle_registration)}</span>
+                )}
+              </div>
+              <div className={canShowDriverDetails ? "customer-driver-avatar is-live" : "customer-driver-avatar"}>
+                {canShowDriverDetails ? driverInitials(driver) : <span />}
+              </div>
+            </div>
+
+            <div className="customer-trip-current-card">
+              <div className="min-w-0">
+                <div className="customer-trip-compact-kicker">Current status</div>
+                <h3>{statusLabel(trip.status)}</h3>
+                <p>{statusCta}</p>
+              </div>
+              <div className={statusChipClass(trip.status)}>
+                <span className="moovu-chip-dot" />
+                {statusLabel(trip.status)}
+              </div>
+            </div>
+
+            <div className="customer-trip-action-tabs" aria-label="Trip actions">
+              {(["route", "fare", "safety", "support", "receipt"] as const).map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  className="customer-trip-action-tab"
+                  onClick={() => setActiveDetailModal(action)}
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+
+            <div className="customer-trip-compact-footer">
+              <button
+                type="button"
+                className="customer-trip-more-button"
+                onClick={() => setDetailsMenuOpen(true)}
+              >
+                More details
+              </button>
+              {trip.status === "completed" && (
+                <button
+                  type="button"
+                  onClick={() => router.push("/")}
+                  className="customer-trip-more-button is-primary"
+                >
+                  Done
+                </button>
+              )}
+            </div>
+          </section>
+
+          <aside className="hidden space-y-4">
             <section id="customer-driver-card" className="customer-trip-summary-card">
               <div className="customer-trip-summary-top">
                 <div className="min-w-0">
@@ -1917,7 +2266,7 @@ export default function RideTrackingPage() {
           </aside>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-4 hidden">
           <section className="customer-route-summary-card">
             <div>
               <div className="moovu-section-title">Route summary</div>

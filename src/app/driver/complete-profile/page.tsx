@@ -11,6 +11,7 @@ import {
   type DriverDocumentItem,
 } from "@/lib/driver-documents";
 import {
+  buildDriverReadiness,
   normalizeEngineNumber,
   normalizeSaPhone,
   normalizeVehicleRegistration,
@@ -60,6 +61,7 @@ type DriverDocument = {
   id: string;
   doc_type?: string | null;
   document_type?: string | null;
+  file_path?: string | null;
   status?: string | null;
   review_status?: string | null;
   rejection_reason?: string | null;
@@ -202,38 +204,61 @@ export default function DriverCompleteProfilePage() {
     void loadProfile();
   }, [loadProfile]);
 
-  const readiness = useMemo(() => {
-    const checks = [
-      hasLicence === "yes",
-      hasVehicle === "yes",
-      Boolean(firstName && lastName && phone),
-      Boolean(idNumber && homeAddress && areaName),
-      Boolean(emergencyName && emergencyPhone),
-      Boolean(licenseNumber && licenseCode && licenseExpiry),
-      Boolean(vehicleMake && vehicleModel && vehicleRegistration),
-      Boolean(vehicleYear && vehicleColor),
-    ];
-    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [
+  const readinessResult = useMemo(() => buildDriverReadiness(
+    {
+      first_name: firstName,
+      last_name: lastName,
+      phone,
+      email: "driver@moovu.local",
+      id_number: idNumber,
+      home_address: homeAddress,
+      area_name: areaName,
+      emergency_contact_name: emergencyName,
+      emergency_contact_phone: emergencyPhone,
+      license_number: licenseNumber,
+      license_code: licenseCode,
+      license_expiry: licenseExpiry,
+      pdp_number: pdpStatus === "uploaded" ? pdpNumber : null,
+      pdp_expiry: pdpStatus === "uploaded" ? pdpExpiry : null,
+      vehicle_make: vehicleMake,
+      vehicle_model: vehicleModel,
+      vehicle_year: vehicleYear,
+      vehicle_color: vehicleColor,
+      vehicle_registration: vehicleRegistration,
+      vehicle_vin: vehicleVin,
+      vehicle_engine_number: vehicleEngine,
+      seating_capacity: seatingCapacity,
+    },
+    documents,
+    { requirePdp: false },
+  ), [
     areaName,
+    documents,
     emergencyName,
     emergencyPhone,
     firstName,
-    hasLicence,
-    hasVehicle,
     homeAddress,
     idNumber,
     lastName,
     licenseCode,
     licenseExpiry,
     licenseNumber,
+    pdpExpiry,
+    pdpNumber,
+    pdpStatus,
     phone,
+    seatingCapacity,
     vehicleColor,
+    vehicleEngine,
     vehicleMake,
     vehicleModel,
     vehicleRegistration,
+    vehicleVin,
     vehicleYear,
   ]);
+
+  const readiness = readinessResult.readiness_score;
+  const applicationChecklist = readinessResult.checklist;
 
   const blockers = useMemo(() => {
     const items: string[] = [];
@@ -241,6 +266,13 @@ export default function DriverCompleteProfilePage() {
     if (hasVehicle !== "yes") items.push("Access to a roadworthy 4-door vehicle is required.");
     return items;
   }, [hasLicence, hasVehicle]);
+
+  const missingItems = useMemo(() => {
+    return applicationChecklist
+      .filter((item) => item.blocking && ["Missing", "Needs correction"].includes(item.status))
+      .slice(0, 8)
+      .map((item) => ({ ...item }));
+  }, [applicationChecklist]);
 
   async function saveProfile(submit: boolean) {
     if (submit && blockers.length > 0) {
@@ -377,6 +409,54 @@ export default function DriverCompleteProfilePage() {
     }
   }
 
+  async function viewDocument(document: DriverDocument) {
+    if (!document.file_path) {
+      setMsg("This document does not have a saved file path yet.");
+      return;
+    }
+
+    const viewer = window.open("", "_blank");
+    if (viewer) {
+      viewer.opener = null;
+      viewer.document.write("<p style='font-family: system-ui; padding: 24px;'>Opening MOOVU document...</p>");
+    }
+
+    setMsg(null);
+    try {
+      const token = await getToken();
+      if (!token) {
+        viewer?.close();
+        router.replace("/driver/login?next=/driver/complete-profile");
+        return;
+      }
+
+      const res = await fetch("/api/driver/documents/signed-url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ path: document.file_path }),
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok || !json.url) {
+        viewer?.close();
+        setMsg(json?.error || "Could not open this document.");
+        return;
+      }
+
+      if (viewer) {
+        viewer.location.href = json.url;
+      } else {
+        window.location.assign(json.url);
+      }
+    } catch {
+      viewer?.close();
+      setMsg("Could not open this document.");
+    }
+  }
+
   if (busy) {
     return (
       <main className="moovu-page min-h-screen p-5 text-slate-950">
@@ -410,9 +490,74 @@ export default function DriverCompleteProfilePage() {
                 <div className="h-3 rounded-full bg-gradient-to-r from-[var(--moovu-primary)] to-emerald-400" style={{ width: `${readiness}%` }} />
               </div>
               <p className="mt-3 text-xs font-bold leading-5 text-slate-500">
-                PDP / PrDP is visible to admin but does not block submission.
+                {readinessResult.status === "needs_required_items"
+                  ? "Complete the missing required items below."
+                  : "Ready for admin review. PDP / PrDP remains a warning only."}
               </p>
             </div>
+          </div>
+        </section>
+
+        {missingItems.length > 0 && (
+          <section className="moovu-card p-5">
+            <div className="moovu-section-title">Continue application</div>
+            <h2 className="mt-2 text-xl font-black">Missing required items</h2>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {missingItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className="rounded-2xl bg-red-50 px-4 py-3 text-left text-sm font-bold text-red-800"
+                  onClick={() => setStep(item.step)}
+                >
+                  <span className="block font-black">{item.label}</span>
+                  {item.message}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="moovu-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="moovu-section-title">Application checklist</div>
+              <h2 className="mt-2 text-xl font-black">
+                {driver?.profile_completed ? "Application submitted" : "Complete your MOOVU Driver application"}
+              </h2>
+              <p className="mt-1 text-sm font-bold text-slate-600">
+                {driver?.profile_completed ? "Your profile is under review." : `Next required action: ${missingItems[0]?.message ?? readinessResult.next_action}`}
+              </p>
+            </div>
+            <span className="rounded-full bg-sky-50 px-4 py-2 text-sm font-black text-[var(--moovu-primary)]">
+              Readiness {readiness}%
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2">
+            {applicationChecklist.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold ${
+                  item.warning
+                    ? "bg-amber-50 text-amber-900"
+                    : item.status === "Approved" || item.status === "Complete"
+                      ? "bg-emerald-50 text-emerald-800"
+                      : item.status === "Needs correction"
+                        ? "bg-red-50 text-red-800"
+                        : "bg-slate-50 text-slate-700"
+                }`}
+                onClick={() => setStep(item.step)}
+              >
+                <span>
+                  <span className="block font-black">{item.label}</span>
+                  <span className="block text-xs opacity-75">{item.message}</span>
+                </span>
+                <span className="shrink-0 rounded-full bg-white/80 px-3 py-1 text-xs font-black">
+                  {item.warning && item.status === "Missing" ? "Missing - not blocking" : item.status}
+                </span>
+              </button>
+            ))}
           </div>
         </section>
 
@@ -479,6 +624,7 @@ export default function DriverCompleteProfilePage() {
                 documents={documents}
                 uploadingDoc={uploadingDoc}
                 onUpload={uploadDocument}
+                onView={viewDocument}
               />
               <UploadChecklist
                 title="Optional but tracked"
@@ -486,6 +632,7 @@ export default function DriverCompleteProfilePage() {
                 documents={documents}
                 uploadingDoc={uploadingDoc}
                 onUpload={uploadDocument}
+                onView={viewDocument}
               />
               {pdpStatus !== "uploaded" && <Warning>Do not have a PDP / PrDP yet? You can still submit. MOOVU may request it later.</Warning>}
             </Panel>
@@ -511,6 +658,7 @@ export default function DriverCompleteProfilePage() {
                 documents={documents}
                 uploadingDoc={uploadingDoc}
                 onUpload={uploadDocument}
+                onView={viewDocument}
               />
             </Panel>
           )}
@@ -523,6 +671,7 @@ export default function DriverCompleteProfilePage() {
                 documents={documents}
                 uploadingDoc={uploadingDoc}
                 onUpload={uploadDocument}
+                onView={viewDocument}
               />
               <Warning>Photo uploads are tracked in the SQL/storage migration. Existing approved drivers are not affected.</Warning>
             </Panel>
@@ -660,12 +809,14 @@ function UploadChecklist({
   documents,
   uploadingDoc,
   onUpload,
+  onView,
 }: {
   title: string;
   items: DriverDocumentItem[];
   documents: DriverDocument[];
   uploadingDoc: string | null;
   onUpload: (item: DriverDocumentItem, file: File | null) => void;
+  onView: (document: DriverDocument) => void;
 }) {
   return (
     <div>
@@ -695,12 +846,22 @@ function UploadChecklist({
                   {latest.rejection_reason}
                 </div>
               )}
-              <label className="mt-3 block">
-                <span className="sr-only">Upload {item.label}</span>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {latest?.file_path && (
+                  <button
+                    type="button"
+                    className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-black text-[var(--moovu-primary)]"
+                    onClick={() => onView(latest)}
+                  >
+                    View document
+                  </button>
+                )}
+                <label className="inline-flex cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700">
+                  {latest?.file_path ? "Change file" : "Choose file"}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,application/pdf"
-                  className="block w-full text-xs font-bold text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-sky-50 file:px-3 file:py-2 file:text-xs file:font-black file:text-[var(--moovu-primary)]"
+                  className="sr-only"
                   disabled={uploadingDoc === item.label}
                   onChange={(event) => {
                     const file = event.target.files?.[0] ?? null;
@@ -708,7 +869,8 @@ function UploadChecklist({
                     event.currentTarget.value = "";
                   }}
                 />
-              </label>
+                </label>
+              </div>
               {uploadingDoc === item.label && <div className="mt-2 text-xs font-black text-slate-500">Uploading...</div>}
             </div>
           );

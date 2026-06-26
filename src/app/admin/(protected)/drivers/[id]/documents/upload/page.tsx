@@ -90,7 +90,18 @@ export default function UploadDriverDocPage() {
 
         <label className="block">
           <div className="text-sm opacity-80 mb-2">File</div>
-          <input className="w-full" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-[var(--moovu-primary)]">
+              {file ? "Change file" : "Choose file"}
+              <input
+                className="sr-only"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,application/pdf"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {file && <span className="text-sm font-bold text-slate-600">{file.name}</span>}
+          </div>
         </label>
 
         {err && <p className="text-sm text-red-600">{err}</p>}

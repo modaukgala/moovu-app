@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import {
-  readinessScoreFromIssues,
-  validateDriverDocumentsForApproval,
-  validateDriverProfileFields,
+  buildDriverReadiness,
   type DriverDocumentStatusInput,
 } from "@/lib/driver-validation";
 
@@ -138,17 +136,14 @@ export async function GET(req: Request) {
 
     const enriched = rows.map((row) => {
       const profile = profileByDriver[row.id] ?? null;
-      const validationIssues = [
-        ...validateDriverProfileFields(
-          {
-            ...row,
-            ...(profile ?? {}),
-          },
-          { requirePdp: true },
-        ),
-        ...validateDriverDocumentsForApproval(documentsByDriver[row.id] ?? []),
-      ];
-      const readiness_score = readinessScoreFromIssues(validationIssues);
+      const readiness = buildDriverReadiness(
+        {
+          ...row,
+          ...(profile ?? {}),
+        },
+        documentsByDriver[row.id] ?? [],
+        { requirePdp: false },
+      );
       const pdp_status = profile?.pdp_number
         ? "uploaded"
         : row.verification_status === "approved"
@@ -158,9 +153,10 @@ export async function GET(req: Request) {
       return {
         ...row,
         driver_profile: profile,
-        validation_issues: validationIssues,
-        approval_blockers: validationIssues.filter((item) => item.severity === "blocked"),
-        readiness_score,
+        readiness,
+        validation_issues: readiness.issues,
+        approval_blockers: readiness.blockers,
+        readiness_score: readiness.readiness_score,
         pdp_status,
       };
     });

@@ -507,6 +507,9 @@ export default function TripsPage() {
 
                 <div className="admin-trip-mobile-meta">
                   <AdminTripMobileField label="Rider">{trip.rider_name ?? "--"}</AdminTripMobileField>
+                  <AdminTripMobileField label="Customer cellphone">
+                    {trip.rider_phone ?? "--"}
+                  </AdminTripMobileField>
                   <AdminTripMobileField label="Driver">
                     {trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}
                   </AdminTripMobileField>

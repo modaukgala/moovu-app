@@ -490,7 +490,7 @@ export default function AdminDriverApplicationsPage() {
 
                 {!selected.driver_profile?.pdp_number && (
                   <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
-                    This driver has not captured PDP / PrDP details yet. Under the current admin validation rules, final approval is blocked until PDP / PrDP details are valid.
+                    PDP missing - approval is still allowed under current MOOVU rules. MOOVU may request PDP / PrDP later.
                   </div>
                 )}
 

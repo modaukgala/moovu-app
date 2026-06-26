@@ -315,6 +315,12 @@ function subscriptionTone(driver: Driver | null) {
   };
 }
 
+function canReceiveTripOffers(driver: Driver | null) {
+  if (!driver) return false;
+  const status = String(driver.subscription_status ?? "").toLowerCase();
+  return status === "active" || status === "grace";
+}
+
 export default function DriverHomePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -347,6 +353,7 @@ export default function DriverHomePage() {
   const [driverToolsOpen, setDriverToolsOpen] = useState(false);
 
   const subscriptionReminder = subscriptionTone(driver);
+  const subscriptionAllowsOnline = canReceiveTripOffers(driver);
   const driverLevel = getDriverLevel(earningsSnapshot.completedTrips);
   const otpEntryOpen = showStartOtp || showEndOtp;
   const canOpenTripChat =
@@ -528,6 +535,11 @@ export default function DriverHomePage() {
       return;
     }
 
+    if (wantOnline && !subscriptionAllowsOnline) {
+      showDriverActionError("Your subscription must be active before you can go online and receive trip offers.");
+      return;
+    }
+
     setBusy(true);
     setInfo(null);
     setDriverActionError(null);
@@ -685,6 +697,7 @@ export default function DriverHomePage() {
   async function respondToOffer(action: "accept" | "reject") {
     if (!offer) return;
 
+    window.dispatchEvent(new Event("moovu:stop-trip-offer-alert"));
     setBusy(true);
     setInfo(null);
     setDriverActionError(null);
@@ -1165,6 +1178,8 @@ export default function DriverHomePage() {
     ? stageDetail.action
     : offer
       ? "Accept or decline"
+      : !subscriptionAllowsOnline
+        ? "Activate your subscription to receive trip offers"
       : driver?.online
         ? "Waiting for trips nearby"
         : "Ready to earn today?";
@@ -1400,21 +1415,31 @@ export default function DriverHomePage() {
                   </button>
                 </div>
 
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-blue-50 p-4 text-sm font-bold text-blue-800">
-                  <span>Stay online to receive nearby requests.</span>
+                <div className={`mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-sm font-bold ${subscriptionReminder.className}`}>
+                  <span>{subscriptionReminder.message}</span>
                   <span className={`rounded-full border px-3 py-1 text-xs font-black ${driverLevel.className}`}>
                     {driverLevel.label} driver
                   </span>
                 </div>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <button
-                    className={driver.online ? "moovu-driver-toggle-off" : "moovu-driver-toggle-on"}
-                    disabled={busy}
-                    onClick={() => setOnlineServer(!driver.online)}
-                  >
-                    {primaryOnlineAction}
-                  </button>
+                  {subscriptionAllowsOnline ? (
+                    <button
+                      className={driver.online ? "moovu-driver-toggle-off" : "moovu-driver-toggle-on"}
+                      disabled={busy}
+                      onClick={() => setOnlineServer(!driver.online)}
+                    >
+                      {primaryOnlineAction}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="moovu-btn moovu-btn-primary"
+                      onClick={() => router.push("/driver/subscriptions")}
+                    >
+                      Activate subscription
+                    </button>
+                  )}
 
                   <button
                     className="moovu-btn moovu-btn-secondary"
@@ -1454,16 +1479,28 @@ export default function DriverHomePage() {
                     </button>
 
                     <div className="moovu-driver-go-panel">
-                      <button
-                        type="button"
-                        className={driver.online ? "moovu-driver-go-button is-online" : "moovu-driver-go-button"}
-                        disabled={busy}
-                        onClick={() => setOnlineServer(!driver.online)}
-                      >
-                        {busy ? "WORKING..." : primaryOnlineAction}
-                      </button>
+                      {subscriptionAllowsOnline ? (
+                        <button
+                          type="button"
+                          className={driver.online ? "moovu-driver-go-button is-online" : "moovu-driver-go-button"}
+                          disabled={busy}
+                          onClick={() => setOnlineServer(!driver.online)}
+                        >
+                          {busy ? "WORKING..." : primaryOnlineAction}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="moovu-driver-go-button"
+                          onClick={() => router.push("/driver/subscriptions")}
+                        >
+                          SUBSCRIBE
+                        </button>
+                      )}
                       <div className="mt-2 text-center text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                        {driver.lat != null && driver.lng != null ? "GPS live" : "GPS pending"}
+                        {subscriptionAllowsOnline
+                          ? driver.lat != null && driver.lng != null ? "GPS live" : "GPS pending"
+                          : "Subscription required"}
                       </div>
                     </div>
                   </div>

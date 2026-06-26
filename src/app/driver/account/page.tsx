@@ -91,6 +91,7 @@ export default function DriverAccountPage() {
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link className="moovu-btn moovu-btn-secondary" href="/driver/complete-profile">Complete profile</Link>
+            <Link className="moovu-btn moovu-btn-secondary" href="/driver/trip-offers">Trip offers received</Link>
             <Link className="moovu-btn moovu-btn-secondary" href="/driver/privacy-policy">Driver Privacy</Link>
             <Link className="moovu-btn moovu-btn-secondary" href="/driver/terms">Driver Terms</Link>
             <Link className="moovu-btn moovu-btn-secondary" href="/driver/contact">Contact</Link>

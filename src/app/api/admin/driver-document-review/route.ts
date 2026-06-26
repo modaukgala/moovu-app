@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 
-const ALLOWED = ["pending", "approved", "rejected", "needs_reupload"] as const;
+const ALLOWED = ["pending", "approved", "verified", "rejected", "needs_reupload"] as const;
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -30,10 +30,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid reviewStatus" }, { status: 400 });
     }
 
-    const { error } = await supabaseAdmin
+    let { error } = await supabaseAdmin
       .from("driver_documents")
-      .update({ review_status: reviewStatus })
+      .update({
+        review_status: reviewStatus,
+        status: reviewStatus === "verified" ? "approved" : reviewStatus,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", documentId);
+
+    if (error?.code === "42703") {
+      const retry = await supabaseAdmin
+        .from("driver_documents")
+        .update({
+          review_status: reviewStatus,
+          status: reviewStatus === "verified" ? "approved" : reviewStatus,
+        })
+        .eq("id", documentId);
+      error = retry.error;
+    }
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

@@ -39,6 +39,8 @@ export async function GET(req: Request) {
       });
     }
 
+    await supabaseAdmin.rpc("refresh_driver_subscription", { did: mapping.driver_id });
+
     const { data: driver, error: driverErr } = await supabaseAdmin
       .from("drivers")
       .select(
@@ -57,6 +59,22 @@ export async function GET(req: Request) {
         code: "DRIVER_MISSING",
         error: "Driver record not found for your account mapping.",
       });
+    }
+
+    const subscriptionStatus = String(driver.subscription_status ?? "").toLowerCase();
+    const subscriptionAllowsOnline = subscriptionStatus === "active" || subscriptionStatus === "grace";
+    if (!subscriptionAllowsOnline && driver.online) {
+      await supabaseAdmin
+        .from("drivers")
+        .update({
+          online: false,
+          busy: false,
+          last_seen: new Date().toISOString(),
+        })
+        .eq("id", driver.id);
+
+      driver.online = false;
+      driver.busy = false;
     }
 
     return NextResponse.json({ ok: true, driver });

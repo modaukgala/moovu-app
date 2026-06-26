@@ -7,7 +7,10 @@ import { createNativeNotificationActionToken } from "@/lib/native-notification-a
 
 const MOOVU_NOTIFICATION_SOUND = "moovu_premium_alert";
 const MOOVU_NOTIFICATION_SOUND_FILE = `${MOOVU_NOTIFICATION_SOUND}.wav`;
+const MOOVU_TRIP_OFFER_SOUND = "moovu_trip_offer_buzz";
+const MOOVU_TRIP_OFFER_SOUND_FILE = `${MOOVU_TRIP_OFFER_SOUND}.wav`;
 const MOOVU_ANDROID_CHANNEL_ID = "moovu_premium_v1";
+const MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID = "moovu_trip_offer_buzz_v1";
 
 type SendPushParams = {
   userIds?: string[];
@@ -174,7 +177,21 @@ function isIosNativeToken(row: { platform?: string | null; app_type?: string | n
   return platform === "ios" || appType.startsWith("ios");
 }
 
-function apnsOptions() {
+function isTripOfferData(data: PushData | undefined) {
+  return String(data?.nativeActionType ?? "").toLowerCase() === "trip_offer";
+}
+
+function pushSoundNames(data: PushData | undefined) {
+  const tripOffer = isTripOfferData(data);
+  return {
+    androidSound: tripOffer ? MOOVU_TRIP_OFFER_SOUND : MOOVU_NOTIFICATION_SOUND,
+    iosSoundFile: tripOffer ? MOOVU_TRIP_OFFER_SOUND_FILE : MOOVU_NOTIFICATION_SOUND_FILE,
+    androidChannelId: tripOffer ? MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID : MOOVU_ANDROID_CHANNEL_ID,
+  };
+}
+
+function apnsOptions(data?: PushData) {
+  const { iosSoundFile } = pushSoundNames(data);
   return {
     headers: {
       "apns-priority": "10",
@@ -182,7 +199,7 @@ function apnsOptions() {
     },
     payload: {
       aps: {
-        sound: MOOVU_NOTIFICATION_SOUND_FILE,
+        sound: iosSoundFile,
         badge: 1,
       },
     },
@@ -229,8 +246,12 @@ async function withNativeActionData(params: {
     nativeActionToken: token,
     nativeActionApiUrl: absoluteAppUrl("/api/notifications/native-action"),
     nativeClickUrl: absoluteRoleAppUrl(params.data.url || "/", params.row.role),
-    nativeSound: MOOVU_NOTIFICATION_SOUND,
-    androidChannelId: MOOVU_ANDROID_CHANNEL_ID,
+    nativeSound: params.data.nativeActionType === "trip_offer"
+      ? MOOVU_TRIP_OFFER_SOUND
+      : MOOVU_NOTIFICATION_SOUND,
+    androidChannelId: params.data.nativeActionType === "trip_offer"
+      ? MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID
+      : MOOVU_ANDROID_CHANNEL_ID,
   };
 }
 
@@ -361,6 +382,7 @@ async function sendFcmToTargets(params: SendPushParams) {
     const clickUrl = absoluteAppUrl(relativeUrl);
     const androidNativeToken = isAndroidNativeToken(row);
     const iosNativeToken = isIosNativeToken(row);
+    const { androidSound, iosSoundFile, androidChannelId } = pushSoundNames(params.data);
 
     try {
       const baseData = stringData(params.data, {
@@ -378,7 +400,7 @@ async function sendFcmToTargets(params: SendPushParams) {
           body: params.body,
           url: relativeUrl,
           data: baseData,
-          sound: MOOVU_NOTIFICATION_SOUND_FILE,
+          sound: iosSoundFile,
         });
 
         if (!apnsResult.ok) {
@@ -440,8 +462,8 @@ async function sendFcmToTargets(params: SendPushParams) {
                   title: params.title,
                   body: params.body,
                   icon: "ic_launcher",
-                  sound: MOOVU_NOTIFICATION_SOUND,
-                  channelId: MOOVU_ANDROID_CHANNEL_ID,
+                  sound: androidSound,
+                  channelId: androidChannelId,
                   clickAction: "FCM_PLUGIN_ACTIVITY",
                 },
               }),
@@ -535,6 +557,7 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
     body: payload.body,
     url,
   });
+  const { androidSound, androidChannelId } = pushSoundNames(payload.data);
 
   let delivered = 0;
   let removed = 0;
@@ -556,12 +579,12 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
             title: payload.title,
             body: payload.body,
             icon: "ic_launcher",
-            sound: MOOVU_NOTIFICATION_SOUND,
-            channelId: MOOVU_ANDROID_CHANNEL_ID,
+            sound: androidSound,
+            channelId: androidChannelId,
             clickAction: "FCM_PLUGIN_ACTIVITY",
           },
         },
-        apns: apnsOptions(),
+        apns: apnsOptions(payload.data),
         webpush: {
           notification: {
             title: payload.title,
