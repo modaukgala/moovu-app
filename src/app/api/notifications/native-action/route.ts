@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { chatPreview, normalizeTripMessageBody } from "@/lib/trip-chat";
 import { notifyAdmins, notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
 import { offerNextEligibleDriver } from "@/lib/trip-offers";
+import { respondToOffer as respondToAtomicOffer } from "@/lib/dispatch/respondToOffer";
 
 type NativeActionRow = {
   id: string;
@@ -71,6 +72,18 @@ async function respondToTripOffer(row: NativeActionRow, action: "accept" | "decl
   const driverId = await driverIdForUser(row.user_id);
   if (!driverId) return jsonError("Driver account is not linked.", 403);
 
+  const atomicResponse = await respondToAtomicOffer({
+    tripId: row.trip_id,
+    driverId,
+    action,
+    source: "native_notification",
+  });
+  if (!atomicResponse.atomicUnavailable) {
+    return atomicResponse.ok
+      ? NextResponse.json({ ok: true, message: action === "accept" ? "Trip accepted." : "Trip declined." })
+      : jsonError(atomicResponse.error ?? "Offer is no longer available.", atomicResponse.status);
+  }
+
   const { data: trip, error: tripError } = await supabaseAdmin
     .from("trips")
     .select("id,driver_id,status,offer_status,offer_attempted_driver_ids")
@@ -103,6 +116,8 @@ async function respondToTripOffer(row: NativeActionRow, action: "accept" | "decl
 
     if (acceptError) return jsonError(acceptError.message, 500);
     if (!acceptedTrip) return jsonError("This trip was already accepted or is no longer available.", 409);
+
+    await supabaseAdmin.from("drivers").update({ busy: true }).eq("id", driverId);
 
     const { data: competingOffers } = await supabaseAdmin
       .from("driver_trip_offers")

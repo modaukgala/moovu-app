@@ -21,6 +21,12 @@ type BoardTrip = {
   offer_expires_at: string | null;
   offer_attempted_driver_ids: string[] | null;
   attempted_count: number;
+  dispatch_started_at?: string | null;
+  dispatch_cycle?: number | null;
+  dispatch_sequence?: number | null;
+  dispatch_state?: string | null;
+  dispatch_search_radius_km?: number | null;
+  dispatch_failure_reason?: string | null;
   driver: {
     id: string;
     name: string;
@@ -228,7 +234,7 @@ export default function DispatchBoardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
           <div className="rounded-2xl bg-slate-50 p-3">
             <div className="text-xs text-slate-500">Payment</div>
             <div className="mt-1 font-bold text-slate-950">{trip.payment_method ?? "--"}</div>
@@ -237,7 +243,19 @@ export default function DispatchBoardPage() {
             <div className="text-xs text-slate-500">Attempts</div>
             <div className="mt-1 font-bold text-slate-950">{trip.attempted_count}</div>
           </div>
+          <div className="col-span-2 rounded-2xl bg-slate-50 p-3 sm:col-span-1">
+            <div className="text-xs text-slate-500">Cycle / radius</div>
+            <div className="mt-1 font-bold text-slate-950">
+              {trip.dispatch_cycle ?? 0} / {trip.dispatch_search_radius_km != null ? `${trip.dispatch_search_radius_km} km` : "--"}
+            </div>
+          </div>
         </div>
+
+        {trip.dispatch_failure_reason ? (
+          <div className="rounded-2xl bg-amber-50 p-3 text-sm font-bold text-amber-900">
+            {trip.dispatch_failure_reason}
+          </div>
+        ) : null}
 
         {left != null ? (
           <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800">

@@ -554,7 +554,7 @@ export default function AdminDriverProfilePage() {
   if (busy) {
     return (
       <main className="min-h-screen px-6 py-10 text-black">
-        <div className="max-w-6xl mx-auto border rounded-[2rem] p-6 bg-white shadow-sm">
+        <div className="max-w-6xl mx-auto moovu-card p-5 sm:p-6">
           Loading driver profile...
         </div>
       </main>
@@ -566,7 +566,7 @@ export default function AdminDriverProfilePage() {
       <main className="min-h-screen px-6 py-10 text-black">
         <div className="max-w-6xl mx-auto space-y-4">
           {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
-          <Link href="/admin/applications" className="inline-flex border rounded-xl px-4 py-2 bg-white">
+          <Link href="/admin/applications" className="inline-flex moovu-btn moovu-btn-secondary">
             Back
           </Link>
         </div>
@@ -586,7 +586,7 @@ export default function AdminDriverProfilePage() {
             </p>
           </div>
 
-          <Link href="/admin/applications" className="inline-flex border rounded-xl px-4 py-2 bg-white">
+          <Link href="/admin/applications" className="inline-flex moovu-btn moovu-btn-secondary">
             Back
           </Link>
         </div>
@@ -695,7 +695,7 @@ export default function AdminDriverProfilePage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold">Application checklist</h2>
@@ -736,7 +736,7 @@ export default function AdminDriverProfilePage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <h2 className="text-2xl font-semibold">Document expiry tracking</h2>
           <p className="text-sm text-gray-700">
             Warnings are visible only. MOOVU does not automatically block drivers from these dates yet.
@@ -762,7 +762,7 @@ export default function AdminDriverProfilePage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <div>
             <h2 className="text-2xl font-semibold">Extracted vs entered checks</h2>
             <p className="mt-1 text-sm text-gray-700">
@@ -814,7 +814,7 @@ export default function AdminDriverProfilePage() {
 
         {activeTab === "documents" && (
         <>
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold">Driver verification review</h2>
@@ -850,7 +850,7 @@ export default function AdminDriverProfilePage() {
           )}
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold">Uploaded documents</h2>
@@ -934,7 +934,7 @@ export default function AdminDriverProfilePage() {
 
         {activeTab === "vehicle" && (
         <>
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold">Profile and vehicle corrections</h2>
@@ -977,7 +977,7 @@ export default function AdminDriverProfilePage() {
 
         {activeTab === "notes" && (
         <>
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <div>
             <h2 className="text-2xl font-semibold">Admin notes</h2>
             <p className="mt-1 text-sm text-gray-700">Internal notes are for admin review only.</p>
@@ -1011,7 +1011,7 @@ export default function AdminDriverProfilePage() {
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <h2 className="text-2xl font-semibold">Correction history</h2>
           {!correctionsReady ? (
             <div className="rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-900">
@@ -1049,7 +1049,7 @@ export default function AdminDriverProfilePage() {
 
         {activeTab === "actions" && (
         <>
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <div>
             <h2 className="text-2xl font-semibold">Application actions</h2>
             <p className="mt-1 text-sm text-gray-700">
@@ -1080,12 +1080,12 @@ export default function AdminDriverProfilePage() {
           )}
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <h2 className="text-2xl font-semibold">Confirm Payment & Activate Prepaid Subscription</h2>
 
           <div className="grid md:grid-cols-4 gap-4">
             <select
-              className="border rounded-xl p-3"
+              className="moovu-input"
               value={planType}
               onChange={(e) => setPlanType(e.target.value as "day" | "week" | "month")}
             >
@@ -1095,7 +1095,7 @@ export default function AdminDriverProfilePage() {
             </select>
 
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               type="number"
               min="0"
               step="0.01"
@@ -1105,7 +1105,7 @@ export default function AdminDriverProfilePage() {
             />
 
             <select
-              className="border rounded-xl p-3"
+              className="moovu-input"
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
             >
@@ -1116,7 +1116,7 @@ export default function AdminDriverProfilePage() {
             </select>
 
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Reference"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
@@ -1124,13 +1124,13 @@ export default function AdminDriverProfilePage() {
           </div>
 
           <input
-            className="border rounded-xl p-3 w-full"
+            className="moovu-input"
             placeholder="Optional note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
 
-          <div className="border rounded-2xl p-4 space-y-2">
+          <div className="moovu-data-row space-y-2">
             <div><span className="text-gray-500">Bank:</span> {BANK_DETAILS.bankName}</div>
             <div><span className="text-gray-500">Account Name:</span> {BANK_DETAILS.accountName}</div>
             <div><span className="text-gray-500">Account Number:</span> {BANK_DETAILS.accountNumber}</div>
@@ -1140,14 +1140,14 @@ export default function AdminDriverProfilePage() {
           <button
             onClick={() => activateSubscription()}
             disabled={actionBusy}
-            className="rounded-xl px-4 py-3 text-white"
+            className="moovu-btn moovu-btn-primary"
             style={{ background: "var(--moovu-primary)" }}
           >
             {actionBusy ? "Activating..." : "Confirm Payment & Activate"}
           </button>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <h2 className="text-2xl font-semibold">Recent Subscription Requests</h2>
 
           {subscriptionRequests.length === 0 ? (
@@ -1155,7 +1155,7 @@ export default function AdminDriverProfilePage() {
           ) : (
             <div className="space-y-3">
               {subscriptionRequests.map((row) => (
-                <div key={row.id} className="border rounded-xl p-4">
+                <div key={row.id} className="moovu-data-row">
                   <div className="grid md:grid-cols-5 gap-4">
                     <div>
                       <div className="text-sm text-gray-500">Plan</div>
@@ -1199,7 +1199,7 @@ export default function AdminDriverProfilePage() {
           )}
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
           <h2 className="text-2xl font-semibold">Subscription Payment History</h2>
 
           {subscriptionPayments.length === 0 ? (
@@ -1207,7 +1207,7 @@ export default function AdminDriverProfilePage() {
           ) : (
             <div className="space-y-3">
               {subscriptionPayments.map((row) => (
-                <div key={row.id} className="border rounded-xl p-4">
+                <div key={row.id} className="moovu-data-row">
                   <div className="grid md:grid-cols-4 gap-4">
                     <div>
                       <div className="text-sm text-gray-500">Amount</div>

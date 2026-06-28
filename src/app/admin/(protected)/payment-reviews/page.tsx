@@ -365,7 +365,7 @@ export default function AdminPaymentReviewsPage() {
                     <button
                       onClick={() => setReviewDraft({ requestId: row.id, action: "approve", note: "" })}
                       disabled={busyId === row.id}
-                      className="rounded-xl px-4 py-3 text-white"
+                      className="moovu-btn moovu-btn-primary"
                       style={{ background: "var(--moovu-primary)" }}
                     >
                       {busyId === row.id ? "Working..." : "Approve"}
@@ -374,7 +374,7 @@ export default function AdminPaymentReviewsPage() {
                     <button
                       onClick={() => setReviewDraft({ requestId: row.id, action: "waiting", note: "" })}
                       disabled={busyId === row.id}
-                      className="border rounded-xl px-4 py-3 bg-white"
+                      className="moovu-btn moovu-btn-secondary"
                     >
                       {busyId === row.id ? "Working..." : "Still Waiting"}
                     </button>
@@ -382,7 +382,7 @@ export default function AdminPaymentReviewsPage() {
                     <button
                       onClick={() => setReviewDraft({ requestId: row.id, action: "reject", note: "" })}
                       disabled={busyId === row.id}
-                      className="border rounded-xl px-4 py-3 bg-white text-red-600 border-red-300"
+                      className="moovu-btn moovu-btn-secondary text-red-600 border-red-300"
                     >
                       {busyId === row.id ? "Working..." : "Reject"}
                     </button>

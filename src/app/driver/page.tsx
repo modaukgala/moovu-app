@@ -39,6 +39,9 @@ type Offer = {
   final_add_stop_increase?: number | null;
   final_fare?: number | null;
   stop_waiting_fee?: number | null;
+  current_fare?: number | null;
+  actual_distance_km?: number | null;
+  actual_duration_min?: number | null;
 };
 
 type CurrentTrip = {
@@ -64,6 +67,9 @@ type CurrentTrip = {
   final_add_stop_increase?: number | null;
   final_fare?: number | null;
   stop_waiting_fee?: number | null;
+  current_fare?: number | null;
+  actual_distance_km?: number | null;
+  actual_duration_min?: number | null;
 };
 
 type TripStop = {
@@ -619,7 +625,11 @@ export default function DriverHomePage() {
     await loadDriverProfile(true);
   }
 
-  async function sendHeartbeat(lat: number, lng: number) {
+  async function sendHeartbeat(
+    lat: number,
+    lng: number,
+    telemetry?: { heading?: number | null; speedMps?: number | null; accuracyM?: number | null },
+  ) {
     const token = await getAccessToken();
     if (!token) return false;
 
@@ -629,7 +639,14 @@ export default function DriverHomePage() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ lat, lng }),
+      body: JSON.stringify({
+        lat,
+        lng,
+        heading: telemetry?.heading ?? null,
+        speedMps: telemetry?.speedMps ?? null,
+        accuracyM: telemetry?.accuracyM ?? null,
+        capturedAt: new Date().toISOString(),
+      }),
     });
 
     const json = await res.json().catch(() => null);
@@ -646,7 +663,7 @@ export default function DriverHomePage() {
     return true;
   }
 
-  async function captureCurrentLocationAndSave(silent = false) {
+  async function captureCurrentLocationAndSave(silent = false, refreshProfile = true) {
     return new Promise<boolean>((resolve) => {
       if (silent && gpsPermissionBlockedRef.current) {
         resolve(false);
@@ -660,8 +677,13 @@ export default function DriverHomePage() {
       }).then(
         async (pos) => {
           gpsPermissionBlockedRef.current = false;
-          const ok = await sendHeartbeat(pos.coords.latitude, pos.coords.longitude);
-          await loadDriverProfile(silent);
+          const extendedCoords = pos.coords as typeof pos.coords & { heading?: number | null; speed?: number | null };
+          const ok = await sendHeartbeat(pos.coords.latitude, pos.coords.longitude, {
+            heading: extendedCoords.heading,
+            speedMps: extendedCoords.speed,
+            accuracyM: pos.coords.accuracy,
+          });
+          if (refreshProfile) await loadDriverProfile(silent);
           resolve(ok);
         },
         (err) => {
@@ -1038,16 +1060,17 @@ export default function DriverHomePage() {
     gpsPermissionBlockedRef.current = false;
     captureCurrentLocationAndSave(true);
 
+    const activeTrip = currentTrip && ["assigned", "arrived", "ongoing"].includes(currentTrip.status);
     gpsTimerRef.current = setInterval(() => {
-      captureCurrentLocationAndSave(true);
-    }, 5000);
+      captureCurrentLocationAndSave(true, false);
+    }, activeTrip ? 1000 : 5000);
 
     return () => {
       if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
     };
     // GPS polling intentionally starts/stops only with online state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.online]);
+  }, [driver?.online, currentTrip?.id, currentTrip?.status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1516,13 +1539,13 @@ export default function DriverHomePage() {
                         {tripStatusLabel(currentTrip.status)}
                       </div>
                       <p className="mt-2 text-sm font-semibold text-slate-600">
-                        {rideTypeLabel(currentTrip.ride_option)} - {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
+                        {rideTypeLabel(currentTrip.ride_option)} - {money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}
                       </p>
                     </div>
 
                     <div className="moovu-chip moovu-chip-primary">
                       <span className="moovu-chip-dot" />
-                      Fare: {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
+                      {currentTrip.status === "ongoing" ? "Current fare" : "Fare"}: {money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}
                     </div>
                   </div>
 

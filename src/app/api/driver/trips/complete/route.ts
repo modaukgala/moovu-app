@@ -32,6 +32,10 @@ type CompleteTripRow = {
   route_distance_km?: number | null;
   route_duration_min?: number | null;
   estimated_fare?: number | null;
+  current_fare?: number | null;
+  actual_distance_km?: number | null;
+  actual_duration_min?: number | null;
+  actual_fare_breakdown?: unknown;
 };
 
 const COMPLETE_TRIP_SELECT = `
@@ -53,6 +57,10 @@ const COMPLETE_TRIP_SELECT = `
   route_distance_km,
   route_duration_min,
   estimated_fare
+  ,current_fare
+  ,actual_distance_km
+  ,actual_duration_min
+  ,actual_fare_breakdown
 `;
 
 const LEGACY_COMPLETE_TRIP_SELECT =
@@ -74,7 +82,9 @@ function isMissingFinalFareColumn(error: { code?: string; message?: string } | n
     message.includes("fare_finalized_at") ||
     message.includes("actual_distance_km") ||
     message.includes("actual_duration_min") ||
-    message.includes("actual_route_source")
+    message.includes("actual_route_source") ||
+    message.includes("current_fare") ||
+    message.includes("actual_fare_breakdown")
   );
 }
 
@@ -218,7 +228,13 @@ export async function POST(req: Request) {
       stopWaitingFee: typedTrip.stop_waiting_fee,
       fallbackFare: typedTrip.final_fare ?? typedTrip.fare_amount,
     });
-    const fareAmount = Number(finalizedFare.finalFare || 0);
+    const liveFare = Number(typedTrip.current_fare ?? 0);
+    const fareAmount = Number((Number.isFinite(liveFare) && liveFare > 0 ? liveFare : finalizedFare.finalFare) || 0);
+    const effectiveFare = {
+      ...finalizedFare,
+      finalFare: Math.round(fareAmount),
+      adjustmentAmount: Math.round((fareAmount - finalizedFare.estimatedFare) * 100) / 100,
+    };
     if (!Number.isFinite(fareAmount) || fareAmount <= 0) {
       return NextResponse.json(
         { ok: false, error: "Trip fare is missing or invalid." },
@@ -325,16 +341,16 @@ export async function POST(req: Request) {
     const finalFareUpdate = {
       status: "completed",
       end_otp_verified: true,
-      fare_amount: finalizedFare.finalFare,
-      final_fare: finalizedFare.finalFare,
-      estimated_fare: finalizedFare.estimatedFare,
-      fare_adjustment_amount: finalizedFare.adjustmentAmount,
+      fare_amount: effectiveFare.finalFare,
+      final_fare: effectiveFare.finalFare,
+      estimated_fare: effectiveFare.estimatedFare,
+      fare_adjustment_amount: effectiveFare.adjustmentAmount,
       fare_adjustment_reason:
-        finalizedFare.adjustmentAmount !== 0 ? "finalized_after_end_otp" : "finalized_without_adjustment",
+        effectiveFare.adjustmentAmount !== 0 ? "finalized_from_live_trip" : "finalized_without_adjustment",
       fare_finalized_at: completedAt,
-      actual_distance_km: typedTrip.route_distance_km ?? typedTrip.distance_km ?? null,
-      actual_duration_min: typedTrip.route_duration_min ?? typedTrip.duration_min ?? null,
-      actual_route_source: "route_estimate",
+      actual_distance_km: typedTrip.actual_distance_km ?? typedTrip.route_distance_km ?? typedTrip.distance_km ?? null,
+      actual_duration_min: typedTrip.actual_duration_min ?? typedTrip.route_duration_min ?? typedTrip.duration_min ?? null,
+      actual_route_source: typedTrip.actual_distance_km != null ? "live_gps" : "route_estimate",
     };
 
     let updateTripResult = await supabaseAdmin
@@ -349,7 +365,7 @@ export async function POST(req: Request) {
         .update({
           status: "completed",
           end_otp_verified: true,
-          fare_amount: finalizedFare.finalFare,
+          fare_amount: effectiveFare.finalFare,
         })
         .eq("id", tripId)
         .eq("status", "ongoing");
@@ -391,7 +407,7 @@ export async function POST(req: Request) {
         {
           trip_id: tripId,
           event_type: "fare_finalized",
-          message: `Final fare confirmed at R${finalizedFare.finalFare}. Adjustment: R${finalizedFare.adjustmentAmount}.`,
+          message: `Final fare confirmed at R${effectiveFare.finalFare}. Adjustment: R${effectiveFare.adjustmentAmount}.`,
           old_status: "ongoing",
           new_status: "ongoing",
         },
@@ -441,7 +457,7 @@ export async function POST(req: Request) {
         commissionAmount: commissionResult.calc.commissionAmount,
         driverNet: commissionResult.calc.driverNet,
       },
-      fare: finalizedFare,
+      fare: effectiveFare,
     });
   } catch (error: unknown) {
     return NextResponse.json(

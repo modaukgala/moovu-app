@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { recordTripTelemetry } from "@/lib/trips/recordTripTelemetry";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error";
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Not logged in" }, { status: 401 });
     }
 
-    const { lat, lng } = await req.json();
+    const { lat, lng, heading, speedMps, accuracyM, capturedAt } = await req.json();
 
     if (typeof lat !== "number" || typeof lng !== "number") {
       return NextResponse.json({ ok: false, error: "lat/lng must be numbers" }, { status: 400 });
@@ -89,6 +90,20 @@ export async function POST(req: Request) {
 
     if (upErr) {
       return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 });
+    }
+
+    const telemetry = await recordTripTelemetry({
+      supabase: supabaseAdmin,
+      driverId,
+      lat,
+      lng,
+      heading: typeof heading === "number" ? heading : null,
+      speedMps: typeof speedMps === "number" ? speedMps : null,
+      accuracyM: typeof accuracyM === "number" ? accuracyM : null,
+      capturedAt: typeof capturedAt === "string" ? capturedAt : undefined,
+    });
+    if (!telemetry.ok) {
+      console.error("[driver-heartbeat] trip telemetry failed", { driverId, reason: telemetry.error });
     }
 
     return NextResponse.json({ ok: true });

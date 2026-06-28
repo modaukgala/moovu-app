@@ -283,13 +283,13 @@ export default function NewTripPage() {
       <form onSubmit={createTrip} className="mt-6 space-y-4">
         <div className="grid md:grid-cols-2 gap-3">
           <input
-            className="border rounded-xl p-3"
+            className="moovu-input"
             placeholder="Rider name (optional)"
             value={riderName}
             onChange={(e) => setRiderName(e.target.value)}
           />
           <input
-            className="border rounded-xl p-3"
+            className="moovu-input"
             placeholder="Rider phone (optional)"
             value={riderPhone}
             onChange={(e) => setRiderPhone(e.target.value)}
@@ -298,7 +298,7 @@ export default function NewTripPage() {
 
         <div className="relative">
           <input
-            className="border rounded-xl p-3 w-full"
+            className="moovu-input"
             placeholder="Pickup (select from suggestions) *"
             value={pickup}
             onChange={(e) => {
@@ -336,7 +336,7 @@ export default function NewTripPage() {
 
         <div className="relative">
           <input
-            className="border rounded-xl p-3 w-full"
+            className="moovu-input"
             placeholder="Dropoff (select from suggestions) *"
             value={dropoff}
             onChange={(e) => {
@@ -372,7 +372,7 @@ export default function NewTripPage() {
           )}
         </div>
 
-        <div className="border rounded-2xl p-4">
+        <div className="moovu-data-row">
           <div className="font-semibold">Smart Kasi Pricing</div>
           <div className="text-sm opacity-70 mt-1">
             Uses the same MOOVU launch pricing engine as customer booking.
@@ -409,7 +409,7 @@ export default function NewTripPage() {
 
           <div className="grid md:grid-cols-5 gap-3 mt-4">
             <select
-              className="border rounded-xl p-3 bg-transparent"
+              className="moovu-input bg-transparent"
               value={rideOptionId}
               onChange={(e) => {
                 const next = e.target.value === "group" ? "group" : "go";
@@ -424,14 +424,14 @@ export default function NewTripPage() {
             </select>
 
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Distance (km)"
               value={distanceKm}
               onChange={(e) => setDistanceKm(e.target.value)}
             />
 
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Duration (min)"
               value={durationMin}
               onChange={(e) => setDurationMin(e.target.value)}
@@ -439,7 +439,7 @@ export default function NewTripPage() {
 
             <button
               type="button"
-              className="border rounded-xl p-3"
+              className="moovu-input"
               disabled={calcBusy}
               onClick={calculateDistance}
             >
@@ -448,7 +448,7 @@ export default function NewTripPage() {
 
             <button
               type="button"
-              className="border rounded-xl p-3"
+              className="moovu-input"
               onClick={() => {
                 const km = Number(distanceKm);
                 const calc = calculateTripFare({
@@ -472,7 +472,7 @@ export default function NewTripPage() {
 
         <div className="grid md:grid-cols-3 gap-3">
           <select
-            className="border rounded-xl p-3 bg-transparent"
+            className="moovu-input bg-transparent"
             value={paymentMethod}
             onChange={(e) => {
               if (isPaymentMethod(e.target.value)) {
@@ -486,14 +486,14 @@ export default function NewTripPage() {
           </select>
 
           <input
-            className="border rounded-xl p-3"
+            className="moovu-input"
             placeholder="Fare (auto or manual)"
             value={fare}
             onChange={(e) => setFare(e.target.value)}
           />
 
           <select
-            className="border rounded-xl p-3 bg-transparent"
+            className="moovu-input bg-transparent"
             value={driverId}
             onChange={(e) => setDriverId(e.target.value)}
           >

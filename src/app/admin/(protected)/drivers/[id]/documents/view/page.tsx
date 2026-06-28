@@ -38,13 +38,20 @@ export default function ViewDocPage() {
   if (!url) return <main className="p-6">Loading file...</main>;
 
   return (
-    <main className="p-6">
-      <a className="underline" href={url} target="_blank" rel="noreferrer">
-        Open in new tab
-      </a>
+    <main className="space-y-5">
+      <header className="moovu-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div>
+          <div className="moovu-section-title">Secure document viewer</div>
+          <h1 className="mt-2 text-2xl font-black text-slate-950">Driver document</h1>
+          <p className="mt-2 text-sm text-slate-600">Review the uploaded file without leaving the admin workspace.</p>
+        </div>
+        <a className="moovu-btn moovu-btn-secondary" href={url} target="_blank" rel="noreferrer">
+          Open in new tab
+        </a>
+      </header>
 
-      <div className="mt-4 border rounded-2xl overflow-hidden">
-        <iframe src={url} className="w-full h-[80vh]" />
+      <div className="moovu-admin-document-viewer">
+        <iframe src={url} title="Driver document preview" />
       </div>
     </main>
   );

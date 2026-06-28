@@ -234,7 +234,7 @@ export default function AdminSettlementsPage() {
           <h2 className="text-xl font-black text-slate-950">Record settlement</h2>
 
           <select
-            className="border rounded-xl p-3 w-full"
+            className="moovu-input"
             value={driverId}
             onChange={(e) => setDriverId(e.target.value)}
           >
@@ -247,7 +247,7 @@ export default function AdminSettlementsPage() {
           </select>
 
           {selectedDriver && (
-            <div className="grid md:grid-cols-4 gap-4 border rounded-2xl p-4">
+            <div className="grid md:grid-cols-4 gap-4 moovu-data-row">
               <div>
                 <div className="text-sm text-gray-500">Balance Due</div>
                 <div className="font-semibold">{money(selectedDriver.wallet?.balance_due)}</div>
@@ -269,7 +269,7 @@ export default function AdminSettlementsPage() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Amount paid"
               type="number"
               min="0"
@@ -279,7 +279,7 @@ export default function AdminSettlementsPage() {
             />
 
             <select
-              className="border rounded-xl p-3"
+              className="moovu-input"
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
             >
@@ -290,14 +290,14 @@ export default function AdminSettlementsPage() {
             </select>
 
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Reference"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
             />
 
             <input
-              className="border rounded-xl p-3"
+              className="moovu-input"
               placeholder="Note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -308,7 +308,7 @@ export default function AdminSettlementsPage() {
             <button
               onClick={recordSettlement}
               disabled={busy}
-              className="rounded-xl px-4 py-3 text-white"
+              className="moovu-btn moovu-btn-primary"
               style={{ background: "var(--moovu-primary)" }}
             >
               {busy ? "Saving..." : "Record Settlement"}
@@ -317,7 +317,7 @@ export default function AdminSettlementsPage() {
             <button
               onClick={clearFullBalance}
               disabled={busy || !selectedDriver || Number(selectedDriver.wallet?.balance_due ?? 0) <= 0}
-              className="border rounded-xl px-4 py-3 bg-white"
+              className="moovu-btn moovu-btn-secondary"
             >
               Clear Full Balance
             </button>
@@ -332,7 +332,7 @@ export default function AdminSettlementsPage() {
           ) : (
             <div className="space-y-3">
               {driverOptions.map((driver) => (
-                <div key={driver.id} className="border rounded-2xl p-4">
+                <div key={driver.id} className="moovu-data-row">
                   <div className="grid md:grid-cols-6 gap-4">
                     <div>
                       <div className="text-sm text-gray-500">Driver</div>
@@ -377,7 +377,7 @@ export default function AdminSettlementsPage() {
           ) : (
             <div className="space-y-3">
               {settlements.map((row) => (
-                <div key={row.id} className="border rounded-2xl p-4">
+                <div key={row.id} className="moovu-data-row">
                   <div className="grid md:grid-cols-5 gap-4">
                     <div>
                       <div className="text-sm text-gray-500">Driver</div>

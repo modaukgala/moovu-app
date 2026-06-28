@@ -175,63 +175,63 @@ export default function AdminReportsPage() {
 
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <section className="border rounded-2xl p-5 space-y-4">
+      <section className="moovu-card space-y-4 p-5 sm:p-6">
         <h2 className="font-semibold">Totals</h2>
 
         <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-4">
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Completed trips</div>
             <div className="text-2xl font-semibold mt-2">{totals.completedTrips}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Total earnings (completed)</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.completedRevenue)}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">MOOVU commission</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.completedCommission)}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Driver net</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.completedDriverNet)}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">In-progress trips</div>
             <div className="text-2xl font-semibold mt-2">{totals.inProgressTrips}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">In-progress value</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.inProgressValue)}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Late cancel fees</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.lateCancellationFees)}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">No-show fees</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.noShowFees)}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Driver fee payouts</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.cancellationDriverPayouts)}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">MOOVU fee revenue</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.cancellationMoovuRevenue)}</div>
           </div>
         </div>
       </section>
 
-      <section className="border rounded-2xl p-5 space-y-4">
+      <section className="moovu-card space-y-4 p-5 sm:p-6">
         <h2 className="font-semibold">By Driver</h2>
 
         {!data?.byDriver?.length ? (
@@ -239,7 +239,7 @@ export default function AdminReportsPage() {
         ) : (
           <div className="space-y-3">
             {data.byDriver.map((row) => (
-              <div key={row.driver_id} className="border rounded-xl p-4">
+              <div key={row.driver_id} className="moovu-data-row">
                 <div className="font-medium">{row.driver_name}</div>
                 <div className="text-xs opacity-60 mt-1">{row.driver_id}</div>
                 <div className="text-sm opacity-70 mt-2">

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
 import {
-  advanceDriverOfferIfNeeded,
   expirePendingOfferIfNeeded,
   isMissingOfferTableError,
   offerNextEligibleDriver,
@@ -47,7 +46,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, offers: [], info: "Subscription inactive" });
     }
 
-    const { data: activeRows, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("driver_trip_offers")
       .select("trip_id")
       .eq("driver_id", driverId)
@@ -101,11 +100,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    for (const row of activeRows ?? []) {
-      if (row.trip_id) {
-        await advanceDriverOfferIfNeeded(row.trip_id, driverId);
-      }
-    }
+    // Polling refreshes the driver UI only. Server-owned dispatch advances offers.
 
     const nowIso = new Date().toISOString();
     const { data: offers, error: offerErr } = await supabaseAdmin

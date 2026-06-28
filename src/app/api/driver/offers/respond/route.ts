@@ -8,6 +8,7 @@ import {
   offerNextEligibleDriver,
 } from "@/lib/trip-offers";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
+import { respondToOffer } from "@/lib/dispatch/respondToOffer";
 
 async function incrementOfferStat(driverId: string, field: "offers_accepted" | "offers_rejected") {
   const { data: stats } = await supabaseAdmin
@@ -74,6 +75,22 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { ok: false, code: "NOT_LINKED", error: "Not linked" },
         { status: 403 }
+      );
+    }
+
+    const atomicResponse = await respondToOffer({
+      tripId: String(tripId),
+      driverId,
+      action: action === "accept" ? "accept" : "decline",
+      source: "driver_app",
+    });
+
+    if (!atomicResponse.atomicUnavailable) {
+      return NextResponse.json(
+        atomicResponse.ok
+          ? { ok: true, status: atomicResponse.state }
+          : { ok: false, error: atomicResponse.error },
+        { status: atomicResponse.status },
       );
     }
 
@@ -202,6 +219,8 @@ export async function POST(req: Request) {
           { status: 409 }
         );
       }
+
+      await supabaseAdmin.from("drivers").update({ busy: true }).eq("id", driverId);
 
       try {
         await incrementOfferStat(driverId, "offers_accepted");

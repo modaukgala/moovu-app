@@ -57,6 +57,16 @@ After generation, wire the typed database into the browser/admin Supabase client
 - Server key: use `GOOGLE_MAPS_API_KEY` for API routes and restrict it to required Google Maps APIs.
 - Required APIs include Places, Geocoding, Maps JavaScript, and Distance Matrix or Routes depending on the configured implementation.
 
+## Atomic Dispatch Worker
+
+- Review and apply `docs/atomic-dispatch-migration.sql` to staging before enabling the new dispatch path.
+- Configure a strong server-only `DISPATCH_JOB_SECRET`.
+- The protected worker is `POST /api/jobs/dispatch` and accepts the secret through `Authorization: Bearer <secret>` or `x-dispatch-job-secret`.
+- Driver polling is UI refresh only and is not the authoritative scheduler after the atomic migration is active.
+- The repository currently has no durable sub-minute queue provider. A trusted queue/workflow must invoke due work at the required times. Vercel Cron alone cannot guarantee six-second escalation.
+- Do not disable the legacy `CampusRide Auto Assign` task until the durable worker has passed staging tests. When approved, disable it from elevated PowerShell with `Disable-ScheduledTask -TaskName "CampusRide Auto Assign"`.
+- Apply `docs/live-trip-telemetry-migration.sql` before enabling live actual-distance/current-fare persistence. Location history is private and must use an agreed retention policy.
+
 ## Push Notification Setup
 
 - Generate VAPID keys and configure:

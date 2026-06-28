@@ -107,7 +107,7 @@ export default function AdminEarningsPage() {
   if (loading) {
     return (
       <main className="min-h-screen px-6 py-10 text-black">
-        <div className="max-w-6xl mx-auto border rounded-[2rem] p-6 bg-white shadow-sm">
+        <div className="max-w-6xl mx-auto moovu-card p-5 sm:p-6">
           Loading admin earnings...
         </div>
       </main>
@@ -127,13 +127,13 @@ export default function AdminEarningsPage() {
           </div>
 
           <div className="flex gap-2">
-            <Link href="/admin/trips" className="border rounded-xl px-4 py-2 bg-white">
+            <Link href="/admin/trips" className="moovu-btn moovu-btn-secondary">
               Back to Dispatch
             </Link>
 
             <button
               onClick={loadEarnings}
-              className="rounded-xl px-4 py-2 text-white"
+              className="moovu-btn moovu-btn-primary"
               style={{ background: "var(--moovu-primary)" }}
             >
               Refresh
@@ -143,7 +143,7 @@ export default function AdminEarningsPage() {
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
         {!earnings ? (
-          <div className="border rounded-[2rem] p-6 bg-white shadow-sm">
+          <div className="moovu-card p-5 sm:p-6">
             No earnings data found.
           </div>
         ) : (
@@ -183,7 +183,7 @@ export default function AdminEarningsPage() {
             </section>
 
             <section className="grid lg:grid-cols-2 gap-6">
-              <div className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+              <div className="moovu-card space-y-4 p-5 sm:p-6">
                 <h2 className="text-xl font-semibold">Payment Methods</h2>
 
                 {Object.keys(earnings.by_payment_method).length === 0 ? (
@@ -199,7 +199,7 @@ export default function AdminEarningsPage() {
                         typeof value === "number" ? null : value.count;
 
                       return (
-                        <div key={key} className="border rounded-2xl p-4">
+                        <div key={key} className="moovu-data-row">
                           <div className="flex items-center justify-between">
                             <div className="capitalize font-medium">{key}</div>
                             <div className="font-semibold">{money(revenue)}</div>
@@ -219,17 +219,17 @@ export default function AdminEarningsPage() {
                 )}
               </div>
 
-              <div className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+              <div className="moovu-card space-y-4 p-5 sm:p-6">
                 <h2 className="text-xl font-semibold">Completed Trips</h2>
 
-                <div className="border rounded-2xl p-4">
+                <div className="moovu-data-row">
                   <div className="text-sm text-gray-600">Total Completed Trips</div>
                   <div className="text-3xl font-semibold mt-2">
                     {earnings.total_completed_trips}
                   </div>
                 </div>
 
-                <div className="border rounded-2xl p-4">
+                <div className="moovu-data-row">
                   <div className="text-sm text-gray-600">Commission Rate</div>
                   <div className="text-3xl font-semibold mt-2">
                     {earnings.commission_rate_label ?? "10% / 12%"}
@@ -238,7 +238,7 @@ export default function AdminEarningsPage() {
               </div>
             </section>
 
-            <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+            <section className="moovu-card space-y-4 p-5 sm:p-6">
               <h2 className="text-xl font-semibold">Recent Completed Trips</h2>
 
               {earnings.recent_completed_trips.length === 0 ? (
@@ -246,7 +246,7 @@ export default function AdminEarningsPage() {
               ) : (
                 <div className="space-y-3">
                   {earnings.recent_completed_trips.map((trip) => (
-                    <div key={trip.id} className="border rounded-2xl p-4">
+                    <div key={trip.id} className="moovu-data-row">
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
                           <div className="text-sm text-gray-600">Pickup</div>

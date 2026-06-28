@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Trip = {
@@ -194,7 +195,7 @@ export default function TripDetailPage() {
   if (loading) {
     return (
       <main className="space-y-6 text-black">
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
+        <section className="moovu-card p-5 sm:p-6">
           <p className="text-gray-700">Loading trip.</p>
         </section>
       </main>
@@ -211,10 +212,10 @@ export default function TripDetailPage() {
             onClose={() => setPageError(null)}
           />
         )}
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
+        <section className="moovu-card p-5 sm:p-6">
           <p className="text-black">Trip not found.</p>
           <button
-            className="mt-4 rounded-xl px-4 py-2 text-white"
+            className="mt-4 moovu-btn moovu-btn-primary"
             style={{ background: "var(--moovu-primary)" }}
             onClick={() => router.push("/admin/trips")}
           >
@@ -236,10 +237,13 @@ export default function TripDetailPage() {
           onClose={() => setPageError(null)}
         />
       )}
-      <div className="flex items-start justify-between gap-6">
+      <header className="moovu-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
         <div>
-          <div className="text-sm text-gray-500">Trip Detail</div>
-          <h1 className="text-3xl font-semibold text-black mt-1">Trip</h1>
+          <div className="moovu-section-title">Trip control room</div>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-black text-slate-950">Trip details</h1>
+            <StatusBadge status={trip.status} />
+          </div>
           <p className="text-gray-700 mt-2">
             Status: <span className="capitalize font-medium text-black">{trip.status}</span>
             {trip.cancel_reason ? ` • Reason: ${trip.cancel_reason}` : ""}
@@ -247,22 +251,25 @@ export default function TripDetailPage() {
         </div>
 
         <button
-          className="rounded-xl px-4 py-2 text-white"
-          style={{ background: "var(--moovu-primary)" }}
+          className="moovu-btn moovu-btn-secondary"
           onClick={() => router.push("/admin/trips")}
         >
           Back to Trips
         </button>
-      </div>
+      </header>
 
-      <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
+      <section className="moovu-card space-y-4 p-5 sm:p-6">
+        <div>
+          <div className="moovu-section-title">Route and assignment</div>
+          <h2 className="mt-2 text-xl font-black text-slate-950">Trip summary</h2>
+        </div>
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="border rounded-2xl p-4" style={{ background: "var(--moovu-primary-soft)" }}>
+          <div className="moovu-data-row" style={{ background: "var(--moovu-primary-soft)" }}>
             <div className="text-sm text-gray-600">Pickup</div>
             <div className="font-medium text-black mt-1">{trip.pickup_address}</div>
           </div>
 
-          <div className="border rounded-2xl p-4 bg-white">
+          <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Dropoff</div>
             <div className="font-medium text-black mt-1">{trip.dropoff_address}</div>
           </div>
@@ -284,15 +291,15 @@ export default function TripDetailPage() {
 
         {trip.final_add_stop_increase != null && Number(trip.final_add_stop_increase) > 0 && (
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="border rounded-2xl p-4 bg-white">
+            <div className="moovu-data-row">
               <div className="text-sm text-gray-600">Original fare</div>
               <div className="font-semibold text-black mt-1">R{Number(trip.original_fare ?? 0).toFixed(2)}</div>
             </div>
-            <div className="border rounded-2xl p-4 bg-white">
+            <div className="moovu-data-row">
               <div className="text-sm text-gray-600">Add stop increase</div>
               <div className="font-semibold text-black mt-1">R{Number(trip.final_add_stop_increase ?? 0).toFixed(2)}</div>
             </div>
-            <div className="border rounded-2xl p-4 bg-white">
+            <div className="moovu-data-row">
               <div className="text-sm text-gray-600">Waiting fees</div>
               <div className="font-semibold text-black mt-1">R{Number(trip.stop_waiting_fee ?? 0).toFixed(2)}</div>
             </div>
@@ -300,7 +307,7 @@ export default function TripDetailPage() {
         )}
 
         <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-4">
-          <div className="border rounded-2xl p-4 bg-white">
+          <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Customer</div>
             <div className="font-semibold text-black mt-1">{trip.rider_name ?? "Customer"}</div>
             <div className="mt-1 text-sm font-bold text-slate-600">
@@ -308,7 +315,7 @@ export default function TripDetailPage() {
             </div>
           </div>
 
-          <div className="border rounded-2xl p-4 bg-white">
+          <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Driver</div>
             <div className="font-semibold text-black mt-1">{driverLabel}</div>
             {trip.offer_status === "pending" && offerSecondsLeft != null && (
@@ -318,31 +325,30 @@ export default function TripDetailPage() {
             )}
           </div>
 
-          <div className="border rounded-2xl p-4 bg-white">
+          <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Payment</div>
             <div className="font-semibold text-black mt-1 capitalize">{trip.payment_method}</div>
           </div>
 
-          <div className="border rounded-2xl p-4 bg-white">
+          <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Fare</div>
             <div className="font-semibold text-black mt-1">
               {trip.fare_amount != null ? `R${trip.fare_amount}` : "—"}
             </div>
           </div>
 
-          <div className="border rounded-2xl p-4 bg-white">
+          <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Offer</div>
             <div className="font-semibold text-black mt-1">{trip.offer_status ?? "—"}</div>
           </div>
         </div>
       </section>
 
-      <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-        <div className="flex flex-wrap gap-2">
+      <section className="moovu-card p-5 sm:p-6">
+        <div className="moovu-action-row">
           {!isClosed && trip.offer_status !== "pending" && trip.status !== "assigned" && (
             <button
-              className="rounded-xl px-4 py-2 text-white"
-              style={{ background: "var(--moovu-primary)" }}
+              className="moovu-btn moovu-btn-primary"
               onClick={() => offerNearest([])}
             >
               Offer nearest driver
@@ -351,7 +357,7 @@ export default function TripDetailPage() {
 
           {!isClosed && (
             <button
-              className="border rounded-xl px-4 py-2 bg-white text-black"
+              className="moovu-btn moovu-btn-danger"
               onClick={cancelTrip}
             >
               Cancel
@@ -360,12 +366,13 @@ export default function TripDetailPage() {
         </div>
       </section>
 
-      <section className="border rounded-[2rem] p-6 bg-white shadow-sm">
-        <h2 className="text-xl font-semibold text-black">Events</h2>
+      <section className="moovu-card p-5 sm:p-6">
+        <div className="moovu-section-title">Activity</div>
+        <h2 className="mt-2 text-xl font-black text-slate-950">Trip timeline</h2>
         <div className="mt-4 space-y-3">
           {events.map((e) => (
-            <div key={e.id} className="border rounded-xl p-4">
-              <div className="font-medium">{e.event_type}</div>
+            <div key={e.id} className="moovu-data-row">
+              <div className="font-black capitalize text-slate-950">{e.event_type.replaceAll("_", " ")}</div>
               {e.message && <div className="text-sm text-gray-700 mt-2">{e.message}</div>}
             </div>
           ))}

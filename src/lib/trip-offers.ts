@@ -358,18 +358,6 @@ export async function offerNextEligibleDriver(
   const expiresAt = new Date(Date.now() + OFFER_ACCEPT_DEADLINE_SECONDS * 1000).toISOString();
   const escalatesAt = new Date(Date.now() + OFFER_ESCALATION_SECONDS * 1000).toISOString();
 
-  const { error: markBusyError } = await supabaseAdmin
-    .from("drivers")
-    .update({ busy: true })
-    .eq("id", chosen.id);
-
-  if (markBusyError) {
-    return {
-      ok: false,
-      error: markBusyError.message,
-    };
-  }
-
   const { error: updateTripError } = await supabaseAdmin
     .from("trips")
     .update({
@@ -382,8 +370,6 @@ export async function offerNextEligibleDriver(
     .eq("id", trip.id);
 
   if (updateTripError) {
-    await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", chosen.id);
-
     return {
       ok: false,
       error: updateTripError.message,

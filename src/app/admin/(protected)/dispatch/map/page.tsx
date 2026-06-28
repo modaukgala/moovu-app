@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import {
   carMarkerIcon,
+  createOrMoveMarker,
   fitBoundsToPoints,
   makeRouteRenderer,
   stopMarkerIcon,
@@ -58,7 +59,7 @@ declare global {
 export default function DispatchMapPage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const driverMarkersRef = useRef<google.maps.Marker[]>([]);
+  const driverMarkersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const tripMarkersRef = useRef<google.maps.Marker[]>([]);
   const routeRenderersRef = useRef<google.maps.DirectionsRenderer[]>([]);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
@@ -119,7 +120,6 @@ export default function DispatchMapPage() {
     const map = mapInstanceRef.current;
     if (!map || !window.google) return;
 
-    clearMarkers(driverMarkersRef.current);
     clearMarkers(tripMarkersRef.current);
     clearRoutes();
 
@@ -129,15 +129,25 @@ export default function DispatchMapPage() {
 
     const routeBoundsPoints: google.maps.LatLngLiteral[] = [];
 
+    const visibleDriverIds = new Set(drivers.map((driver) => driver.id));
+    for (const [driverId, marker] of driverMarkersRef.current) {
+      if (!visibleDriverIds.has(driverId)) {
+        marker.setMap(null);
+        driverMarkersRef.current.delete(driverId);
+      }
+    }
+
     for (const d of drivers) {
-      const marker = new window.google.maps.Marker({
+      const existingMarker = driverMarkersRef.current.get(d.id) ?? null;
+      const marker = createOrMoveMarker({
         map,
+        marker: existingMarker,
         position: { lat: d.lat, lng: d.lng },
         title: d.name,
         icon: carMarkerIcon(),
       });
 
-      marker.addListener("click", () => {
+      if (!existingMarker) marker.addListener("click", () => {
         infoWindowRef.current?.setContent(`
           <div style="min-width:220px">
             <div style="font-weight:600">${d.name}</div>
@@ -152,7 +162,7 @@ export default function DispatchMapPage() {
         infoWindowRef.current?.open({ map, anchor: marker });
       });
 
-      driverMarkersRef.current.push(marker);
+      driverMarkersRef.current.set(d.id, marker);
     }
 
     for (const t of trips) {

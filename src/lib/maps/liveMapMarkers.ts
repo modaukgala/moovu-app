@@ -1,5 +1,7 @@
 type LatLngLiteral = google.maps.LatLngLiteral;
 
+const markerAnimations = new WeakMap<google.maps.Marker, number>();
+
 function svgUrl(svg: string) {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
@@ -60,7 +62,23 @@ export function createOrMoveMarker(params: {
   icon: google.maps.Icon;
 }) {
   if (params.marker) {
-    params.marker.setPosition(params.position);
+    const marker = params.marker;
+    const start = marker.getPosition()?.toJSON() ?? params.position;
+    const animationId = (markerAnimations.get(marker) ?? 0) + 1;
+    markerAnimations.set(marker, animationId);
+    const startedAt = performance.now();
+    const durationMs = 900;
+    const animate = (now: number) => {
+      if (markerAnimations.get(marker) !== animationId) return;
+      const progress = Math.min(1, Math.max(0, (now - startedAt) / durationMs));
+      const eased = 1 - Math.pow(1 - progress, 3);
+      marker.setPosition({
+        lat: start.lat + (params.position.lat - start.lat) * eased,
+        lng: start.lng + (params.position.lng - start.lng) * eased,
+      });
+      if (progress < 1) window.requestAnimationFrame(animate);
+    };
+    window.requestAnimationFrame(animate);
     params.marker.setIcon(params.icon);
     params.marker.setTitle(params.title);
     params.marker.setMap(params.map);

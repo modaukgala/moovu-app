@@ -14,6 +14,12 @@ type DispatchTripRow = {
   offer_status: string | null;
   offer_expires_at: string | null;
   offer_attempted_driver_ids: string[] | null;
+  dispatch_started_at?: string | null;
+  dispatch_cycle?: number | null;
+  dispatch_sequence?: number | null;
+  dispatch_state?: string | null;
+  dispatch_search_radius_km?: number | null;
+  dispatch_failure_reason?: string | null;
 };
 
 type DispatchDriverRow = {
@@ -39,7 +45,7 @@ export async function GET(req: Request) {
 
     const { supabaseAdmin } = auth;
 
-    const { data: trips, error: tErr } = await supabaseAdmin
+    const expandedTripsResult = await supabaseAdmin
       .from("trips")
       .select(`
         id,
@@ -53,10 +59,29 @@ export async function GET(req: Request) {
         created_at,
         offer_status,
         offer_expires_at,
-        offer_attempted_driver_ids
+        offer_attempted_driver_ids,
+        dispatch_started_at,
+        dispatch_cycle,
+        dispatch_sequence,
+        dispatch_state,
+        dispatch_search_radius_km,
+        dispatch_failure_reason
       `)
       .order("created_at", { ascending: false })
       .limit(300);
+
+    let trips = expandedTripsResult.data as DispatchTripRow[] | null;
+    let tErr = expandedTripsResult.error;
+
+    if (expandedTripsResult.error?.code === "42703") {
+      const fallbackTripsResult = await supabaseAdmin
+        .from("trips")
+        .select("id,driver_id,pickup_address,dropoff_address,fare_amount,payment_method,status,cancel_reason,created_at,offer_status,offer_expires_at,offer_attempted_driver_ids")
+        .order("created_at", { ascending: false })
+        .limit(300);
+      trips = fallbackTripsResult.data as DispatchTripRow[] | null;
+      tErr = fallbackTripsResult.error;
+    }
 
     if (tErr) {
       return NextResponse.json({ ok: false, error: tErr.message }, { status: 500 });

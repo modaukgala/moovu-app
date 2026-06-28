@@ -8,7 +8,7 @@ import {
   normalizeRideOptionId,
 } from "@/lib/domain/fare";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
-import { offerNextEligibleDriver } from "@/lib/trip-offers";
+import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 import { fullCustomerName } from "@/lib/customer/auth";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
@@ -523,7 +523,7 @@ export async function POST(req: Request) {
 
     if (rideType === "now") {
       try {
-        autoOfferResult = await offerNextEligibleDriver(trip.id, []);
+        autoOfferResult = await dispatchTrip({ tripId: trip.id });
       } catch {
         autoOfferResult = null;
       }

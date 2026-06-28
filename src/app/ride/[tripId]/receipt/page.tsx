@@ -25,6 +25,17 @@ type Trip = {
   stops?: unknown;
   distance_km?: number | null;
   duration_min?: number | null;
+  actual_distance_km?: number | null;
+  actual_duration_min?: number | null;
+  actual_fare_breakdown?: {
+    baseFare?: number;
+    distanceKm?: number;
+    perKm?: number;
+    durationMin?: number;
+    perMinute?: number;
+    bookingFee?: number;
+    waitingFee?: number;
+  } | null;
   status: string;
   created_at: string | null;
   completed_at?: string | null;
@@ -183,6 +194,16 @@ export default function TripReceiptPage() {
     return [driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(" ") || "--";
   }, [driver]);
 
+  async function shareReceipt() {
+    const url = window.location.href;
+    if (navigator.share) {
+      await navigator.share({ title: `MOOVU receipt ${receiptNumber}`, text: "Your MOOVU ride receipt", url });
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    setMsg("Receipt link copied.");
+  }
+
   if (loading) {
     return <LoadingState title="Loading receipt" description="Preparing your MOOVU trip receipt." />;
   }
@@ -218,9 +239,14 @@ export default function TripReceiptPage() {
           <Link href={`/ride/${trip.id}`} className="moovu-btn moovu-btn-secondary">
             Back to trip
           </Link>
-          <button type="button" onClick={() => window.print()} className="moovu-btn moovu-btn-primary">
-            Print receipt
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void shareReceipt()} className="moovu-btn moovu-btn-secondary">
+              Share
+            </button>
+            <button type="button" onClick={() => window.print()} className="moovu-btn moovu-btn-primary">
+              Print / Save PDF
+            </button>
+          </div>
         </div>
 
         <div className="moovu-receipt-doc">
@@ -302,11 +328,11 @@ export default function TripReceiptPage() {
             </div>
             <div className="moovu-receipt-stat">
               <div className="moovu-receipt-stat-label">Distance</div>
-              <div className="moovu-receipt-stat-value">{fmtNum(trip.distance_km, "km")}</div>
+              <div className="moovu-receipt-stat-value">{fmtNum(trip.actual_distance_km ?? trip.distance_km, "km")}</div>
             </div>
             <div className="moovu-receipt-stat">
               <div className="moovu-receipt-stat-label">Duration</div>
-              <div className="moovu-receipt-stat-value">{fmtNum(trip.duration_min, "min")}</div>
+              <div className="moovu-receipt-stat-value">{fmtNum(trip.actual_duration_min ?? trip.duration_min, "min")}</div>
             </div>
             <div className="moovu-receipt-stat">
               <div className="moovu-receipt-stat-label">Payment</div>
@@ -357,6 +383,24 @@ export default function TripReceiptPage() {
 
           {/* FARE TOTAL */}
           <div className="moovu-receipt-fare-block">
+            {trip.actual_fare_breakdown?.baseFare != null && (
+              <div className="moovu-receipt-fare-row">
+                <span>Base fare</span>
+                <span>{money(trip.actual_fare_breakdown.baseFare)}</span>
+              </div>
+            )}
+            {trip.actual_fare_breakdown?.distanceKm != null && (
+              <div className="moovu-receipt-fare-row">
+                <span>Distance fare</span>
+                <span>{money(Number(trip.actual_fare_breakdown.distanceKm) * Number(trip.actual_fare_breakdown.perKm ?? 0))}</span>
+              </div>
+            )}
+            {trip.actual_fare_breakdown?.durationMin != null && (
+              <div className="moovu-receipt-fare-row">
+                <span>Time fare</span>
+                <span>{money(Number(trip.actual_fare_breakdown.durationMin) * Number(trip.actual_fare_breakdown.perMinute ?? 0))}</span>
+              </div>
+            )}
             <div className="moovu-receipt-fare-row">
               <span>Trip fare (excl. VAT)</span>
               <span>{money(fareExclVat)}</span>
@@ -397,7 +441,8 @@ export default function TripReceiptPage() {
 
           {/* FOOTER */}
           <div className="moovu-receipt-doc-footer">
-            Thank you for riding with MOOVU Kasi Rides.
+            <strong>Thank you for choosing MOOVU.</strong>
+            <span>admin@moovurides.co.za · moovurides.co.za</span>
           </div>
         </div>
       </div>

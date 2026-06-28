@@ -455,6 +455,158 @@ tr:last-child td {
   outline-offset: 3px;
 }
 
+/* Admin modernization layer. Scoped to the protected shell so legacy utility
+   markup receives the same visual language without changing page behavior. */
+.moovu-admin-content {
+  width: 100%;
+  max-width: 1540px;
+  margin-inline: auto;
+}
+
+.moovu-admin-content > main,
+.moovu-admin-content > div,
+.moovu-admin-content main > div[class*="max-w-"] {
+  width: 100%;
+  max-width: none;
+}
+
+.moovu-admin-content main[class*="min-h-screen"] {
+  min-height: auto;
+  padding: 0;
+}
+
+.moovu-admin-content main > section,
+.moovu-admin-content main > div > section,
+.moovu-admin-content main > div[class*="max-w-"] > section {
+  border: 1px solid rgba(215, 226, 234, 0.88);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(249, 252, 255, 0.96)),
+    #fff;
+  box-shadow: 0 14px 34px rgba(31, 116, 201, 0.065);
+}
+
+.moovu-admin-content section > div[class*="border"][class*="rounded"],
+.moovu-admin-content article[class*="border"][class*="rounded"] {
+  border-color: rgba(215, 226, 234, 0.88);
+  background-color: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+}
+
+.moovu-admin-content h1,
+.moovu-admin-content h2,
+.moovu-admin-content h3 {
+  letter-spacing: 0;
+  color: #0f172a;
+}
+
+.moovu-admin-content h1 {
+  font-weight: 900;
+}
+
+.moovu-admin-content h2,
+.moovu-admin-content h3 {
+  font-weight: 850;
+}
+
+.moovu-admin-content input:not([type="checkbox"]):not([type="radio"]),
+.moovu-admin-content select,
+.moovu-admin-content textarea {
+  min-height: 46px;
+  border-color: var(--moovu-border);
+  border-radius: 14px;
+  background: #fff;
+  padding-inline: 14px;
+}
+
+.moovu-admin-content button:not(.moovu-btn):not([class*="moovu-"]),
+.moovu-admin-content a[class*="border"][class*="rounded"] {
+  min-height: 42px;
+  border-color: var(--moovu-border);
+  border-radius: 14px;
+  font-weight: 800;
+}
+
+.moovu-admin-content button:not(:disabled):active,
+.moovu-admin-content a[class*="rounded"]:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.moovu-admin-content table {
+  min-width: 720px;
+}
+
+.moovu-admin-content thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.moovu-admin-content tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.moovu-admin-content tbody tr:hover {
+  background: #f7fbff;
+}
+
+.moovu-admin-document-viewer {
+  overflow: hidden;
+  border: 1px solid rgba(203, 216, 229, 0.92);
+  border-radius: 24px;
+  background: #eef3f8;
+  box-shadow: var(--moovu-shadow-md);
+}
+
+.moovu-admin-document-viewer iframe {
+  display: block;
+  width: 100%;
+  height: min(76vh, 900px);
+  min-height: 480px;
+  border: 0;
+  background: #fff;
+}
+
+@media (max-width: 639px) {
+  .moovu-admin-content {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .moovu-admin-content main,
+  .moovu-admin-content main > div[class*="max-w-"] {
+    gap: 14px;
+  }
+
+  .moovu-admin-content main > section,
+  .moovu-admin-content main > div > section,
+  .moovu-admin-content main > div[class*="max-w-"] > section {
+    border-radius: 20px;
+    padding: 16px;
+  }
+
+  .moovu-admin-content section > div[class*="border"][class*="rounded"] {
+    border-radius: 16px;
+  }
+
+  .moovu-admin-content .moovu-action-row,
+  .moovu-admin-content form > div[class*="flex"] {
+    align-items: stretch;
+  }
+
+  .moovu-admin-content button,
+  .moovu-admin-content a[class*="rounded"] {
+    overflow-wrap: anywhere;
+  }
+
+  .moovu-admin-document-viewer iframe {
+    height: 66svh;
+    min-height: 420px;
+  }
+}
+
 .moovu-floating-chat-button {
   min-height: 52px;
   border: 0;

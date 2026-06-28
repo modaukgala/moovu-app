@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { offerNextEligibleDriver } from "@/lib/trip-offers";
+import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 
 export async function POST(req: Request) {
   try {
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await offerNextEligibleDriver(tripId);
+    const result = await dispatchTrip({ tripId });
 
     if (!result.ok) {
       return NextResponse.json(
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       await supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
         event_type: "auto_assign_attempt",
-        message: `Auto-assign offered trip to driver ${result.driverId}`,
+        message: `Auto-assign offered trip to driver ${result.driverId ?? "pending"}`,
         old_status: trip.status,
         new_status: "offered",
         created_by: user.id,

@@ -166,14 +166,27 @@ export async function POST(req: Request) {
       distanceAudit = `Trip started with OTP ${kmAway.toFixed(2)} km from pickup${freshnessNote}.`;
     }
 
-    const { error: updateError } = await supabaseAdmin
+    const startedAt = new Date().toISOString();
+    let updateResult = await supabaseAdmin
       .from("trips")
       .update({
         status: "ongoing",
         start_otp_verified: true,
         otp_verified: true,
+        trip_started_at: startedAt,
+        actual_distance_km: 0,
+        actual_duration_min: 0,
       })
       .eq("id", tripId);
+
+    if (updateResult.error?.code === "42703") {
+      updateResult = await supabaseAdmin
+        .from("trips")
+        .update({ status: "ongoing", start_otp_verified: true, otp_verified: true })
+        .eq("id", tripId);
+    }
+
+    const { error: updateError } = updateResult;
 
     if (updateError) {
       return NextResponse.json(

@@ -103,28 +103,28 @@ export default function DriverEarningsReportPage() {
       <section className="border rounded-2xl p-5">
         <h2 className="font-semibold">Totals</h2>
         <div className="grid md:grid-cols-5 gap-4 mt-4">
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Completed trips</div>
             <div className="text-2xl font-semibold mt-1">{totTrips}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Total earnings (completed)</div>
             <div className="text-2xl font-semibold mt-1">R{totEarnings}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">In-progress trips</div>
             <div className="text-2xl font-semibold mt-1">{totInProgress}</div>
             <div className="text-xs opacity-60 mt-1">Value: R{totInProgressAmount}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Subscriptions due</div>
             <div className="text-2xl font-semibold mt-1">{dueCount}</div>
           </div>
 
-          <div className="border rounded-2xl p-4">
+          <div className="moovu-data-row">
             <div className="text-sm opacity-70">Total subscription due</div>
             <div className="text-2xl font-semibold mt-1">R{totSubDue}</div>
           </div>
@@ -153,7 +153,7 @@ export default function DriverEarningsReportPage() {
                 : "—";
 
               return (
-                <div key={r.driver_id} className="border rounded-2xl p-4">
+                <div key={r.driver_id} className="moovu-data-row">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="font-medium">{r.name}</div>
@@ -184,32 +184,32 @@ export default function DriverEarningsReportPage() {
                   </div>
 
                   <div className="grid md:grid-cols-6 gap-3 mt-4">
-                    <div className="border rounded-xl p-3">
+          <div className="moovu-data-row">
                       <div className="text-xs opacity-60">Completed</div>
                       <div className="font-semibold mt-1">{r.trips_completed}</div>
                     </div>
 
-                    <div className="border rounded-xl p-3">
+          <div className="moovu-data-row">
                       <div className="text-xs opacity-60">Cash trips</div>
                       <div className="font-semibold mt-1">{r.cash_trips}</div>
                     </div>
 
-                    <div className="border rounded-xl p-3">
+          <div className="moovu-data-row">
                       <div className="text-xs opacity-60">Cash total</div>
                       <div className="font-semibold mt-1">R{r.cash_total}</div>
                     </div>
 
-                    <div className="border rounded-xl p-3">
+          <div className="moovu-data-row">
                       <div className="text-xs opacity-60">In-progress</div>
                       <div className="font-semibold mt-1">{r.in_progress_trips}</div>
                     </div>
 
-                    <div className="border rounded-xl p-3">
+          <div className="moovu-data-row">
                       <div className="text-xs opacity-60">In-progress value</div>
                       <div className="font-semibold mt-1">R{r.in_progress_total}</div>
                     </div>
 
-                    <div className="border rounded-xl p-3">
+          <div className="moovu-data-row">
                       <div className="text-xs opacity-60">Breakdown</div>
                       <div className="text-xs mt-1 opacity-80">{statusBreakdown}</div>
                     </div>

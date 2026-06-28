@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { sendPushToTargets } from "@/lib/push-server";
 import { OFFER_ESCALATION_SECONDS, isMissingOfferTableError } from "@/lib/trip-offers";
+import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -57,6 +58,30 @@ export async function POST(req: Request) {
       );
     }
 
+    const atomicResult = await dispatchTrip({
+      tripId,
+      preferredDriverId: driverId,
+      allowLegacyFallback: false,
+    });
+    if (atomicResult.ok) {
+      return NextResponse.json({
+        ok: true,
+        message: "Trip offer sent to driver successfully.",
+        tripId,
+        driverId: atomicResult.driverId,
+        expiresAt: atomicResult.expiresAt,
+        dispatchMode: atomicResult.mode,
+      });
+    }
+
+    const atomicSchemaMissing = /reserve_trip_offer|schema cache|dispatch_jobs/i.test(atomicResult.error ?? "");
+    if (!atomicSchemaMissing) {
+      return NextResponse.json(
+        { ok: false, error: atomicResult.error ?? "Driver is not eligible for this trip." },
+        { status: 400 },
+      );
+    }
+
     const { data: driver, error: driverError } = await supabaseAdmin
       .from("drivers")
       .select("id,first_name,last_name,phone,status,online,busy")
@@ -94,19 +119,6 @@ export async function POST(req: Request) {
     const expiresAt = new Date(Date.now() + 30 * 1000).toISOString();
     const escalatesAt = new Date(Date.now() + OFFER_ESCALATION_SECONDS * 1000).toISOString();
 
-    const { error: busyError } = await supabaseAdmin
-      .from("drivers")
-      .update({ busy: true })
-      .eq("id", driverId)
-      .eq("busy", false);
-
-    if (busyError) {
-      return NextResponse.json(
-        { ok: false, error: busyError.message },
-        { status: 500 }
-      );
-    }
-
     const attemptedDriverIds = Array.from(
       new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
     );
@@ -123,8 +135,6 @@ export async function POST(req: Request) {
       .eq("id", tripId);
 
     if (updateTripError) {
-      await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", driverId);
-
       return NextResponse.json(
         { ok: false, error: updateTripError.message },
         { status: 500 }

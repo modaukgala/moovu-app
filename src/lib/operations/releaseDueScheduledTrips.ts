@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { offerNextEligibleDriver } from "@/lib/trip-offers";
+import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 import { sendPushToTargets } from "@/lib/push-server";
 
 const supabaseAdmin = createClient(
@@ -74,7 +74,7 @@ export async function releaseDueScheduledTrips() {
     } catch {}
 
     try {
-      await offerNextEligibleDriver(trip.id, []);
+      await dispatchTrip({ tripId: trip.id });
     } catch {}
   }
 

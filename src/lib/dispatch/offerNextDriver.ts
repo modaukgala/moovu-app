@@ -190,16 +190,6 @@ export async function offerNextDriver(params: {
   const driver = candidates[0];
   const expiresAt = new Date(Date.now() + 30 * 1000).toISOString();
 
-  const { error: busyError } = await supabase
-    .from("drivers")
-    .update({ busy: true })
-    .eq("id", driver.id)
-    .eq("busy", false);
-
-  if (busyError) {
-    return { ok: false as const, error: busyError.message };
-  }
-
   const { error: updateError } = await supabase
     .from("trips")
     .update({
@@ -211,7 +201,6 @@ export async function offerNextDriver(params: {
     .eq("id", params.tripId);
 
   if (updateError) {
-    await supabase.from("drivers").update({ busy: false }).eq("id", driver.id);
     return { ok: false as const, error: updateError.message };
   }
 

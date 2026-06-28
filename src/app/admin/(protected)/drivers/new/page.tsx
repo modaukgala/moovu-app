@@ -64,28 +64,28 @@ export default function NewDriverPage() {
       <form onSubmit={createDriver} className="space-y-4 max-w-md">
 
         <input
-          className="w-full border rounded-xl p-3"
+          className="w-full moovu-input"
           placeholder="First name"
           value={firstName}
           onChange={(e) => setFirstName(e.target.value)}
         />
 
         <input
-          className="w-full border rounded-xl p-3"
+          className="w-full moovu-input"
           placeholder="Last name"
           value={lastName}
           onChange={(e) => setLastName(e.target.value)}
         />
 
         <input
-          className="w-full border rounded-xl p-3"
+          className="w-full moovu-input"
           placeholder="Phone"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
 
         <input
-          className="w-full border rounded-xl p-3"
+          className="w-full moovu-input"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}

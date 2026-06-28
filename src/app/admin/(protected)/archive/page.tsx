@@ -76,47 +76,46 @@ export default function AdminArchivePage() {
   }, [searchTrips]);
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-3">
+    <main className="text-black">
+      <div className="mx-auto max-w-7xl space-y-5">
+        <header className="moovu-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
-            <div className="text-sm text-gray-500">MOOVU Admin</div>
-            <h1 className="text-3xl font-semibold mt-1">Trip Archive</h1>
-            <p className="text-gray-700 mt-2">
+            <div className="moovu-section-title">MOOVU Admin</div>
+            <h1 className="mt-2 text-3xl font-black text-slate-950">Trip archive</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
               Search trips by trip ID, rider, phone, address, driver ID, status and date.
             </p>
           </div>
 
-          <div className="flex gap-2">
-            <Link href="/admin/trips" className="border rounded-xl px-4 py-2 bg-white">
+          <div className="moovu-action-row">
+            <Link href="/admin/trips" className="moovu-btn moovu-btn-secondary">
               Back to Dispatch
             </Link>
 
             <button
               onClick={() => void searchTrips()}
-              className="rounded-xl px-4 py-2 text-white"
-              style={{ background: "var(--moovu-primary)" }}
+              className="moovu-btn moovu-btn-primary"
             >
               Search
             </button>
           </div>
-        </div>
+        </header>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Filters</h2>
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
+          <h2 className="text-xl font-black">Filters</h2>
 
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
             <input
-              className="rounded-xl p-3 border"
+              className="moovu-input"
               placeholder="Search trip ID, rider, phone, address, driver ID"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
 
             <select
-              className="rounded-xl p-3 border bg-white"
+              className="moovu-input"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
             >
@@ -132,22 +131,22 @@ export default function AdminArchivePage() {
 
             <input
               type="date"
-              className="rounded-xl p-3 border"
+              className="moovu-input"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
             />
 
             <input
               type="date"
-              className="rounded-xl p-3 border"
+              className="moovu-input"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
             />
           </div>
         </section>
 
-        <section className="border rounded-[2rem] p-6 bg-white shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">Results</h2>
+        <section className="moovu-card space-y-4 p-5 sm:p-6">
+          <h2 className="text-xl font-black">Results</h2>
 
           {loading ? (
             <p className="text-gray-700">Searching...</p>
@@ -156,7 +155,7 @@ export default function AdminArchivePage() {
           ) : (
             <div className="space-y-3">
               {trips.map((trip) => (
-                <div key={trip.id} className="border rounded-2xl p-4">
+                <div key={trip.id} className="moovu-data-row">
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <div className="text-sm text-gray-600">Pickup</div>

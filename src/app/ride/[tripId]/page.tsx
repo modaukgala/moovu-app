@@ -53,6 +53,9 @@ type RideTrip = {
   fare_adjustment_amount?: number | null;
   fare_adjustment_reason?: string | null;
   fare_finalized_at?: string | null;
+  current_fare?: number | null;
+  actual_distance_km?: number | null;
+  actual_duration_min?: number | null;
 };
 
 type TripStop = {
@@ -1175,7 +1178,7 @@ export default function RideTrackingPage() {
 
   const displayTotal = useMemo(() => {
     if (!trip) return 0;
-    return Number(trip.final_fare ?? trip.fare_amount ?? 0);
+    return Number(trip.current_fare ?? trip.final_fare ?? trip.fare_amount ?? 0);
   }, [trip]);
 
   const routeAddition = useMemo(() => {
@@ -1531,12 +1534,12 @@ export default function RideTrackingPage() {
                   <em>{fareHelperText}</em>
                 </div>
                 <div className="customer-detail-grid">
-                  <div><span>Booked fare</span><strong>{money(trip.fare_amount)}</strong></div>
+                  <div><span>Estimated fare</span><strong>{money(trip.estimated_fare ?? trip.fare_amount)}</strong></div>
                   <div><span>Stop additions</span><strong>{money(routeAddition)}</strong></div>
-                  <div><span>Final fare</span><strong>{money(displayTotal)}</strong></div>
+                  <div><span>{trip.status === "ongoing" ? "Current fare" : "Final fare"}</span><strong>{money(displayTotal)}</strong></div>
                   <div><span>Payment</span><strong className="capitalize">{displayValue(trip.payment_method)}</strong></div>
-                  <div><span>Route distance</span><strong>{displayDistance(trip.distance_km)}</strong></div>
-                  <div><span>Trip time</span><strong>{displayDuration(trip.duration_min)}</strong></div>
+                  <div><span>Route distance</span><strong>{displayDistance(trip.actual_distance_km ?? trip.distance_km)}</strong></div>
+                  <div><span>Trip time</span><strong>{displayDuration(trip.actual_duration_min ?? trip.duration_min)}</strong></div>
                 </div>
               </div>
             )}

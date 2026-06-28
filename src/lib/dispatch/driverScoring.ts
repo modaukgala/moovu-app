@@ -73,10 +73,10 @@ export function scoreDriverForTrip(params: {
   const subscriptionScore =
     driver.subscription_status === "active" || driver.subscription_status === "grace" ? 15 : -20;
 
-  const ratingScore = Number(driver.quality?.avg_rating ?? 5) * 4;
-  const qualityScore = Number(driver.quality?.quality_score ?? 100) * 0.2;
-  const acceptanceScore = Number(driver.quality?.acceptance_rate ?? 100) * 0.1;
-  const missedPenalty = Number(driver.offerStats?.offers_missed ?? 0) * -2;
+  const ratingScore = Number(driver.quality?.avg_rating ?? 4) * 4;
+  const qualityScore = Number(driver.quality?.quality_score ?? 70) * 0.2;
+  const acceptanceScore = Number(driver.quality?.acceptance_rate ?? 70) * 0.1;
+  const missedPenalty = Math.min(8, Number(driver.offerStats?.offers_missed ?? 0)) * -0.75;
 
   const score = round2(
     distanceScore +

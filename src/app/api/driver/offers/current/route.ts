@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
 import {
-  advanceDriverOfferIfNeeded,
   expirePendingOfferIfNeeded,
   isMissingOfferTableError,
   offerNextEligibleDriver,
@@ -71,7 +70,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, offer: null, info: "Subscription inactive" });
     }
 
-    const { data: activeRows, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("driver_trip_offers")
       .select("trip_id")
       .eq("driver_id", driverId)
@@ -172,11 +171,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    for (const row of activeRows ?? []) {
-      if (row.trip_id) {
-        await advanceDriverOfferIfNeeded(row.trip_id, driverId);
-      }
-    }
+    // The client only reads offers. The protected dispatch worker owns
+    // escalation and expiry when the atomic offer table is available.
 
     const nowIso = new Date().toISOString();
     const { data: offers, error: offerErr } = await supabaseAdmin

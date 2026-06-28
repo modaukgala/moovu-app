@@ -41,6 +41,10 @@ type CustomerTripStatusRow = {
   fare_adjustment_amount?: number | null;
   fare_adjustment_reason?: string | null;
   fare_finalized_at?: string | null;
+  current_fare?: number | null;
+  actual_distance_km?: number | null;
+  actual_duration_min?: number | null;
+  actual_fare_breakdown?: unknown;
 };
 
 type CustomerTripDriverRow = {
@@ -81,7 +85,11 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
     message.includes("estimated_fare") ||
     message.includes("fare_adjustment_amount") ||
     message.includes("fare_adjustment_reason") ||
-    message.includes("fare_finalized_at")
+    message.includes("fare_finalized_at") ||
+    message.includes("current_fare") ||
+    message.includes("actual_distance_km") ||
+    message.includes("actual_duration_min") ||
+    message.includes("actual_fare_breakdown")
   );
 }
 
@@ -187,7 +195,11 @@ export async function GET(req: Request) {
         estimated_fare,
         fare_adjustment_amount,
         fare_adjustment_reason,
-        fare_finalized_at
+        fare_finalized_at,
+        current_fare,
+        actual_distance_km,
+        actual_duration_min,
+        actual_fare_breakdown
       `)
       .eq("id", tripId)
       .eq("customer_id", auth.customer.id)
