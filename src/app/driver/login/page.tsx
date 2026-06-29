@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import TimedPasswordField from "@/components/ui/TimedPasswordField";
 
 export default function DriverLoginPage() {
   const router = useRouter();
@@ -111,13 +112,12 @@ export default function DriverLoginPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
 
-            <input
-              className="moovu-input"
+            <TimedPasswordField
+              className="moovu-input pr-16"
               placeholder="Password"
-              type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
             />
 
             <button

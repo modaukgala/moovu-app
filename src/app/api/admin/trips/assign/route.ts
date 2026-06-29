@@ -74,13 +74,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const atomicSchemaMissing = /reserve_trip_offer|schema cache|dispatch_jobs/i.test(atomicResult.error ?? "");
-    if (!atomicSchemaMissing) {
-      return NextResponse.json(
-        { ok: false, error: atomicResult.error ?? "Driver is not eligible for this trip." },
-        { status: 400 },
-      );
-    }
+    // Until the atomic migration is active and existing driver records are
+    // aligned, preserve the validated legacy manual-offer path below.
 
     const { data: driver, error: driverError } = await supabaseAdmin
       .from("drivers")
@@ -109,7 +104,26 @@ export async function POST(req: Request) {
       );
     }
 
-    if (driver.busy) {
+    const { data: driverActiveTrip, error: activeTripError } = await supabaseAdmin
+      .from("trips")
+      .select("id")
+      .eq("driver_id", driverId)
+      .in("status", ["assigned", "arrived", "ongoing"])
+      .limit(1)
+      .maybeSingle();
+
+    if (activeTripError) {
+      console.error("[admin-assign] failed to verify active driver trip", {
+        driverId,
+        reason: activeTripError.message,
+      });
+      return NextResponse.json(
+        { ok: false, error: "Could not verify the driver's current trip status. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    if (driver.busy && driverActiveTrip) {
       return NextResponse.json(
         { ok: false, error: "Driver is already busy." },
         { status: 400 }

@@ -24,6 +24,25 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
   );
 }
 
+async function loadLegacyCurrentOffer(driverId: string) {
+  const query = (columns: string) => supabaseAdmin
+    .from("trips")
+    .select(columns)
+    .eq("driver_id", driverId)
+    .eq("offer_status", "pending")
+    .eq("status", "offered")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await query(TRIP_SELECT_WITH_STOPS);
+  if (!error) return { offer: data ?? null, error: null };
+  if (!isMissingStopsColumn(error)) return { offer: null, error };
+
+  const fallback = await query(TRIP_SELECT);
+  return { offer: fallback.data ?? null, error: fallback.error };
+}
+
 export async function GET(req: Request) {
   try {
     const user = await getUserFromBearer(req);
@@ -190,15 +209,20 @@ export async function GET(req: Request) {
 
     const offerRow = offers?.[0] ?? null;
     if (!offerRow?.trip_id) {
-      return NextResponse.json({ ok: true, offer: null });
+      // Compatibility path: the legacy dispatcher stores the active offer on
+      // trips even when driver_trip_offers exists but its atomic RPCs/columns
+      // are not fully active yet.
+      const legacy = await loadLegacyCurrentOffer(driverId);
+      if (legacy.error) {
+        return NextResponse.json({ ok: false, error: legacy.error.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, offer: legacy.offer, mode: "legacy-trip-offer" });
     }
 
     const { data: trip, error: tripErr } = await supabaseAdmin
       .from("trips")
       .select(TRIP_SELECT_WITH_STOPS)
       .eq("id", offerRow.trip_id)
-      .eq("offer_status", "pending")
-      .eq("status", "offered")
       .maybeSingle();
 
     if (tripErr) {
@@ -210,8 +234,6 @@ export async function GET(req: Request) {
         .from("trips")
         .select(TRIP_SELECT)
         .eq("id", offerRow.trip_id)
-        .eq("offer_status", "pending")
-        .eq("status", "offered")
         .maybeSingle();
 
       if (legacyTripErr) {
@@ -224,9 +246,17 @@ export async function GET(req: Request) {
       });
     }
 
+    if (!trip || ["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(String(trip.status ?? "").toLowerCase())) {
+      const legacy = await loadLegacyCurrentOffer(driverId);
+      if (legacy.error) {
+        return NextResponse.json({ ok: false, error: legacy.error.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, offer: legacy.offer, mode: "legacy-trip-offer" });
+    }
+
     return NextResponse.json({
       ok: true,
-      offer: trip ? { ...trip, offer_expires_at: offerRow.accept_deadline_at } : null,
+      offer: { ...trip, offer_expires_at: offerRow.accept_deadline_at },
     });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error" }, { status: 500 });

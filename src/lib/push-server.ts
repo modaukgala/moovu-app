@@ -6,9 +6,7 @@ import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
 import { createNativeNotificationActionToken } from "@/lib/native-notification-actions";
 
 const MOOVU_NOTIFICATION_SOUND = "moovu_premium_alert";
-const MOOVU_NOTIFICATION_SOUND_FILE = `${MOOVU_NOTIFICATION_SOUND}.wav`;
 const MOOVU_TRIP_OFFER_SOUND = "moovu_trip_offer_buzz";
-const MOOVU_TRIP_OFFER_SOUND_FILE = `${MOOVU_TRIP_OFFER_SOUND}.wav`;
 const MOOVU_ANDROID_CHANNEL_ID = "moovu_premium_v1";
 const MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID = "moovu_trip_offer_buzz_v1";
 
@@ -46,6 +44,12 @@ type PushDatabase = {
           token: string;
           platform?: string | null;
           app_type?: string | null;
+          device_id?: string | null;
+          enabled?: boolean | null;
+          updated_at?: string | null;
+          last_used_at?: string | null;
+          last_seen_at?: string | null;
+          created_at?: string | null;
         };
         Insert: Record<string, unknown>;
         Update: Record<string, unknown>;
@@ -177,6 +181,10 @@ function isIosNativeToken(row: { platform?: string | null; app_type?: string | n
   return platform === "ios" || appType.startsWith("ios");
 }
 
+function isLegacyApnsDeviceToken(row: { token: string; platform?: string | null; app_type?: string | null }) {
+  return isIosNativeToken(row) && /^[a-f0-9]{64}$/i.test(String(row.token).trim());
+}
+
 function isTripOfferData(data: PushData | undefined) {
   return String(data?.nativeActionType ?? "").toLowerCase() === "trip_offer";
 }
@@ -185,13 +193,11 @@ function pushSoundNames(data: PushData | undefined) {
   const tripOffer = isTripOfferData(data);
   return {
     androidSound: tripOffer ? MOOVU_TRIP_OFFER_SOUND : MOOVU_NOTIFICATION_SOUND,
-    iosSoundFile: tripOffer ? MOOVU_TRIP_OFFER_SOUND_FILE : MOOVU_NOTIFICATION_SOUND_FILE,
     androidChannelId: tripOffer ? MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID : MOOVU_ANDROID_CHANNEL_ID,
   };
 }
 
-function apnsOptions(data?: PushData) {
-  const { iosSoundFile } = pushSoundNames(data);
+function apnsOptions(title: string, body: string, data?: PushData) {
   return {
     headers: {
       "apns-priority": "10",
@@ -199,8 +205,13 @@ function apnsOptions(data?: PushData) {
     },
     payload: {
       aps: {
-        sound: iosSoundFile,
+        alert: {
+          title,
+          body,
+        },
+        sound: "default",
         badge: 1,
+        ...(isTripOfferData(data) ? { "interruption-level": "time-sensitive" } : {}),
       },
     },
     fcmOptions: {
@@ -263,6 +274,69 @@ function getSupabaseAdmin(): AdminSupabaseClient {
   );
 }
 
+function tokenTargetKind(row: {
+  platform?: string | null;
+  app_type?: string | null;
+  role?: PushRole | null;
+  token: string;
+}) {
+  if (isLegacyApnsDeviceToken(row)) return "ios_apns_legacy";
+  if (isIosNativeToken(row)) return "ios_fcm";
+  if (isAndroidNativeToken(row)) return "android_fcm";
+  const appType = String(row.app_type ?? "").toLowerCase();
+  if (appType.startsWith("web")) return "web_fcm";
+  return "unknown_fcm";
+}
+
+function sortTokenRows<T extends {
+  updated_at?: string | null;
+  last_seen_at?: string | null;
+  last_used_at?: string | null;
+  created_at?: string | null;
+}>(rows: T[]) {
+  const score = (value?: string | null) => {
+    const ms = value ? new Date(value).getTime() : 0;
+    return Number.isFinite(ms) ? ms : 0;
+  };
+
+  return [...rows].sort((a, b) => {
+    return (
+      score(b.updated_at) - score(a.updated_at) ||
+      score(b.last_seen_at) - score(a.last_seen_at) ||
+      score(b.last_used_at) - score(a.last_used_at) ||
+      score(b.created_at) - score(a.created_at)
+    );
+  });
+}
+
+function dedupeActiveTokens(rows: PushDatabase["public"]["Tables"]["fcm_tokens"]["Row"][]) {
+  const sorted = sortTokenRows(rows);
+  const kept: PushDatabase["public"]["Tables"]["fcm_tokens"]["Row"][] = [];
+  const seenDeviceSlots = new Set<string>();
+  const seenTokens = new Set<string>();
+
+  for (const row of sorted) {
+    const token = String(row.token ?? "").trim();
+    if (!token || seenTokens.has(token)) continue;
+
+    const userId = String(row.user_id ?? "");
+    const role = String(row.role ?? "");
+    const appType = String(row.app_type ?? "");
+    const deviceId = String(row.device_id ?? "").trim();
+    const deviceSlot = deviceId ? `${userId}|${role}|${appType}|${deviceId}` : null;
+
+    if (deviceSlot && seenDeviceSlots.has(deviceSlot)) {
+      continue;
+    }
+
+    kept.push(row);
+    seenTokens.add(token);
+    if (deviceSlot) seenDeviceSlots.add(deviceSlot);
+  }
+
+  return kept;
+}
+
 function isMissingTableError(error: { message?: string; code?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() || "";
   return (
@@ -270,6 +344,11 @@ function isMissingTableError(error: { message?: string; code?: string } | null |
     message.includes("could not find the table") ||
     message.includes("relation") && message.includes("does not exist")
   );
+}
+
+function isMissingFcmTokenColumnError(error: { message?: string; code?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() || "";
+  return error?.code === "42703" || (message.includes("column") && message.includes("fcm_tokens"));
 }
 
 async function recordNotificationHistory(params: {
@@ -337,8 +416,9 @@ async function sendFcmToTargets(params: SendPushParams) {
 
   let query = supabase
     .from("fcm_tokens")
-    .select("id,user_id,role,token,platform,app_type")
-    .eq("is_active", true);
+    .select("id,user_id,role,token,platform,app_type,device_id,enabled,updated_at,last_used_at,last_seen_at,created_at")
+    .eq("is_active", true)
+    .eq("enabled", true);
 
   if (params.userIds && params.userIds.length > 0) {
     query = query.in("user_id", params.userIds);
@@ -348,7 +428,26 @@ async function sendFcmToTargets(params: SendPushParams) {
     query = query.eq("role", params.role);
   }
 
-  const { data: tokens, error } = await query;
+  let { data: tokens, error } = await query;
+  if (error && isMissingFcmTokenColumnError(error)) {
+    let fallbackQuery = supabase
+      .from("fcm_tokens")
+      .select("id,user_id,role,token,platform,app_type")
+      .eq("is_active", true);
+
+    if (params.userIds && params.userIds.length > 0) {
+      fallbackQuery = fallbackQuery.in("user_id", params.userIds);
+    }
+
+    if (params.role) {
+      fallbackQuery = fallbackQuery.eq("role", params.role);
+    }
+
+    const fallbackResult = await fallbackQuery;
+    tokens = fallbackResult.data as typeof tokens;
+    error = fallbackResult.error;
+  }
+
   if (error) {
     console.error("[fcm] token lookup failed", { error: error.message });
     return { delivered: 0, removed: 0, failed: 0, failures: [] as PushFailure[] };
@@ -372,17 +471,39 @@ async function sendFcmToTargets(params: SendPushParams) {
     return { delivered: 0, removed: 0, failed: 0, failures: [] as PushFailure[] };
   }
 
+  const targetRows = dedupeActiveTokens(tokens);
+  const targetSummary = targetRows.reduce<Record<string, number>>((acc, row) => {
+    const key = `${tokenTargetKind(row)}:${String(row.app_type ?? "unknown")}`;
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  console.info("[push] target lookup", {
+    role: params.role ?? null,
+    requestedUsers: params.userIds?.length ?? 0,
+    tokenCount: targetRows.length,
+    targets: targetRows.map((row) => ({
+      platform: row.platform,
+      appType: row.app_type,
+      role: row.role,
+      kind: tokenTargetKind(row),
+      deviceId: row.device_id ?? null,
+    })),
+    summary: targetSummary,
+  });
+
   let delivered = 0;
   let removed = 0;
   let failed = 0;
   const failures: PushFailure[] = [];
 
-  for (const row of tokens) {
+  for (const row of targetRows) {
     const relativeUrl = params.url || "/";
     const clickUrl = absoluteAppUrl(relativeUrl);
     const androidNativeToken = isAndroidNativeToken(row);
     const iosNativeToken = isIosNativeToken(row);
-    const { androidSound, iosSoundFile, androidChannelId } = pushSoundNames(params.data);
+    const { androidSound, androidChannelId } = pushSoundNames(params.data);
+    const tokenKind = tokenTargetKind(row);
 
     try {
       const baseData = stringData(params.data, {
@@ -392,15 +513,20 @@ async function sendFcmToTargets(params: SendPushParams) {
         role: params.role || String(row.role || ""),
       });
 
-      if (iosNativeToken) {
+      if (iosNativeToken && isLegacyApnsDeviceToken(row)) {
+        const iosData = await withNativeActionData({
+          supabase,
+          row,
+          data: baseData,
+        });
         const apnsResult = await sendApnsToDeviceToken({
           token: String(row.token),
           appType: row.app_type,
           title: params.title,
           body: params.body,
           url: relativeUrl,
-          data: baseData,
-          sound: iosSoundFile,
+          data: iosData,
+          sound: "default",
         });
 
         if (!apnsResult.ok) {
@@ -411,6 +537,7 @@ async function sendFcmToTargets(params: SendPushParams) {
             userId: row.user_id,
             role: row.role,
             appType: row.app_type,
+            kind: tokenKind,
             status: apnsResult.status,
             reason: apnsResult.reason,
           });
@@ -420,10 +547,25 @@ async function sendFcmToTargets(params: SendPushParams) {
               .from("fcm_tokens")
               .update({ is_active: false, updated_at: new Date().toISOString() })
               .eq("id", row.id);
+            console.warn("[push] token deactivated", {
+              tokenId: row.id,
+              userId: row.user_id,
+              role: row.role,
+              appType: row.app_type,
+              kind: tokenKind,
+              reason: apnsResult.reason,
+            });
             removed += 1;
           }
         } else {
           delivered += 1;
+          console.info("[apns] send ok", {
+            tokenId: row.id,
+            userId: row.user_id,
+            role: row.role,
+            appType: row.app_type,
+            kind: tokenKind,
+          });
           await supabase
             .from("fcm_tokens")
             .update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -433,7 +575,7 @@ async function sendFcmToTargets(params: SendPushParams) {
         continue;
       }
 
-      const data = androidNativeToken
+      const data = androidNativeToken || iosNativeToken
         ? await withNativeActionData({
             supabase,
             row,
@@ -442,7 +584,7 @@ async function sendFcmToTargets(params: SendPushParams) {
         : baseData;
       const useNativeAndroidNotification = androidNativeToken && !!data.nativeActionToken;
 
-      await messaging.send({
+      const responseId = await messaging.send({
         token: String(row.token),
         ...(useNativeAndroidNotification
           ? {}
@@ -468,6 +610,7 @@ async function sendFcmToTargets(params: SendPushParams) {
                 },
               }),
         },
+        apns: apnsOptions(params.title, params.body, params.data),
         webpush: {
           notification: {
             title: params.title,
@@ -484,6 +627,16 @@ async function sendFcmToTargets(params: SendPushParams) {
         },
       });
       delivered += 1;
+      console.info("[fcm] send ok", {
+        tokenId: row.id,
+        userId: row.user_id,
+        role: row.role,
+        platform: row.platform,
+        appType: row.app_type,
+        kind: tokenKind,
+        responseId,
+        usedTopLevelNotification: !useNativeAndroidNotification,
+      });
       await supabase
         .from("fcm_tokens")
         .update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -497,6 +650,9 @@ async function sendFcmToTargets(params: SendPushParams) {
         tokenId: row.id,
         userId: row.user_id,
         role: row.role,
+        platform: row.platform,
+        appType: row.app_type,
+        kind: tokenKind,
         code,
         reason,
       });
@@ -511,12 +667,21 @@ async function sendFcmToTargets(params: SendPushParams) {
           .from("fcm_tokens")
           .update({ is_active: false, updated_at: new Date().toISOString() })
           .eq("id", row.id);
+        console.warn("[push] token deactivated", {
+          tokenId: row.id,
+          userId: row.user_id,
+          role: row.role,
+          appType: row.app_type,
+          kind: tokenKind,
+          code,
+          reason,
+        });
         removed += 1;
       }
     }
   }
 
-  const userIds = Array.from(new Set(tokens.map((row) => String(row.user_id)).filter(Boolean)));
+  const userIds = Array.from(new Set(targetRows.map((row) => String(row.user_id)).filter(Boolean)));
   await recordNotificationHistory({
     supabase,
     userIds,
@@ -566,7 +731,7 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
 
   for (const token of uniqueTokens) {
     try {
-      await messaging.send({
+      const responseId = await messaging.send({
         token,
         notification: {
           title: payload.title,
@@ -584,7 +749,7 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
             clickAction: "FCM_PLUGIN_ACTIVITY",
           },
         },
-        apns: apnsOptions(payload.data),
+        apns: apnsOptions(payload.title, payload.body, payload.data),
         webpush: {
           notification: {
             title: payload.title,
@@ -599,6 +764,10 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
         },
       });
       delivered += 1;
+      console.info("[fcm] direct token send ok", {
+        tokenSuffix: token.slice(-12),
+        responseId,
+      });
       await supabase
         .from("fcm_tokens")
         .update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -621,6 +790,11 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
           .from("fcm_tokens")
           .update({ is_active: false, updated_at: new Date().toISOString() })
           .eq("token", token);
+        console.warn("[push] direct token deactivated", {
+          tokenSuffix: token.slice(-12),
+          code,
+          reason,
+        });
         removed += 1;
       }
     }

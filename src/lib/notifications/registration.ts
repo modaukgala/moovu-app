@@ -33,6 +33,10 @@ function devLog(message: string, context?: Record<string, unknown>) {
   }
 }
 
+function isIosApnsToken(token: string, platform = platformName()) {
+  return platform === "ios" && /^[a-f0-9]{64}$/i.test(token.trim());
+}
+
 function platformName(): "android" | "ios" | "web" {
   const platform = Capacitor.getPlatform();
   return platform === "android" || platform === "ios" ? platform : "web";
@@ -75,6 +79,15 @@ async function saveToken(params: {
   token: string;
 }) {
   const platform = platformName();
+  const cleanToken = params.token.trim();
+  if (isIosApnsToken(cleanToken, platform)) {
+    console.warn("[push-registration] APNs token rejected, waiting for FCM token", {
+      role: params.role,
+      platform,
+      length: cleanToken.length,
+    });
+    throw new Error("APNs token rejected, waiting for FCM token.");
+  }
   const currentDeviceId = getPushDeviceId();
   const response = await fetch("/api/push/fcm/register", {
     method: "POST",
@@ -84,7 +97,7 @@ async function saveToken(params: {
     },
     body: JSON.stringify({
       role: params.role,
-      token: params.token,
+      token: cleanToken,
       platform,
       appSource: appSource(params.role),
       appType: legacyAppType(params.role),
@@ -96,15 +109,80 @@ async function saveToken(params: {
 
   const json = await response.json().catch(() => null);
   if (!response.ok || !json?.ok) {
+    console.error("[push-registration] token API rejected", {
+      role: params.role,
+      platform,
+      status: response.status,
+    });
     throw new Error(json?.error || "Failed to save notification token.");
   }
+  devLog("token registration API accepted", { role: params.role, platform });
+}
+
+export async function syncNativePushToken(params: {
+  token: string;
+  role: NotificationRole;
+  supabase: SupabaseClient;
+}) {
+  const cleanToken = params.token.trim();
+  const platform = platformName();
+  if (!Capacitor.isNativePlatform() || !cleanToken) return false;
+  if (isIosApnsToken(cleanToken, platform)) {
+    console.warn("[push-registration] APNs token rejected, waiting for FCM token", {
+      role: params.role,
+      platform,
+      length: cleanToken.length,
+    });
+    return false;
+  }
+  const { data: { session } } = await params.supabase.auth.getSession();
+  if (!session?.access_token) return false;
+
+  await saveToken({
+    accessToken: session.access_token,
+    role: params.role,
+    token: cleanToken,
+  });
+  devLog("refreshed native token saved", {
+    role: params.role,
+    platform,
+    tokenLength: cleanToken.length,
+  });
+  return true;
+}
+
+export async function bootstrapNativePushRegistration(params: {
+  role: NotificationRole;
+  supabase: SupabaseClient;
+}) {
+  if (!Capacitor.isNativePlatform()) return false;
+
+  const permissions = await PushNotifications.checkPermissions().catch(() => null);
+  devLog("native bootstrap permission status", {
+    receive: permissions?.receive ?? "unknown",
+    role: params.role,
+    platform: platformName(),
+  });
+
+  if (!permissions || permissions.receive !== "granted") {
+    return false;
+  }
+
+  devLog("native bootstrap registration started", {
+    role: params.role,
+    platform: platformName(),
+  });
+  await PushNotifications.register();
+  return true;
 }
 
 async function requestNativeToken(): Promise<string | null> {
   const permissions = await PushNotifications.checkPermissions();
+  devLog("native permission status", { receive: permissions.receive });
   let receive = permissions.receive;
 
   if (receive !== "granted") {
+    devLog("requesting native notification permission");
     receive = (await PushNotifications.requestPermissions()).receive;
   }
 
@@ -129,10 +207,27 @@ async function requestNativeToken(): Promise<string | null> {
 
     PushNotifications.addListener("registration", (token) => {
       if (settled) return;
+      const value = String(token.value ?? "").trim();
+      const platform = platformName();
+      devLog("native registration event received", {
+        platform,
+        length: value.length,
+        apnsLike: isIosApnsToken(value, platform),
+      });
+
+      if (isIosApnsToken(value, platform)) {
+        console.warn("[push-registration] APNs token rejected, waiting for FCM token", {
+          platform,
+          length: value.length,
+        });
+        return;
+      }
+
       settled = true;
       window.clearTimeout(timeout);
       cleanup();
-      resolve(token.value);
+      devLog("native FCM token received", { platform, length: value.length });
+      resolve(value);
     }).then((handle) => handles.push(handle)).catch(reject);
 
     PushNotifications.addListener("registrationError", (error) => {

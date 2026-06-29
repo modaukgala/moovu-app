@@ -9,6 +9,12 @@ import {
   type InAppNotificationDetail,
 } from "@/lib/in-app-notifications";
 import { getFirebaseMessaging } from "@/lib/firebase/client";
+import {
+  bootstrapNativePushRegistration,
+  syncNativePushToken,
+  type NotificationRole,
+} from "@/lib/notifications/registration";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type NativeListenerHandle = {
   remove: () => Promise<void>;
@@ -157,6 +163,14 @@ function showSystemLikeAlert(detail: InAppNotificationDetail) {
       detail,
     }),
   );
+}
+
+function currentNotificationRole(): NotificationRole {
+  const host = window.location.hostname.toLowerCase();
+  const path = window.location.pathname.toLowerCase();
+  if (host.startsWith("driver.") || path.startsWith("/driver")) return "driver";
+  if (host.startsWith("admin.") || path.startsWith("/admin")) return "admin";
+  return "customer";
 }
 
 declare global {
@@ -322,6 +336,15 @@ export default function InAppNotificationBar() {
 
     const handles: NativeListenerHandle[] = [];
 
+    void bootstrapNativePushRegistration({
+      role: currentNotificationRole(),
+      supabase: supabaseClient,
+    }).catch((error: unknown) => {
+      console.error("[push-registration] native bootstrap failed", {
+        error: error instanceof Error ? error.message : "Unknown bootstrap error",
+      });
+    });
+
     PushNotifications.addListener("pushNotificationReceived", (notification) => {
       const data = notification.data as { url?: string; nativeActionType?: string } | undefined;
       showSystemLikeAlert({
@@ -329,6 +352,32 @@ export default function InAppNotificationBar() {
         body: notification.body || "You have a new MOOVU update.",
         url: data?.url,
         tone: data?.nativeActionType === "trip_offer" ? "offer" : "message",
+      });
+    })
+      .then((handle) => handles.push(handle))
+      .catch(() => undefined);
+
+    PushNotifications.addListener("registration", (token) => {
+      console.log("[push-registration] native registration listener received token", {
+        platform: Capacitor.getPlatform(),
+        length: String(token.value ?? "").trim().length,
+      });
+      void syncNativePushToken({
+        token: token.value,
+        role: currentNotificationRole(),
+        supabase: supabaseClient,
+      }).catch((error: unknown) => {
+        console.error("[push-registration] refreshed native token save failed", {
+          error: error instanceof Error ? error.message : "Unknown token sync error",
+        });
+      });
+    })
+      .then((handle) => handles.push(handle))
+      .catch(() => undefined);
+
+    PushNotifications.addListener("registrationError", (error) => {
+      console.error("[push-registration] native registration error", {
+        error: error.error || "Unknown native registration error",
       });
     })
       .then((handle) => handles.push(handle))

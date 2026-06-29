@@ -127,6 +127,14 @@ declare global {
 }
 
 const DEFAULT_CENTER = { lat: -25.12, lng: 29.05 };
+const DRIVER_CANCEL_REASONS = [
+  "Customer asked to cancel",
+  "Could not reach pickup",
+  "Unsafe pickup situation",
+  "Vehicle issue",
+  "Emergency",
+  "Other",
+] as const;
 
 function googleMapsLink(lat: number | null | undefined, lng: number | null | undefined) {
   if (typeof lat !== "number" || typeof lng !== "number") return null;
@@ -344,6 +352,7 @@ export default function DriverHomePage() {
 
   const [locationName, setLocationName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [offerResponding, setOfferResponding] = useState<"accept" | "reject" | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [driverActionError, setDriverActionError] = useState<string | null>(null);
   const [gpsInfo, setGpsInfo] = useState<GpsNotice | string | null>(null);
@@ -357,6 +366,8 @@ export default function DriverHomePage() {
   const [showEndOtp, setShowEndOtp] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<"pickup" | "dropoff" | null>(null);
   const [driverToolsOpen, setDriverToolsOpen] = useState(false);
+  const [showCancelTripForm, setShowCancelTripForm] = useState(false);
+  const [cancelTripReason, setCancelTripReason] = useState<string>(DRIVER_CANCEL_REASONS[0]);
 
   const subscriptionReminder = subscriptionTone(driver);
   const subscriptionAllowsOnline = canReceiveTripOffers(driver);
@@ -717,52 +728,58 @@ export default function DriverHomePage() {
   }
 
   async function respondToOffer(action: "accept" | "reject") {
-    if (!offer) return;
+    if (!offer || offerResponding) return;
 
     window.dispatchEvent(new Event("moovu:stop-trip-offer-alert"));
-    setBusy(true);
+    setOfferResponding(action);
     setInfo(null);
     setDriverActionError(null);
 
     const token = await getAccessToken();
     if (!token) {
-      setBusy(false);
+      setOfferResponding(null);
       return;
     }
 
-    const res = await fetch("/api/driver/offers/respond", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        tripId: offer.id,
-        action,
-      }),
-    });
+    try {
+      const res = await fetch("/api/driver/offers/respond", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          tripId: offer.id,
+          action,
+        }),
+      });
 
-    const json = await res.json().catch(() => null);
-    setBusy(false);
+      const json = await res.json().catch(() => null);
 
-    if (!json?.ok) {
-      showDriverActionError(json?.error || "Failed to respond to offer.");
+      if (!res.ok || !json?.ok) {
+        showDriverActionError(json?.error || "Failed to respond to offer.");
+        await loadCurrentOffer();
+        await loadCurrentTrip();
+        return;
+      }
+
+      setInfo(action === "accept" ? "Offer accepted." : "Offer declined.");
+      notifyInApp({
+        title: action === "accept" ? "Trip accepted" : "Trip declined",
+        body: action === "accept" ? "MOOVU is opening this trip for you." : "You will not receive this offer again.",
+        tone: action === "accept" ? "success" : "info",
+        loud: action === "accept",
+      });
       await loadCurrentOffer();
       await loadCurrentTrip();
-      return;
+      await loadDriverProfile(true);
+      await loadEarningsSnapshot();
+    } catch (error: unknown) {
+      console.error("[driver-offers] response failed", error);
+      showDriverActionError("Could not respond to this offer. Please check your connection and try again.");
+    } finally {
+      setOfferResponding(null);
     }
-
-    setInfo(action === "accept" ? "Offer accepted." : "Offer declined.");
-    notifyInApp({
-      title: action === "accept" ? "Trip accepted" : "Trip declined",
-      body: action === "accept" ? "MOOVU is opening this trip for you." : "You will not receive this offer again.",
-      tone: action === "accept" ? "success" : "info",
-      loud: action === "accept",
-    });
-    await loadCurrentOffer();
-    await loadCurrentTrip();
-    await loadDriverProfile(true);
-    await loadEarningsSnapshot();
   }
 
   async function tripAction(
@@ -806,6 +823,8 @@ export default function DriverHomePage() {
         ? "Start OTP verified. The trip is now active."
         : endpoint.includes("/complete")
           ? "End OTP verified. The trip has been completed."
+          : endpoint.includes("/cancel")
+            ? "MOOVU cancelled this trip and updated the customer."
           : "MOOVU saved this trip update.",
       tone: endpoint.includes("/complete") || endpoint.includes("/start") ? "success" : "info",
       loud: endpoint.includes("/start") || endpoint.includes("/complete"),
@@ -825,6 +844,12 @@ export default function DriverHomePage() {
 
   async function completeTrip(tripId: string, otp: string) {
     await tripAction("/api/driver/trips/complete", { tripId, otp }, "Trip completed âœ…");
+  }
+
+  async function cancelCurrentTrip(tripId: string, reason: string) {
+    await tripAction("/api/driver/trips/cancel", { tripId, reason }, "Trip cancelled.");
+    setShowCancelTripForm(false);
+    setCancelTripReason(DRIVER_CANCEL_REASONS[0]);
   }
 
   async function markNoShow(tripId: string) {
@@ -1329,18 +1354,18 @@ export default function DriverHomePage() {
               <button
                 type="button"
                 className="moovu-driver-accept"
-                disabled={busy || secondsLeft === 0}
-                onClick={() => respondToOffer("accept")}
+                disabled={offerResponding !== null}
+                onClick={() => void respondToOffer("accept")}
               >
-                ACCEPT
+                {offerResponding === "accept" ? "ACCEPTING..." : "ACCEPT"}
               </button>
               <button
                 type="button"
                 className="moovu-driver-decline"
-                disabled={busy || secondsLeft === 0}
-                onClick={() => respondToOffer("reject")}
+                disabled={offerResponding !== null}
+                onClick={() => void respondToOffer("reject")}
               >
-                DECLINE
+                {offerResponding === "reject" ? "DECLINING..." : "DECLINE"}
               </button>
             </div>
           </div>
@@ -1628,13 +1653,23 @@ export default function DriverHomePage() {
 
                   <div className="mt-5">
                     {currentTrip.status === "assigned" && (
-                      <button
-                        className="moovu-btn moovu-btn-primary"
-                        disabled={busy}
-                        onClick={() => arriveTrip(currentTrip.id)}
-                      >
-                        Mark as arrived
-                      </button>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          className="moovu-btn moovu-btn-primary"
+                          disabled={busy}
+                          onClick={() => arriveTrip(currentTrip.id)}
+                        >
+                          Mark as arrived
+                        </button>
+                        <button
+                          type="button"
+                          className="moovu-btn moovu-btn-secondary border border-red-200 text-red-700"
+                          disabled={busy}
+                          onClick={() => setShowCancelTripForm((open) => !open)}
+                        >
+                          Cancel trip
+                        </button>
+                      </div>
                     )}
 
                     {currentTrip.status === "arrived" && (
@@ -1720,6 +1755,17 @@ export default function DriverHomePage() {
                             </div>
                           )}
                         </div>
+
+                        <div className="mt-4 flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            className="moovu-btn moovu-btn-secondary border border-red-200 text-red-700"
+                            disabled={busy}
+                            onClick={() => setShowCancelTripForm((open) => !open)}
+                          >
+                            Cancel trip
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -1786,6 +1832,48 @@ export default function DriverHomePage() {
                         )}
                       </div>
                     )}
+
+                    {showCancelTripForm &&
+                      ["assigned", "arrived"].includes(currentTrip.status) && (
+                        <div className="mt-4 rounded-[24px] border border-red-100 bg-red-50 p-4">
+                          <div className="text-xs font-black uppercase tracking-[0.14em] text-red-700">
+                            Cancel accepted trip
+                          </div>
+                          <p className="mt-2 text-sm font-medium leading-6 text-red-900">
+                            Use this only before the trip starts. The customer and admin will be notified immediately.
+                          </p>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                            <select
+                              value={cancelTripReason}
+                              onChange={(e) => setCancelTripReason(e.target.value)}
+                              className="moovu-input"
+                              disabled={busy}
+                            >
+                              {DRIVER_CANCEL_REASONS.map((reason) => (
+                                <option key={reason} value={reason}>
+                                  {reason}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              className="moovu-btn bg-red-600 text-white disabled:opacity-60"
+                              disabled={busy}
+                              onClick={() => void cancelCurrentTrip(currentTrip.id, cancelTripReason)}
+                            >
+                              {busy ? "Cancelling..." : "Confirm cancel"}
+                            </button>
+                            <button
+                              type="button"
+                              className="moovu-btn moovu-btn-secondary"
+                              disabled={busy}
+                              onClick={() => setShowCancelTripForm(false)}
+                            >
+                              Keep trip
+                            </button>
+                          </div>
+                        </div>
+                      )}
                   </div>
                 </div>
               )}
@@ -1894,8 +1982,66 @@ export default function DriverHomePage() {
                     Stay online to receive nearby trip requests.
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-2xl bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-800">
-                    New request is open at the top of the app. Respond before the timer ends.
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-[24px] border border-blue-100 bg-blue-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="moovu-driver-offer-alert-dot" />
+                            <span className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+                              New trip nearby
+                            </span>
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-blue-800 shadow-sm">
+                              {secondsLeft != null ? `${secondsLeft}s left` : "Respond now"}
+                            </span>
+                          </div>
+                          <div className="mt-3 text-2xl font-black text-slate-950">
+                            {money(offer.final_fare ?? offer.fare_amount)}
+                          </div>
+                          <div className="mt-1 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                            {rideTypeLabel(offer.ride_option)} - {offer.distance_km == null ? "Distance pending" : `${Number(offer.distance_km).toFixed(1)} km`} - {offer.duration_min == null ? "Time pending" : `${Math.round(Number(offer.duration_min))} min`}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3">
+                        <div className="rounded-2xl bg-white/90 p-3 text-sm font-semibold text-slate-900">
+                          <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Pickup</span>
+                          <span className="mt-1 block">{offer.pickup_address ?? "-"}</span>
+                        </div>
+                        <div className="rounded-2xl bg-white/90 p-3 text-sm font-semibold text-slate-900">
+                          <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Dropoff</span>
+                          <span className="mt-1 block">{offer.dropoff_address ?? "-"}</span>
+                        </div>
+                        {offerStops.length > 0 && (
+                          <div className="rounded-2xl bg-white/90 p-3 text-sm font-semibold text-slate-900">
+                            <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Stops</span>
+                            <span className="mt-1 block">
+                              {offerStops.map((stop, index) => `Stop ${index + 1}: ${stop.address}`).join(" | ")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        className="moovu-driver-accept"
+                        disabled={offerResponding !== null}
+                        onClick={() => void respondToOffer("accept")}
+                      >
+                        {offerResponding === "accept" ? "ACCEPTING..." : "ACCEPT"}
+                      </button>
+                      <button
+                        type="button"
+                        className="moovu-driver-decline"
+                        disabled={offerResponding !== null}
+                        onClick={() => void respondToOffer("reject")}
+                      >
+                        {offerResponding === "reject" ? "DECLINING..." : "DECLINE"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </section>

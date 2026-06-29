@@ -350,7 +350,7 @@ export async function POST(req: Request) {
       fare_finalized_at: completedAt,
       actual_distance_km: typedTrip.actual_distance_km ?? typedTrip.route_distance_km ?? typedTrip.distance_km ?? null,
       actual_duration_min: typedTrip.actual_duration_min ?? typedTrip.route_duration_min ?? typedTrip.duration_min ?? null,
-      actual_route_source: typedTrip.actual_distance_km != null ? "live_gps" : "route_estimate",
+      actual_route_source: typedTrip.actual_distance_km != null ? "gps_audit" : "route_estimate",
     };
 
     let updateTripResult = await supabaseAdmin

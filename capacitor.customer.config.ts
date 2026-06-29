@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.moovu.customer",
+  appId: "za.co.moovu.customer",
   appName: "MOOVU",
   webDir: "capacitor-shell-customer",
   server: {

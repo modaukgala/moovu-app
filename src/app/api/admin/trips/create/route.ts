@@ -34,6 +34,10 @@ export async function POST(req: Request) {
     const driverId = cleanText(body?.driverId);
     const rideOptionId = normalizeRideOptionId(body?.rideOptionId ?? body?.rideOption ?? body?.ride_option);
     const distanceKm = Number(body?.distanceKm);
+    const pickupLat = Number(body?.pickupLat);
+    const pickupLng = Number(body?.pickupLng);
+    const dropoffLat = Number(body?.dropoffLat);
+    const dropoffLng = Number(body?.dropoffLng);
     const durationMin = body?.durationMin === "" || body?.durationMin == null ? null : Number(body.durationMin);
     const requestedFare = body?.fare == null || body?.fare === "" ? null : Number(body.fare);
 
@@ -49,6 +53,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Distance is required." }, { status: 400 });
     }
 
+    if (![pickupLat, pickupLng, dropoffLat, dropoffLng].every(Number.isFinite)) {
+      return NextResponse.json(
+        { ok: false, error: "Valid pickup and dropoff coordinates are required." },
+        { status: 400 }
+      );
+    }
+
     const activeSurge = await getActiveManualSurge();
     const fareAmount =
       requestedFare != null && Number.isFinite(requestedFare) && requestedFare > 0
@@ -61,7 +72,8 @@ export async function POST(req: Request) {
             surgeMultiplier: activeSurge.multiplier,
           }).totalFare;
 
-    const completionOtp = generateOtp();
+    const startOtp = generateOtp();
+    const endOtp = generateOtp();
     const initialStatus = driverId ? "assigned" : "requested";
     const { supabaseAdmin, user } = auth;
 
@@ -93,6 +105,10 @@ export async function POST(req: Request) {
         rider_phone: riderPhone || null,
         pickup_address: pickup,
         dropoff_address: dropoff,
+        pickup_lat: pickupLat,
+        pickup_lng: pickupLng,
+        dropoff_lat: dropoffLat,
+        dropoff_lng: dropoffLng,
         payment_method: paymentMethod,
         fare_amount: fareAmount,
         distance_km: distanceKm,
@@ -100,7 +116,10 @@ export async function POST(req: Request) {
         ride_option: rideOptionId,
         status: initialStatus,
         driver_id: driverId || null,
-        completion_otp: completionOtp,
+        start_otp: startOtp,
+        end_otp: endOtp,
+        start_otp_verified: false,
+        end_otp_verified: false,
         otp_verified: false,
       })
       .select("id,status")
@@ -117,7 +136,7 @@ export async function POST(req: Request) {
     await supabaseAdmin.from("trip_events").insert({
       trip_id: trip.id,
       event_type: "created",
-      message: `Trip created. Rider OTP: ${completionOtp}. Surge: ${activeSurge.label}.`,
+      message: `Trip created with start/end OTPs. Surge: ${activeSurge.label}.`,
       old_status: null,
       new_status: trip.status,
       created_by: user.id,

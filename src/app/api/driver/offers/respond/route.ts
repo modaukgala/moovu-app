@@ -85,11 +85,9 @@ export async function POST(req: Request) {
       source: "driver_app",
     });
 
-    if (!atomicResponse.atomicUnavailable) {
+    if (atomicResponse.ok) {
       return NextResponse.json(
-        atomicResponse.ok
-          ? { ok: true, status: atomicResponse.state }
-          : { ok: false, error: atomicResponse.error },
+        { ok: true, status: atomicResponse.state },
         { status: atomicResponse.status },
       );
     }
@@ -101,16 +99,15 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (tripError || !trip) {
+      if (!atomicResponse.atomicUnavailable) {
+        return NextResponse.json(
+          { ok: false, error: atomicResponse.error ?? "Offer is no longer available." },
+          { status: atomicResponse.status },
+        );
+      }
       return NextResponse.json(
         { ok: false, error: tripError?.message ?? "Trip not found" },
         { status: 404 }
-      );
-    }
-
-    if (trip.offer_status !== "pending" || trip.status !== "offered") {
-      return NextResponse.json(
-        { ok: false, error: "No pending offer for your account" },
-        { status: 400 }
       );
     }
 
@@ -133,14 +130,33 @@ export async function POST(req: Request) {
       }
     }
 
-    if (!offerTableMissing && !activeOffer) {
+    const hasAtomicOffer = !offerTableMissing && !!activeOffer;
+    const hasLegacyOffer =
+      trip.driver_id === driverId &&
+      trip.offer_status === "pending" &&
+      trip.status === "offered";
+
+    if (!hasAtomicOffer && !hasLegacyOffer) {
+      return NextResponse.json(
+        { ok: false, error: atomicResponse.error ?? "No pending offer for your account" },
+        { status: atomicResponse.status >= 400 ? atomicResponse.status : 400 },
+      );
+    }
+
+    if (
+      trip.offer_status !== "pending" ||
+      (
+        trip.status !== "offered" &&
+        !(hasAtomicOffer && trip.status === "requested")
+      )
+    ) {
       return NextResponse.json(
         { ok: false, error: "No pending offer for your account" },
         { status: 400 }
       );
     }
 
-    if (offerTableMissing && trip.driver_id !== driverId) {
+    if (offerTableMissing && !hasLegacyOffer) {
       return NextResponse.json(
         { ok: false, error: "No pending offer for your account" },
         { status: 400 }
@@ -204,8 +220,8 @@ export async function POST(req: Request) {
           driver_id: driverId,
         })
         .eq("id", tripId)
-        .eq("status", "offered")
         .eq("offer_status", "pending")
+        .in("status", hasAtomicOffer ? ["requested", "offered"] : ["offered"])
         .select("id")
         .maybeSingle();
 
@@ -352,7 +368,7 @@ export async function POST(req: Request) {
       | Awaited<ReturnType<typeof offerNextEligibleDriver>>
       | { ok: false; driverId?: null } = { ok: false };
 
-    if (trip.driver_id === driverId) {
+    if (trip.driver_id === driverId || hasAtomicOffer) {
       const attemptedDriverIds = Array.from(
         new Set([...(trip.offer_attempted_driver_ids ?? []), driverId])
       );
@@ -367,7 +383,7 @@ export async function POST(req: Request) {
           offer_attempted_driver_ids: attemptedDriverIds,
         })
         .eq("id", tripId)
-        .eq("driver_id", driverId);
+        .eq("offer_status", "pending");
 
       if (rejectError) {
         return NextResponse.json({ ok: false, error: rejectError.message }, { status: 500 });

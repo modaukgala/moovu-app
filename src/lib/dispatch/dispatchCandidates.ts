@@ -107,7 +107,6 @@ export async function getDispatchCandidates(params: {
     .from("drivers")
     .select("id,status,verification_status,profile_completed,online,busy,lat,lng,last_seen,subscription_status,subscription_expires_at,seating_capacity,is_deleted")
     .eq("online", true)
-    .eq("busy", false)
     .gte("last_seen", freshAfter)
     .limit(250);
 

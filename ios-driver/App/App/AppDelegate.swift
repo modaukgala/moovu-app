@@ -1,13 +1,27 @@
 import UIKit
 import Capacitor
+import FirebaseCore
+import FirebaseMessaging
+import UserNotifications
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
 
     var window: UIWindow?
 
+    private func hexString(from data: Data) -> String {
+        data.map { String(format: "%02.2hhx", $0) }.joined()
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+            NSLog("[MOOVU Push] Firebase initialized")
+        }
+        Messaging.messaging().isAutoInitEnabled = true
+        Messaging.messaging().delegate = self
+        UNUserNotificationCenter.current().delegate = self
+        NSLog("[MOOVU Push] Notification center delegate ready")
         return true
     }
 
@@ -47,11 +61,44 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+        let apnsToken = hexString(from: deviceToken)
+        NSLog("[MOOVU Push] APNs token received (%lu chars); forwarding to Firebase only", apnsToken.count)
+        Messaging.messaging().apnsToken = deviceToken
+        Messaging.messaging().token { token, error in
+            if let error = error {
+                NSLog("[MOOVU Push] FCM token request failed: %@", error.localizedDescription)
+                NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+                return
+            }
+            guard let token = token, !token.isEmpty else { return }
+            NSLog("[MOOVU Push] FCM token received (%lu chars); posting to Capacitor", token.count)
+            NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: token)
+        }
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NSLog("[MOOVU Push] APNs registration failed: %@", error.localizedDescription)
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        guard let token = fcmToken, !token.isEmpty else { return }
+        NSLog("[MOOVU Push] FCM token refresh received (%lu chars); posting to Capacitor", token.count)
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: token)
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        NSLog("[MOOVU Push] Foreground notification received")
+        completionHandler([.banner, .badge, .sound])
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        NSLog("[MOOVU Push] Notification action received")
+        completionHandler()
     }
 
 }

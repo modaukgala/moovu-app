@@ -235,7 +235,37 @@ export default function NewTripPage() {
       return;
     }
 
+    if (!pickupPlaceId || !dropoffPlaceId) {
+      setErr("Select both pickup and dropoff from the location suggestions.");
+      return;
+    }
+
     setBusy(true);
+
+    const [pickupDetails, dropoffDetails] = await Promise.all(
+      [pickupPlaceId, dropoffPlaceId].map(async (placeId) => {
+        const response = await fetch("/api/maps/place-details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ place_id: placeId }),
+        });
+        const json = await response.json().catch(() => null);
+        return response.ok && json?.ok ? json : null;
+      })
+    );
+
+    if (
+      !pickupDetails ||
+      !dropoffDetails ||
+      !Number.isFinite(Number(pickupDetails.lat)) ||
+      !Number.isFinite(Number(pickupDetails.lng)) ||
+      !Number.isFinite(Number(dropoffDetails.lat)) ||
+      !Number.isFinite(Number(dropoffDetails.lng))
+    ) {
+      setBusy(false);
+      setErr("Could not resolve the selected route. Please select both locations again.");
+      return;
+    }
 
     const token = await getAccessToken();
     if (!token) {
@@ -255,6 +285,10 @@ export default function NewTripPage() {
         riderPhone,
         pickup: pickup.trim(),
         dropoff: dropoff.trim(),
+        pickupLat: Number(pickupDetails.lat),
+        pickupLng: Number(pickupDetails.lng),
+        dropoffLat: Number(dropoffDetails.lat),
+        dropoffLng: Number(dropoffDetails.lng),
         paymentMethod,
         fare: finalFare,
         distanceKm: km,

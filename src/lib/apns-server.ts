@@ -15,9 +15,9 @@ type ApnsResult =
   | { ok: true }
   | { ok: false; status?: number; reason: string; removeToken?: boolean };
 
-const DEFAULT_CUSTOMER_BUNDLE_ID = "com.moovu.customer";
-const DEFAULT_DRIVER_BUNDLE_ID = "com.moovu.driver";
-const DEFAULT_SOUND = "moovu_premium_alert.wav";
+const DEFAULT_CUSTOMER_BUNDLE_ID = "za.co.moovu.customer";
+const DEFAULT_DRIVER_BUNDLE_ID = "za.co.moovu.driver";
+const DEFAULT_SOUND = "default";
 
 let cachedJwt: { token: string; expiresAt: number } | null = null;
 
@@ -75,7 +75,11 @@ function createProviderToken() {
   const signature = createSign("SHA256")
     .update(signingInput)
     .end()
-    .sign(privateKey);
+    .sign({
+      key: privateKey,
+      // APNs provider JWTs use JOSE ES256 signatures (raw R || S), not DER.
+      dsaEncoding: "ieee-p1363",
+    });
   const token = `${signingInput}.${base64url(signature)}`;
 
   cachedJwt = {
@@ -127,6 +131,8 @@ export async function sendApnsToDeviceToken(params: ApnsSendParams): Promise<Apn
 
   const bundleId = getApnsBundleIdForAppType(params.appType);
   const providerToken = createProviderToken();
+  const customData = compactData(params.data);
+  const isTripOffer = customData.nativeActionType === "trip_offer";
   const payload = JSON.stringify({
     aps: {
       alert: {
@@ -135,9 +141,10 @@ export async function sendApnsToDeviceToken(params: ApnsSendParams): Promise<Apn
       },
       sound: params.sound || DEFAULT_SOUND,
       badge: 1,
+      ...(isTripOffer ? { "interruption-level": "time-sensitive" } : {}),
     },
     url: params.url || "/",
-    data: compactData(params.data),
+    ...customData,
   });
 
   return new Promise<ApnsResult>((resolve) => {

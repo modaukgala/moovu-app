@@ -120,6 +120,21 @@ export async function dispatchTrip(params: {
     : candidates;
 
   if (candidatesToTry.length === 0) {
+    if (params.allowLegacyFallback !== false) {
+      const legacy = await offerNextEligibleDriver(
+        trip.id,
+        params.preferredDriverId ? [] : undefined,
+        params.preferredDriverId ? { resendToDriverId: params.preferredDriverId, excludePreviouslyAttempted: false } : undefined,
+      );
+      return {
+        ok: legacy.ok,
+        tripId: trip.id,
+        driverId: legacy.ok ? legacy.driverId : null,
+        expiresAt: legacy.ok ? legacy.expiresAt : null,
+        mode: "legacy",
+        error: legacy.ok ? undefined : legacy.error,
+      };
+    }
     const nextCycle = cycle + 1;
     if (nextCycle <= DISPATCH_CONFIG.maxCycles) {
       await enqueueDispatchJob({

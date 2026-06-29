@@ -125,9 +125,7 @@ export async function POST(req: Request) {
     const { data: trips, error: fErr } = await supabaseAdmin
       .from("trips")
       .select(TRIP_SELECT)
-      .in("id", tripIds)
-      .eq("offer_status", "pending")
-      .eq("status", "offered");
+      .in("id", tripIds);
 
     if (fErr) return NextResponse.json({ ok: false, error: fErr.message }, { status: 500 });
 
@@ -136,6 +134,7 @@ export async function POST(req: Request) {
     );
 
     const fresh = (trips ?? [])
+      .filter((trip) => !["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(String(trip.status ?? "").toLowerCase()))
       .map((trip) => ({
         ...trip,
         offer_expires_at: deadlineByTripId.get(trip.id) ?? trip.offer_expires_at,

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import TimedPasswordField from "@/components/ui/TimedPasswordField";
 import { supabaseClient } from "@/lib/supabase/client";
 import {
   customerEmailFromPhone,
@@ -279,12 +280,11 @@ export default function CustomerAuthPage() {
 
               <input className="moovu-input bg-slate-50" value={phone.trim()} readOnly />
 
-              <input
-                className="moovu-input"
+              <TimedPasswordField
+                className="moovu-input pr-16"
                 placeholder="Password"
-                type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
               />
 
               <div className="flex flex-wrap gap-3">
@@ -354,12 +354,11 @@ export default function CustomerAuthPage() {
                 onChange={(e) => setEmail(e.target.value)}
               />
 
-              <input
-                className="moovu-input"
+              <TimedPasswordField
+                className="moovu-input pr-16"
                 placeholder="Password"
-                type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
               />
 
               <label className="legal-consent-row">

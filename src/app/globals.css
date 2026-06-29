@@ -6685,12 +6685,13 @@ tr:last-child td {
 
 .moovu-driver-offer-drop {
   position: fixed;
-  top: calc(76px + env(safe-area-inset-top));
+  top: calc(96px + env(safe-area-inset-top));
   left: 50%;
-  z-index: 9000;
+  z-index: 10040;
   width: min(96vw, 980px);
   transform: translateX(-50%);
   animation: moovuNoticeSlideDown 280ms ease-out both;
+  pointer-events: auto;
 }
 
 .moovu-driver-offer-drop-inner {
@@ -6707,6 +6708,17 @@ tr:last-child td {
   padding: 16px;
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
   backdrop-filter: blur(18px);
+  pointer-events: auto;
+  isolation: isolate;
+}
+
+.moovu-driver-offer-drop .moovu-driver-accept,
+.moovu-driver-offer-drop .moovu-driver-decline {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .moovu-driver-offer-alert-dot {

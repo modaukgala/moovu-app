@@ -171,7 +171,6 @@ begin
      or v_driver.verification_status <> 'approved'
      or not coalesce(v_driver.profile_completed, false)
      or not coalesce(v_driver.online, false)
-     or coalesce(v_driver.busy, false)
      or v_driver.lat is null or v_driver.lng is null
      or v_driver.last_seen < now() - interval '90 seconds'
      or v_driver.subscription_status not in ('active','grace')
@@ -255,7 +254,7 @@ begin
   if v_trip.driver_id is not null or v_trip.status not in ('requested','offered') then
     return query select false,p_trip_id,p_driver_id,v_trip.status,v_offer.dispatch_cycle,v_offer.sequence_number,'{}'::uuid[],'OFFER_CONFLICT','Another driver already accepted'; return;
   end if;
-  if coalesce(v_driver.busy,false) or not coalesce(v_driver.online,false) or v_driver.status not in ('approved','active') then
+  if not coalesce(v_driver.online,false) or v_driver.status not in ('approved','active') then
     return query select false,p_trip_id,p_driver_id,'ineligible',v_offer.dispatch_cycle,v_offer.sequence_number,'{}'::uuid[],'DRIVER_CONFLICT','Driver is no longer eligible'; return;
   end if;
   if exists(select 1 from public.trips where driver_id=p_driver_id and status in ('assigned','arrived','ongoing') and id<>p_trip_id) then
@@ -363,4 +362,3 @@ grant execute on function public.mark_dispatch_exhausted(uuid) to service_role;
 
 comment on table public.dispatch_jobs is 'Durable dispatch work queue. Requires a trusted worker/queue callback; browser polling is not authoritative.';
 comment on function public.accept_trip_offer is 'Atomically assigns one driver, marks busy after acceptance, and cancels competing offers.';
-

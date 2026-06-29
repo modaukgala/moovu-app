@@ -23,6 +23,10 @@ const VALID_APP_TYPES = new Set([
 
 const VALID_PLATFORMS = new Set(["android", "ios", "web", "unknown"]);
 
+function isIosApnsToken(token: string, platform: string) {
+  return platform === "ios" && /^[a-f0-9]{64}$/i.test(token.trim());
+}
+
 function defaultAppType(role: PushRole) {
   return role === "driver" ? "web_driver" : role === "admin" ? "web_admin" : "web_customer";
 }
@@ -124,6 +128,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid FCM token." }, { status: 400 });
     }
 
+    if (isIosApnsToken(fcmToken, platform)) {
+      console.warn("[push-registration] APNs token rejected, waiting for FCM token", {
+        userId: user.id,
+        role,
+        platform,
+        length: fcmToken.length,
+      });
+      return NextResponse.json(
+        { ok: false, error: "APNs token rejected, waiting for FCM token." },
+        { status: 400 }
+      );
+    }
+
     const pushRole = role as PushRole;
     const appType = VALID_APP_TYPES.has(requestedAppType)
       ? requestedAppType
@@ -174,6 +191,13 @@ export async function POST(req: Request) {
     const result = await upsertFcmToken(supabase, tokenRow);
 
     if (!result.ok) {
+      console.error("[push-registration] token upsert failed", {
+        userId: user.id,
+        role,
+        platform,
+        appType,
+        reason: result.error.message,
+      });
       return NextResponse.json({ ok: false, error: result.error.message }, { status: 500 });
     }
 
@@ -190,6 +214,15 @@ export async function POST(req: Request) {
         .eq("device_id", deviceId)
         .neq("token", fcmToken);
     }
+
+    console.info("[push-registration] token saved", {
+      userId: user.id,
+      role,
+      platform,
+      appType,
+      deviceIdPresent: Boolean(deviceId),
+      compatibilityColumnsRemoved: result.removedColumns,
+    });
 
     if (result.removedColumns.length > 0 || isMissingColumnError(result.removedColumns.join(","), "app_type")) {
       return NextResponse.json({

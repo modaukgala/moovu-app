@@ -279,13 +279,33 @@ export async function offerNextEligibleDriver(
     };
   }
 
+  const fetchedDriverIds = ((drivers ?? []) as EligibleDriverRow[]).map((driver) => driver.id);
+  const { data: activeTrips, error: activeTripsError } = fetchedDriverIds.length > 0
+    ? await supabaseAdmin
+        .from("trips")
+        .select("driver_id")
+        .in("driver_id", fetchedDriverIds)
+        .in("status", ["assigned", "arrived", "ongoing"])
+    : { data: [], error: null };
+
+  if (activeTripsError) {
+    console.error("[dispatch] failed to verify active driver trips", {
+      reason: activeTripsError.message,
+    });
+  }
+  const activeTripDriverIds = new Set((activeTrips ?? []).map((row) => row.driver_id).filter(Boolean));
+
   const nowMs = Date.now();
   const allowBusyDriverIds = new Set(options.allowBusyDriverIds ?? []);
 
   const filteredDrivers = ((drivers ?? []) as EligibleDriverRow[]).filter((driver) => {
     if (options.resendToDriverId && driver.id !== options.resendToDriverId) return false;
     if (blockedDriverIds.has(driver.id)) return false;
-    if (driver.busy && !allowBusyDriverIds.has(driver.id)) return false;
+    if (
+      driver.busy &&
+      (activeTripsError || activeTripDriverIds.has(driver.id)) &&
+      !allowBusyDriverIds.has(driver.id)
+    ) return false;
 
     const expiryMs = driver.subscription_expires_at
       ? new Date(driver.subscription_expires_at).getTime()

@@ -100,7 +100,7 @@ export async function recordTripTelemetry(params: {
   const update: Record<string, unknown> = {
     actual_distance_km: Math.round(currentDistance * 1000) / 1000,
     actual_duration_min: Math.round(durationMin * 100) / 100,
-    actual_route_source: "live_gps",
+    actual_route_source: "gps_audit",
   };
 
   if (shouldUpdateFare) {
