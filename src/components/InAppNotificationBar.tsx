@@ -334,56 +334,73 @@ export default function InAppNotificationBar() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
+    let active = true;
     const handles: NativeListenerHandle[] = [];
 
-    void bootstrapNativePushRegistration({
-      role: currentNotificationRole(),
-      supabase: supabaseClient,
-    }).catch((error: unknown) => {
-      console.error("[push-registration] native bootstrap failed", {
-        error: error instanceof Error ? error.message : "Unknown bootstrap error",
-      });
-    });
-
-    PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      const data = notification.data as { url?: string; nativeActionType?: string } | undefined;
-      showSystemLikeAlert({
-        title: notification.title || "MOOVU update",
-        body: notification.body || "You have a new MOOVU update.",
-        url: data?.url,
-        tone: data?.nativeActionType === "trip_offer" ? "offer" : "message",
-      });
-    })
-      .then((handle) => handles.push(handle))
-      .catch(() => undefined);
-
-    PushNotifications.addListener("registration", (token) => {
-      console.log("[push-registration] native registration listener received token", {
-        platform: Capacitor.getPlatform(),
-        length: String(token.value ?? "").trim().length,
-      });
-      void syncNativePushToken({
-        token: token.value,
-        role: currentNotificationRole(),
-        supabase: supabaseClient,
-      }).catch((error: unknown) => {
-        console.error("[push-registration] refreshed native token save failed", {
-          error: error instanceof Error ? error.message : "Unknown token sync error",
+    async function setupNativePushListeners() {
+      try {
+        const receivedHandle = await PushNotifications.addListener("pushNotificationReceived", (notification) => {
+          const data = notification.data as { url?: string; nativeActionType?: string } | undefined;
+          showSystemLikeAlert({
+            title: notification.title || "MOOVU update",
+            body: notification.body || "You have a new MOOVU update.",
+            url: data?.url,
+            tone: data?.nativeActionType === "trip_offer" ? "offer" : "message",
+          });
         });
-      });
-    })
-      .then((handle) => handles.push(handle))
-      .catch(() => undefined);
+        if (!active) {
+          await receivedHandle.remove();
+          return;
+        }
+        handles.push(receivedHandle);
 
-    PushNotifications.addListener("registrationError", (error) => {
-      console.error("[push-registration] native registration error", {
-        error: error.error || "Unknown native registration error",
-      });
-    })
-      .then((handle) => handles.push(handle))
-      .catch(() => undefined);
+        const registrationHandle = await PushNotifications.addListener("registration", (token) => {
+          console.log("[push-registration] native registration listener received token", {
+            platform: Capacitor.getPlatform(),
+            length: String(token.value ?? "").trim().length,
+          });
+          void syncNativePushToken({
+            token: token.value,
+            role: currentNotificationRole(),
+            supabase: supabaseClient,
+          }).catch((error: unknown) => {
+            console.error("[push-registration] refreshed native token save failed", {
+              error: error instanceof Error ? error.message : "Unknown token sync error",
+            });
+          });
+        });
+        if (!active) {
+          await registrationHandle.remove();
+          return;
+        }
+        handles.push(registrationHandle);
+
+        const errorHandle = await PushNotifications.addListener("registrationError", (error) => {
+          console.error("[push-registration] native registration error", {
+            error: error.error || "Unknown native registration error",
+          });
+        });
+        if (!active) {
+          await errorHandle.remove();
+          return;
+        }
+        handles.push(errorHandle);
+
+        await bootstrapNativePushRegistration({
+          role: currentNotificationRole(),
+          supabase: supabaseClient,
+        });
+      } catch (error: unknown) {
+        console.error("[push-registration] native bootstrap failed", {
+          error: error instanceof Error ? error.message : "Unknown bootstrap error",
+        });
+      }
+    }
+
+    void setupNativePushListeners();
 
     return () => {
+      active = false;
       for (const handle of handles) {
         void handle.remove();
       }

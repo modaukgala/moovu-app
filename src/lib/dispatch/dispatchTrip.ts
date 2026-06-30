@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPushSafe } from "@/lib/push-server";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 import { DISPATCH_CONFIG, dispatchRadiusForCycle } from "@/lib/dispatch/config";
-import { getDispatchCandidates } from "@/lib/dispatch/dispatchCandidates";
+import { getDispatchCandidates, getPreferredDispatchCandidate } from "@/lib/dispatch/dispatchCandidates";
 import { enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
 import type { DispatchResult } from "@/lib/dispatch/types";
 
@@ -16,6 +16,11 @@ type AtomicOfferRow = {
 function isMissingAtomicDispatch(error: { code?: string; message?: string } | null | undefined) {
   const message = String(error?.message ?? "").toLowerCase();
   return error?.code === "PGRST202" || message.includes("reserve_trip_offer") || message.includes("dispatch_jobs");
+}
+
+function isDispatchSchemaHotfixRequired(error: { message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return message.includes("driver_id") && message.includes("ambiguous");
 }
 
 async function notifyDriverOffer(params: {
@@ -101,14 +106,34 @@ export async function dispatchTrip(params: {
   const radiusKm = dispatchRadiusForCycle(cycle);
   let candidates;
   try {
-    candidates = await getDispatchCandidates({
-      supabase: supabaseAdmin,
-      tripId: trip.id,
-      pickupLat: Number(trip.pickup_lat),
-      pickupLng: Number(trip.pickup_lng),
-      rideOption: trip.ride_option,
-      radiusKm,
-    });
+    if (params.preferredDriverId) {
+      const preferred = await getPreferredDispatchCandidate({
+        supabase: supabaseAdmin,
+        tripId: trip.id,
+        driverId: params.preferredDriverId,
+        pickupLat: Number(trip.pickup_lat),
+        pickupLng: Number(trip.pickup_lng),
+        rideOption: trip.ride_option,
+      });
+      candidates = preferred.ok ? [preferred.candidate] : [];
+      if (!preferred.ok) {
+        console.warn("[dispatch] preferred driver not eligible", {
+          tripId: trip.id,
+          driverId: params.preferredDriverId,
+          reason: preferred.error,
+        });
+        return { ok: false, tripId: trip.id, error: preferred.error };
+      }
+    } else {
+      candidates = await getDispatchCandidates({
+        supabase: supabaseAdmin,
+        tripId: trip.id,
+        pickupLat: Number(trip.pickup_lat),
+        pickupLng: Number(trip.pickup_lng),
+        rideOption: trip.ride_option,
+        radiusKm,
+      });
+    }
   } catch (error: unknown) {
     console.error("[dispatch] candidate lookup failed", {
       tripId: trip.id,
@@ -180,6 +205,16 @@ export async function dispatchTrip(params: {
           reason: error.message,
         });
         return { ok: false, tripId: trip.id, error: "Atomic dispatch migration is not active." };
+      }
+      if (isDispatchSchemaHotfixRequired(error)) {
+        console.error("[dispatch] atomic offer reservation needs SQL hotfix", {
+          tripId: trip.id,
+          driverId: candidate.driverId,
+          cycle,
+          sequenceNumber,
+          reason: error.message,
+        });
+        return { ok: false, tripId: trip.id, error: "Dispatch database needs the latest driver assignment SQL hotfix." };
       }
       reservationError = error.message;
       console.warn("[dispatch] reserve_trip_offer rejected candidate", {

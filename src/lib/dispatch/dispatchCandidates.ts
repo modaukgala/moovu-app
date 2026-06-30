@@ -45,7 +45,8 @@ function round2(value: number) {
 }
 
 function compatibleCapacity(rideOption: string | null | undefined, seats: number | null) {
-  const required = String(rideOption ?? "go").toLowerCase() === "group" ? 6 : 3;
+  const option = String(rideOption ?? "go").toLowerCase();
+  const required = option === "group" || option === "xl" || option === "go_xl" ? 6 : 3;
   return Number(seats ?? 0) >= required;
 }
 
@@ -114,9 +115,9 @@ export async function getDispatchCandidates(params: {
 
   const prelim = ((drivers ?? []) as CandidateRow[]).filter((driver) => {
     if (excluded.has(driver.id) || driver.is_deleted) return false;
-    if (!driver.profile_completed) return false;
+    if (driver.profile_completed === false) return false;
     if (!["approved", "active"].includes(String(driver.status ?? ""))) return false;
-    if (driver.verification_status !== "approved") return false;
+    if (driver.verification_status && driver.verification_status !== "approved") return false;
     if (!["active", "grace"].includes(String(driver.subscription_status ?? ""))) return false;
     if (!driver.subscription_expires_at || new Date(driver.subscription_expires_at).getTime() <= now) return false;
     if (driver.lat == null || driver.lng == null) return false;
@@ -169,4 +170,73 @@ export async function getDispatchCandidates(params: {
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, DISPATCH_CONFIG.maxCandidatesPerStep);
+}
+
+export async function getPreferredDispatchCandidate(params: {
+  supabase: SupabaseClient;
+  tripId: string;
+  driverId: string;
+  pickupLat: number;
+  pickupLng: number;
+  rideOption?: string | null;
+}) {
+  const { supabase, tripId, driverId, pickupLat, pickupLng, rideOption } = params;
+  const now = Date.now();
+  const freshAfter = new Date(now - DISPATCH_CONFIG.gpsFreshnessSeconds * 1000).toISOString();
+
+  const { data: driver, error: driverError } = await supabase
+    .from("drivers")
+    .select("id,status,verification_status,profile_completed,online,busy,lat,lng,last_seen,subscription_status,subscription_expires_at,seating_capacity,is_deleted")
+    .eq("id", driverId)
+    .maybeSingle();
+
+  if (driverError) throw new Error(driverError.message);
+  if (!driver) return { ok: false as const, error: "Driver not found." };
+
+  const row = driver as CandidateRow;
+  if (row.is_deleted) return { ok: false as const, error: "Driver is deleted." };
+  if (!row.online) return { ok: false as const, error: "Driver is offline." };
+  if (row.last_seen && row.last_seen < freshAfter) return { ok: false as const, error: "Driver GPS is not fresh. Ask the driver to open the app and go online again." };
+  if (row.profile_completed === false) return { ok: false as const, error: "Driver profile is incomplete." };
+  if (!["approved", "active"].includes(String(row.status ?? ""))) return { ok: false as const, error: "Driver is not approved or active." };
+  if (row.verification_status && row.verification_status !== "approved") return { ok: false as const, error: "Driver verification is not approved." };
+  if (!["active", "grace"].includes(String(row.subscription_status ?? ""))) return { ok: false as const, error: "Driver subscription is not active." };
+  if (!row.subscription_expires_at || new Date(row.subscription_expires_at).getTime() <= now) return { ok: false as const, error: "Driver subscription has expired." };
+  if (row.lat == null || row.lng == null) return { ok: false as const, error: "Driver GPS location is missing." };
+  if (!compatibleCapacity(rideOption, row.seating_capacity)) return { ok: false as const, error: "Driver vehicle does not match this ride type." };
+
+  const [walletResult, activeTripsResult, declinedResult, activeOfferResult, qualityResult, statsResult] = await Promise.all([
+    supabase.from("driver_wallets").select("driver_id,balance_due").eq("driver_id", driverId).maybeSingle(),
+    supabase.from("trips").select("driver_id").eq("driver_id", driverId).in("status", ["assigned", "arrived", "ongoing"]).limit(1),
+    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).eq("driver_id", driverId).eq("status", "declined").limit(1),
+    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).eq("driver_id", driverId).in("status", ["pending", "shown"]).limit(1),
+    supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").eq("driver_id", driverId).maybeSingle(),
+    supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").eq("driver_id", driverId).maybeSingle(),
+  ]);
+
+  const fatal = [walletResult.error, activeTripsResult.error, declinedResult.error, activeOfferResult.error].find(Boolean);
+  if (fatal) throw new Error(fatal.message);
+  if (Number((walletResult.data as WalletRow | null)?.balance_due ?? 0) >= DRIVER_COMMISSION_LOCK_LIMIT) return { ok: false as const, error: "Driver commission balance is locked." };
+  if ((activeTripsResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already has an active trip." };
+  if ((declinedResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already declined this trip." };
+  if ((activeOfferResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already has this offer." };
+
+  const distanceKm = round2(haversineKm(pickupLat, pickupLng, Number(row.lat), Number(row.lng)));
+  const scoreBreakdown = scoreCandidate({
+    distanceKm,
+    quality: (qualityResult.data as QualityRow | null) ?? undefined,
+    stats: (statsResult.data as OfferStatsRow | null) ?? undefined,
+    nowMs: now,
+  });
+
+  return {
+    ok: true as const,
+    candidate: {
+      driverId,
+      distanceKm,
+      roadEtaSeconds: Math.max(60, Math.round((distanceKm / 35) * 3600)),
+      score: scoreBreakdown.total,
+      scoreBreakdown,
+    } satisfies DispatchCandidate,
+  };
 }

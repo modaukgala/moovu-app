@@ -168,8 +168,8 @@ begin
   if not found then raise exception 'Driver not found' using errcode = 'P0002'; end if;
   if coalesce(v_driver.is_deleted, false)
      or v_driver.status not in ('approved','active')
-     or v_driver.verification_status <> 'approved'
-     or not coalesce(v_driver.profile_completed, false)
+     or (v_driver.verification_status is not null and v_driver.verification_status <> 'approved')
+     or coalesce(v_driver.profile_completed, true) = false
      or not coalesce(v_driver.online, false)
      or v_driver.lat is null or v_driver.lng is null
      or v_driver.last_seen < now() - interval '90 seconds'
@@ -184,25 +184,25 @@ begin
     raise exception 'Driver vehicle is incompatible' using errcode = 'P0001';
   end if;
 
-  select coalesce(balance_due, 0) into v_balance
-  from public.driver_wallets where driver_id = p_driver_id;
+  select coalesce(w.balance_due, 0) into v_balance
+  from public.driver_wallets w where w.driver_id = p_driver_id;
   if coalesce(v_balance, 0) >= 100 then
     raise exception 'Driver commission balance is locked' using errcode = 'P0001';
   end if;
 
   if exists (
-    select 1 from public.trips
-    where driver_id = p_driver_id and status in ('assigned','arrived','ongoing') and id <> p_trip_id
+    select 1 from public.trips t
+    where t.driver_id = p_driver_id and t.status in ('assigned','arrived','ongoing') and t.id <> p_trip_id
   ) then raise exception 'Driver already has an active trip' using errcode = 'P0001'; end if;
 
   if exists (
-    select 1 from public.driver_trip_offers
-    where trip_id = p_trip_id and driver_id = p_driver_id and status = 'declined'
+    select 1 from public.driver_trip_offers o
+    where o.trip_id = p_trip_id and o.driver_id = p_driver_id and o.status = 'declined'
   ) then raise exception 'Driver already declined this trip' using errcode = 'P0001'; end if;
 
   if exists (
-    select 1 from public.driver_trip_offers
-    where driver_id = p_driver_id and status in ('pending','shown') and accept_deadline_at > now()
+    select 1 from public.driver_trip_offers o
+    where o.driver_id = p_driver_id and o.status in ('pending','shown') and o.accept_deadline_at > now()
   ) then raise exception 'Driver has another active reservation' using errcode = 'P0001'; end if;
 
   insert into public.driver_trip_offers(
@@ -227,7 +227,7 @@ begin
   insert into public.trip_events(trip_id,event_type,message,old_status,new_status)
   values (p_trip_id,'offer_created',format('Cycle %s sequence %s reserved driver %s',p_dispatch_cycle,p_sequence_number,p_driver_id),v_trip.status,'offered');
 
-  return query select v_offer_id, p_driver_id, v_deadline, v_escalates;
+  return query select v_offer_id as offer_id, p_driver_id as driver_id, v_deadline as accept_deadline_at, v_escalates as escalates_at;
 end;
 $$;
 
@@ -242,11 +242,11 @@ declare
   v_offer public.driver_trip_offers%rowtype;
   v_cancelled uuid[] := '{}';
 begin
-  select * into v_driver from public.drivers where id=p_driver_id for update;
-  select * into v_trip from public.trips where id=p_trip_id for update;
-  select * into v_offer from public.driver_trip_offers
-    where trip_id=p_trip_id and driver_id=p_driver_id and status in ('pending','shown')
-    order by offered_at desc limit 1 for update;
+  select * into v_driver from public.drivers d where d.id=p_driver_id for update;
+  select * into v_trip from public.trips t where t.id=p_trip_id for update;
+  select * into v_offer from public.driver_trip_offers o
+    where o.trip_id=p_trip_id and o.driver_id=p_driver_id and o.status in ('pending','shown')
+    order by o.offered_at desc limit 1 for update;
 
   if v_offer.id is null or v_offer.accept_deadline_at <= now() then
     return query select false,p_trip_id,p_driver_id,'expired',0,0,'{}'::uuid[],'OFFER_CONFLICT','Offer expired or unavailable'; return;
@@ -257,24 +257,24 @@ begin
   if not coalesce(v_driver.online,false) or v_driver.status not in ('approved','active') then
     return query select false,p_trip_id,p_driver_id,'ineligible',v_offer.dispatch_cycle,v_offer.sequence_number,'{}'::uuid[],'DRIVER_CONFLICT','Driver is no longer eligible'; return;
   end if;
-  if exists(select 1 from public.trips where driver_id=p_driver_id and status in ('assigned','arrived','ongoing') and id<>p_trip_id) then
+  if exists(select 1 from public.trips t where t.driver_id=p_driver_id and t.status in ('assigned','arrived','ongoing') and t.id<>p_trip_id) then
     return query select false,p_trip_id,p_driver_id,'busy',v_offer.dispatch_cycle,v_offer.sequence_number,'{}'::uuid[],'DRIVER_CONFLICT','Driver already has an active trip'; return;
   end if;
 
-  select coalesce(array_agg(driver_id),'{}'::uuid[]) into v_cancelled
-  from public.driver_trip_offers where trip_id=p_trip_id and driver_id<>p_driver_id and status in ('pending','shown');
+  select coalesce(array_agg(o.driver_id),'{}'::uuid[]) into v_cancelled
+  from public.driver_trip_offers o where o.trip_id=p_trip_id and o.driver_id<>p_driver_id and o.status in ('pending','shown');
 
-  update public.driver_trip_offers set status='accepted',responded_at=now(),response_source=p_source,updated_at=now() where id=v_offer.id;
-  update public.driver_trip_offers set status='cancelled',cancelled_at=now(),responded_at=now(),updated_at=now()
-    where trip_id=p_trip_id and driver_id<>p_driver_id and status in ('pending','shown');
-  update public.trips set driver_id=p_driver_id,status='assigned',offer_status='accepted',offer_expires_at=null,
-    dispatch_state='accepted',dispatch_updated_at=now() where id=p_trip_id;
-  update public.drivers set busy=true where id=p_driver_id;
-  update public.dispatch_jobs set status='cancelled',updated_at=now() where trip_id=p_trip_id and status in ('pending','processing');
+  update public.driver_trip_offers o set status='accepted',responded_at=now(),response_source=p_source,updated_at=now() where o.id=v_offer.id;
+  update public.driver_trip_offers o set status='cancelled',cancelled_at=now(),responded_at=now(),updated_at=now()
+    where o.trip_id=p_trip_id and o.driver_id<>p_driver_id and o.status in ('pending','shown');
+  update public.trips t set driver_id=p_driver_id,status='assigned',offer_status='accepted',offer_expires_at=null,
+    dispatch_state='accepted',dispatch_updated_at=now() where t.id=p_trip_id;
+  update public.drivers d set busy=true where d.id=p_driver_id;
+  update public.dispatch_jobs j set status='cancelled',updated_at=now() where j.trip_id=p_trip_id and j.status in ('pending','processing');
   insert into public.trip_events(trip_id,event_type,message,old_status,new_status)
     values(p_trip_id,'offer_accepted',format('Driver %s accepted via %s',p_driver_id,p_source),v_trip.status,'assigned');
 
-  return query select true,p_trip_id,p_driver_id,'assigned',v_offer.dispatch_cycle,v_offer.sequence_number,v_cancelled,null::text,null::text;
+  return query select true as ok,p_trip_id as trip_id,p_driver_id as driver_id,'assigned'::text as status,v_offer.dispatch_cycle,v_offer.sequence_number,v_cancelled,null::text as error_code,null::text as error_message;
 end;
 $$;
 
@@ -285,17 +285,17 @@ language plpgsql security definer set search_path = public, pg_temp
 as $$
 declare v_offer public.driver_trip_offers%rowtype;
 begin
-  select * into v_offer from public.driver_trip_offers
-    where trip_id=p_trip_id and driver_id=p_driver_id and status in ('pending','shown')
-    order by offered_at desc limit 1 for update;
+  select * into v_offer from public.driver_trip_offers o
+    where o.trip_id=p_trip_id and o.driver_id=p_driver_id and o.status in ('pending','shown')
+    order by o.offered_at desc limit 1 for update;
   if v_offer.id is null then
     return query select false,p_trip_id,p_driver_id,'unavailable',0,0,'{}'::uuid[],'OFFER_CONFLICT','Offer no longer available'; return;
   end if;
-  update public.driver_trip_offers set status='declined',responded_at=now(),decline_reason='driver_declined',
-    response_source=p_source,updated_at=now() where id=v_offer.id;
+  update public.driver_trip_offers o set status='declined',responded_at=now(),decline_reason='driver_declined',
+    response_source=p_source,updated_at=now() where o.id=v_offer.id;
   insert into public.trip_events(trip_id,event_type,message,old_status,new_status)
     values(p_trip_id,'offer_declined',format('Driver %s declined via %s',p_driver_id,p_source),'offered','offered');
-  return query select true,p_trip_id,p_driver_id,'declined',v_offer.dispatch_cycle,v_offer.sequence_number,'{}'::uuid[],null::text,null::text;
+  return query select true as ok,p_trip_id as trip_id,p_driver_id as driver_id,'declined'::text as status,v_offer.dispatch_cycle,v_offer.sequence_number,'{}'::uuid[] as cancelled_driver_ids,null::text as error_code,null::text as error_message;
 end;
 $$;
 
@@ -306,14 +306,14 @@ as $$
 begin
   return query
   with due as (
-    select id from public.driver_trip_offers
-    where status in ('pending','shown') and accept_deadline_at <= now()
-      and (p_trip_id is null or driver_trip_offers.trip_id=p_trip_id)
+    select o.id from public.driver_trip_offers o
+    where o.status in ('pending','shown') and o.accept_deadline_at <= now()
+      and (p_trip_id is null or o.trip_id=p_trip_id)
     for update skip locked
   ), changed as (
     update public.driver_trip_offers o set status='expired',expired_at=now(),responded_at=now(),updated_at=now()
     from due where o.id=due.id returning o.id,o.trip_id,o.driver_id
-  ) select id,changed.trip_id,changed.driver_id from changed;
+  ) select changed.id as expired_offer_id,changed.trip_id,changed.driver_id from changed;
 end;
 $$;
 

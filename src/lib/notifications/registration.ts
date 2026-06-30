@@ -37,6 +37,26 @@ function isIosApnsToken(token: string, platform = platformName()) {
   return platform === "ios" && /^[a-f0-9]{64}$/i.test(token.trim());
 }
 
+const NATIVE_FCM_TOKEN_KEY = "moovu:native-fcm-token";
+
+function getCachedNativeFcmToken() {
+  try {
+    const token = window.localStorage.getItem(`${NATIVE_FCM_TOKEN_KEY}:${platformName()}`)?.trim() ?? "";
+    return token && !isIosApnsToken(token) ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheNativeFcmToken(token: string) {
+  const cleanToken = token.trim();
+  if (!cleanToken || isIosApnsToken(cleanToken)) return;
+
+  try {
+    window.localStorage.setItem(`${NATIVE_FCM_TOKEN_KEY}:${platformName()}`, cleanToken);
+  } catch {}
+}
+
 function platformName(): "android" | "ios" | "web" {
   const platform = Capacitor.getPlatform();
   return platform === "android" || platform === "ios" ? platform : "web";
@@ -135,6 +155,7 @@ export async function syncNativePushToken(params: {
     });
     return false;
   }
+  cacheNativeFcmToken(cleanToken);
   const { data: { session } } = await params.supabase.auth.getSession();
   if (!session?.access_token) return false;
 
@@ -188,24 +209,39 @@ async function requestNativeToken(): Promise<string | null> {
 
   if (receive !== "granted") return null;
 
-  return new Promise<string>((resolve, reject) => {
-    let settled = false;
-    const handles: Array<{ remove: () => Promise<void> }> = [];
+  const cachedToken = getCachedNativeFcmToken();
+  if (cachedToken) {
+    devLog("using cached native FCM token", {
+      platform: platformName(),
+      length: cachedToken.length,
+    });
+    return cachedToken;
+  }
 
-    const cleanup = () => {
-      for (const handle of handles) {
-        void handle.remove();
-      }
-    };
+  let settled = false;
+  let resolveToken!: (token: string) => void;
+  let rejectToken!: (error: Error) => void;
+  const handles: Array<{ remove: () => Promise<void> }> = [];
+  const tokenPromise = new Promise<string>((resolve, reject) => {
+    resolveToken = resolve;
+    rejectToken = reject;
+  });
 
-    const timeout = window.setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(new Error("Timed out while registering this device for push notifications."));
-    }, 15000);
+  const cleanup = () => {
+    for (const handle of handles) {
+      void handle.remove();
+    }
+  };
 
-    PushNotifications.addListener("registration", (token) => {
+  const timeout = window.setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    rejectToken(new Error("Timed out while registering this device for push notifications."));
+  }, 30000);
+
+  try {
+    const registrationHandle = await PushNotifications.addListener("registration", (token) => {
       if (settled) return;
       const value = String(token.value ?? "").trim();
       const platform = platformName();
@@ -226,20 +262,35 @@ async function requestNativeToken(): Promise<string | null> {
       settled = true;
       window.clearTimeout(timeout);
       cleanup();
+      cacheNativeFcmToken(value);
       devLog("native FCM token received", { platform, length: value.length });
-      resolve(value);
-    }).then((handle) => handles.push(handle)).catch(reject);
+      resolveToken(value);
+    });
+    handles.push(registrationHandle);
 
-    PushNotifications.addListener("registrationError", (error) => {
+    const errorHandle = await PushNotifications.addListener("registrationError", (error) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timeout);
       cleanup();
-      reject(new Error(error.error || "Native push registration failed."));
-    }).then((handle) => handles.push(handle)).catch(reject);
+      rejectToken(new Error(error.error || "Native push registration failed."));
+    });
+    handles.push(errorHandle);
 
-    void PushNotifications.register();
-  });
+    devLog("native push listeners ready; starting registration", {
+      platform: platformName(),
+    });
+    await PushNotifications.register();
+  } catch (error) {
+    if (!settled) {
+      settled = true;
+      window.clearTimeout(timeout);
+      cleanup();
+      rejectToken(error instanceof Error ? error : new Error("Native push registration failed."));
+    }
+  }
+
+  return tokenPromise;
 }
 
 async function requestWebToken(): Promise<string | null> {
