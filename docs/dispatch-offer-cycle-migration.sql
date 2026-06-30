@@ -1,6 +1,6 @@
--- MOOVU multi-driver staged offer cycle migration
--- Review before running. This supports nearest-driver first, escalation after 6 seconds,
--- 15 second accept windows, explicit reject exclusion, and first-valid-accept wins.
+-- MOOVU multi-driver staged offer cycle migration (LEGACY REFERENCE)
+-- Prefer docs/atomic-dispatch-migration.sql for production.
+-- Current production timing is 10 second escalation and 30 second accept windows.
 
 create table if not exists public.driver_trip_offers (
   id uuid primary key default gen_random_uuid(),

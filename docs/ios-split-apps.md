@@ -6,8 +6,8 @@ MOOVU uses one Next.js codebase and two independent iOS Capacitor app packages f
 
 | App | Display name | Bundle ID | Start URL |
 | --- | --- | --- | --- |
-| Customer | MOOVU | `com.moovu.customer` | `https://moovurides.co.za` |
-| Driver | MOOVU Driver | `com.moovu.driver` | `https://driver.moovurides.co.za` |
+| Customer | MOOVU | `za.co.moovu.customer` | `https://moovurides.co.za` |
+| Driver | MOOVU Driver | `za.co.moovu.driver` | `https://driver.moovurides.co.za` |
 
 `capacitor.config.ts` is a guarded wrapper only. It refuses generic Capacitor commands unless `CAPACITOR_TARGET=customer` or `CAPACITOR_TARGET=driver` is set by the npm scripts.
 
@@ -71,15 +71,15 @@ For each generated app:
    - Customer: `ios-customer/App/App.xcworkspace`
    - Driver: `ios-driver/App/App.xcworkspace`
 2. Confirm the bundle identifier:
-   - Customer: `com.moovu.customer`
-   - Driver: `com.moovu.driver`
+   - Customer: `za.co.moovu.customer`
+   - Driver: `za.co.moovu.driver`
 3. Confirm the display name:
    - Customer: `MOOVU`
    - Driver: `MOOVU Driver`
 4. Replace the default AppIcon slots with the matching assets from `native-assets/ios/...`.
 5. Add the correct Firebase plist:
-   - Customer Firebase iOS app: `GoogleService-Info.plist` for `com.moovu.customer`
-   - Driver Firebase iOS app: `GoogleService-Info.plist` for `com.moovu.driver`
+   - Customer Firebase iOS app: `GoogleService-Info.plist` for `za.co.moovu.customer`
+   - Driver Firebase iOS app: `GoogleService-Info.plist` for `za.co.moovu.driver`
 6. Enable capabilities as required:
    - Push Notifications
    - Associated Domains if deep links are configured

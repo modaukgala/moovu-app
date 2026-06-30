@@ -1,12 +1,12 @@
 export const DISPATCH_CONFIG = {
-  escalationSeconds: 6,
-  acceptWindowSeconds: 15,
-  cycleCooldownSeconds: 12,
+  escalationSeconds: 10,
+  acceptWindowSeconds: 30,
+  cycleCooldownSeconds: 8,
   gpsFreshnessSeconds: 90,
   initialRadiusKm: 8,
   expandedRadiusKm: 20,
-  maxSearchSeconds: 180,
-  maxCycles: 3,
+  maxSearchSeconds: 600,
+  maxCycles: 50,
   maxCandidatesPerStep: 25,
 } as const;
 
@@ -19,4 +19,3 @@ export function dispatchRadiusForCycle(cycle: number) {
       10,
   ) / 10;
 }
-

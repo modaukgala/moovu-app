@@ -12,14 +12,14 @@ This checklist records the final manual items that must be completed before Goog
 
 ## iOS APNs and Firebase
 
-Native iOS closed-app push uses APNs device tokens from Capacitor Push Notifications. Configure Vercel with:
+Native iOS closed-app push now expects Firebase FCM registration tokens from the native Firebase Messaging SDK. If the temporary direct-APNs fallback is explicitly enabled, configure Vercel with:
 
 - `APNS_TEAM_ID`
 - `APNS_KEY_ID`
 - `APNS_AUTH_KEY`
 - `APNS_ENV=production`
-- `APNS_CUSTOMER_BUNDLE_ID=com.moovu.customer`
-- `APNS_DRIVER_BUNDLE_ID=com.moovu.driver`
+- `APNS_CUSTOMER_BUNDLE_ID=za.co.moovu.customer`
+- `APNS_DRIVER_BUNDLE_ID=za.co.moovu.driver`
 
 Enable the Push Notifications capability on both Xcode targets, then test foreground, background, and closed-app delivery on real iPhones.
 
@@ -30,8 +30,8 @@ Firebase plist files are only required if MOOVU later adds native Firebase Messa
 
 These files must be downloaded from Firebase for the exact bundle IDs:
 
-- Customer: `com.moovu.customer`
-- Driver: `com.moovu.driver`
+- Customer: `za.co.moovu.customer`
+- Driver: `za.co.moovu.driver`
 
 Do not claim iOS notification readiness from browser/PWA tests only.
 

@@ -8,8 +8,8 @@ MOOVU's shared permission code already calls Capacitor plugins on native platfor
 
 The repository uses split native iOS projects:
 
-- Customer: `ios-customer/`, bundle ID `com.moovu.customer`
-- Driver: `ios-driver/`, bundle ID `com.moovu.driver`
+- Customer: `ios-customer/`, bundle ID `za.co.moovu.customer`
+- Driver: `ios-driver/`, bundle ID `za.co.moovu.driver`
 
 Add or confirm these privacy strings in each Xcode target under `App/App/Info.plist` before testing permissions.
 

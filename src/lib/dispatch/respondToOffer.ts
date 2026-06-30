@@ -106,9 +106,7 @@ export async function respondToOffer(params: {
     tripId: params.tripId,
     cycle: Number(row.dispatch_cycle ?? 1),
     sequenceNumber: Number(row.sequence_number ?? 1) + 1,
-    allowLegacyFallback: false,
   }).catch(() => null);
 
   return { ok: true, status: 200, tripId: params.tripId, state: "declined" };
 }
-

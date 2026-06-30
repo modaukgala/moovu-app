@@ -9,6 +9,7 @@ const MOOVU_NOTIFICATION_SOUND = "moovu_premium_alert";
 const MOOVU_TRIP_OFFER_SOUND = "moovu_trip_offer_buzz";
 const MOOVU_ANDROID_CHANNEL_ID = "moovu_premium_v1";
 const MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID = "moovu_trip_offer_buzz_v1";
+const ENABLE_LEGACY_APNS_FALLBACK = process.env.ENABLE_LEGACY_APNS_FALLBACK === "true";
 
 type SendPushParams = {
   userIds?: string[];
@@ -514,6 +515,26 @@ async function sendFcmToTargets(params: SendPushParams) {
       });
 
       if (iosNativeToken && isLegacyApnsDeviceToken(row)) {
+        if (!ENABLE_LEGACY_APNS_FALLBACK) {
+          console.warn("[push] legacy APNs token skipped and deactivated; iOS must register Firebase FCM tokens", {
+            tokenId: row.id,
+            userId: row.user_id,
+            role: row.role,
+            appType: row.app_type,
+            kind: tokenKind,
+          });
+          await supabase
+            .from("fcm_tokens")
+            .update({
+              is_active: false,
+              enabled: false,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", row.id);
+          removed += 1;
+          continue;
+        }
+
         const iosData = await withNativeActionData({
           supabase,
           row,

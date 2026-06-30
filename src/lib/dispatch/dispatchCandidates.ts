@@ -127,15 +127,16 @@ export async function getDispatchCandidates(params: {
   if (prelim.length === 0) return [] as DispatchCandidate[];
   const driverIds = prelim.map((driver) => driver.id);
 
-  const [walletsResult, qualityResult, statsResult, activeTripsResult, declinedResult] = await Promise.all([
+  const [walletsResult, qualityResult, statsResult, activeTripsResult, declinedResult, activeOfferResult] = await Promise.all([
     supabase.from("driver_wallets").select("driver_id,balance_due").in("driver_id", driverIds),
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").in("driver_id", driverIds),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").in("driver_id", driverIds),
     supabase.from("trips").select("driver_id").in("driver_id", driverIds).in("status", ["assigned", "arrived", "ongoing"]),
     supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).in("driver_id", driverIds).eq("status", "declined"),
+    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).in("driver_id", driverIds).in("status", ["pending", "shown"]),
   ]);
 
-  const fatal = [walletsResult.error, activeTripsResult.error].find(Boolean);
+  const fatal = [walletsResult.error, activeTripsResult.error, activeOfferResult.error].find(Boolean);
   if (fatal) throw new Error(fatal.message);
 
   const wallets = new Map(((walletsResult.data ?? []) as WalletRow[]).map((row) => [row.driver_id, row]));
@@ -143,10 +144,12 @@ export async function getDispatchCandidates(params: {
   const stats = new Map(((statsResult.data ?? []) as OfferStatsRow[]).map((row) => [row.driver_id, row]));
   const activeDriverIds = new Set((activeTripsResult.data ?? []).map((row) => row.driver_id).filter(Boolean));
   const declinedDriverIds = new Set((declinedResult.data ?? []).map((row) => row.driver_id).filter(Boolean));
+  const activeOfferDriverIds = new Set((activeOfferResult.data ?? []).map((row) => row.driver_id).filter(Boolean));
 
   return prelim
     .filter((driver) => !activeDriverIds.has(driver.id))
     .filter((driver) => !declinedDriverIds.has(driver.id))
+    .filter((driver) => !activeOfferDriverIds.has(driver.id))
     .filter((driver) => Number(wallets.get(driver.id)?.balance_due ?? 0) < DRIVER_COMMISSION_LOCK_LIMIT)
     .map((driver): DispatchCandidate => {
       const distanceKm = round2(haversineKm(pickupLat, pickupLng, Number(driver.lat), Number(driver.lng)));

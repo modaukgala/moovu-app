@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
-import {
-  expirePendingOfferIfNeeded,
-  isMissingOfferTableError,
-  offerNextEligibleDriver,
-} from "@/lib/trip-offers";
 
 const TRIP_SELECT =
   "id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount";
@@ -54,50 +49,11 @@ export async function POST(req: Request) {
       .limit(10);
 
     if (error) {
-      if (isMissingOfferTableError(error)) {
-        const { data: trips, error: legacyError } = await supabaseAdmin
-          .from("trips")
-          .select(TRIP_SELECT)
-          .eq("driver_id", driverId)
-          .eq("offer_status", "pending")
-          .eq("status", "offered")
-          .order("created_at", { ascending: false })
-          .limit(5);
-
-        if (legacyError) {
-          return NextResponse.json({ ok: false, error: legacyError.message }, { status: 500 });
-        }
-
-        for (const trip of trips ?? []) {
-          const expired = await expirePendingOfferIfNeeded(trip.id);
-          if (expired.expired) {
-            const next = await offerNextEligibleDriver(trip.id, [driverId]);
-            if (!next.ok) {
-              await offerNextEligibleDriver(trip.id, [], {
-                excludePreviouslyAttempted: false,
-                resendToDriverId: driverId,
-              });
-            }
-          }
-        }
-
-        const { data: fresh, error: freshError } = await supabaseAdmin
-          .from("trips")
-          .select(TRIP_SELECT)
-          .eq("driver_id", driverId)
-          .eq("offer_status", "pending")
-          .eq("status", "offered")
-          .order("created_at", { ascending: false })
-          .limit(5);
-
-        if (freshError) {
-          return NextResponse.json({ ok: false, error: freshError.message }, { status: 500 });
-        }
-
-        return NextResponse.json({ ok: true, offers: fresh ?? [], mode: "legacy-trip-offer" });
-      }
-
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      console.error("[driver-offers] atomic offer table unavailable", { reason: error.message });
+      return NextResponse.json(
+        { ok: false, error: "Atomic dispatch migration is not active." },
+        { status: 503 },
+      );
     }
 
     // Polling refreshes the driver UI only. Server-owned dispatch advances offers.

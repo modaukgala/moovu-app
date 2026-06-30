@@ -2,7 +2,7 @@
 
 Last updated: 2026-06-23
 
-This guide supports the customer app (`com.moovu.customer`) and driver app (`com.moovu.driver`) after the Apple review feedback around privacy, account deletion, age rating, and iOS notifications.
+This guide supports the customer app (`za.co.moovu.customer`) and driver app (`za.co.moovu.driver`) after the Apple review feedback around privacy, account deletion, age rating, and iOS notifications.
 
 ## 1. Apple 5.1.2(i) Tracking
 
@@ -113,10 +113,10 @@ Tracking:
 
 ## 6. iOS Push Notification Blockers
 
-The code supports Android/Web through FCM/Web Push and native iOS through APNs device tokens. Closed-app iOS push cannot be claimed as verified until these manual items are complete:
+The code supports Android/Web through FCM/Web Push and native iOS through Firebase FCM registration tokens with APNs alert payloads. Closed-app iOS push cannot be claimed as verified until these manual items are complete:
 
 - Enable Push Notifications capability in both Xcode targets.
-- Create/download an Apple APNs auth key and configure Vercel with `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_AUTH_KEY`, `APNS_ENV=production`, `APNS_CUSTOMER_BUNDLE_ID=com.moovu.customer`, and `APNS_DRIVER_BUNDLE_ID=com.moovu.driver`.
+- Create/download an Apple APNs auth key and configure Vercel with `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_AUTH_KEY`, `APNS_ENV=production`, `APNS_CUSTOMER_BUNDLE_ID=za.co.moovu.customer`, and `APNS_DRIVER_BUNDLE_ID=za.co.moovu.driver` only if the temporary legacy APNs fallback is enabled.
 - Confirm each app registers a native token and stores it in `fcm_tokens` as `ios_customer` or `ios_driver`.
 - Test foreground, background, and closed-app notifications on real iPhones.
 - Add `ios-customer/App/App/GoogleService-Info.plist` and `ios-driver/App/App/GoogleService-Info.plist` only if MOOVU later adds native Firebase Messaging token bridging.
@@ -133,7 +133,7 @@ npm run ios:customer:open
 In Xcode:
 
 1. Select the MOOVU customer scheme.
-2. Confirm bundle ID `com.moovu.customer`.
+2. Confirm bundle ID `za.co.moovu.customer`.
 3. Confirm signing team.
 4. Product > Archive.
 5. Distribute App > App Store Connect.
@@ -148,7 +148,7 @@ npm run ios:driver:open
 In Xcode:
 
 1. Select the MOOVU Driver scheme.
-2. Confirm bundle ID `com.moovu.driver`.
+2. Confirm bundle ID `za.co.moovu.driver`.
 3. Confirm signing team.
 4. Product > Archive.
 5. Distribute App > App Store Connect.

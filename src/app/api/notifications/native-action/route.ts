@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { chatPreview, normalizeTripMessageBody } from "@/lib/trip-chat";
-import { notifyAdmins, notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
-import { offerNextEligibleDriver } from "@/lib/trip-offers";
+import { notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
 import { respondToOffer as respondToAtomicOffer } from "@/lib/dispatch/respondToOffer";
 
 type NativeActionRow = {
@@ -78,153 +77,9 @@ async function respondToTripOffer(row: NativeActionRow, action: "accept" | "decl
     action,
     source: "native_notification",
   });
-  if (!atomicResponse.atomicUnavailable) {
-    return atomicResponse.ok
-      ? NextResponse.json({ ok: true, message: action === "accept" ? "Trip accepted." : "Trip declined." })
-      : jsonError(atomicResponse.error ?? "Offer is no longer available.", atomicResponse.status);
-  }
-
-  const { data: trip, error: tripError } = await supabaseAdmin
-    .from("trips")
-    .select("id,driver_id,status,offer_status,offer_attempted_driver_ids")
-    .eq("id", row.trip_id)
-    .maybeSingle();
-
-  if (tripError) return jsonError(tripError.message, 500);
-  if (!trip) return jsonError("Trip not found.", 404);
-  if (trip.status !== "offered" || trip.offer_status !== "pending" || trip.driver_id !== driverId) {
-    return jsonError("This trip offer is no longer available.", 409);
-  }
-
-  const now = new Date().toISOString();
-
-  if (action === "accept") {
-    const { data: acceptedTrip, error: acceptError } = await supabaseAdmin
-      .from("trips")
-      .update({
-        status: "assigned",
-        offer_status: "accepted",
-        offer_expires_at: null,
-        driver_id: driverId,
-      })
-      .eq("id", row.trip_id)
-      .eq("status", "offered")
-      .eq("offer_status", "pending")
-      .eq("driver_id", driverId)
-      .select("id")
-      .maybeSingle();
-
-    if (acceptError) return jsonError(acceptError.message, 500);
-    if (!acceptedTrip) return jsonError("This trip was already accepted or is no longer available.", 409);
-
-    await supabaseAdmin.from("drivers").update({ busy: true }).eq("id", driverId);
-
-    const { data: competingOffers } = await supabaseAdmin
-      .from("driver_trip_offers")
-      .select("driver_id")
-      .eq("trip_id", row.trip_id)
-      .neq("driver_id", driverId)
-      .in("status", ["pending", "shown"]);
-
-    const competingDriverIds = Array.from(
-      new Set((competingOffers ?? []).map((offer) => offer.driver_id).filter(Boolean)),
-    );
-
-    await supabaseAdmin
-      .from("driver_trip_offers")
-      .update({ status: "accepted", responded_at: now, updated_at: now })
-      .eq("trip_id", row.trip_id)
-      .eq("driver_id", driverId)
-      .in("status", ["pending", "shown"]);
-
-    await supabaseAdmin
-      .from("driver_trip_offers")
-      .update({ status: "cancelled", responded_at: now, updated_at: now })
-      .eq("trip_id", row.trip_id)
-      .neq("driver_id", driverId)
-      .in("status", ["pending", "shown"]);
-
-    if (competingDriverIds.length > 0) {
-      await supabaseAdmin.from("drivers").update({ busy: false }).in("id", competingDriverIds);
-    }
-
-    const { data: acceptingDriver } = await supabaseAdmin
-      .from("drivers")
-      .select("first_name,last_name,phone")
-      .eq("id", driverId)
-      .maybeSingle();
-    const acceptingDriverName =
-      `${acceptingDriver?.first_name ?? ""} ${acceptingDriver?.last_name ?? ""}`.trim() ||
-      acceptingDriver?.phone ||
-      "A driver";
-
-    await supabaseAdmin.from("trip_events").insert({
-      trip_id: row.trip_id,
-      event_type: "offer_accepted",
-      message: `${acceptingDriverName} accepted the trip from Android notification`,
-      old_status: "offered",
-      new_status: "assigned",
-    });
-
-    await notifyCustomerForTrip(
-      row.trip_id,
-      "Driver Accepted Your Ride",
-      "A driver accepted your trip and is on the way.",
-      `/ride/${row.trip_id}`,
-    );
-
-    await notifyAdmins("Driver accepted trip", `${acceptingDriverName} accepted trip ${row.trip_id}.`, "/admin/trips");
-
-    return NextResponse.json({ ok: true, message: "Trip accepted." });
-  }
-
-  await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", driverId);
-
-  await supabaseAdmin
-    .from("driver_trip_offers")
-    .update({ status: "declined", responded_at: now, updated_at: now })
-    .eq("trip_id", row.trip_id)
-    .eq("driver_id", driverId)
-    .in("status", ["pending", "shown"]);
-
-  const attemptedDriverIds = Array.from(
-    new Set([...(trip.offer_attempted_driver_ids ?? []), driverId]),
-  );
-
-  await supabaseAdmin
-    .from("trips")
-    .update({
-      driver_id: null,
-      status: "requested",
-      offer_status: "rejected",
-      offer_expires_at: null,
-      offer_attempted_driver_ids: attemptedDriverIds,
-    })
-    .eq("id", row.trip_id)
-    .eq("driver_id", driverId);
-
-  await supabaseAdmin.from("trip_events").insert({
-    trip_id: row.trip_id,
-    event_type: "offer_rejected",
-    message: "Driver declined from Android notification",
-    old_status: "offered",
-    new_status: "requested",
-  });
-
-  const next = await offerNextEligibleDriver(row.trip_id, [driverId]);
-
-  await notifyAdmins(
-    "Driver rejected trip",
-    `A driver rejected trip ${row.trip_id}. The system is finding the next eligible driver.`,
-    "/admin/trips",
-  );
-
-  return NextResponse.json({
-    ok: true,
-    message: "Trip declined.",
-    reoffered: next.ok,
-    nextDriverId: next.ok ? next.driverId : null,
-  });
+  return atomicResponse.ok
+    ? NextResponse.json({ ok: true, message: action === "accept" ? "Trip accepted." : "Trip declined." })
+    : jsonError(atomicResponse.error ?? "Offer is no longer available.", atomicResponse.status);
 }
 
 async function replyToChat(row: NativeActionRow, replyText: string) {

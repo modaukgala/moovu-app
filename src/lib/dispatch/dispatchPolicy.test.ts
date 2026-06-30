@@ -5,9 +5,9 @@ import { DISPATCH_CONFIG, dispatchRadiusForCycle } from "./config.ts";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
 import { scoreDriverForTrip } from "./driverScoring.ts";
 
-test("dispatch timing uses six-second escalation and fifteen-second acceptance", () => {
-  assert.equal(DISPATCH_CONFIG.escalationSeconds, 6);
-  assert.equal(DISPATCH_CONFIG.acceptWindowSeconds, 15);
+test("dispatch timing uses ten-second escalation and thirty-second acceptance", () => {
+  assert.equal(DISPATCH_CONFIG.escalationSeconds, 10);
+  assert.equal(DISPATCH_CONFIG.acceptWindowSeconds, 30);
   assert.ok(DISPATCH_CONFIG.acceptWindowSeconds > DISPATCH_CONFIG.escalationSeconds * 2);
 });
 

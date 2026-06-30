@@ -7,7 +7,7 @@ MOOVU does not use generic Capacitor commands for App Store packaging. Every bui
 Identity:
 
 - App name: MOOVU
-- Bundle ID: `com.moovu.customer`
+- Bundle ID: `za.co.moovu.customer`
 - URL: `https://moovurides.co.za`
 - Native folder: `ios-customer/`
 
@@ -32,7 +32,7 @@ build/MOOVU-Customer.xcarchive
 Identity:
 
 - App name: MOOVU Driver
-- Bundle ID: `com.moovu.driver`
+- Bundle ID: `za.co.moovu.driver`
 - URL: `https://driver.moovurides.co.za`
 - Native folder: `ios-driver/`
 

@@ -3,6 +3,7 @@ import { scoreDriverForTrip } from "@/lib/dispatch/driverScoring";
 import { rebuildDriverQualityMetrics } from "@/lib/quality/rebuildDriverQualityMetrics";
 import { sendPushSafe } from "@/lib/push-server";
 import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
+import { DISPATCH_CONFIG } from "@/lib/dispatch/config";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,8 +11,8 @@ const supabaseAdmin = createClient(
   { auth: { persistSession: false } }
 );
 
-export const OFFER_ACCEPT_DEADLINE_SECONDS = 15;
-export const OFFER_ESCALATION_SECONDS = 6;
+export const OFFER_ACCEPT_DEADLINE_SECONDS = DISPATCH_CONFIG.acceptWindowSeconds;
+export const OFFER_ESCALATION_SECONDS = DISPATCH_CONFIG.escalationSeconds;
 
 type EligibleDriverRow = {
   id: string;

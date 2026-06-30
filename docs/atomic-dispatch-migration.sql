@@ -140,8 +140,8 @@ create or replace function public.reserve_trip_offer(
   p_road_eta_seconds integer,
   p_dispatch_score numeric,
   p_score_breakdown jsonb,
-  p_escalation_seconds integer default 6,
-  p_accept_window_seconds integer default 15,
+  p_escalation_seconds integer default 10,
+  p_accept_window_seconds integer default 30,
   p_search_radius_km numeric default 8
 )
 returns table(offer_id uuid, driver_id uuid, accept_deadline_at timestamptz, escalates_at timestamptz)

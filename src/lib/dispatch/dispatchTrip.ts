@@ -5,7 +5,6 @@ import { DISPATCH_CONFIG, dispatchRadiusForCycle } from "@/lib/dispatch/config";
 import { getDispatchCandidates } from "@/lib/dispatch/dispatchCandidates";
 import { enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
 import type { DispatchResult } from "@/lib/dispatch/types";
-import { offerNextEligibleDriver } from "@/lib/trip-offers";
 
 type AtomicOfferRow = {
   offer_id: string;
@@ -51,10 +50,15 @@ export async function dispatchTrip(params: {
   cycle?: number;
   sequenceNumber?: number;
   preferredDriverId?: string | null;
-  allowLegacyFallback?: boolean;
 }): Promise<DispatchResult> {
   const cycle = Math.max(1, params.cycle ?? 1);
   const sequenceNumber = Math.max(1, params.sequenceNumber ?? 1);
+  console.log("[dispatch] trip dispatch requested", {
+    tripId: params.tripId,
+    cycle,
+    sequenceNumber,
+    preferredDriverId: params.preferredDriverId ?? null,
+  });
   const { data: trip, error: tripError } = await supabaseAdmin
     .from("trips")
     .select("id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,ride_option,dispatch_started_at,dispatch_cycle")
@@ -76,6 +80,11 @@ export async function dispatchTrip(params: {
 
   const startedAtMs = trip.dispatch_started_at ? new Date(trip.dispatch_started_at).getTime() : Date.now();
   if (Date.now() - startedAtMs > DISPATCH_CONFIG.maxSearchSeconds * 1000 || cycle > DISPATCH_CONFIG.maxCycles) {
+    console.warn("[dispatch] search exhausted", {
+      tripId: trip.id,
+      cycle,
+      startedAt: trip.dispatch_started_at,
+    });
     try {
       await supabaseAdmin.rpc("mark_dispatch_exhausted", { p_trip_id: trip.id });
     } catch {}
@@ -101,17 +110,12 @@ export async function dispatchTrip(params: {
       radiusKm,
     });
   } catch (error: unknown) {
-    if (params.allowLegacyFallback !== false) {
-      const legacy = await offerNextEligibleDriver(trip.id, []);
-      return {
-        ok: legacy.ok,
-        tripId: trip.id,
-        driverId: legacy.ok ? legacy.driverId : null,
-        expiresAt: legacy.ok ? legacy.expiresAt : null,
-        mode: "legacy",
-        error: legacy.ok ? undefined : legacy.error,
-      };
-    }
+    console.error("[dispatch] candidate lookup failed", {
+      tripId: trip.id,
+      cycle,
+      sequenceNumber,
+      reason: error instanceof Error ? error.message : "Unknown error",
+    });
     return { ok: false, tripId: trip.id, error: error instanceof Error ? error.message : "Candidate lookup failed." };
   }
 
@@ -119,24 +123,24 @@ export async function dispatchTrip(params: {
     ? candidates.filter((row) => row.driverId === params.preferredDriverId)
     : candidates;
 
+  console.log("[dispatch] candidates prepared", {
+    tripId: trip.id,
+    cycle,
+    sequenceNumber,
+    radiusKm,
+    candidateCount: candidates.length,
+    targetedCount: candidatesToTry.length,
+  });
+
   if (candidatesToTry.length === 0) {
-    if (params.allowLegacyFallback !== false) {
-      const legacy = await offerNextEligibleDriver(
-        trip.id,
-        params.preferredDriverId ? [] : undefined,
-        params.preferredDriverId ? { resendToDriverId: params.preferredDriverId, excludePreviouslyAttempted: false } : undefined,
-      );
-      return {
-        ok: legacy.ok,
-        tripId: trip.id,
-        driverId: legacy.ok ? legacy.driverId : null,
-        expiresAt: legacy.ok ? legacy.expiresAt : null,
-        mode: "legacy",
-        error: legacy.ok ? undefined : legacy.error,
-      };
-    }
     const nextCycle = cycle + 1;
     if (nextCycle <= DISPATCH_CONFIG.maxCycles) {
+      console.log("[dispatch] no candidates, scheduling recover", {
+        tripId: trip.id,
+        currentCycle: cycle,
+        nextCycle,
+        cooldownSeconds: DISPATCH_CONFIG.cycleCooldownSeconds,
+      });
       await enqueueDispatchJob({
         supabase: supabaseAdmin,
         tripId: trip.id,
@@ -167,18 +171,24 @@ export async function dispatchTrip(params: {
     });
 
     if (error) {
-      if (isMissingAtomicDispatch(error) && params.allowLegacyFallback !== false) {
-        const legacy = await offerNextEligibleDriver(trip.id, []);
-        return {
-          ok: legacy.ok,
+      if (isMissingAtomicDispatch(error)) {
+        console.error("[dispatch] atomic offer reservation unavailable", {
           tripId: trip.id,
-          driverId: legacy.ok ? legacy.driverId : null,
-          expiresAt: legacy.ok ? legacy.expiresAt : null,
-          mode: "legacy",
-          error: legacy.ok ? undefined : legacy.error,
-        };
+          driverId: candidate.driverId,
+          cycle,
+          sequenceNumber,
+          reason: error.message,
+        });
+        return { ok: false, tripId: trip.id, error: "Atomic dispatch migration is not active." };
       }
       reservationError = error.message;
+      console.warn("[dispatch] reserve_trip_offer rejected candidate", {
+        tripId: trip.id,
+        driverId: candidate.driverId,
+        cycle,
+        sequenceNumber,
+        reason: error.message,
+      });
       if (params.preferredDriverId || error.code !== "P0001") break;
       continue;
     }
@@ -188,9 +198,27 @@ export async function dispatchTrip(params: {
   }
 
   if (!row?.offer_id && reservationError) {
+    console.error("[dispatch] reservation failed for all candidates", {
+      tripId: trip.id,
+      cycle,
+      sequenceNumber,
+      reason: reservationError,
+    });
     return { ok: false, tripId: trip.id, error: reservationError };
   }
   if (!row?.offer_id) return { ok: false, tripId: trip.id, error: "Offer reservation was not created." };
+
+  if (cycle > 1 && sequenceNumber === 1) {
+    try {
+      await supabaseAdmin.from("trip_events").insert({
+        trip_id: trip.id,
+        event_type: "offer_cycle_restarted",
+        message: `Dispatch restarted for cycle ${cycle}.`,
+        old_status: "requested",
+        new_status: "offered",
+      });
+    } catch {}
+  }
 
   await Promise.all([
     enqueueDispatchJob({
@@ -212,6 +240,16 @@ export async function dispatchTrip(params: {
       sequenceNumber,
     }),
   ]);
+
+  console.log("[dispatch] driver offered", {
+    tripId: trip.id,
+    offerId: row.offer_id,
+    driverId: row.driver_id,
+    cycle,
+    sequenceNumber,
+    expiresAt: row.accept_deadline_at,
+    escalatesAt: row.escalates_at,
+  });
 
   await notifyDriverOffer({
     tripId: trip.id,

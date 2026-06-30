@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
-import {
-  expirePendingOfferIfNeeded,
-  isMissingOfferTableError,
-  offerNextEligibleDriver,
-} from "@/lib/trip-offers";
 
 const TRIP_SELECT =
   "id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount,payment_method";
@@ -22,25 +17,6 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
     message.includes("stop_waiting_fee") ||
     message.includes("ride_option")
   );
-}
-
-async function loadLegacyCurrentOffer(driverId: string) {
-  const query = (columns: string) => supabaseAdmin
-    .from("trips")
-    .select(columns)
-    .eq("driver_id", driverId)
-    .eq("offer_status", "pending")
-    .eq("status", "offered")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data, error } = await query(TRIP_SELECT_WITH_STOPS);
-  if (!error) return { offer: data ?? null, error: null };
-  if (!isMissingStopsColumn(error)) return { offer: null, error };
-
-  const fallback = await query(TRIP_SELECT);
-  return { offer: fallback.data ?? null, error: fallback.error };
 }
 
 export async function GET(req: Request) {
@@ -97,97 +73,11 @@ export async function GET(req: Request) {
       .limit(10);
 
     if (error) {
-      if (isMissingOfferTableError(error)) {
-        const { data: trips, error: legacyError } = await supabaseAdmin
-          .from("trips")
-          .select(TRIP_SELECT_WITH_STOPS)
-          .eq("driver_id", driverId)
-          .eq("offer_status", "pending")
-          .eq("status", "offered")
-          .order("created_at", { ascending: false })
-          .limit(5);
-
-        if (legacyError) {
-          if (!isMissingStopsColumn(legacyError)) {
-            return NextResponse.json({ ok: false, error: legacyError.message }, { status: 500 });
-          }
-
-          const { data: fallbackTrips, error: fallbackError } = await supabaseAdmin
-            .from("trips")
-            .select(TRIP_SELECT)
-            .eq("driver_id", driverId)
-            .eq("offer_status", "pending")
-            .eq("status", "offered")
-            .order("created_at", { ascending: false })
-            .limit(5);
-
-          if (fallbackError) {
-            return NextResponse.json({ ok: false, error: fallbackError.message }, { status: 500 });
-          }
-
-          for (const trip of fallbackTrips ?? []) {
-            const expired = await expirePendingOfferIfNeeded(trip.id);
-            if (expired.expired) {
-              const next = await offerNextEligibleDriver(trip.id, [driverId]);
-              if (!next.ok) {
-                await offerNextEligibleDriver(trip.id, [], {
-                  excludePreviouslyAttempted: false,
-                  resendToDriverId: driverId,
-                });
-              }
-            }
-          }
-        }
-
-        for (const trip of trips ?? []) {
-          const expired = await expirePendingOfferIfNeeded(trip.id);
-          if (expired.expired) {
-            const next = await offerNextEligibleDriver(trip.id, [driverId]);
-            if (!next.ok) {
-              await offerNextEligibleDriver(trip.id, [], {
-                excludePreviouslyAttempted: false,
-                resendToDriverId: driverId,
-              });
-            }
-          }
-        }
-
-        const { data: fresh, error: freshError } = await supabaseAdmin
-          .from("trips")
-          .select(TRIP_SELECT_WITH_STOPS)
-          .eq("driver_id", driverId)
-          .eq("offer_status", "pending")
-          .eq("status", "offered")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (freshError) {
-          if (!isMissingStopsColumn(freshError)) {
-            return NextResponse.json({ ok: false, error: freshError.message }, { status: 500 });
-          }
-
-          const { data: legacyFresh, error: legacyFreshError } = await supabaseAdmin
-            .from("trips")
-            .select(TRIP_SELECT)
-            .eq("driver_id", driverId)
-            .eq("offer_status", "pending")
-            .eq("status", "offered")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (legacyFreshError) {
-            return NextResponse.json({ ok: false, error: legacyFreshError.message }, { status: 500 });
-          }
-
-          return NextResponse.json({ ok: true, offer: legacyFresh ?? null, mode: "legacy-trip-offer" });
-        }
-
-        return NextResponse.json({ ok: true, offer: fresh ?? null, mode: "legacy-trip-offer" });
-      }
-
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      console.error("[driver-offers] atomic offer table unavailable", { reason: error.message });
+      return NextResponse.json(
+        { ok: false, error: "Atomic dispatch migration is not active." },
+        { status: 503 },
+      );
     }
 
     // The client only reads offers. The protected dispatch worker owns
@@ -209,14 +99,7 @@ export async function GET(req: Request) {
 
     const offerRow = offers?.[0] ?? null;
     if (!offerRow?.trip_id) {
-      // Compatibility path: the legacy dispatcher stores the active offer on
-      // trips even when driver_trip_offers exists but its atomic RPCs/columns
-      // are not fully active yet.
-      const legacy = await loadLegacyCurrentOffer(driverId);
-      if (legacy.error) {
-        return NextResponse.json({ ok: false, error: legacy.error.message }, { status: 500 });
-      }
-      return NextResponse.json({ ok: true, offer: legacy.offer, mode: "legacy-trip-offer" });
+      return NextResponse.json({ ok: true, offer: null });
     }
 
     const { data: trip, error: tripErr } = await supabaseAdmin
@@ -247,11 +130,7 @@ export async function GET(req: Request) {
     }
 
     if (!trip || ["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(String(trip.status ?? "").toLowerCase())) {
-      const legacy = await loadLegacyCurrentOffer(driverId);
-      if (legacy.error) {
-        return NextResponse.json({ ok: false, error: legacy.error.message }, { status: 500 });
-      }
-      return NextResponse.json({ ok: true, offer: legacy.offer, mode: "legacy-trip-offer" });
+      return NextResponse.json({ ok: true, offer: null });
     }
 
     return NextResponse.json({

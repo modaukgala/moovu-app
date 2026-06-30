@@ -63,7 +63,7 @@ After generation, wire the typed database into the browser/admin Supabase client
 - Configure a strong server-only `DISPATCH_JOB_SECRET`.
 - The protected worker is `POST /api/jobs/dispatch` and accepts the secret through `Authorization: Bearer <secret>` or `x-dispatch-job-secret`.
 - Driver polling is UI refresh only and is not the authoritative scheduler after the atomic migration is active.
-- The repository currently has no durable sub-minute queue provider. A trusted queue/workflow must invoke due work at the required times. Vercel Cron alone cannot guarantee six-second escalation.
+- The repository currently has no durable sub-minute queue provider. A trusted queue/workflow must invoke due work at the required times. Vercel Cron alone cannot guarantee ten-second escalation.
 - Do not disable the legacy `CampusRide Auto Assign` task until the durable worker has passed staging tests. When approved, disable it from elevated PowerShell with `Disable-ScheduledTask -TaskName "CampusRide Auto Assign"`.
 - Apply `docs/live-trip-telemetry-migration.sql` before enabling live actual-distance/current-fare persistence. Location history is private and must use an agreed retention policy.
 
@@ -79,18 +79,20 @@ After generation, wire the typed database into the browser/admin Supabase client
 - Use `/api/push/test-self` from the customer, driver, and admin UI to prove each logged-in role can receive a notification on its own device.
 - Keep `PUSH_INTERNAL_API_KEY` server-only; `/api/push/send` must not be called from public browser code.
 - Firebase Cloud Messaging is supported alongside the existing web-push path. Public Firebase client variables may be exposed to the browser, but `FIREBASE_PRIVATE_KEY` and `FIREBASE_CLIENT_EMAIL` must be server-only in Vercel.
-- Native Android notifications use FCM tokens. Native iOS notifications from `@capacitor/push-notifications` use APNs device tokens and require APNs server variables:
+- Native Android and native iOS notifications use Firebase FCM registration tokens. iOS APNs device tokens are forwarded into Firebase Messaging inside the native app and must not be stored as the normal production token in `fcm_tokens`.
+- Legacy direct APNs fallback is disabled unless `ENABLE_LEGACY_APNS_FALLBACK=true` is explicitly set. If that temporary fallback is enabled, configure:
   - `APNS_TEAM_ID`
   - `APNS_KEY_ID`
   - `APNS_AUTH_KEY`
   - `APNS_ENV=production`
-  - `APNS_CUSTOMER_BUNDLE_ID=com.moovu.customer`
-  - `APNS_DRIVER_BUNDLE_ID=com.moovu.driver`
+  - `APNS_CUSTOMER_BUNDLE_ID=za.co.moovu.customer`
+  - `APNS_DRIVER_BUNDLE_ID=za.co.moovu.driver`
 - Apply `docs/fcm-notifications-migration.sql` on staging/production before relying on FCM token storage.
+- Apply `docs/fcm-token-cleanup-migration.sql` after the rebuilt iOS apps are confirmed to save FCM tokens longer than 100 characters. It deactivates old 64-character APNs-shaped rows without deleting history.
 - Apply `docs/notification-polish-migration.sql` so `/admin/notifications` can show sent, failed, and no-token delivery history.
 - The Firebase private key must preserve newlines. In Vercel it can be stored with escaped `\n`; the server helper converts escaped newlines at runtime.
 - Browser/PWA push requires HTTPS in production. Native iOS closed-app push requires the Xcode Push Notifications capability, matching bundle IDs, and APNs auth key variables in Vercel. Firebase iOS `GoogleService-Info.plist` files are still required if you add Firebase Messaging native token bridging later. See `docs/mobile-ios-stabilization.md`.
-- The server sends APNs alerts for native iOS tokens and FCM alerts for Android/Web tokens. Do not claim iOS closed-app push is verified until tested on a real iPhone with APNs configured.
+- The server sends visible Firebase Admin messages with APNs alert payloads for iOS FCM tokens. Do not claim iOS closed-app push is verified until tested on a real iPhone with Firebase/APNs configured.
 
 ## Mobile Native Setup
 
@@ -99,8 +101,8 @@ After generation, wire the typed database into the browser/admin Supabase client
 - MOOVU offline fallback is served from `public/offline.html` through the service workers after the app has loaded online at least once.
 - iOS location requires `NSLocationWhenInUseUsageDescription`; do not request background location unless MOOVU intentionally supports background tracking.
 - Split iOS App Store packaging is configured through:
-  - Customer: `capacitor.customer.config.ts`, bundle ID `com.moovu.customer`, URL `https://moovurides.co.za`, native folder `ios-customer/`.
-  - Driver: `capacitor.driver.config.ts`, bundle ID `com.moovu.driver`, URL `https://driver.moovurides.co.za`, native folder `ios-driver/`.
+  - Customer: `capacitor.customer.config.ts`, bundle ID `za.co.moovu.customer`, URL `https://moovurides.co.za`, native folder `ios-customer/`.
+  - Driver: `capacitor.driver.config.ts`, bundle ID `za.co.moovu.driver`, URL `https://driver.moovurides.co.za`, native folder `ios-driver/`.
   - See `docs/ios-split-apps.md` for Mac build, sync, Xcode, archive, Firebase, and icon steps.
 - Do not run generic `npx cap ...` commands. `capacitor.config.ts` is only a guarded wrapper and requires an explicit target through the npm scripts.
 

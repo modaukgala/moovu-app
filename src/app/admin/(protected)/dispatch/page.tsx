@@ -286,7 +286,7 @@ export default function DispatchBoardPage() {
               disabled={busyId === trip.id}
               onClick={() => offerNext(trip.id)}
             >
-              {busyId === trip.id ? "Working..." : "Offer next"}
+              {busyId === trip.id ? "Working..." : "Offer nearest driver"}
             </button>
           )}
 
