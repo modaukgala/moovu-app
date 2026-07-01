@@ -603,33 +603,25 @@ async function sendFcmToTargets(params: SendPushParams) {
             data: baseData,
           })
         : baseData;
-      const useNativeAndroidNotification = androidNativeToken && !!data.nativeActionToken;
+      const useNativeAndroidActions = androidNativeToken && !!data.nativeActionToken;
 
       const responseId = await messaging.send({
         token: String(row.token),
-        ...(useNativeAndroidNotification
-          ? {}
-          : {
-              notification: {
-                title: params.title,
-                body: params.body,
-              },
-            }),
+        notification: {
+          title: params.title,
+          body: params.body,
+        },
         data,
         android: {
           priority: "high",
-          ...(useNativeAndroidNotification
-            ? {}
-            : {
-                notification: {
-                  title: params.title,
-                  body: params.body,
-                  icon: "ic_launcher",
-                  sound: androidSound,
-                  channelId: androidChannelId,
-                  clickAction: "FCM_PLUGIN_ACTIVITY",
-                },
-              }),
+          notification: {
+            title: params.title,
+            body: params.body,
+            icon: "ic_launcher",
+            sound: androidSound,
+            channelId: androidChannelId,
+            clickAction: "FCM_PLUGIN_ACTIVITY",
+          },
         },
         apns: apnsOptions(params.title, params.body, params.data),
         webpush: {
@@ -656,7 +648,8 @@ async function sendFcmToTargets(params: SendPushParams) {
         appType: row.app_type,
         kind: tokenKind,
         responseId,
-        usedTopLevelNotification: !useNativeAndroidNotification,
+        usedTopLevelNotification: true,
+        nativeActionsAvailableInForeground: useNativeAndroidActions,
       });
       await supabase
         .from("fcm_tokens")

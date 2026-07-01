@@ -3,7 +3,7 @@ import { sendPushSafe } from "@/lib/push-server";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 import { DISPATCH_CONFIG, dispatchRadiusForCycle } from "@/lib/dispatch/config";
 import { getDispatchCandidates, getPreferredDispatchCandidate } from "@/lib/dispatch/dispatchCandidates";
-import { enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
+import { dispatchJobsQueued, enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
 import type { DispatchResult } from "@/lib/dispatch/types";
 
 type AtomicOfferRow = {
@@ -35,8 +35,14 @@ async function notifyDriverOffer(params: {
     .eq("driver_id", params.driverId)
     .maybeSingle();
 
-  if (!account?.user_id) return;
-  await sendPushSafe({
+  if (!account?.user_id) {
+    console.error("[dispatch] driver offer notification target missing", {
+      tripId: params.tripId,
+      driverId: params.driverId,
+    });
+    return;
+  }
+  const result = await sendPushSafe({
     userIds: [account.user_id],
     role: "driver",
     title: "New trip nearby",
@@ -47,6 +53,15 @@ async function notifyDriverOffer(params: {
       tripId: params.tripId,
       driverId: params.driverId,
     },
+  });
+  console.info("[dispatch] driver offer notification result", {
+    tripId: params.tripId,
+    driverId: params.driverId,
+    userId: account.user_id,
+    delivered: result.delivered,
+    failed: result.failed,
+    removed: result.removed,
+    ok: result.ok,
   });
 }
 
@@ -255,7 +270,7 @@ export async function dispatchTrip(params: {
     } catch {}
   }
 
-  await Promise.all([
+  const schedulerResults = await Promise.all([
     enqueueDispatchJob({
       supabase: supabaseAdmin,
       tripId: trip.id,
@@ -275,6 +290,24 @@ export async function dispatchTrip(params: {
       sequenceNumber,
     }),
   ]);
+  const schedulerQueued = dispatchJobsQueued(schedulerResults);
+  const schedulerWarning = schedulerQueued
+    ? undefined
+    : "The first offer was sent, but dispatch escalation requires worker attention.";
+
+  if (!schedulerQueued) {
+    console.error("[dispatch] offer created without complete scheduler jobs", {
+      tripId: trip.id,
+      offerId: row.offer_id,
+      driverId: row.driver_id,
+      schedulerResults,
+    });
+    await notifyAdmins(
+      "Dispatch scheduler needs attention",
+      `Trip ${trip.id} was offered, but its escalation or expiry job could not be queued.`,
+      "/admin/dispatch",
+    ).catch(() => null);
+  }
 
   console.log("[dispatch] driver offered", {
     tripId: trip.id,
@@ -307,5 +340,7 @@ export async function dispatchTrip(params: {
     expiresAt: row.accept_deadline_at,
     escalatesAt: row.escalates_at,
     mode: "atomic",
+    schedulerQueued,
+    schedulerWarning,
   };
 }

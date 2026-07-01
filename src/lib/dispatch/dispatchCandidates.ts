@@ -102,13 +102,15 @@ export async function getDispatchCandidates(params: {
   const { supabase, tripId, pickupLat, pickupLng, rideOption, radiusKm } = params;
   const excluded = new Set(params.excludedDriverIds ?? []);
   const now = Date.now();
-  const freshAfter = new Date(now - DISPATCH_CONFIG.gpsFreshnessSeconds * 1000).toISOString();
+  const offerEligibleAfter = new Date(
+    now - DISPATCH_CONFIG.backgroundOfferEligibilitySeconds * 1000,
+  ).toISOString();
 
   const { data: drivers, error: driversError } = await supabase
     .from("drivers")
     .select("id,status,verification_status,profile_completed,online,busy,lat,lng,last_seen,subscription_status,subscription_expires_at,seating_capacity,is_deleted")
     .eq("online", true)
-    .gte("last_seen", freshAfter)
+    .gte("last_seen", offerEligibleAfter)
     .limit(250);
 
   if (driversError) throw new Error(driversError.message);
@@ -182,7 +184,9 @@ export async function getPreferredDispatchCandidate(params: {
 }) {
   const { supabase, tripId, driverId, pickupLat, pickupLng, rideOption } = params;
   const now = Date.now();
-  const freshAfter = new Date(now - DISPATCH_CONFIG.gpsFreshnessSeconds * 1000).toISOString();
+  const offerEligibleAfter = new Date(
+    now - DISPATCH_CONFIG.backgroundOfferEligibilitySeconds * 1000,
+  ).toISOString();
 
   const { data: driver, error: driverError } = await supabase
     .from("drivers")
@@ -196,7 +200,9 @@ export async function getPreferredDispatchCandidate(params: {
   const row = driver as CandidateRow;
   if (row.is_deleted) return { ok: false as const, error: "Driver is deleted." };
   if (!row.online) return { ok: false as const, error: "Driver is offline." };
-  if (row.last_seen && row.last_seen < freshAfter) return { ok: false as const, error: "Driver GPS is not fresh. Ask the driver to open the app and go online again." };
+  if (!row.last_seen || row.last_seen < offerEligibleAfter) {
+    return { ok: false as const, error: "Driver online session is stale. Ask the driver to open the app and go online again." };
+  }
   if (row.profile_completed === false) return { ok: false as const, error: "Driver profile is incomplete." };
   if (!["approved", "active"].includes(String(row.status ?? ""))) return { ok: false as const, error: "Driver is not approved or active." };
   if (row.verification_status && row.verification_status !== "approved") return { ok: false as const, error: "Driver verification is not approved." };

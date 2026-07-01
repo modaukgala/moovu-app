@@ -3,6 +3,7 @@ export const DISPATCH_CONFIG = {
   acceptWindowSeconds: 30,
   cycleCooldownSeconds: 8,
   gpsFreshnessSeconds: 90,
+  backgroundOfferEligibilitySeconds: 8 * 60 * 60,
   initialRadiusKm: 8,
   expandedRadiusKm: 20,
   maxSearchSeconds: 600,

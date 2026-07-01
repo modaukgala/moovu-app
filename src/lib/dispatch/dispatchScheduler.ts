@@ -2,6 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type DispatchJobType = "escalate" | "expire" | "recover" | "release_scheduled";
 
+export type DispatchJobEnqueueResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export function dispatchJobsQueued(results: DispatchJobEnqueueResult[]) {
+  return results.every((result) => result.ok);
+}
+
 export function isDispatchWorkerAuthorized(req: Request) {
   const configured = process.env.DISPATCH_JOB_SECRET?.trim();
   if (!configured) return false;
@@ -18,7 +26,7 @@ export async function enqueueDispatchJob(params: {
   offerId?: string | null;
   dispatchCycle?: number;
   sequenceNumber?: number;
-}) {
+}): Promise<DispatchJobEnqueueResult> {
   const { error } = await params.supabase.from("dispatch_jobs").upsert(
     {
       trip_id: params.tripId,
@@ -44,4 +52,3 @@ export async function enqueueDispatchJob(params: {
 
   return { ok: true as const };
 }
-

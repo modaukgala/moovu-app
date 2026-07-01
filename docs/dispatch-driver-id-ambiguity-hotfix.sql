@@ -4,6 +4,8 @@
 --
 -- Run this in Supabase SQL Editor after reviewing. It is non-destructive:
 -- it only replaces dispatch RPC function bodies and grants service_role execute.
+-- Re-run this updated version to allow drivers who deliberately remain online
+-- to receive background offers for up to 8 hours after their last heartbeat.
 
 create or replace function public.reserve_trip_offer(
   p_trip_id uuid,
@@ -46,7 +48,7 @@ begin
      or coalesce(v_driver.profile_completed, true) = false
      or not coalesce(v_driver.online, false)
      or v_driver.lat is null or v_driver.lng is null
-     or v_driver.last_seen < now() - interval '90 seconds'
+     or v_driver.last_seen < now() - interval '8 hours'
      or v_driver.subscription_status not in ('active','grace')
      or v_driver.subscription_expires_at is null
      or v_driver.subscription_expires_at <= now() then

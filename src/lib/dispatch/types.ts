@@ -23,9 +23,10 @@ export type DispatchResult = {
   expiresAt?: string | null;
   escalatesAt?: string | null;
   mode?: "atomic" | "legacy";
+  schedulerQueued?: boolean;
+  schedulerWarning?: string;
   exhausted?: boolean;
   error?: string;
 };
 
 export type OfferAction = "accept" | "decline";
-

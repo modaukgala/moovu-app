@@ -172,7 +172,7 @@ begin
      or coalesce(v_driver.profile_completed, true) = false
      or not coalesce(v_driver.online, false)
      or v_driver.lat is null or v_driver.lng is null
-     or v_driver.last_seen < now() - interval '90 seconds'
+     or v_driver.last_seen < now() - interval '8 hours'
      or v_driver.subscription_status not in ('active','grace')
      or v_driver.subscription_expires_at is null
      or v_driver.subscription_expires_at <= now() then

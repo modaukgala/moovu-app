@@ -4,11 +4,18 @@ import test from "node:test";
 import { DISPATCH_CONFIG, dispatchRadiusForCycle } from "./config.ts";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
 import { scoreDriverForTrip } from "./driverScoring.ts";
+// @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
+import { dispatchJobsQueued } from "./dispatchScheduler.ts";
 
 test("dispatch timing uses ten-second escalation and thirty-second acceptance", () => {
   assert.equal(DISPATCH_CONFIG.escalationSeconds, 10);
   assert.equal(DISPATCH_CONFIG.acceptWindowSeconds, 30);
   assert.ok(DISPATCH_CONFIG.acceptWindowSeconds > DISPATCH_CONFIG.escalationSeconds * 2);
+});
+
+test("an online driver remains offer-eligible while the native app is backgrounded", () => {
+  assert.ok(DISPATCH_CONFIG.backgroundOfferEligibilitySeconds >= 8 * 60 * 60);
+  assert.ok(DISPATCH_CONFIG.backgroundOfferEligibilitySeconds > DISPATCH_CONFIG.gpsFreshnessSeconds);
 });
 
 test("dispatch radius expands by cycle and remains capped", () => {
@@ -46,5 +53,10 @@ test("new drivers receive neutral rather than perfect quality defaults", () => {
     },
   });
   assert.ok(neutral.score < perfect.score);
+});
+
+test("dispatch reports incomplete scheduler enqueue results", () => {
+  assert.equal(dispatchJobsQueued([{ ok: true }, { ok: true }]), true);
+  assert.equal(dispatchJobsQueued([{ ok: true }, { ok: false, error: "queue unavailable" }]), false);
 });
 
