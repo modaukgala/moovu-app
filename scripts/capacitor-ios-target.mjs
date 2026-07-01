@@ -86,6 +86,40 @@ function run(command, args) {
   }
 }
 
+function ensureFirebaseMessagingPackage(nativeRoot) {
+  const packagePath = join(nativeRoot, "App", "CapApp-SPM", "Package.swift");
+  if (!existsSync(packagePath)) {
+    fail(`Missing ${packagePath}; cannot configure native Firebase Messaging.`);
+  }
+
+  let contents = readFileSync(packagePath, "utf8");
+  const pushPackage = '.package(name: "CapacitorPushNotifications", path: "..\\..\\..\\node_modules\\@capacitor\\push-notifications")';
+  const firebasePackage = '.package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "11.0.0")';
+  const pushProduct = '.product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications")';
+  const firebaseProducts = [
+    '.product(name: "FirebaseCore", package: "firebase-ios-sdk")',
+    '.product(name: "FirebaseMessaging", package: "firebase-ios-sdk")',
+  ];
+
+  if (!contents.includes(firebasePackage)) {
+    contents = contents.replace(pushPackage, `${pushPackage},\n        ${firebasePackage}`);
+  }
+
+  if (!contents.includes(firebaseProducts[0]) || !contents.includes(firebaseProducts[1])) {
+    contents = contents.replace(
+      pushProduct,
+      `${pushProduct},\n                ${firebaseProducts.join(",\n                ")}`,
+    );
+  }
+
+  if (!contents.includes(firebasePackage) || !firebaseProducts.every((product) => contents.includes(product))) {
+    fail(`Could not add Firebase Messaging dependencies to ${packagePath}.`);
+  }
+
+  writeFileSync(packagePath, contents);
+  console.log(`[moovu-ios-target] Firebase Messaging package verified in ${packagePath}.`);
+}
+
 async function withTargetLock(callback) {
   let fd;
   try {
@@ -169,6 +203,7 @@ async function withTargetAsIos(callback) {
 async function syncTarget() {
   await withTargetAsIos(async () => {
     run("npx", ["cap", "sync", "ios"]);
+    ensureFirebaseMessagingPackage(iosPath);
   });
 
   console.log(`[moovu-ios-target] Synced ${target.label} in ${target.nativeDir}/.`);

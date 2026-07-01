@@ -8,15 +8,39 @@ import UserNotifications
 class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
 
     var window: UIWindow?
+    private let cachedFcmTokenKey = "moovu.firebase.fcmToken"
 
     private func hexString(from data: Data) -> String {
         data.map { String(format: "%02.2hhx", $0) }.joined()
     }
 
+    private func publishFcmToken(_ token: String, source: String) {
+        guard !token.isEmpty else { return }
+        UserDefaults.standard.set(token, forKey: cachedFcmTokenKey)
+        NSLog("[MOOVU Push] FCM token ready from %@ (%lu chars)", source, token.count)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .moovuFcmTokenReady, object: token)
+            NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: token)
+        }
+    }
+
+    private func publishFcmError(_ error: Error, source: String) {
+        let message = error.localizedDescription
+        NSLog("[MOOVU Push] FCM token failure from %@: %@", source, message)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .moovuFcmTokenError, object: message)
+            NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+        }
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        NSLog("[MOOVU Push] Native FCM bridge build 2026-07-01")
         if FirebaseApp.app() == nil {
+            NSLog("[MOOVU Push] FirebaseApp.configure called")
             FirebaseApp.configure()
-            NSLog("[MOOVU Push] Firebase initialized")
+            NSLog("[MOOVU Push] FirebaseApp.configure completed")
+        } else {
+            NSLog("[MOOVU Push] Firebase already configured")
         }
         Messaging.messaging().isAutoInitEnabled = true
         Messaging.messaging().delegate = self
@@ -61,18 +85,28 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NSLog("[MOOVU Push] didRegisterForRemoteNotificationsWithDeviceToken called")
         let apnsToken = hexString(from: deviceToken)
-        NSLog("[MOOVU Push] APNs token received (%lu chars); forwarding to Firebase only", apnsToken.count)
+        NSLog("[MOOVU Push] APNs token received (%lu chars); never forwarding raw APNs token to JavaScript", apnsToken.count)
         Messaging.messaging().apnsToken = deviceToken
+        NSLog("[MOOVU Push] Messaging.messaging().apnsToken assigned")
+        NSLog("[MOOVU Push] Messaging.messaging().token callback requested")
         Messaging.messaging().token { token, error in
             if let error = error {
-                NSLog("[MOOVU Push] FCM token request failed: %@", error.localizedDescription)
-                NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+                self.publishFcmError(error, source: "token callback")
                 return
             }
-            guard let token = token, !token.isEmpty else { return }
-            NSLog("[MOOVU Push] FCM token received (%lu chars); posting to Capacitor", token.count)
-            NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: token)
+            guard let token = token, !token.isEmpty else {
+                let error = NSError(
+                    domain: "MOOVUPush",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Firebase returned an empty FCM token."]
+                )
+                self.publishFcmError(error, source: "token callback")
+                return
+            }
+            NSLog("[MOOVU Push] Messaging.messaging().token callback succeeded (%lu chars)", token.count)
+            self.publishFcmToken(token, source: "token callback")
         }
     }
 
@@ -83,8 +117,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
 
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken, !token.isEmpty else { return }
-        NSLog("[MOOVU Push] FCM token refresh received (%lu chars); posting to Capacitor", token.count)
-        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: token)
+        NSLog("[MOOVU Push] Messaging delegate received refreshed FCM token (%lu chars)", token.count)
+        publishFcmToken(token, source: "MessagingDelegate")
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,

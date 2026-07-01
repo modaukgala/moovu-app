@@ -1,6 +1,6 @@
 "use client";
 
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getToken as getFcmToken } from "firebase/messaging";
@@ -27,6 +27,18 @@ type RegisterForPushNotificationsResult =
       message: string;
     };
 
+type NativeListenerHandle = { remove: () => Promise<void> };
+
+type FcmTokenPlugin = {
+  getToken: () => Promise<{ token?: string | null }>;
+  addListener: (
+    eventName: "fcmTokenReady" | "fcmTokenError",
+    listener: (event: { token?: string; message?: string }) => void,
+  ) => Promise<NativeListenerHandle>;
+};
+
+const NativeFcmToken = registerPlugin<FcmTokenPlugin>("FcmToken");
+
 function devLog(message: string, context?: Record<string, unknown>) {
   if (process.env.NODE_ENV !== "production") {
     console.log(`[push-registration] ${message}`, context ?? {});
@@ -37,12 +49,18 @@ function isIosApnsToken(token: string, platform = platformName()) {
   return platform === "ios" && /^[a-f0-9]{64}$/i.test(token.trim());
 }
 
+function isValidIosFcmToken(token: string) {
+  const cleanToken = token.trim();
+  return cleanToken.length > 100 && !isIosApnsToken(cleanToken, "ios");
+}
+
 const NATIVE_FCM_TOKEN_KEY = "moovu:native-fcm-token";
 
 function getCachedNativeFcmToken() {
   try {
     const token = window.localStorage.getItem(`${NATIVE_FCM_TOKEN_KEY}:${platformName()}`)?.trim() ?? "";
-    return token && !isIosApnsToken(token) ? token : null;
+    if (!token) return null;
+    return platformName() === "ios" ? (isValidIosFcmToken(token) ? token : null) : token;
   } catch {
     return null;
   }
@@ -50,7 +68,8 @@ function getCachedNativeFcmToken() {
 
 function cacheNativeFcmToken(token: string) {
   const cleanToken = token.trim();
-  if (!cleanToken || isIosApnsToken(cleanToken)) return;
+  if (!cleanToken) return;
+  if (platformName() === "ios" && !isValidIosFcmToken(cleanToken)) return;
 
   try {
     window.localStorage.setItem(`${NATIVE_FCM_TOKEN_KEY}:${platformName()}`, cleanToken);
@@ -100,7 +119,7 @@ async function saveToken(params: {
 }) {
   const platform = platformName();
   const cleanToken = params.token.trim();
-  if (isIosApnsToken(cleanToken, platform)) {
+  if (platform === "ios" && !isValidIosFcmToken(cleanToken)) {
     console.warn("[push-registration] APNs token rejected, waiting for FCM token", {
       role: params.role,
       platform,
@@ -147,7 +166,7 @@ export async function syncNativePushToken(params: {
   const cleanToken = params.token.trim();
   const platform = platformName();
   if (!Capacitor.isNativePlatform() || !cleanToken) return false;
-  if (isIosApnsToken(cleanToken, platform)) {
+  if (platform === "ios" && !isValidIosFcmToken(cleanToken)) {
     console.warn("[push-registration] APNs token rejected, waiting for FCM token", {
       role: params.role,
       platform,
@@ -197,7 +216,7 @@ export async function bootstrapNativePushRegistration(params: {
   return true;
 }
 
-async function requestNativeToken(): Promise<string | null> {
+async function ensureNativePermission() {
   const permissions = await PushNotifications.checkPermissions();
   devLog("native permission status", { receive: permissions.receive });
   let receive = permissions.receive;
@@ -207,7 +226,11 @@ async function requestNativeToken(): Promise<string | null> {
     receive = (await PushNotifications.requestPermissions()).receive;
   }
 
-  if (receive !== "granted") return null;
+  return receive === "granted";
+}
+
+async function requestIosFcmToken(): Promise<string | null> {
+  if (!(await ensureNativePermission())) return null;
 
   const cachedToken = getCachedNativeFcmToken();
   if (cachedToken) {
@@ -219,9 +242,10 @@ async function requestNativeToken(): Promise<string | null> {
   }
 
   let settled = false;
+  let lastFirebaseError: string | null = null;
   let resolveToken!: (token: string) => void;
   let rejectToken!: (error: Error) => void;
-  const handles: Array<{ remove: () => Promise<void> }> = [];
+  const handles: NativeListenerHandle[] = [];
   const tokenPromise = new Promise<string>((resolve, reject) => {
     resolveToken = resolve;
     rejectToken = reject;
@@ -237,23 +261,22 @@ async function requestNativeToken(): Promise<string | null> {
     if (settled) return;
     settled = true;
     cleanup();
-    rejectToken(new Error("Timed out while registering this device for push notifications."));
+    rejectToken(new Error(lastFirebaseError || "Firebase did not return an iOS FCM token within 30 seconds."));
   }, 30000);
 
   try {
-    const registrationHandle = await PushNotifications.addListener("registration", (token) => {
+    const readyHandle = await NativeFcmToken.addListener("fcmTokenReady", (event) => {
       if (settled) return;
-      const value = String(token.value ?? "").trim();
-      const platform = platformName();
-      devLog("native registration event received", {
-        platform,
+      const value = String(event.token ?? "").trim();
+      devLog("native fcmTokenReady event received", {
+        platform: "ios",
         length: value.length,
-        apnsLike: isIosApnsToken(value, platform),
+        apnsLike: isIosApnsToken(value, "ios"),
       });
 
-      if (isIosApnsToken(value, platform)) {
+      if (!isValidIosFcmToken(value)) {
         console.warn("[push-registration] APNs token rejected, waiting for FCM token", {
-          platform,
+          platform: "ios",
           length: value.length,
         });
         return;
@@ -263,34 +286,122 @@ async function requestNativeToken(): Promise<string | null> {
       window.clearTimeout(timeout);
       cleanup();
       cacheNativeFcmToken(value);
-      devLog("native FCM token received", { platform, length: value.length });
+      devLog("native FCM token received", { platform: "ios", length: value.length });
       resolveToken(value);
     });
-    handles.push(registrationHandle);
+    handles.push(readyHandle);
 
-    const errorHandle = await PushNotifications.addListener("registrationError", (error) => {
+    const errorHandle = await NativeFcmToken.addListener("fcmTokenError", (event) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timeout);
       cleanup();
-      rejectToken(new Error(error.error || "Native push registration failed."));
+      rejectToken(new Error(event.message || "Firebase could not create an iOS FCM token."));
     });
     handles.push(errorHandle);
 
-    devLog("native push listeners ready; starting registration", {
-      platform: platformName(),
+    devLog("native Firebase token bridge ready; starting APNs registration", {
+      platform: "ios",
     });
     await PushNotifications.register();
+
+    void (async () => {
+      const deadline = Date.now() + 30000;
+
+      while (!settled && Date.now() < deadline) {
+        try {
+          const result = await NativeFcmToken.getToken();
+          const token = String(result.token ?? "").trim();
+          if (isValidIosFcmToken(token)) {
+            settled = true;
+            window.clearTimeout(timeout);
+            cleanup();
+            cacheNativeFcmToken(token);
+            devLog("native FCM token received by polling", { platform: "ios", length: token.length });
+            resolveToken(token);
+            return;
+          }
+        } catch (error: unknown) {
+          lastFirebaseError = error instanceof Error ? error.message : "Firebase token lookup failed.";
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      }
+
+      if (!settled && lastFirebaseError) {
+        settled = true;
+        window.clearTimeout(timeout);
+        cleanup();
+        rejectToken(new Error(lastFirebaseError));
+      }
+    })();
   } catch (error) {
     if (!settled) {
       settled = true;
       window.clearTimeout(timeout);
       cleanup();
-      rejectToken(error instanceof Error ? error : new Error("Native push registration failed."));
+      const message = error instanceof Error ? error.message : "Native Firebase token bridge failed.";
+      rejectToken(new Error(
+        message.toLowerCase().includes("not implemented") || message.toLowerCase().includes("unavailable")
+          ? "This iOS app build does not contain the MOOVU Firebase token bridge. Rebuild and reinstall the latest iOS app."
+          : message,
+      ));
     }
   }
 
   return tokenPromise;
+}
+
+async function requestCapacitorNativeToken(): Promise<string | null> {
+  if (!(await ensureNativePermission())) return null;
+
+  const cachedToken = getCachedNativeFcmToken();
+  if (cachedToken) return cachedToken;
+
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const handles: NativeListenerHandle[] = [];
+    const cleanup = () => handles.forEach((handle) => void handle.remove());
+    const timeout = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("Timed out while registering this device for push notifications."));
+    }, 30000);
+
+    void (async () => {
+      try {
+        handles.push(await PushNotifications.addListener("registration", (token) => {
+          if (settled) return;
+          const value = String(token.value ?? "").trim();
+          if (!value) return;
+          settled = true;
+          window.clearTimeout(timeout);
+          cleanup();
+          cacheNativeFcmToken(value);
+          resolve(value);
+        }));
+        handles.push(await PushNotifications.addListener("registrationError", (error) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeout);
+          cleanup();
+          reject(new Error(error.error || "Native push registration failed."));
+        }));
+        await PushNotifications.register();
+      } catch (error) {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        cleanup();
+        reject(error instanceof Error ? error : new Error("Native push registration failed."));
+      }
+    })();
+  });
+}
+
+async function requestNativeToken() {
+  return platformName() === "ios" ? requestIosFcmToken() : requestCapacitorNativeToken();
 }
 
 async function requestWebToken(): Promise<string | null> {

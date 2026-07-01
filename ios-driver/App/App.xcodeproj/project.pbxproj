@@ -10,6 +10,8 @@
 		A7E110000000000000012 /* moovu_premium_alert.wav in Resources */ = {isa = PBXBuildFile; fileRef = A7E110000000000000011 /* moovu_premium_alert.wav */; };
 		A7E130000000000000012 /* moovu_trip_offer_buzz.wav in Resources */ = {isa = PBXBuildFile; fileRef = A7E130000000000000011 /* moovu_trip_offer_buzz.wav */; };
 		A7E140000000000000012 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A7E140000000000000011 /* GoogleService-Info.plist */; };
+		A7E150000000000000012 /* FcmTokenPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E150000000000000011 /* FcmTokenPlugin.swift */; };
+		A7E160000000000000012 /* MoovuBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E160000000000000011 /* MoovuBridgeViewController.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -24,6 +26,8 @@
 		A7E110000000000000011 /* moovu_premium_alert.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = moovu_premium_alert.wav; sourceTree = "<group>"; };
 		A7E130000000000000011 /* moovu_trip_offer_buzz.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = moovu_trip_offer_buzz.wav; sourceTree = "<group>"; };
 		A7E140000000000000011 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		A7E150000000000000011 /* FcmTokenPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FcmTokenPlugin.swift; sourceTree = "<group>"; };
+		A7E160000000000000011 /* MoovuBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoovuBridgeViewController.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -74,6 +78,8 @@
 				A7E130000000000000011 /* moovu_trip_offer_buzz.wav */,
 				A7E140000000000000011 /* GoogleService-Info.plist */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				A7E150000000000000011 /* FcmTokenPlugin.swift */,
+				A7E160000000000000011 /* MoovuBridgeViewController.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -178,6 +184,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				A7E150000000000000012 /* FcmTokenPlugin.swift in Sources */,
+				A7E160000000000000012 /* MoovuBridgeViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

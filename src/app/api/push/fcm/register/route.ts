@@ -141,6 +141,19 @@ export async function POST(req: Request) {
       );
     }
 
+    if (platform === "ios" && fcmToken.length <= 100) {
+      console.warn("[push-registration] invalid short iOS token rejected", {
+        userId: user.id,
+        role,
+        platform,
+        length: fcmToken.length,
+      });
+      return NextResponse.json(
+        { ok: false, error: "Invalid iOS FCM token. Rebuild the app and enable notifications again." },
+        { status: 400 },
+      );
+    }
+
     const pushRole = role as PushRole;
     const appType = VALID_APP_TYPES.has(requestedAppType)
       ? requestedAppType
