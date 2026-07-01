@@ -120,6 +120,20 @@ type DriverEarningsSnapshot = {
   completedTrips: number;
 };
 
+type TripActionResponse = {
+  ok?: boolean;
+  error?: string;
+  fare?: { finalFare?: number };
+  commission?: { driverNet?: number; commissionAmount?: number };
+};
+
+type CompletedFareSummary = {
+  tripId: string;
+  finalFare: number;
+  driverNet: number;
+  commissionAmount: number;
+};
+
 declare global {
   interface Window {
     google: typeof google;
@@ -368,6 +382,8 @@ export default function DriverHomePage() {
   const [driverToolsOpen, setDriverToolsOpen] = useState(false);
   const [showCancelTripForm, setShowCancelTripForm] = useState(false);
   const [cancelTripReason, setCancelTripReason] = useState<string>(DRIVER_CANCEL_REASONS[0]);
+  const [completedFareSummary, setCompletedFareSummary] = useState<CompletedFareSummary | null>(null);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
 
   const subscriptionReminder = subscriptionTone(driver);
   const subscriptionAllowsOnline = canReceiveTripOffers(driver);
@@ -794,7 +810,7 @@ export default function DriverHomePage() {
     const token = await getAccessToken();
     if (!token) {
       setBusy(false);
-      return;
+      return null;
     }
 
     const res = await fetch(endpoint, {
@@ -806,14 +822,14 @@ export default function DriverHomePage() {
       body: JSON.stringify(payload),
     });
 
-    const json = await res.json().catch(() => null);
+    const json = await res.json().catch(() => null) as TripActionResponse | null;
     setBusy(false);
 
     if (!json?.ok) {
       showDriverActionError(json?.error || "Action failed");
       await loadCurrentTrip();
       await loadDriverProfile(true);
-      return;
+      return null;
     }
 
     setInfo(successMsg);
@@ -832,6 +848,7 @@ export default function DriverHomePage() {
     await loadCurrentTrip();
     await loadDriverProfile(true);
     await loadEarningsSnapshot();
+    return json;
   }
 
   async function arriveTrip(tripId: string) {
@@ -843,7 +860,54 @@ export default function DriverHomePage() {
   }
 
   async function completeTrip(tripId: string, otp: string) {
-    await tripAction("/api/driver/trips/complete", { tripId, otp }, "Trip completed âœ…");
+    const result = await tripAction("/api/driver/trips/complete", { tripId, otp }, "Trip completed âœ…");
+    if (result?.ok && result.fare?.finalFare != null) {
+      setCompletedFareSummary({
+        tripId,
+        finalFare: Number(result.fare.finalFare),
+        driverNet: Number(result.commission?.driverNet ?? 0),
+        commissionAmount: Number(result.commission?.commissionAmount ?? 0),
+      });
+      setShowEndOtp(false);
+      setEndOtp("");
+    }
+  }
+
+  async function confirmPaymentReceived() {
+    if (!completedFareSummary || confirmingPayment) return;
+    setConfirmingPayment(true);
+    const token = await getAccessToken();
+    if (!token) {
+      setConfirmingPayment(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/driver/trips/payment-received", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tripId: completedFareSummary.tripId }),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok || !json?.ok) {
+        showDriverActionError(json?.error || "Could not confirm payment receipt.");
+        return;
+      }
+      notifyInApp({
+        title: "Payment received",
+        body: `R${completedFareSummary.finalFare.toFixed(2)} marked as received.`,
+        tone: "success",
+      });
+      setCompletedFareSummary(null);
+    } catch (error: unknown) {
+      console.error("[driver-payment-received] request failed", error);
+      showDriverActionError("Could not confirm payment receipt. Please try again.");
+    } finally {
+      setConfirmingPayment(false);
+    }
   }
 
   async function cancelCurrentTrip(tripId: string, reason: string) {
@@ -1260,6 +1324,34 @@ export default function DriverHomePage() {
         />
       )}
 
+      {completedFareSummary && (
+        <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-sm rounded-[28px] border border-emerald-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.3)]" role="dialog" aria-modal="true" aria-labelledby="driver-final-fare-title">
+            <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
+              Trip completed
+            </div>
+            <h2 id="driver-final-fare-title" className="mt-4 text-2xl font-black text-slate-950">Collect final fare</h2>
+            <div className="mt-5 rounded-3xl bg-slate-950 px-5 py-6 text-center text-white">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-300">Customer pays</div>
+              <div className="mt-2 text-5xl font-black">{money(completedFareSummary.finalFare)}</div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-2xl bg-emerald-50 p-3"><span className="block text-xs font-bold text-emerald-700">Your earnings</span><strong className="mt-1 block text-lg text-emerald-950">{money(completedFareSummary.driverNet)}</strong></div>
+              <div className="rounded-2xl bg-blue-50 p-3"><span className="block text-xs font-bold text-blue-700">MOOVU commission</span><strong className="mt-1 block text-lg text-blue-950">{money(completedFareSummary.commissionAmount)}</strong></div>
+            </div>
+            <p className="mt-4 text-sm font-semibold leading-6 text-slate-600">The trip is complete and you can receive new offers. Confirm only after the customer has paid.</p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" className="moovu-btn moovu-btn-primary" disabled={confirmingPayment} onClick={confirmPaymentReceived}>
+                {confirmingPayment ? "Saving..." : "Received"}
+              </button>
+              <button type="button" className="moovu-btn moovu-btn-secondary" disabled={confirmingPayment} onClick={() => setCompletedFareSummary(null)}>
+                Hide
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {navigationTarget && (
         <div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
           <section className="moovu-driver-nav-sheet w-full max-w-sm">
@@ -1573,6 +1665,14 @@ export default function DriverHomePage() {
                       {currentTrip.status === "ongoing" ? "Current fare" : "Fare"}: {money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}
                     </div>
                   </div>
+
+                  {currentTrip.status === "ongoing" && (
+                    <div className="mb-4 rounded-[24px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Live trip fare</div>
+                      <div className="mt-1 text-4xl font-black">{money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}</div>
+                      <div className="mt-1 text-xs font-semibold text-blue-100">Updates while the trip is in progress. Final amount is confirmed with the end OTP.</div>
+                    </div>
+                  )}
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">

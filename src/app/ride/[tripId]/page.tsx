@@ -1368,6 +1368,11 @@ export default function RideTrackingPage() {
             <h2 className="mt-4 text-2xl font-black text-slate-950">
               How was your MOOVU ride?
             </h2>
+            <div className="mt-5 rounded-3xl bg-slate-950 px-5 py-6 text-center text-white">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-300">Final fare to pay</div>
+              <div className="mt-2 text-5xl font-black">{money(displayTotal)}</div>
+              <div className="mt-2 text-xs font-semibold text-slate-300">Pay this amount to your driver.</div>
+            </div>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Your receipt is ready. You can rate the driver now or close this message and come back later.
             </p>
@@ -2043,6 +2048,14 @@ export default function RideTrackingPage() {
                 {statusLabel(trip.status)}
               </div>
             </div>
+
+            {trip.status === "ongoing" && (
+              <div className="rounded-[22px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Live trip fare</div>
+                <div className="mt-1 text-4xl font-black">{money(displayTotal)}</div>
+                <div className="mt-1 text-xs font-semibold text-blue-100">This updates during your ride. The final amount is confirmed after the end OTP.</div>
+              </div>
+            )}
 
             <div className="customer-trip-action-tabs" aria-label="Trip actions">
               {(["route", "fare", "safety", "support", "receipt"] as const).map((action) => (

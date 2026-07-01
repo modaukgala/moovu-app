@@ -164,6 +164,12 @@ begin
     raise exception 'Trip is no longer dispatchable' using errcode = 'P0001';
   end if;
 
+  update public.driver_trip_offers o
+  set status = 'expired', expired_at = coalesce(o.expired_at, now()), updated_at = now()
+  where o.trip_id = p_trip_id
+    and o.status in ('pending','shown')
+    and o.accept_deadline_at <= now();
+
   select * into v_driver from public.drivers where id = p_driver_id for update;
   if not found then raise exception 'Driver not found' using errcode = 'P0002'; end if;
   if coalesce(v_driver.is_deleted, false)

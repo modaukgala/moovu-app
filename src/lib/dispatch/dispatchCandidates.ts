@@ -136,7 +136,7 @@ export async function getDispatchCandidates(params: {
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").in("driver_id", driverIds),
     supabase.from("trips").select("driver_id").in("driver_id", driverIds).in("status", ["assigned", "arrived", "ongoing"]),
     supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).in("driver_id", driverIds).eq("status", "declined"),
-    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).in("driver_id", driverIds).in("status", ["pending", "shown"]),
+    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).in("driver_id", driverIds).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()),
   ]);
 
   const fatal = [walletsResult.error, activeTripsResult.error, activeOfferResult.error].find(Boolean);
@@ -215,7 +215,7 @@ export async function getPreferredDispatchCandidate(params: {
     supabase.from("driver_wallets").select("driver_id,balance_due").eq("driver_id", driverId).maybeSingle(),
     supabase.from("trips").select("driver_id").eq("driver_id", driverId).in("status", ["assigned", "arrived", "ongoing"]).limit(1),
     supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).eq("driver_id", driverId).eq("status", "declined").limit(1),
-    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).eq("driver_id", driverId).in("status", ["pending", "shown"]).limit(1),
+    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).eq("driver_id", driverId).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()).limit(1),
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").eq("driver_id", driverId).maybeSingle(),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").eq("driver_id", driverId).maybeSingle(),
   ]);

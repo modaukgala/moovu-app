@@ -98,6 +98,29 @@ export async function dispatchTrip(params: {
     return { ok: false, tripId: trip.id, error: "Trip pickup coordinates are missing." };
   }
 
+  const expiryNow = new Date().toISOString();
+  const { error: staleOfferError } = await supabaseAdmin
+    .from("driver_trip_offers")
+    .update({
+      status: "expired",
+      updated_at: expiryNow,
+    })
+    .eq("trip_id", trip.id)
+    .in("status", ["pending", "shown"])
+    .lte("accept_deadline_at", expiryNow);
+
+  if (staleOfferError) {
+    console.error("[dispatch] stale offer cleanup failed", {
+      tripId: trip.id,
+      reason: staleOfferError.message,
+    });
+    return {
+      ok: false,
+      tripId: trip.id,
+      error: "Could not clear the expired offer. Please retry in a moment.",
+    };
+  }
+
   const startedAtMs = trip.dispatch_started_at ? new Date(trip.dispatch_started_at).getTime() : Date.now();
   if (Date.now() - startedAtMs > DISPATCH_CONFIG.maxSearchSeconds * 1000 || cycle > DISPATCH_CONFIG.maxCycles) {
     console.warn("[dispatch] search exhausted", {
