@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { buildDriverReadiness } from "@/lib/driver-validation";
-
-const ALLOWED = ["pending_review", "approved", "needs_more_info", "rejected"] as const;
+import {
+  isDriverVerificationAction,
+  persistedDriverVerificationStatus,
+} from "@/lib/drivers/statusContract";
 
 export async function POST(req: Request) {
   try {
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!ALLOWED.includes(verificationStatus)) {
+    if (!isDriverVerificationAction(verificationStatus)) {
       return NextResponse.json(
         { ok: false, error: "Invalid verificationStatus" },
         { status: 400 }
@@ -34,6 +36,7 @@ export async function POST(req: Request) {
         : verificationStatus === "rejected"
         ? "rejected"
         : "pending";
+    const persistedVerificationStatus = persistedDriverVerificationStatus(verificationStatus);
 
     const profileCompleted = verificationStatus === "approved";
 
@@ -122,7 +125,7 @@ export async function POST(req: Request) {
     const { error: driverError } = await supabaseAdmin
       .from("drivers")
       .update({
-        verification_status: verificationStatus,
+        verification_status: persistedVerificationStatus,
         status: driverStatus,
         profile_completed: profileCompleted ? true : undefined,
         updated_at: new Date().toISOString(),
@@ -130,7 +133,22 @@ export async function POST(req: Request) {
       .eq("id", driverId);
 
     if (driverError) {
-      return NextResponse.json({ ok: false, error: driverError.message }, { status: 500 });
+      console.error("[admin-driver-verification] update failed", {
+        driverId,
+        requestedStatus: verificationStatus,
+        persistedStatus: persistedVerificationStatus,
+        code: driverError.code,
+        reason: driverError.message,
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: driverError.code === "23514"
+            ? "This verification action is not supported by the current driver status setup."
+            : "Could not update driver verification. Please try again.",
+        },
+        { status: driverError.code === "23514" ? 400 : 500 },
+      );
     }
 
     if (verificationStatus === "approved") {
@@ -145,7 +163,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: `Driver verification updated to ${verificationStatus}`,
+      message: verificationStatus === "needs_more_info"
+        ? "More information requested. The driver remains pending review."
+        : `Driver verification updated to ${verificationStatus}`,
+      verificationStatus: persistedVerificationStatus,
     });
   } catch (error: unknown) {
     return NextResponse.json(

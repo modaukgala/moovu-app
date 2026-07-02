@@ -4,6 +4,7 @@ import {
   normalizeDriverProfileInput,
   validateDriverProfileFields,
 } from "@/lib/driver-validation";
+import { DEFAULT_DRIVER_VERIFICATION_STATUS } from "@/lib/drivers/statusContract";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
@@ -234,7 +235,7 @@ export async function POST(req: Request) {
       false;
 
     const preservedVerificationStatus =
-      existingDriver?.verification_status ?? "draft";
+      existingDriver?.verification_status ?? DEFAULT_DRIVER_VERIFICATION_STATUS;
 
     const nextProfileCompleted = submit ? true : preservedProfileCompleted;
 

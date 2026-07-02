@@ -29,12 +29,13 @@ export async function POST(req: Request) {
     if (!ALLOWED.includes(reviewStatus as (typeof ALLOWED)[number])) {
       return NextResponse.json({ ok: false, error: "Invalid reviewStatus" }, { status: 400 });
     }
+    const persistedReviewStatus = reviewStatus === "approved" ? "verified" : reviewStatus;
 
     let { error } = await supabaseAdmin
       .from("driver_documents")
       .update({
-        review_status: reviewStatus,
-        status: reviewStatus === "verified" ? "approved" : reviewStatus,
+        review_status: persistedReviewStatus,
+        status: persistedReviewStatus === "verified" ? "approved" : persistedReviewStatus,
         updated_at: new Date().toISOString(),
       })
       .eq("id", documentId);
@@ -43,20 +44,29 @@ export async function POST(req: Request) {
       const retry = await supabaseAdmin
         .from("driver_documents")
         .update({
-          review_status: reviewStatus,
-          status: reviewStatus === "verified" ? "approved" : reviewStatus,
+          review_status: persistedReviewStatus,
+          status: persistedReviewStatus === "verified" ? "approved" : persistedReviewStatus,
         })
         .eq("id", documentId);
       error = retry.error;
     }
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      console.error("[admin-driver-document-review] update failed", {
+        documentId,
+        reviewStatus: persistedReviewStatus,
+        code: error.code,
+        reason: error.message,
+      });
+      return NextResponse.json(
+        { ok: false, error: "Could not update this document review. Please try again." },
+        { status: error.code === "23514" ? 400 : 500 },
+      );
     }
 
     return NextResponse.json({
       ok: true,
-      message: `Document review updated to ${reviewStatus}`,
+      message: `Document review updated to ${persistedReviewStatus}`,
     });
   } catch (e: unknown) {
     return NextResponse.json({ ok: false, error: errorMessage(e, "Server error") }, { status: 500 });

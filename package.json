@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:dispatch": "node --test --experimental-strip-types src/lib/dispatch/dispatchPolicy.test.ts",
+    "test:status-contracts": "node --test --experimental-strip-types src/lib/drivers/statusContract.test.ts",
     "sync:customer": "node scripts/capacitor-ios-target.mjs customer sync",
     "sync:driver": "node scripts/capacitor-ios-target.mjs driver sync",
     "copy:customer": "node scripts/capacitor-ios-target.mjs customer copy",
