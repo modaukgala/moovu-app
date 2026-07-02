@@ -64,6 +64,11 @@ begin
 end $$;
 
 -- Preserve the newest active row and close stale duplicates before unique indexes are added.
+update public.driver_trip_offers
+set status = 'expired', expired_at = coalesce(expired_at, now()), updated_at = now()
+where status in ('pending','shown')
+  and (accept_deadline_at is null or accept_deadline_at <= now());
+
 with ranked as (
   select id,
          row_number() over (partition by trip_id, driver_id order by offered_at desc, created_at desc) as rn
@@ -166,9 +171,8 @@ begin
 
   update public.driver_trip_offers o
   set status = 'expired', expired_at = coalesce(o.expired_at, now()), updated_at = now()
-  where o.trip_id = p_trip_id
-    and o.status in ('pending','shown')
-    and o.accept_deadline_at <= now();
+  where o.status in ('pending','shown')
+    and (o.accept_deadline_at is null or o.accept_deadline_at <= now());
 
   select * into v_driver from public.drivers where id = p_driver_id for update;
   if not found then raise exception 'Driver not found' using errcode = 'P0002'; end if;

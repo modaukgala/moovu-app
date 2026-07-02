@@ -136,7 +136,7 @@ export async function getDispatchCandidates(params: {
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").in("driver_id", driverIds),
     supabase.from("trips").select("driver_id").in("driver_id", driverIds).in("status", ["assigned", "arrived", "ongoing"]),
     supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).in("driver_id", driverIds).eq("status", "declined"),
-    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).in("driver_id", driverIds).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()),
+    supabase.from("driver_trip_offers").select("driver_id").in("driver_id", driverIds).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()),
   ]);
 
   const fatal = [walletsResult.error, activeTripsResult.error, activeOfferResult.error].find(Boolean);
@@ -215,7 +215,7 @@ export async function getPreferredDispatchCandidate(params: {
     supabase.from("driver_wallets").select("driver_id,balance_due").eq("driver_id", driverId).maybeSingle(),
     supabase.from("trips").select("driver_id").eq("driver_id", driverId).in("status", ["assigned", "arrived", "ongoing"]).limit(1),
     supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).eq("driver_id", driverId).eq("status", "declined").limit(1),
-    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).eq("driver_id", driverId).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()).limit(1),
+    supabase.from("driver_trip_offers").select("driver_id").eq("driver_id", driverId).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()).limit(1),
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").eq("driver_id", driverId).maybeSingle(),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").eq("driver_id", driverId).maybeSingle(),
   ]);
@@ -225,7 +225,7 @@ export async function getPreferredDispatchCandidate(params: {
   if (Number((walletResult.data as WalletRow | null)?.balance_due ?? 0) >= DRIVER_COMMISSION_LOCK_LIMIT) return { ok: false as const, error: "Driver commission balance is locked." };
   if ((activeTripsResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already has an active trip." };
   if ((declinedResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already declined this trip." };
-  if ((activeOfferResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already has this offer." };
+  if ((activeOfferResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already has another active trip offer." };
 
   const distanceKm = round2(haversineKm(pickupLat, pickupLng, Number(row.lat), Number(row.lng)));
   const scoreBreakdown = scoreCandidate({

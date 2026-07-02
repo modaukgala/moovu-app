@@ -105,9 +105,8 @@ export async function dispatchTrip(params: {
       status: "expired",
       updated_at: expiryNow,
     })
-    .eq("trip_id", trip.id)
     .in("status", ["pending", "shown"])
-    .lte("accept_deadline_at", expiryNow);
+    .or(`accept_deadline_at.lte.${expiryNow},accept_deadline_at.is.null`);
 
   if (staleOfferError) {
     console.error("[dispatch] stale offer cleanup failed", {
