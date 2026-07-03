@@ -377,6 +377,9 @@ export default function AdminSubscriptionsPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
+              <Link href="/admin/subscriptions/paid" className="moovu-btn moovu-btn-secondary">
+                Paid subscriptions
+              </Link>
               <Link href="/admin/commission-payments" className="moovu-btn moovu-btn-secondary">
                 Commission payments
               </Link>

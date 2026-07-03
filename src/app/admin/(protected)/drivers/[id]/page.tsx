@@ -766,8 +766,11 @@ export default function AdminDriverProfilePage() {
           <div>
             <h2 className="text-2xl font-semibold">Extracted vs entered checks</h2>
             <p className="mt-1 text-sm text-gray-700">
-              OCR is not auto-approving documents. Rows marked needs review require manual admin comparison.
+              Automatic OCR is not active. Open the source document, compare it with the entered value, then verify the matching document in the Documents tab.
             </p>
+          </div>
+          <div className="rounded-2xl bg-sky-50 p-4 text-sm font-bold leading-6 text-sky-950">
+            Validation process: open the source file, confirm the name or number matches the Entered value, check expiry and image clarity, then mark the document Verified. A re-upload request resets the replacement file to pending review when the driver uploads it.
           </div>
           {!documentChecks.length ? (
             <div className="rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-600">
@@ -801,9 +804,25 @@ export default function AdminDriverProfilePage() {
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3">
                       <span className="font-bold text-slate-500">Document:</span>{" "}
-                      <span className="font-black text-slate-950">{check.extractedValue || "Manual review required"}</span>
+                      <span className="font-black text-slate-950">{check.extractedValue || "No OCR value - compare visually"}</span>
                     </div>
                   </div>
+                  {(() => {
+                    const sourceDocument = documents.find(
+                      (document) =>
+                        normalizeDriverDocumentType(document.document_type || document.doc_type) === check.documentType,
+                    );
+                    return sourceDocument ? (
+                      <button
+                        type="button"
+                        className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-black text-[var(--moovu-primary)]"
+                        disabled={actionBusy}
+                        onClick={() => void openDocument(sourceDocument)}
+                      >
+                        Open source document
+                      </button>
+                    ) : null;
+                  })()}
                 </div>
               ))}
             </div>
@@ -872,6 +891,8 @@ export default function AdminDriverProfilePage() {
               {documents.map((document) => {
                 const type = normalizeDriverDocumentType(document.document_type || document.doc_type);
                 const status = document.review_status || document.status || "pending";
+                const isReviewed = ["approved", "verified"].includes(status.toLowerCase());
+                const isAwaitingReupload = status.toLowerCase() === "needs_reupload";
                 return (
                   <div key={document.id} className="rounded-3xl border border-[var(--moovu-border)] bg-white p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -905,18 +926,18 @@ export default function AdminDriverProfilePage() {
                       <button
                         type="button"
                         className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700"
-                        disabled={actionBusy}
+                        disabled={actionBusy || isReviewed || isAwaitingReupload}
                         onClick={() => void updateDocumentReview(document.id, "verified")}
                       >
-                        Verify
+                        {isReviewed ? "Reviewed" : isAwaitingReupload ? "Awaiting re-upload" : "Verify"}
                       </button>
                       <button
                         type="button"
                         className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700"
-                        disabled={actionBusy}
+                        disabled={actionBusy || isAwaitingReupload}
                         onClick={() => void updateDocumentReview(document.id, "needs_reupload")}
                       >
-                        Request re-upload
+                        {isAwaitingReupload ? "Re-upload requested" : "Request re-upload"}
                       </button>
                     </div>
                   </div>

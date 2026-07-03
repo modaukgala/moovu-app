@@ -70,6 +70,7 @@ export default function TripDetailPage() {
   const [events, setEvents] = useState<TripEvent[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
+  const [offering, setOffering] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pageError, setPageError] = useState<string | null>(null);
 
@@ -136,6 +137,9 @@ export default function TripDetailPage() {
   async function offerNearest(exclude: string[] = []) {
     if (!trip) return;
 
+    setOffering(true);
+    setPageError(null);
+
     const {
       data: { session },
     } = await supabaseClient.auth.getSession();
@@ -151,13 +155,15 @@ export default function TripDetailPage() {
       body: JSON.stringify({ tripId: trip.id, excludeDriverIds: exclude }),
     });
 
-    const json = await res.json();
-    if (!json.ok) {
-      setPageError(json.error || "Offer failed");
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) {
+      setOffering(false);
+      setPageError(json?.error || "Offer failed");
       return;
     }
 
     await loadAll();
+    setOffering(false);
   }
 
   async function cancelTrip() {
@@ -227,6 +233,15 @@ export default function TripDetailPage() {
   }
 
   const isClosed = trip.status === "completed" || trip.status === "cancelled";
+  const hasActiveOffer =
+    trip.offer_status === "pending" &&
+    offerSecondsLeft != null &&
+    offerSecondsLeft > 0;
+  const canOfferNearest =
+    !isClosed &&
+    !trip.driver_id &&
+    ["requested", "offered"].includes(trip.status) &&
+    !hasActiveOffer;
 
   return (
     <main className="space-y-6 text-black">
@@ -318,9 +333,14 @@ export default function TripDetailPage() {
           <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Driver</div>
             <div className="font-semibold text-black mt-1">{driverLabel}</div>
-            {trip.offer_status === "pending" && offerSecondsLeft != null && (
+            {hasActiveOffer && offerSecondsLeft != null && (
               <div className="text-sm text-gray-700 mt-2">
                 Offer pending • {Math.max(0, offerSecondsLeft)}s left
+              </div>
+            )}
+            {trip.offer_status === "pending" && !hasActiveOffer && (
+              <div className="mt-2 text-sm font-bold text-amber-700">
+                Previous offer ended. Offer the next eligible driver.
               </div>
             )}
           </div>
@@ -346,12 +366,17 @@ export default function TripDetailPage() {
 
       <section className="moovu-card p-5 sm:p-6">
         <div className="moovu-action-row">
-          {!isClosed && trip.offer_status !== "pending" && trip.status !== "assigned" && (
+          {canOfferNearest && (
             <button
               className="moovu-btn moovu-btn-primary"
+              disabled={offering}
               onClick={() => offerNearest([])}
             >
-              Offer nearest driver
+              {offering
+                ? "Finding next driver..."
+                : trip.offer_status === "pending"
+                  ? "Offer next driver"
+                  : "Offer nearest driver"}
             </button>
           )}
 

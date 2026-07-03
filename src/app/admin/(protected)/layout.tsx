@@ -18,6 +18,7 @@ const navItems = [
   { href: "/admin/payment-reviews", label: "Payments", group: "Payments" },
   { href: "/admin/commission-payments", label: "Commissions", group: "Payments" },
   { href: "/admin/subscriptions", label: "Subscriptions", group: "Payments" },
+  { href: "/admin/subscriptions/paid", label: "Paid Subscriptions", group: "Payments" },
   { href: "/admin/settlements", label: "Settlements", group: "Payments" },
   { href: "/admin/reports", label: "Earnings Report", group: "Reports" },
   { href: "/admin/earnings", label: "Earnings Dashboard", group: "Reports" },
