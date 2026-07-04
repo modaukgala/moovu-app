@@ -5,7 +5,7 @@ import FirebaseMessaging
 import UserNotifications
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
 
     var window: UIWindow?
     private let cachedFcmTokenKey = "moovu.firebase.fcmToken"
@@ -44,8 +44,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         }
         Messaging.messaging().isAutoInitEnabled = true
         Messaging.messaging().delegate = self
-        UNUserNotificationCenter.current().delegate = self
-        NSLog("[MOOVU Push] Notification center delegate ready")
+        NSLog("[MOOVU Push] Capacitor notification router will handle notification presentation and taps")
         return true
     }
 
@@ -119,20 +118,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         guard let token = fcmToken, !token.isEmpty else { return }
         NSLog("[MOOVU Push] Messaging delegate received refreshed FCM token (%lu chars)", token.count)
         publishFcmToken(token, source: "MessagingDelegate")
-    }
-
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                willPresent notification: UNNotification,
-                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        NSLog("[MOOVU Push] Foreground notification received")
-        completionHandler([.banner, .badge, .sound])
-    }
-
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                didReceive response: UNNotificationResponse,
-                                withCompletionHandler completionHandler: @escaping () -> Void) {
-        NSLog("[MOOVU Push] Notification action received")
-        completionHandler()
     }
 
 }

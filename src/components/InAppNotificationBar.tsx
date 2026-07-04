@@ -15,6 +15,7 @@ import {
   type NotificationRole,
 } from "@/lib/notifications/registration";
 import { supabaseClient } from "@/lib/supabase/client";
+import { resolveNotificationTarget } from "@/lib/notifications/deepLinkRouting";
 
 type NativeListenerHandle = {
   remove: () => Promise<void>;
@@ -234,7 +235,10 @@ export default function InAppNotificationBar() {
       show({
         title: data.title || "MOOVU update",
         body: data.body,
-        url: data.url,
+        url: resolveNotificationTarget(
+          { ...data, role: currentNotificationRole() },
+          currentNotificationRole(),
+        ),
         tone: data.nativeActionType === "trip_offer" ? "offer" : "message",
       });
     }
@@ -317,7 +321,14 @@ export default function InAppNotificationBar() {
         showSystemLikeAlert({
           title: data.title || payload.notification?.title || "MOOVU update",
           body: data.body || payload.notification?.body || "You have a new MOOVU update.",
-          url: data.url,
+          url: resolveNotificationTarget(
+            {
+              ...data,
+              title: data.title || payload.notification?.title,
+              role: currentNotificationRole(),
+            },
+            currentNotificationRole(),
+          ),
           tone: data.nativeActionType === "trip_offer" ? "offer" : "message",
         });
       });
@@ -340,11 +351,18 @@ export default function InAppNotificationBar() {
     async function setupNativePushListeners() {
       try {
         const receivedHandle = await PushNotifications.addListener("pushNotificationReceived", (notification) => {
-          const data = notification.data as { url?: string; nativeActionType?: string } | undefined;
+          const data = notification.data as Record<string, unknown> | undefined;
           showSystemLikeAlert({
             title: notification.title || "MOOVU update",
             body: notification.body || "You have a new MOOVU update.",
-            url: data?.url,
+            url: resolveNotificationTarget(
+              {
+                ...(data ?? {}),
+                title: notification.title,
+                role: currentNotificationRole(),
+              },
+              currentNotificationRole(),
+            ),
             tone: data?.nativeActionType === "trip_offer" ? "offer" : "message",
           });
         });

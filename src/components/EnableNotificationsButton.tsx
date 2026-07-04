@@ -121,25 +121,6 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
     };
   }, [markSaved, role]);
 
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    const handles: Array<{ remove: () => Promise<void> }> = [];
-
-    PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-      const url = action.notification.data?.url;
-      if (typeof url === "string" && url.length > 0) {
-        window.location.assign(url);
-      }
-    }).then((handle) => handles.push(handle)).catch(() => undefined);
-
-    return () => {
-      for (const handle of handles) {
-        void handle.remove();
-      }
-    };
-  }, []);
-
   async function handleClick() {
     setBusy(true);
     setMessage("");

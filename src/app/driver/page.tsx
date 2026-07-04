@@ -1110,6 +1110,11 @@ export default function DriverHomePage() {
   }, [driver?.online, otpEntryOpen]);
 
   useEffect(() => {
+    if (searchParams.get("offerExpired") !== "1") return;
+    setInfo("This trip is no longer available.");
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!searchParams.get("offerTripId")) return;
     document
       .getElementById("driver-trip-offer-card")

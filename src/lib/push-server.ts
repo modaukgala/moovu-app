@@ -4,6 +4,10 @@ import type { PushRole } from "@/lib/push-auth";
 import { sendApnsToDeviceToken } from "@/lib/apns-server";
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
 import { createNativeNotificationActionToken } from "@/lib/native-notification-actions";
+import {
+  buildNotificationRoutingData,
+  resolveNotificationTarget,
+} from "@/lib/notifications/deepLinkRouting";
 
 const MOOVU_NOTIFICATION_SOUND = "moovu_premium_alert";
 const MOOVU_TRIP_OFFER_SOUND = "moovu_trip_offer_buzz";
@@ -499,15 +503,25 @@ async function sendFcmToTargets(params: SendPushParams) {
   const failures: PushFailure[] = [];
 
   for (const row of targetRows) {
-    const relativeUrl = params.url || "/";
-    const clickUrl = absoluteAppUrl(relativeUrl);
     const androidNativeToken = isAndroidNativeToken(row);
     const iosNativeToken = isIosNativeToken(row);
     const { androidSound, androidChannelId } = pushSoundNames(params.data);
     const tokenKind = tokenTargetKind(row);
 
     try {
-      const baseData = stringData(params.data, {
+      const routingData = buildNotificationRoutingData({
+        role: params.role,
+        title: params.title,
+        url: params.url || "/",
+        data: params.data,
+      });
+      const relativeUrl = resolveNotificationTarget(
+        routingData,
+        params.role ?? row.role ?? "customer",
+      );
+      routingData.url = relativeUrl;
+      const clickUrl = absoluteRoleAppUrl(relativeUrl, params.role ?? row.role);
+      const baseData = stringData(routingData, {
         title: params.title,
         body: params.body,
         url: relativeUrl,
@@ -730,8 +744,14 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
   }
 
   const supabase = getSupabaseAdmin();
-  const url = payload.url || "/";
-  const data = stringData(payload.data, {
+  const routingData = buildNotificationRoutingData({
+    title: payload.title,
+    url: payload.url || "/",
+    data: payload.data,
+  });
+  const url = resolveNotificationTarget(routingData, "customer");
+  routingData.url = url;
+  const data = stringData(routingData, {
     title: payload.title,
     body: payload.body,
     url,
