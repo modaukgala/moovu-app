@@ -5,6 +5,7 @@ import ClientErrorRecovery from "@/components/ClientErrorRecovery";
 import InAppNotificationBar from "@/components/InAppNotificationBar";
 import PortalNotificationLauncher from "@/components/PortalNotificationLauncher";
 import NotificationDeepLinkRouter from "@/components/NotificationDeepLinkRouter";
+import CustomerLaunchNotice from "@/components/CustomerLaunchNotice";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://moovurides.co.za"),
@@ -53,6 +54,7 @@ export default function RootLayout({
         <CapacitorBackButtonHandler />
         <PortalNotificationLauncher />
         <NotificationDeepLinkRouter />
+        <CustomerLaunchNotice />
       </body>
     </html>
   );
