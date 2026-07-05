@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
+import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { getNoShowFee } from "@/lib/finance/cancellationFees";
@@ -1593,6 +1594,10 @@ export default function DriverHomePage() {
                     Account
                   </button>
                 </div>
+              </div>
+
+              <div className="flex justify-end px-1">
+                <EnableNotificationsButton role="driver" variant="chip" />
               </div>
 
               <div className="moovu-driver-map-card">

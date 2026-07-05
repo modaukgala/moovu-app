@@ -4,6 +4,7 @@ import { type ClipboardEvent, useEffect, useMemo, useRef, useState } from "react
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import {
   DEFAULT_RIDE_OPTION_ID,
@@ -1762,6 +1763,10 @@ export default function RiderBookingPage() {
               <span className="moovu-account-dot" />
               <span>{customer?.first_name || "Rider"}</span>
             </div>
+          </div>
+
+          <div className="flex justify-end px-4 pb-2">
+            <EnableNotificationsButton role="customer" variant="chip" />
           </div>
 
           {/* Route inputs box */}

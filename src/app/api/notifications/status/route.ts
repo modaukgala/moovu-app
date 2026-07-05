@@ -92,13 +92,33 @@ export async function GET(req: Request) {
       };
     });
 
+    let activeDeviceTokenCount = 0;
+    if (deviceId) {
+      const { count, error: deviceCountError } = await supabaseAdmin
+        .from("fcm_tokens")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("role", role)
+        .eq("device_id", deviceId)
+        .eq("is_active", true);
+
+      if (deviceCountError) {
+        console.error("[notification-status] failed to load current device status", {
+          role,
+          userId: user.id,
+          deviceId,
+          reason: deviceCountError.message,
+        });
+      } else {
+        activeDeviceTokenCount = Number(count ?? 0);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       userId: user.id,
       activeTokenCount: tokens.filter((row) => row.is_active).length,
-      activeDeviceTokenCount: deviceId
-        ? tokens.filter((row) => row.is_active && row.device_id === deviceId).length
-        : 0,
+      activeDeviceTokenCount,
       tokens,
     });
   } catch {
