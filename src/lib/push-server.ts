@@ -618,6 +618,20 @@ async function sendFcmToTargets(params: SendPushParams) {
           })
         : baseData;
       const useNativeAndroidActions = androidNativeToken && !!data.nativeActionToken;
+      const apns = apnsOptions(params.title, params.body, data);
+
+      console.info("[fcm] sending token", {
+        tokenId: row.id,
+        userId: row.user_id,
+        role: row.role,
+        platform: row.platform,
+        appType: row.app_type,
+        kind: tokenKind,
+        iosVisibleAlert: iosNativeToken,
+        androidNativeToken,
+        usesTopLevelNotification: true,
+        apnsPriority: iosNativeToken ? apns.headers["apns-priority"] : null,
+      });
 
       const responseId = await messaging.send({
         token: String(row.token),
@@ -637,7 +651,7 @@ async function sendFcmToTargets(params: SendPushParams) {
             clickAction: "FCM_PLUGIN_ACTIVITY",
           },
         },
-        apns: apnsOptions(params.title, params.body, params.data),
+        apns,
         webpush: {
           notification: {
             title: params.title,
@@ -663,6 +677,7 @@ async function sendFcmToTargets(params: SendPushParams) {
         kind: tokenKind,
         responseId,
         usedTopLevelNotification: true,
+        apnsAlertSent: iosNativeToken,
         nativeActionsAvailableInForeground: useNativeAndroidActions,
       });
       await supabase
@@ -765,6 +780,15 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
 
   for (const token of uniqueTokens) {
     try {
+      const apns = apnsOptions(payload.title, payload.body, payload.data);
+      console.info("[fcm] direct token send started", {
+        tokenSuffix: token.slice(-12),
+        platform: "unknown",
+        appType: "unknown",
+        usedTopLevelNotification: true,
+        apnsPriority: apns.headers["apns-priority"],
+      });
+
       const responseId = await messaging.send({
         token,
         notification: {
@@ -783,7 +807,7 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
             clickAction: "FCM_PLUGIN_ACTIVITY",
           },
         },
-        apns: apnsOptions(payload.title, payload.body, payload.data),
+        apns,
         webpush: {
           notification: {
             title: payload.title,
@@ -800,6 +824,8 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
       delivered += 1;
       console.info("[fcm] direct token send ok", {
         tokenSuffix: token.slice(-12),
+        platform: "unknown",
+        appType: "unknown",
         responseId,
       });
       await supabase
