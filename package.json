@@ -27,7 +27,9 @@
     "ios:customer:open": "npm run open:customer",
     "ios:driver:open": "npm run open:driver",
     "ios:customer:doctor": "node scripts/capacitor-ios-target.mjs customer doctor",
-    "ios:driver:doctor": "node scripts/capacitor-ios-target.mjs driver doctor"
+    "ios:driver:doctor": "node scripts/capacitor-ios-target.mjs driver doctor",
+    "ios:clean-locks": "node scripts/capacitor-ios-target.mjs clean-locks",
+    "ios:reset-targets": "node scripts/capacitor-ios-target.mjs reset-targets"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.3",
