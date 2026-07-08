@@ -1,7 +1,7 @@
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
+import type { Message } from "firebase-admin/messaging";
 import type { PushRole } from "@/lib/push-auth";
-import { sendApnsToDeviceToken } from "@/lib/apns-server";
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
 import { createNativeNotificationActionToken } from "@/lib/native-notification-actions";
 import {
@@ -13,7 +13,6 @@ const MOOVU_NOTIFICATION_SOUND = "moovu_premium_alert";
 const MOOVU_TRIP_OFFER_SOUND = "moovu_trip_offer_buzz";
 const MOOVU_ANDROID_CHANNEL_ID = "moovu_premium_v1";
 const MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID = "moovu_trip_offer_buzz_v1";
-const ENABLE_LEGACY_APNS_FALLBACK = process.env.ENABLE_LEGACY_APNS_FALLBACK === "true";
 
 type SendPushParams = {
   userIds?: string[];
@@ -30,6 +29,12 @@ type PushFailure = {
 };
 
 type PushData = Record<string, string | number | boolean | null | undefined>;
+
+type TokenMetadataOverride = {
+  platform?: string | null;
+  appType?: string | null;
+  role?: PushRole | null;
+};
 
 type SendPushPayload = {
   title: string;
@@ -115,6 +120,19 @@ function getFirebaseErrorCode(error: unknown) {
   if (typeof error !== "object" || error === null) return "";
   const record = error as Record<string, unknown>;
   return typeof record.code === "string" ? record.code : "";
+}
+
+function isInvalidFirebaseTokenError(error: unknown) {
+  const code = getFirebaseErrorCode(error);
+  const reason = getErrorMessage(error);
+  return (
+    code === "messaging/registration-token-not-registered" ||
+    code === "messaging/invalid-registration-token" ||
+    code === "messaging/invalid-argument" && reason.toLowerCase().includes("registration token") ||
+    reason.includes("registration-token-not-registered") ||
+    reason.includes("invalid-registration-token") ||
+    reason.includes("Requested entity was not found.")
+  );
 }
 
 function getSiteOrigin() {
@@ -223,6 +241,53 @@ function apnsOptions(title: string, body: string, data?: PushData) {
       analyticsLabel: "moovu_push",
     },
   } as const;
+}
+
+function buildVisibleFirebaseMessage(params: {
+  token: string;
+  title: string;
+  body: string;
+  data: Record<string, string>;
+  url: string;
+  webLink: string;
+  androidSound: string;
+  androidChannelId: string;
+  sourceData?: PushData;
+}): Message {
+  return {
+    token: params.token,
+    notification: {
+      title: params.title,
+      body: params.body,
+    },
+    data: params.data,
+    android: {
+      priority: "high",
+      notification: {
+        title: params.title,
+        body: params.body,
+        icon: "ic_launcher",
+        sound: params.androidSound,
+        channelId: params.androidChannelId,
+        clickAction: "FCM_PLUGIN_ACTIVITY",
+      },
+    },
+    apns: apnsOptions(params.title, params.body, params.sourceData ?? params.data),
+    webpush: {
+      notification: {
+        title: params.title,
+        body: params.body,
+        icon: absoluteAppUrl("/icon-192.png"),
+        badge: absoluteAppUrl("/icon-192.png"),
+        data: {
+          url: params.url,
+        },
+      },
+      fcmOptions: {
+        link: params.webLink,
+      },
+    },
+  };
 }
 
 async function withNativeActionData(params: {
@@ -555,84 +620,24 @@ async function sendFcmToTargets(params: SendPushParams) {
       });
 
       if (iosNativeToken && isLegacyApnsDeviceToken(row)) {
-        if (!ENABLE_LEGACY_APNS_FALLBACK) {
-          console.warn("[push] legacy APNs token skipped and deactivated; iOS must register Firebase FCM tokens", {
-            tokenId: row.id,
-            userId: row.user_id,
-            role: row.role,
-            appType: row.app_type,
-            kind: tokenKind,
-          });
-          await supabase
-            .from("fcm_tokens")
-            .update({
-              is_active: false,
-              enabled: false,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", row.id);
-          removed += 1;
-          continue;
-        }
-
-        const iosData = await withNativeActionData({
-          supabase,
-          row,
-          data: baseData,
-        });
-        const apnsResult = await sendApnsToDeviceToken({
-          token: String(row.token),
+        console.warn("[push] legacy APNs token skipped and deactivated; iOS must register a Firebase FCM token", {
+          tokenId: row.id,
+          userId: row.user_id,
+          role: row.role,
+          platform: row.platform,
           appType: row.app_type,
-          title: params.title,
-          body: params.body,
-          url: relativeUrl,
-          data: iosData,
-          sound: "default",
+          kind: tokenKind,
+          tokenLength: String(row.token).trim().length,
         });
-
-        if (!apnsResult.ok) {
-          failed += 1;
-          failures.push({ subscriptionId: String(row.id), reason: apnsResult.reason });
-          console.error("[apns] send failed", {
-            tokenId: row.id,
-            userId: row.user_id,
-            role: row.role,
-            appType: row.app_type,
-            kind: tokenKind,
-            status: apnsResult.status,
-            reason: apnsResult.reason,
-          });
-
-          if (apnsResult.removeToken) {
-            await supabase
-              .from("fcm_tokens")
-              .update({ is_active: false, updated_at: new Date().toISOString() })
-              .eq("id", row.id);
-            console.warn("[push] token deactivated", {
-              tokenId: row.id,
-              userId: row.user_id,
-              role: row.role,
-              appType: row.app_type,
-              kind: tokenKind,
-              reason: apnsResult.reason,
-            });
-            removed += 1;
-          }
-        } else {
-          delivered += 1;
-          console.info("[apns] send ok", {
-            tokenId: row.id,
-            userId: row.user_id,
-            role: row.role,
-            appType: row.app_type,
-            kind: tokenKind,
-          });
-          await supabase
-            .from("fcm_tokens")
-            .update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-            .eq("id", row.id);
-        }
-
+        await supabase
+          .from("fcm_tokens")
+          .update({
+            is_active: false,
+            enabled: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", row.id);
+        removed += 1;
         continue;
       }
 
@@ -661,40 +666,17 @@ async function sendFcmToTargets(params: SendPushParams) {
         apnsSound: iosNativeToken ? apns.payload.aps.sound : null,
       });
 
-      const responseId = await messaging.send({
+      const responseId = await messaging.send(buildVisibleFirebaseMessage({
         token: String(row.token),
-        notification: {
-          title: params.title,
-          body: params.body,
-        },
+        title: params.title,
+        body: params.body,
         data,
-        android: {
-          priority: "high",
-          notification: {
-            title: params.title,
-            body: params.body,
-            icon: "ic_launcher",
-            sound: androidSound,
-            channelId: androidChannelId,
-            clickAction: "FCM_PLUGIN_ACTIVITY",
-          },
-        },
-        apns,
-        webpush: {
-          notification: {
-            title: params.title,
-            body: params.body,
-            icon: absoluteAppUrl("/icon-192.png"),
-            badge: absoluteAppUrl("/icon-192.png"),
-            data: {
-              url: relativeUrl,
-            },
-          },
-          fcmOptions: {
-            link: clickUrl,
-          },
-        },
-      });
+        url: relativeUrl,
+        webLink: clickUrl,
+        androidSound,
+        androidChannelId,
+        sourceData: params.data,
+      }));
       delivered += 1;
       console.info("[fcm] send ok", {
         tokenId: row.id,
@@ -732,15 +714,10 @@ async function sendFcmToTargets(params: SendPushParams) {
         reason,
       });
 
-      if (
-        code === "messaging/registration-token-not-registered" ||
-        code === "messaging/invalid-registration-token" ||
-        reason.includes("registration-token-not-registered") ||
-        reason.includes("invalid-registration-token")
-      ) {
+      if (isInvalidFirebaseTokenError(error)) {
         await supabase
           .from("fcm_tokens")
-          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .update({ is_active: false, enabled: false, updated_at: new Date().toISOString() })
           .eq("id", row.id);
         console.warn("[push] token deactivated", {
           tokenId: row.id,
@@ -772,7 +749,11 @@ async function sendFcmToTargets(params: SendPushParams) {
   return { delivered, removed, failed, failures };
 }
 
-export async function sendPushToTokens(tokens: string[], payload: SendPushPayload) {
+export async function sendPushToTokens(
+  tokens: string[],
+  payload: SendPushPayload,
+  metadataOverride?: TokenMetadataOverride,
+) {
   const messaging = getFirebaseAdminMessaging();
   if (!messaging) {
     return {
@@ -805,7 +786,23 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
   const metadataByToken = new Map(
     (tokenMetadata ?? []).map((row) => [String(row.token), row]),
   );
-  const directRows = uniqueTokens.map((token) => metadataByToken.get(token) ?? { token });
+  const fallbackTokenRow = (token: string) => ({
+    id: null,
+    user_id: null,
+    role: metadataOverride?.role ?? null,
+    token,
+    platform: metadataOverride?.platform ?? null,
+    app_type: metadataOverride?.appType ?? null,
+    device_id: null,
+    enabled: true,
+    updated_at: null,
+    last_used_at: null,
+    last_seen_at: null,
+    created_at: null,
+  });
+  const directRows = uniqueTokens.map((token) => metadataByToken.get(token) ?? {
+    ...fallbackTokenRow(token),
+  });
   const directCounts = tokenTargetCounts(directRows);
   console.info("[push] direct token target lookup", {
     tokenCount: uniqueTokens.length,
@@ -843,11 +840,11 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
   const failures: PushFailure[] = [];
 
   for (const token of uniqueTokens) {
-    const tokenRow = metadataByToken.get(token);
-    const tokenKind = tokenRow ? tokenTargetKind(tokenRow) : "unknown_fcm";
-    const iosNativeToken = tokenRow ? isIosNativeToken(tokenRow) : false;
+    const tokenRow = metadataByToken.get(token) ?? fallbackTokenRow(token);
+    const tokenKind = tokenTargetKind(tokenRow);
+    const iosNativeToken = isIosNativeToken(tokenRow);
 
-    if (tokenRow && isLegacyApnsDeviceToken(tokenRow)) {
+    if (isLegacyApnsDeviceToken(tokenRow)) {
       console.warn("[push] direct token skipped and deactivated because it is a raw APNs token, not an iOS FCM token", {
         tokenId: tokenRow.id,
         userId: tokenRow.user_id,
@@ -855,11 +852,14 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
         platform: tokenRow.platform,
         appType: tokenRow.app_type,
         kind: tokenKind,
+        tokenLength: token.trim().length,
       });
-      await supabase
-        .from("fcm_tokens")
-        .update({ is_active: false, enabled: false, updated_at: new Date().toISOString() })
-        .eq("id", tokenRow.id);
+      if (tokenRow.id) {
+        await supabase
+          .from("fcm_tokens")
+          .update({ is_active: false, enabled: false, updated_at: new Date().toISOString() })
+          .eq("id", tokenRow.id);
+      }
       removed += 1;
       continue;
     }
@@ -880,38 +880,17 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
         apnsSound: iosNativeToken ? apns.payload.aps.sound : null,
       });
 
-      const responseId = await messaging.send({
+      const responseId = await messaging.send(buildVisibleFirebaseMessage({
         token,
-        notification: {
-          title: payload.title,
-          body: payload.body,
-        },
+        title: payload.title,
+        body: payload.body,
         data,
-        android: {
-          priority: "high",
-          notification: {
-            title: payload.title,
-            body: payload.body,
-            icon: "ic_launcher",
-            sound: androidSound,
-            channelId: androidChannelId,
-            clickAction: "FCM_PLUGIN_ACTIVITY",
-          },
-        },
-        apns,
-        webpush: {
-          notification: {
-            title: payload.title,
-            body: payload.body,
-            icon: absoluteAppUrl("/icon-192.png"),
-            badge: absoluteAppUrl("/icon-192.png"),
-            data: { url },
-          },
-          fcmOptions: {
-            link: absoluteAppUrl(url),
-          },
-        },
-      });
+        url,
+        webLink: absoluteAppUrl(url),
+        androidSound,
+        androidChannelId,
+        sourceData: payload.data,
+      }));
       delivered += 1;
       console.info("[fcm] direct token send ok", {
         tokenId: tokenRow?.id ?? null,
@@ -946,15 +925,10 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
         reason,
       });
 
-      if (
-        code === "messaging/registration-token-not-registered" ||
-        code === "messaging/invalid-registration-token" ||
-        reason.includes("registration-token-not-registered") ||
-        reason.includes("invalid-registration-token")
-      ) {
+      if (isInvalidFirebaseTokenError(error)) {
         await supabase
           .from("fcm_tokens")
-          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .update({ is_active: false, enabled: false, updated_at: new Date().toISOString() })
           .eq("token", token);
         console.warn("[push] direct token deactivated", {
           tokenId: tokenRow?.id ?? null,

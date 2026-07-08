@@ -1554,68 +1554,6 @@ tr:last-child td {
   transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
 }
 
-.moovu-driver-gps-chip {
-  display: grid;
-  min-height: 46px;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 2px;
-  margin-top: 8px;
-  border: 1px solid rgba(207, 228, 255, 0.84);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 8px 10px;
-  text-align: center;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-}
-
-.moovu-driver-gps-chip span {
-  color: var(--moovu-text-soft);
-  font-size: 9px;
-  font-weight: 950;
-  letter-spacing: 0.13em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.moovu-driver-gps-chip strong {
-  overflow: hidden;
-  color: var(--moovu-text);
-  font-size: 12px;
-  font-weight: 950;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.moovu-driver-gps-chip button {
-  min-height: 26px;
-  border: 0;
-  border-radius: 999px;
-  background: #fff;
-  color: #b45309;
-  font-size: 11px;
-  font-weight: 950;
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.32);
-}
-
-.moovu-driver-gps-chip.is-success {
-  border-color: rgba(34, 197, 94, 0.24);
-  background: rgba(240, 253, 244, 0.92);
-}
-
-.moovu-driver-gps-chip.is-success span {
-  color: #047857;
-}
-
-.moovu-driver-gps-chip.is-warning {
-  border-color: rgba(251, 191, 36, 0.42);
-  background: rgba(255, 251, 235, 0.96);
-}
-
-.moovu-driver-gps-chip.is-warning span {
-  color: #b45309;
-}
-
 .moovu-driver-go-button.is-online {
   background: linear-gradient(135deg, #0f766e, #16a34a);
 }
@@ -3079,7 +3017,10 @@ tr:last-child td {
 
 @media (max-width: 640px) {
   .moovu-page.moovu-driver-shell {
-    padding: 12px 12px calc(132px + env(safe-area-inset-bottom));
+    padding:
+      max(62px, calc(20px + env(safe-area-inset-top)))
+      12px
+      calc(132px + env(safe-area-inset-bottom));
   }
 
   .moovu-driver-hero-actions {
@@ -3180,7 +3121,7 @@ tr:last-child td {
   .moovu-driver-map-status {
     left: 12px;
     right: 12px;
-    top: max(12px, calc(8px + env(safe-area-inset-top)));
+    top: 12px;
     max-width: none;
     padding: 10px 12px;
   }
@@ -3200,12 +3141,6 @@ tr:last-child td {
     min-height: 58px;
     border-radius: 20px;
     font-size: 15px;
-  }
-
-  .moovu-driver-gps-chip {
-    min-height: 42px;
-    border-radius: 16px;
-    padding: 7px 8px;
   }
 
   .moovu-driver-earnings-mini strong {

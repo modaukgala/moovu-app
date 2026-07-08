@@ -396,51 +396,7 @@ export default function DriverHomePage() {
   const shouldOpenChatFromNotification = searchParams.get("chat") === "1";
   const notificationTripId = searchParams.get("tripId") || searchParams.get("offerTripId") || "";
   const gpsTone = gpsInfo ? gpsNoticeTone(gpsInfo) : null;
-  const gpsMessage = gpsInfo ? gpsNoticeMessage(gpsInfo) : "";
   const gpsAttentionNotice = gpsInfo && gpsTone !== "success" ? gpsInfo : null;
-  const gpsPanelState = useMemo(() => {
-    if (!subscriptionAllowsOnline) {
-      return {
-        label: "Subscription required",
-        detail: "Renew to receive trip offers",
-        tone: "warning",
-      };
-    }
-
-    if (gpsTone === "success") {
-      return {
-        label: "GPS live",
-        detail: gpsMessage,
-        tone: "success",
-      };
-    }
-
-    if (gpsInfo && gpsTone) {
-      return {
-        label: "GPS needs attention",
-        detail: gpsMessage,
-        tone: "warning",
-      };
-    }
-
-    if (driver?.lat != null && driver.lng != null) {
-      const lastSeen = driver.last_seen
-        ? new Date(driver.last_seen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        : "Location saved";
-
-      return {
-        label: "GPS ready",
-        detail: lastSeen,
-        tone: "success",
-      };
-    }
-
-    return {
-      label: "GPS pending",
-      detail: driver?.online ? "Checking location" : "Go online to share location",
-      tone: "info",
-    };
-  }, [driver?.lat, driver?.lng, driver?.last_seen, driver?.online, gpsInfo, gpsMessage, gpsTone, subscriptionAllowsOnline]);
 
   const offersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1694,15 +1650,6 @@ export default function DriverHomePage() {
                           SUBSCRIBE
                         </button>
                       )}
-                      <div className={`moovu-driver-gps-chip is-${gpsPanelState.tone}`}>
-                        <span>{gpsPanelState.label}</span>
-                        <strong>{gpsPanelState.detail}</strong>
-                        {gpsPanelState.tone === "warning" && subscriptionAllowsOnline && (
-                          <button type="button" onClick={() => void retryCurrentGps()} disabled={busy}>
-                            Retry
-                          </button>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </div>
