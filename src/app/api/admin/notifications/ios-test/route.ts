@@ -30,6 +30,12 @@ function isIosAppType(value: string): value is IosAppType {
   return IOS_APP_TYPES.has(value as IosAppType);
 }
 
+function isIosTokenRow(row: Pick<FcmTokenRow, "platform" | "app_type">) {
+  const platform = String(row.platform ?? "").toLowerCase();
+  const appType = String(row.app_type ?? "").toLowerCase();
+  return platform === "ios" || appType.includes("ios");
+}
+
 function isIosApnsDeviceToken(token: string) {
   return /^[a-f0-9]{64}$/i.test(token.trim());
 }
@@ -97,7 +103,7 @@ export async function POST(req: Request) {
       .select("id,user_id,role,token,platform,app_type,device_id,enabled,is_active,last_seen_at,updated_at")
       .eq("is_active", true)
       .eq("enabled", true)
-      .eq("platform", "ios");
+      .or("platform.eq.ios,app_type.ilike.%ios%");
 
     if (tokenId) {
       query = query.eq("id", tokenId);
@@ -121,9 +127,9 @@ export async function POST(req: Request) {
     }
 
     const rowAppType = String(row.app_type ?? "");
-    if (row.platform !== "ios" || !isIosAppType(rowAppType)) {
+    if (!isIosTokenRow(row)) {
       return NextResponse.json(
-        { ok: false, error: "Selected token is not an iOS Customer or iOS Driver token." },
+        { ok: false, error: "Selected token is not an iOS token." },
         { status: 400 },
       );
     }

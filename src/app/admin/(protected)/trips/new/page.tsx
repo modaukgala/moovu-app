@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import { ActionCard, PageHeader, ProfileSectionCard } from "@/components/ui/MoovuPrimitives";
 import {
   DEFAULT_RIDE_OPTION_ID,
   RIDE_OPTIONS,
@@ -310,110 +311,132 @@ export default function NewTripPage() {
   }
 
   return (
-    <main className="p-6 max-w-2xl">
-      <h1 className="text-2xl font-semibold">New Trip</h1>
-      <p className="opacity-70 mt-2">Create a ride request manually (dispatcher).</p>
+    <main className="space-y-5">
+      <PageHeader
+        kicker="Dispatch"
+        title="New Trip"
+        description="Create a manual ride request for dispatch while using the same MOOVU pricing engine and protected admin API flow."
+      />
 
-      <form onSubmit={createTrip} className="mt-6 space-y-4">
-        <div className="grid md:grid-cols-2 gap-3">
-          <input
-            className="moovu-input"
-            placeholder="Rider name (optional)"
-            value={riderName}
-            onChange={(e) => setRiderName(e.target.value)}
-          />
-          <input
-            className="moovu-input"
-            placeholder="Rider phone (optional)"
-            value={riderPhone}
-            onChange={(e) => setRiderPhone(e.target.value)}
-          />
-        </div>
-
-        <div className="relative">
-          <input
-            className="moovu-input"
-            placeholder="Pickup (select from suggestions) *"
-            value={pickup}
-            onChange={(e) => {
-              const v = e.target.value;
-              setPickup(v);
-              setPickupPlaceId(null);
-              schedulePickupAutocomplete(v);
-            }}
-            onFocus={() => pickupPred.length && setPickupOpen(true)}
-            required
-          />
-          {pickupOpen && pickupPred.length > 0 && (
-            <div className="absolute z-10 mt-2 w-full border rounded-2xl bg-white text-black overflow-hidden shadow">
-              {pickupPred.slice(0, 6).map((p) => (
-                <button
-                  type="button"
-                  key={p.place_id}
-                  className="w-full text-left px-4 py-3 hover:bg-black/5"
-                  onClick={() => {
-                    setPickup(p.description);
-                    setPickupPlaceId(p.place_id);
-                    setPickupOpen(false);
-                    setPickupPred([]);
-                  }}
-                >
-                  {p.description}
-                </button>
-              ))}
+      <form onSubmit={createTrip} className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-5">
+          <ProfileSectionCard
+            title="Rider and route"
+            description="Select pickup and dropoff from suggestions so the route and fare can be calculated correctly."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="moovu-field-label">
+                Rider name
+                <input
+                  className="moovu-input"
+                  placeholder="Optional"
+                  value={riderName}
+                  onChange={(e) => setRiderName(e.target.value)}
+                />
+              </label>
+              <label className="moovu-field-label">
+                Rider phone
+                <input
+                  className="moovu-input"
+                  placeholder="Optional"
+                  value={riderPhone}
+                  onChange={(e) => setRiderPhone(e.target.value)}
+                />
+              </label>
             </div>
-          )}
-          {pickup && !pickupPlaceId && (
-            <p className="text-xs opacity-70 mt-1">Pick from suggestions so distance can be calculated.</p>
-          )}
-        </div>
 
-        <div className="relative">
-          <input
-            className="moovu-input"
-            placeholder="Dropoff (select from suggestions) *"
-            value={dropoff}
-            onChange={(e) => {
-              const v = e.target.value;
-              setDropoff(v);
-              setDropoffPlaceId(null);
-              scheduleDropoffAutocomplete(v);
-            }}
-            onFocus={() => dropoffPred.length && setDropoffOpen(true)}
-            required
-          />
-          {dropoffOpen && dropoffPred.length > 0 && (
-            <div className="absolute z-10 mt-2 w-full border rounded-2xl bg-white text-black overflow-hidden shadow">
-              {dropoffPred.slice(0, 6).map((p) => (
-                <button
-                  type="button"
-                  key={p.place_id}
-                  className="w-full text-left px-4 py-3 hover:bg-black/5"
-                  onClick={() => {
-                    setDropoff(p.description);
-                    setDropoffPlaceId(p.place_id);
-                    setDropoffOpen(false);
-                    setDropoffPred([]);
-                  }}
-                >
-                  {p.description}
-                </button>
-              ))}
+            <div className="mt-4 grid gap-4">
+              <div className="relative">
+                <label className="moovu-field-label">
+                  Pickup
+                  <input
+                    className="moovu-input"
+                    placeholder="Select from suggestions"
+                    value={pickup}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setPickup(v);
+                      setPickupPlaceId(null);
+                      schedulePickupAutocomplete(v);
+                    }}
+                    onFocus={() => pickupPred.length && setPickupOpen(true)}
+                    required
+                  />
+                </label>
+                {pickupOpen && pickupPred.length > 0 && (
+                  <div className="moovu-suggestion-popover">
+                    {pickupPred.slice(0, 6).map((p) => (
+                      <button
+                        type="button"
+                        key={p.place_id}
+                        className="moovu-suggestion-option"
+                        onClick={() => {
+                          setPickup(p.description);
+                          setPickupPlaceId(p.place_id);
+                          setPickupOpen(false);
+                          setPickupPred([]);
+                        }}
+                      >
+                        {p.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {pickup && !pickupPlaceId && (
+                  <p className="mt-2 text-xs font-semibold text-slate-500">Pick from suggestions so distance can be calculated.</p>
+                )}
+              </div>
+
+              <div className="relative">
+                <label className="moovu-field-label">
+                  Dropoff
+                  <input
+                    className="moovu-input"
+                    placeholder="Select from suggestions"
+                    value={dropoff}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDropoff(v);
+                      setDropoffPlaceId(null);
+                      scheduleDropoffAutocomplete(v);
+                    }}
+                    onFocus={() => dropoffPred.length && setDropoffOpen(true)}
+                    required
+                  />
+                </label>
+                {dropoffOpen && dropoffPred.length > 0 && (
+                  <div className="moovu-suggestion-popover">
+                    {dropoffPred.slice(0, 6).map((p) => (
+                      <button
+                        type="button"
+                        key={p.place_id}
+                        className="moovu-suggestion-option"
+                        onClick={() => {
+                          setDropoff(p.description);
+                          setDropoffPlaceId(p.place_id);
+                          setDropoffOpen(false);
+                          setDropoffPred([]);
+                        }}
+                      >
+                        {p.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {dropoff && !dropoffPlaceId && (
+                  <p className="mt-2 text-xs font-semibold text-slate-500">Pick from suggestions so distance can be calculated.</p>
+                )}
+              </div>
             </div>
-          )}
-          {dropoff && !dropoffPlaceId && (
-            <p className="text-xs opacity-70 mt-1">Pick from suggestions so distance can be calculated.</p>
-          )}
-        </div>
+          </ProfileSectionCard>
 
-        <div className="moovu-data-row">
-          <div className="font-semibold">Smart Kasi Pricing</div>
-          <div className="text-sm opacity-70 mt-1">
-            Uses the same MOOVU launch pricing engine as customer booking.
-          </div>
-          <div className="mt-2 text-xs font-semibold text-sky-800">
-            Active manual surge: {activeSurge.label} x{activeSurge.multiplier.toFixed(1)}. Manual fare overrides remain intentional.
-          </div>
+          <ProfileSectionCard
+            title="Smart Kasi Pricing"
+            description="Uses the same MOOVU launch pricing engine as customer booking. Manual fare overrides remain intentional."
+          >
+            <div className="rounded-2xl bg-blue-50 px-4 py-3 text-xs font-black text-blue-800">
+              Active manual surge: {activeSurge.label} x{activeSurge.multiplier.toFixed(1)}
+            </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {RIDE_OPTIONS.map((option) => {
@@ -442,38 +465,47 @@ export default function NewTripPage() {
           </div>
 
           <div className="grid md:grid-cols-5 gap-3 mt-4">
-            <select
-              className="moovu-input bg-transparent"
-              value={rideOptionId}
-              onChange={(e) => {
-                const next = e.target.value === "group" ? "group" : "go";
-                selectRideOption(next);
-              }}
-            >
-              {RIDE_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
+            <label className="moovu-field-label">
+              Ride type
+              <select
+                className="moovu-input bg-transparent"
+                value={rideOptionId}
+                onChange={(e) => {
+                  const next = e.target.value === "group" ? "group" : "go";
+                  selectRideOption(next);
+                }}
+              >
+                {RIDE_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-            <input
-              className="moovu-input"
-              placeholder="Distance (km)"
-              value={distanceKm}
-              onChange={(e) => setDistanceKm(e.target.value)}
-            />
+            <label className="moovu-field-label">
+              Distance
+              <input
+                className="moovu-input"
+                placeholder="km"
+                value={distanceKm}
+                onChange={(e) => setDistanceKm(e.target.value)}
+              />
+            </label>
 
-            <input
-              className="moovu-input"
-              placeholder="Duration (min)"
-              value={durationMin}
-              onChange={(e) => setDurationMin(e.target.value)}
-            />
+            <label className="moovu-field-label">
+              Duration
+              <input
+                className="moovu-input"
+                placeholder="min"
+                value={durationMin}
+                onChange={(e) => setDurationMin(e.target.value)}
+              />
+            </label>
 
             <button
               type="button"
-              className="moovu-input"
+              className="moovu-btn moovu-btn-secondary h-full min-h-[46px]"
               disabled={calcBusy}
               onClick={calculateDistance}
             >
@@ -482,7 +514,7 @@ export default function NewTripPage() {
 
             <button
               type="button"
-              className="moovu-input"
+              className="moovu-btn moovu-btn-secondary h-full min-h-[46px]"
               onClick={() => {
                 const km = Number(distanceKm);
                 const calc = calculateTripFare({
@@ -500,51 +532,84 @@ export default function NewTripPage() {
             </button>
           </div>
 
-          {calcInfo && <p className="text-sm opacity-70 mt-2">{calcInfo}</p>}
-          {autoFare !== null && <p className="text-sm opacity-70 mt-1">Auto fare suggested: R{autoFare}</p>}
+            {calcInfo && <p className="mt-3 text-sm font-semibold text-slate-600">{calcInfo}</p>}
+            {autoFare !== null && <p className="mt-1 text-sm font-black text-blue-800">Auto fare suggested: R{autoFare}</p>}
+          </ProfileSectionCard>
+
+          <ProfileSectionCard
+            title="Payment and assignment"
+            description="Leave the driver unassigned to place this trip into the dispatch queue."
+          >
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="moovu-field-label">
+                Payment
+                <select
+                  className="moovu-input bg-transparent"
+                  value={paymentMethod}
+                  onChange={(e) => {
+                    if (isPaymentMethod(e.target.value)) {
+                      setPaymentMethod(e.target.value);
+                    }
+                  }}
+                >
+                  <option value="cash">Cash</option>
+                  <option value="online">Online</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+
+              <label className="moovu-field-label">
+                Fare
+                <input
+                  className="moovu-input"
+                  placeholder="Auto or manual"
+                  value={fare}
+                  onChange={(e) => setFare(e.target.value)}
+                />
+              </label>
+
+              <label className="moovu-field-label">
+                Driver
+                <select
+                  className="moovu-input bg-transparent"
+                  value={driverId}
+                  onChange={(e) => setDriverId(e.target.value)}
+                >
+                  <option value="">No driver (requested)</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.first_name} {d.last_name} ({d.phone})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </ProfileSectionCard>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-3">
-          <select
-            className="moovu-input bg-transparent"
-            value={paymentMethod}
-            onChange={(e) => {
-              if (isPaymentMethod(e.target.value)) {
-                setPaymentMethod(e.target.value);
-              }
-            }}
-          >
-            <option value="cash">Cash</option>
-            <option value="online">Online</option>
-            <option value="other">Other</option>
-          </select>
-
-          <input
-            className="moovu-input"
-            placeholder="Fare (auto or manual)"
-            value={fare}
-            onChange={(e) => setFare(e.target.value)}
+        <aside className="space-y-4">
+          <ActionCard
+            tone="primary"
+            meta="Dispatcher control"
+            title="Create safely"
+            description="The server still validates the admin session, route, fare, rider details, and driver assignment before creating the trip."
           />
 
-          <select
-            className="moovu-input bg-transparent"
-            value={driverId}
-            onChange={(e) => setDriverId(e.target.value)}
-          >
-            <option value="">No driver (requested)</option>
-            {drivers.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.first_name} {d.last_name} ({d.phone})
-              </option>
-            ))}
-          </select>
-        </div>
+          {err ? (
+            <ActionCard
+              tone="danger"
+              meta="Needs attention"
+              title="Could not create trip"
+              description={err}
+            />
+          ) : null}
 
-        {err && <p className="text-sm text-red-600">{err}</p>}
-
-        <button disabled={busy} className="border rounded-xl px-4 py-2">
-          {busy ? "Creating..." : "Create Trip"}
-        </button>
+          <section className="moovu-sticky-safe-action">
+            <button disabled={busy} className="moovu-btn moovu-btn-primary w-full">
+              {busy ? "Creating..." : "Create Trip"}
+            </button>
+          </section>
+        </aside>
       </form>
     </main>
   );

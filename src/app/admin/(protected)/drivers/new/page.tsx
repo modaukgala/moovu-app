@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { ActionCard, PageHeader, ProfileSectionCard } from "@/components/ui/MoovuPrimitives";
 
 export default function NewDriverPage() {
 
@@ -56,47 +57,80 @@ export default function NewDriverPage() {
   }
 
   return (
-    <main className="p-6">
+    <main className="space-y-5">
       {error && <CenteredMessageBox title="Create driver failed" message={error} onClose={() => setError(null)} />}
 
-      <h1 className="text-2xl font-semibold mb-6">Add Driver</h1>
+      <PageHeader
+        kicker="Driver operations"
+        title="Add Driver"
+        description="Create a driver profile from the admin portal. The driver still keeps the normal approval, document and subscription checks before receiving trips."
+      />
 
-      <form onSubmit={createDriver} className="space-y-4 max-w-md">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <ProfileSectionCard
+          title="Driver details"
+          description="Capture the basic contact details needed to create the driver record."
+        >
+          <form onSubmit={createDriver} className="grid gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="moovu-field-label">
+                First name
+                <input
+                  className="moovu-input"
+                  placeholder="Gift"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </label>
 
-        <input
-          className="w-full moovu-input"
-          placeholder="First name"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
+              <label className="moovu-field-label">
+                Last name
+                <input
+                  className="moovu-input"
+                  placeholder="Driver"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="moovu-field-label">
+                Cellphone
+                <input
+                  className="moovu-input"
+                  placeholder="07..."
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </label>
+
+              <label className="moovu-field-label">
+                Email
+                <input
+                  className="moovu-input"
+                  placeholder="driver@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="moovu-sticky-safe-action mt-2">
+              <button disabled={busy} className="moovu-btn moovu-btn-primary w-full sm:w-auto">
+                {busy ? "Creating..." : "Create Driver"}
+              </button>
+            </div>
+          </form>
+        </ProfileSectionCard>
+
+        <ActionCard
+          tone="primary"
+          meta="Review path"
+          title="Approval stays protected"
+          description="Creating this record does not bypass verification, document review, subscription checks, or online eligibility."
         />
-
-        <input
-          className="w-full moovu-input"
-          placeholder="Last name"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-        />
-
-        <input
-          className="w-full moovu-input"
-          placeholder="Phone"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
-
-        <input
-          className="w-full moovu-input"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-
-        <button disabled={busy} className="border rounded-xl px-4 py-2">
-          {busy ? "Creating..." : "Create Driver"}
-        </button>
-
-      </form>
-
+      </div>
     </main>
   );
 }

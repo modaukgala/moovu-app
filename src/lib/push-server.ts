@@ -177,13 +177,13 @@ function stringData(data: PushData | undefined, fallback: Record<string, string>
 function isAndroidNativeToken(row: { platform?: string | null; app_type?: string | null }) {
   const platform = String(row.platform ?? "").toLowerCase();
   const appType = String(row.app_type ?? "").toLowerCase();
-  return platform === "android" || appType.startsWith("android");
+  return platform === "android" || appType.includes("android");
 }
 
 function isIosNativeToken(row: { platform?: string | null; app_type?: string | null }) {
   const platform = String(row.platform ?? "").toLowerCase();
   const appType = String(row.app_type ?? "").toLowerCase();
-  return platform === "ios" || appType.startsWith("ios");
+  return platform === "ios" || appType.includes("ios");
 }
 
 function isLegacyApnsDeviceToken(row: { token: string; platform?: string | null; app_type?: string | null }) {
@@ -289,8 +289,28 @@ function tokenTargetKind(row: {
   if (isIosNativeToken(row)) return "ios_fcm";
   if (isAndroidNativeToken(row)) return "android_fcm";
   const appType = String(row.app_type ?? "").toLowerCase();
-  if (appType.startsWith("web")) return "web_fcm";
+  if (appType.includes("web") || String(row.platform ?? "").toLowerCase() === "web") return "web_fcm";
   return "unknown_fcm";
+}
+
+function tokenTargetCounts(rows: Array<{
+  token: string;
+  platform?: string | null;
+  app_type?: string | null;
+  role?: PushRole | null;
+}>) {
+  return rows.reduce(
+    (acc, row) => {
+      const kind = tokenTargetKind(row);
+      if (kind === "ios_fcm") acc.ios += 1;
+      else if (kind === "ios_apns_legacy") acc.iosLegacyApns += 1;
+      else if (kind === "android_fcm") acc.android += 1;
+      else if (kind === "web_fcm") acc.web += 1;
+      else acc.unknown += 1;
+      return acc;
+    },
+    { android: 0, ios: 0, iosLegacyApns: 0, web: 0, unknown: 0 },
+  );
 }
 
 function sortTokenRows<T extends {
@@ -477,6 +497,7 @@ async function sendFcmToTargets(params: SendPushParams) {
   }
 
   const targetRows = dedupeActiveTokens(tokens);
+  const platformCounts = tokenTargetCounts(targetRows);
   const targetSummary = targetRows.reduce<Record<string, number>>((acc, row) => {
     const key = `${tokenTargetKind(row)}:${String(row.app_type ?? "unknown")}`;
     acc[key] = (acc[key] ?? 0) + 1;
@@ -487,6 +508,11 @@ async function sendFcmToTargets(params: SendPushParams) {
     role: params.role ?? null,
     requestedUsers: params.userIds?.length ?? 0,
     tokenCount: targetRows.length,
+    androidTokenCount: platformCounts.android,
+    iosTokenCount: platformCounts.ios,
+    iosLegacyApnsTokenCount: platformCounts.iosLegacyApns,
+    webTokenCount: platformCounts.web,
+    unknownTokenCount: platformCounts.unknown,
     targets: targetRows.map((row) => ({
       platform: row.platform,
       appType: row.app_type,
@@ -631,6 +657,8 @@ async function sendFcmToTargets(params: SendPushParams) {
         androidNativeToken,
         usesTopLevelNotification: true,
         apnsPriority: iosNativeToken ? apns.headers["apns-priority"] : null,
+        apnsPushType: iosNativeToken ? apns.headers["apns-push-type"] : null,
+        apnsSound: iosNativeToken ? apns.payload.aps.sound : null,
       });
 
       const responseId = await messaging.send({
@@ -678,6 +706,9 @@ async function sendFcmToTargets(params: SendPushParams) {
         responseId,
         usedTopLevelNotification: true,
         apnsAlertSent: iosNativeToken,
+        apnsPriority: iosNativeToken ? apns.headers["apns-priority"] : null,
+        apnsPushType: iosNativeToken ? apns.headers["apns-push-type"] : null,
+        apnsSound: iosNativeToken ? apns.payload.aps.sound : null,
         nativeActionsAvailableInForeground: useNativeAndroidActions,
       });
       await supabase
@@ -697,6 +728,7 @@ async function sendFcmToTargets(params: SendPushParams) {
         appType: row.app_type,
         kind: tokenKind,
         code,
+        firebaseErrorCode: code || null,
         reason,
       });
 
@@ -759,6 +791,38 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
   }
 
   const supabase = getSupabaseAdmin();
+  const { data: tokenMetadata, error: tokenMetadataError } = await supabase
+    .from("fcm_tokens")
+    .select("id,user_id,role,token,platform,app_type,device_id,enabled,updated_at,last_used_at,last_seen_at,created_at")
+    .in("token", uniqueTokens);
+
+  if (tokenMetadataError) {
+    console.warn("[fcm] direct token metadata lookup failed; continuing with visible FCM payload", {
+      reason: tokenMetadataError.message,
+    });
+  }
+
+  const metadataByToken = new Map(
+    (tokenMetadata ?? []).map((row) => [String(row.token), row]),
+  );
+  const directRows = uniqueTokens.map((token) => metadataByToken.get(token) ?? { token });
+  const directCounts = tokenTargetCounts(directRows);
+  console.info("[push] direct token target lookup", {
+    tokenCount: uniqueTokens.length,
+    androidTokenCount: directCounts.android,
+    iosTokenCount: directCounts.ios,
+    iosLegacyApnsTokenCount: directCounts.iosLegacyApns,
+    webTokenCount: directCounts.web,
+    unknownTokenCount: directCounts.unknown,
+    targets: directRows.map((row) => ({
+      platform: "platform" in row ? row.platform : null,
+      appType: "app_type" in row ? row.app_type : null,
+      role: "role" in row ? row.role : null,
+      kind: tokenTargetKind(row),
+      deviceId: "device_id" in row ? row.device_id ?? null : null,
+    })),
+  });
+
   const routingData = buildNotificationRoutingData({
     title: payload.title,
     url: payload.url || "/",
@@ -779,14 +843,41 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
   const failures: PushFailure[] = [];
 
   for (const token of uniqueTokens) {
+    const tokenRow = metadataByToken.get(token);
+    const tokenKind = tokenRow ? tokenTargetKind(tokenRow) : "unknown_fcm";
+    const iosNativeToken = tokenRow ? isIosNativeToken(tokenRow) : false;
+
+    if (tokenRow && isLegacyApnsDeviceToken(tokenRow)) {
+      console.warn("[push] direct token skipped and deactivated because it is a raw APNs token, not an iOS FCM token", {
+        tokenId: tokenRow.id,
+        userId: tokenRow.user_id,
+        role: tokenRow.role,
+        platform: tokenRow.platform,
+        appType: tokenRow.app_type,
+        kind: tokenKind,
+      });
+      await supabase
+        .from("fcm_tokens")
+        .update({ is_active: false, enabled: false, updated_at: new Date().toISOString() })
+        .eq("id", tokenRow.id);
+      removed += 1;
+      continue;
+    }
+
     try {
       const apns = apnsOptions(payload.title, payload.body, payload.data);
       console.info("[fcm] direct token send started", {
+        tokenId: tokenRow?.id ?? null,
+        userId: tokenRow?.user_id ?? null,
+        role: tokenRow?.role ?? null,
         tokenSuffix: token.slice(-12),
-        platform: "unknown",
-        appType: "unknown",
+        platform: tokenRow?.platform ?? "unknown",
+        appType: tokenRow?.app_type ?? "unknown",
+        kind: tokenKind,
         usedTopLevelNotification: true,
-        apnsPriority: apns.headers["apns-priority"],
+        apnsPriority: iosNativeToken ? apns.headers["apns-priority"] : null,
+        apnsPushType: iosNativeToken ? apns.headers["apns-push-type"] : null,
+        apnsSound: iosNativeToken ? apns.payload.aps.sound : null,
       });
 
       const responseId = await messaging.send({
@@ -823,9 +914,13 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
       });
       delivered += 1;
       console.info("[fcm] direct token send ok", {
+        tokenId: tokenRow?.id ?? null,
+        userId: tokenRow?.user_id ?? null,
+        role: tokenRow?.role ?? null,
         tokenSuffix: token.slice(-12),
-        platform: "unknown",
-        appType: "unknown",
+        platform: tokenRow?.platform ?? "unknown",
+        appType: tokenRow?.app_type ?? "unknown",
+        kind: tokenKind,
         responseId,
       });
       await supabase
@@ -838,7 +933,18 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
       failed += 1;
       failures.push({ subscriptionId: token.slice(-12), reason });
 
-      console.error("[fcm] direct token send failed", { code, reason });
+      console.error("[fcm] direct token send failed", {
+        tokenId: tokenRow?.id ?? null,
+        userId: tokenRow?.user_id ?? null,
+        role: tokenRow?.role ?? null,
+        tokenSuffix: token.slice(-12),
+        platform: tokenRow?.platform ?? "unknown",
+        appType: tokenRow?.app_type ?? "unknown",
+        kind: tokenKind,
+        code,
+        firebaseErrorCode: code || null,
+        reason,
+      });
 
       if (
         code === "messaging/registration-token-not-registered" ||
@@ -851,7 +957,11 @@ export async function sendPushToTokens(tokens: string[], payload: SendPushPayloa
           .update({ is_active: false, updated_at: new Date().toISOString() })
           .eq("token", token);
         console.warn("[push] direct token deactivated", {
+          tokenId: tokenRow?.id ?? null,
           tokenSuffix: token.slice(-12),
+          platform: tokenRow?.platform ?? "unknown",
+          appType: tokenRow?.app_type ?? "unknown",
+          kind: tokenKind,
           code,
           reason,
         });

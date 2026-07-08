@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { PageHeader, ProfileSectionCard, QuickActionGrid } from "@/components/ui/MoovuPrimitives";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type DriverProfile = {
@@ -64,17 +65,26 @@ export default function DriverAccountPage() {
       {message && <CenteredMessageBox message={message} onClose={() => setMessage(null)} />}
 
       <div className="moovu-shell max-w-4xl space-y-5 py-6">
-        <section className="moovu-card p-5 sm:p-7">
-          <div className="moovu-section-title">Driver account</div>
-          <h1 className="mt-2 text-3xl font-black">Account and privacy</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            Manage your MOOVU Driver account, profile, support links, and account deletion.
-          </p>
-        </section>
+        <PageHeader
+          kicker="Driver account"
+          title="Account and privacy"
+          description="Manage your MOOVU Driver account, profile, documents, support links, and account deletion from one secure place."
+        />
 
-        <section className="moovu-card p-5 sm:p-7">
+        <ProfileSectionCard
+          title="Driver profile"
+          description="These details help MOOVU verify your account and keep customers informed after assignment."
+        >
           {loading ? (
-            <p className="text-sm font-semibold text-slate-600">Loading driver account...</p>
+            <div className="moovu-premium-skeleton-stack" aria-hidden="true">
+              <div className="moovu-skeleton h-5 w-40" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="moovu-skeleton h-20 w-full" />
+                <div className="moovu-skeleton h-20 w-full" />
+                <div className="moovu-skeleton h-20 w-full" />
+                <div className="moovu-skeleton h-20 w-full" />
+              </div>
+            </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               <Info label="Driver" value={`${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver"} />
@@ -88,16 +98,23 @@ export default function DriverAccountPage() {
               <Info label="Number plate" value={driver?.vehicle_registration || "Not captured"} />
             </div>
           )}
+        </ProfileSectionCard>
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link className="moovu-btn moovu-btn-secondary" href="/driver/complete-profile">Complete profile</Link>
-            <Link className="moovu-btn moovu-btn-secondary" href="/driver/trip-offers">Trip offers received</Link>
-            <Link className="moovu-btn moovu-btn-secondary" href="/driver/privacy-policy">Driver Privacy</Link>
-            <Link className="moovu-btn moovu-btn-secondary" href="/driver/terms">Driver Terms</Link>
-            <Link className="moovu-btn moovu-btn-secondary" href="/driver/contact">Contact</Link>
-            <button className="moovu-btn moovu-btn-secondary" onClick={signOut}>Logout</button>
-          </div>
-        </section>
+        <ProfileSectionCard
+          title="Quick actions"
+          description="Open the driver areas used most often during onboarding, support, and daily operations."
+        >
+          <QuickActionGrid
+            actions={[
+              { href: "/driver/complete-profile", label: "Complete profile", description: "Documents and vehicle" },
+              { href: "/driver/trip-offers", label: "Trip offers", description: "Received offers" },
+              { href: "/driver/privacy-policy", label: "Privacy", description: "Driver data policy" },
+              { href: "/driver/terms", label: "Terms", description: "Driver T&Cs" },
+              { href: "/driver/contact", label: "Contact", description: "MOOVU support" },
+              { label: "Logout", description: "Sign out safely", onClick: signOut },
+            ]}
+          />
+        </ProfileSectionCard>
 
         <section className="moovu-card border border-red-100 bg-red-50/50 p-5 sm:p-7">
           <div className="moovu-section-title text-red-700">Delete account</div>
@@ -119,7 +136,7 @@ export default function DriverAccountPage() {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl bg-slate-50 p-4">
+    <div className="moovu-data-row">
       <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-black text-slate-950">{value}</div>
     </div>

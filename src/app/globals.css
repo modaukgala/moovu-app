@@ -403,6 +403,244 @@ tr:last-child td {
   }
 }
 
+.moovu-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border: 1px solid rgba(207, 228, 255, 0.95);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(69, 188, 226, 0.14), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(239, 247, 255, 0.94)),
+    #fff;
+  padding: clamp(18px, 4vw, 28px);
+  box-shadow: 0 16px 42px rgba(31, 116, 201, 0.08);
+}
+
+.moovu-page-header h1 {
+  margin: 8px 0 0;
+  color: #050505;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.moovu-page-header p {
+  margin: 10px 0 0;
+  max-width: 720px;
+  color: var(--moovu-text-soft);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.7;
+}
+
+.moovu-page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.moovu-action-card,
+.moovu-profile-section-card {
+  border: 1px solid rgba(215, 226, 234, 0.9);
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 252, 255, 0.95)),
+    #fff;
+  padding: 18px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.055);
+}
+
+.moovu-action-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.moovu-action-card-primary {
+  border-color: #cfe4ff;
+  background: linear-gradient(135deg, #eef8ff, #fff);
+}
+
+.moovu-action-card-success {
+  border-color: #bbf7d0;
+  background: linear-gradient(135deg, #ecfdf3, #fff);
+}
+
+.moovu-action-card-warning {
+  border-color: #fed7aa;
+  background: linear-gradient(135deg, #fff7ed, #fff);
+}
+
+.moovu-action-card-danger {
+  border-color: #fecaca;
+  background: linear-gradient(135deg, #fef2f2, #fff);
+}
+
+.moovu-action-card-meta {
+  color: var(--moovu-text-soft);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.moovu-action-card h2,
+.moovu-profile-section-card h2 {
+  margin: 0;
+  color: #050505;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.moovu-action-card p,
+.moovu-profile-section-card p {
+  margin: 8px 0 0;
+  color: var(--moovu-text-soft);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.65;
+}
+
+.moovu-action-card-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.moovu-profile-section-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 1px solid rgba(215, 226, 234, 0.8);
+  padding-bottom: 14px;
+}
+
+.moovu-profile-section-card-body {
+  padding-top: 16px;
+}
+
+.moovu-quick-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.moovu-quick-action-card {
+  display: flex;
+  min-height: 74px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(215, 226, 234, 0.9);
+  border-radius: 22px;
+  background: #fff;
+  padding: 12px;
+  color: #0f172a;
+  text-align: left;
+  text-decoration: none;
+  box-shadow: var(--moovu-shadow-sm);
+}
+
+.moovu-quick-action-card:hover {
+  border-color: #cfe4ff;
+  background: #f8fbff;
+}
+
+.moovu-quick-action-mark {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--moovu-primary), #2bb5a0);
+  box-shadow: 0 10px 20px rgba(31, 116, 201, 0.16);
+}
+
+.moovu-quick-action-card strong,
+.moovu-quick-action-card small {
+  display: block;
+}
+
+.moovu-quick-action-card strong {
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.moovu-quick-action-card small {
+  margin-top: 2px;
+  color: var(--moovu-text-soft);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.moovu-field-label {
+  display: grid;
+  gap: 7px;
+  color: var(--moovu-text-soft);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.moovu-field-label .moovu-input {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.moovu-suggestion-popover {
+  position: absolute;
+  z-index: 30;
+  margin-top: 8px;
+  max-height: min(320px, 46svh);
+  width: 100%;
+  overflow: auto;
+  border: 1px solid rgba(203, 216, 229, 0.94);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #050505;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.moovu-suggestion-option {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgba(215, 226, 234, 0.72);
+  background: transparent;
+  padding: 13px 16px;
+  text-align: left;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.moovu-suggestion-option:last-child {
+  border-bottom: 0;
+}
+
+.moovu-suggestion-option:hover {
+  background: #f3f8ff;
+}
+
+@media (min-width: 720px) {
+  .moovu-page-header,
+  .moovu-profile-section-card-header,
+  .moovu-action-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .moovu-page-header-actions,
+  .moovu-action-card-action {
+    justify-content: flex-end;
+  }
+}
+
 .moovu-premium-list {
   display: grid;
   gap: 12px;
@@ -2524,24 +2762,27 @@ tr:last-child td {
   width: min(calc(100% - 24px), 520px);
   margin: 0 auto;
   border: 1px solid rgba(215, 226, 234, 0.92);
-  border-radius: 22px;
+  border-radius: 24px;
   background: rgba(255, 255, 255, 0.96);
-  padding: 5px;
+  padding: 6px;
   box-shadow: 0 18px 42px rgba(5, 5, 5, 0.14);
   backdrop-filter: blur(18px);
 }
 
 .moovu-customer-nav-item {
-  display: inline-flex;
+  display: flex;
   min-width: 0;
-  min-height: 46px;
+  min-height: 50px;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  border-radius: 16px;
+  gap: 6px;
+  border-radius: 18px;
   color: #5b6776;
   font-size: 11px;
   font-weight: 900;
+  line-height: 1;
+  text-align: center;
   transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
 }
 
@@ -2560,8 +2801,8 @@ tr:last-child td {
 }
 
 .moovu-customer-nav-dot {
-  width: 7px;
-  height: 7px;
+  width: 18px;
+  height: 4px;
   flex: 0 0 auto;
   border-radius: 999px;
   background: #cad5e3;
@@ -2733,11 +2974,11 @@ tr:last-child td {
 
 .moovu-driver-bottom-nav .moovu-customer-nav-item {
   min-width: 0;
-  min-height: 44px;
-  flex-direction: row;
-  gap: 4px;
+  min-height: 50px;
+  flex-direction: column;
+  gap: 5px;
   padding: 3px 2px;
-  font-size: 9.5px;
+  font-size: 10px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -2751,8 +2992,8 @@ tr:last-child td {
 }
 
 .moovu-driver-bottom-nav .moovu-customer-nav-dot {
-  width: 5px;
-  height: 5px;
+  width: 17px;
+  height: 4px;
 }
 
 @media (max-width: 1180px) {
