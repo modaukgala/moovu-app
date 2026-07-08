@@ -395,6 +395,52 @@ export default function DriverHomePage() {
     ["assigned", "arrived", "ongoing"].includes(currentTrip.status);
   const shouldOpenChatFromNotification = searchParams.get("chat") === "1";
   const notificationTripId = searchParams.get("tripId") || searchParams.get("offerTripId") || "";
+  const gpsTone = gpsInfo ? gpsNoticeTone(gpsInfo) : null;
+  const gpsMessage = gpsInfo ? gpsNoticeMessage(gpsInfo) : "";
+  const gpsAttentionNotice = gpsInfo && gpsTone !== "success" ? gpsInfo : null;
+  const gpsPanelState = useMemo(() => {
+    if (!subscriptionAllowsOnline) {
+      return {
+        label: "Subscription required",
+        detail: "Renew to receive trip offers",
+        tone: "warning",
+      };
+    }
+
+    if (gpsTone === "success") {
+      return {
+        label: "GPS live",
+        detail: gpsMessage,
+        tone: "success",
+      };
+    }
+
+    if (gpsInfo && gpsTone) {
+      return {
+        label: "GPS needs attention",
+        detail: gpsMessage,
+        tone: "warning",
+      };
+    }
+
+    if (driver?.lat != null && driver.lng != null) {
+      const lastSeen = driver.last_seen
+        ? new Date(driver.last_seen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "Location saved";
+
+      return {
+        label: "GPS ready",
+        detail: lastSeen,
+        tone: "success",
+      };
+    }
+
+    return {
+      label: "GPS pending",
+      detail: driver?.online ? "Checking location" : "Go online to share location",
+      tone: "info",
+    };
+  }, [driver?.lat, driver?.lng, driver?.last_seen, driver?.online, gpsInfo, gpsMessage, gpsTone, subscriptionAllowsOnline]);
 
   const offersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -687,7 +733,10 @@ export default function DriverHomePage() {
       return false;
     }
 
-    setGpsInfo(`GPS live - ${new Date().toLocaleTimeString()}`);
+    setGpsInfo({
+      tone: "success",
+      message: `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+    });
     return true;
   }
 
@@ -1471,7 +1520,7 @@ export default function DriverHomePage() {
       )}
 
       <div className="moovu-shell">
-        {(info || gpsInfo) && (
+        {(info || gpsAttentionNotice) && (
           <div className="mb-4 grid gap-3 md:grid-cols-2">
             {info && (
               <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
@@ -1479,21 +1528,19 @@ export default function DriverHomePage() {
               </div>
             )}
 
-            {gpsInfo && (
+            {gpsAttentionNotice && (
               <div
-                className={`rounded-2xl border px-4 py-3 text-sm ${gpsNoticeClass(gpsNoticeTone(gpsInfo))}`}
+                className={`rounded-2xl border px-4 py-3 text-sm ${gpsNoticeClass(gpsNoticeTone(gpsAttentionNotice))}`}
               >
-                <div>{gpsNoticeMessage(gpsInfo)}</div>
-                {gpsNoticeTone(gpsInfo) !== "success" && (
-                  <button
-                    type="button"
-                    className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-bold text-slate-900 shadow-sm"
-                    onClick={() => void retryCurrentGps()}
-                    disabled={busy}
-                  >
-                    Retry GPS
-                  </button>
-                )}
+                <div>{gpsNoticeMessage(gpsAttentionNotice)}</div>
+                <button
+                  type="button"
+                  className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-bold text-slate-900 shadow-sm"
+                  onClick={() => void retryCurrentGps()}
+                  disabled={busy}
+                >
+                  Retry GPS
+                </button>
               </div>
             )}
           </div>
@@ -1647,10 +1694,14 @@ export default function DriverHomePage() {
                           SUBSCRIBE
                         </button>
                       )}
-                      <div className="mt-2 text-center text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                        {subscriptionAllowsOnline
-                          ? driver.lat != null && driver.lng != null ? "GPS live" : "GPS pending"
-                          : "Subscription required"}
+                      <div className={`moovu-driver-gps-chip is-${gpsPanelState.tone}`}>
+                        <span>{gpsPanelState.label}</span>
+                        <strong>{gpsPanelState.detail}</strong>
+                        {gpsPanelState.tone === "warning" && subscriptionAllowsOnline && (
+                          <button type="button" onClick={() => void retryCurrentGps()} disabled={busy}>
+                            Retry
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

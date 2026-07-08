@@ -1461,8 +1461,8 @@ tr:last-child td {
 
 .moovu-driver-map-sheet-grid {
   display: grid;
-  grid-template-columns: minmax(142px, 0.42fr) minmax(180px, 0.58fr);
-  gap: 14px;
+  grid-template-columns: minmax(124px, 0.36fr) minmax(196px, 0.64fr);
+  gap: 10px;
   align-items: center;
   justify-content: end;
 }
@@ -1552,6 +1552,68 @@ tr:last-child td {
   letter-spacing: 0.04em;
   box-shadow: 0 18px 40px rgba(31, 116, 201, 0.26);
   transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+}
+
+.moovu-driver-gps-chip {
+  display: grid;
+  min-height: 46px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  margin-top: 8px;
+  border: 1px solid rgba(207, 228, 255, 0.84);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 10px;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.moovu-driver-gps-chip span {
+  color: var(--moovu-text-soft);
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.moovu-driver-gps-chip strong {
+  overflow: hidden;
+  color: var(--moovu-text);
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moovu-driver-gps-chip button {
+  min-height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 950;
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.32);
+}
+
+.moovu-driver-gps-chip.is-success {
+  border-color: rgba(34, 197, 94, 0.24);
+  background: rgba(240, 253, 244, 0.92);
+}
+
+.moovu-driver-gps-chip.is-success span {
+  color: #047857;
+}
+
+.moovu-driver-gps-chip.is-warning {
+  border-color: rgba(251, 191, 36, 0.42);
+  background: rgba(255, 251, 235, 0.96);
+}
+
+.moovu-driver-gps-chip.is-warning span {
+  color: #b45309;
 }
 
 .moovu-driver-go-button.is-online {
@@ -2965,7 +3027,7 @@ tr:last-child td {
   right: max(6px, env(safe-area-inset-right));
   width: min(calc(100% - 12px), 560px);
   gap: 3px;
-  padding: 5px;
+  padding: 4px;
   border-color: rgba(207, 228, 255, 0.95);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(239, 247, 255, 0.95)),
@@ -2974,11 +3036,11 @@ tr:last-child td {
 
 .moovu-driver-bottom-nav .moovu-customer-nav-item {
   min-width: 0;
-  min-height: 50px;
+  min-height: 44px;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   padding: 3px 2px;
-  font-size: 10px;
+  font-size: 9.5px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -2992,8 +3054,8 @@ tr:last-child td {
 }
 
 .moovu-driver-bottom-nav .moovu-customer-nav-dot {
-  width: 17px;
-  height: 4px;
+  width: 14px;
+  height: 3px;
 }
 
 @media (max-width: 1180px) {
@@ -3112,14 +3174,38 @@ tr:last-child td {
   }
 
   .moovu-driver-map-sheet {
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding: 12px 12px calc(14px + env(safe-area-inset-bottom));
   }
 
   .moovu-driver-map-status {
     left: 12px;
     right: 12px;
-    top: 12px;
+    top: max(12px, calc(8px + env(safe-area-inset-top)));
     max-width: none;
+    padding: 10px 12px;
+  }
+
+  .moovu-driver-map-sheet-grid {
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    gap: 8px;
+  }
+
+  .moovu-driver-map-menu-button {
+    min-height: 54px;
+    border-radius: 18px;
+    padding: 8px;
+  }
+
+  .moovu-driver-go-button {
+    min-height: 58px;
+    border-radius: 20px;
+    font-size: 15px;
+  }
+
+  .moovu-driver-gps-chip {
+    min-height: 42px;
+    border-radius: 16px;
+    padding: 7px 8px;
   }
 
   .moovu-driver-earnings-mini strong {
@@ -3133,8 +3219,8 @@ tr:last-child td {
 
 @media (max-width: 380px) {
   .moovu-driver-bottom-nav .moovu-customer-nav-item {
-    min-height: 42px;
-    font-size: 8.8px;
+    min-height: 40px;
+    font-size: 8.6px;
   }
 
   .moovu-driver-bottom-nav .moovu-customer-nav-dot {
@@ -3143,6 +3229,10 @@ tr:last-child td {
 
   .moovu-driver-map-card .h-\[58vh\] {
     min-height: 540px;
+  }
+
+  .moovu-driver-map-sheet-grid {
+    grid-template-columns: 1fr;
   }
 }
 

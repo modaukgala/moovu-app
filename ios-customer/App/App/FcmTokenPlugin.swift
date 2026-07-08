@@ -16,6 +16,7 @@ public class FcmTokenPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private static let cachedTokenKey = "moovu.firebase.fcmToken"
+    private static let apnsReadyKey = "moovu.firebase.apnsTokenAssigned"
     private var observers: [NSObjectProtocol] = []
 
     override public func load() {
@@ -51,6 +52,12 @@ public class FcmTokenPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func getToken(_ call: CAPPluginCall) {
+        guard UserDefaults.standard.bool(forKey: Self.apnsReadyKey) else {
+            NSLog("[MOOVU Push] FcmToken.getToken waiting for APNs token assignment")
+            call.resolve(["token": NSNull(), "reason": "apns-not-ready"])
+            return
+        }
+
         if let cachedToken = UserDefaults.standard.string(forKey: Self.cachedTokenKey),
            !cachedToken.isEmpty {
             call.resolve(["token": cachedToken])
@@ -83,4 +90,3 @@ public class FcmTokenPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 }
-

@@ -9,6 +9,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
 
     var window: UIWindow?
     private let cachedFcmTokenKey = "moovu.firebase.fcmToken"
+    private let apnsReadyKey = "moovu.firebase.apnsTokenAssigned"
+    private let apnsBoundTokenVersionKey = "moovu.firebase.apnsBoundTokenVersion"
+    private let apnsBoundTokenVersion = "2026-07-08-apns-bound-v1"
 
     private func hexString(from data: Data) -> String {
         data.map { String(format: "%02.2hhx", $0) }.joined()
@@ -16,6 +19,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
 
     private func publishFcmToken(_ token: String, source: String) {
         guard !token.isEmpty else { return }
+        guard UserDefaults.standard.bool(forKey: apnsReadyKey) else {
+            NSLog("[MOOVU Push] FCM token from %@ ignored until APNs token is assigned (%lu chars)", source, token.count)
+            return
+        }
         UserDefaults.standard.set(token, forKey: cachedFcmTokenKey)
         NSLog("[MOOVU Push] FCM token ready from %@ (%lu chars)", source, token.count)
         DispatchQueue.main.async {
@@ -33,8 +40,51 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
         }
     }
 
+    private func requestAndPublishFcmToken(source: String) {
+        NSLog("[MOOVU Push] Messaging.messaging().token callback requested after APNs assignment")
+        Messaging.messaging().token { token, error in
+            if let error = error {
+                self.publishFcmError(error, source: source)
+                return
+            }
+            guard let token = token, !token.isEmpty else {
+                let error = NSError(
+                    domain: "MOOVUPush",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Firebase returned an empty FCM token."]
+                )
+                self.publishFcmError(error, source: source)
+                return
+            }
+            NSLog("[MOOVU Push] Messaging.messaging().token callback succeeded after APNs assignment (%lu chars)", token.count)
+            self.publishFcmToken(token, source: source)
+        }
+    }
+
+    private func refreshApnsBoundFcmTokenIfNeeded() {
+        let currentVersion = UserDefaults.standard.string(forKey: apnsBoundTokenVersionKey)
+        if currentVersion == apnsBoundTokenVersion {
+            requestAndPublishFcmToken(source: "APNs-bound token callback")
+            return
+        }
+
+        NSLog("[MOOVU Push] Refreshing FCM token once so it is bound to the APNs token")
+        UserDefaults.standard.removeObject(forKey: cachedFcmTokenKey)
+        Messaging.messaging().deleteToken { error in
+            if let error = error {
+                NSLog("[MOOVU Push] FCM token delete before APNs-bound refresh failed: %@", error.localizedDescription)
+            } else {
+                NSLog("[MOOVU Push] Previous FCM token deleted before APNs-bound refresh")
+            }
+            UserDefaults.standard.set(self.apnsBoundTokenVersion, forKey: self.apnsBoundTokenVersionKey)
+            self.requestAndPublishFcmToken(source: "APNs-bound refresh")
+        }
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         NSLog("[MOOVU Push] Native FCM bridge build 2026-07-01")
+        UserDefaults.standard.set(false, forKey: apnsReadyKey)
+        UserDefaults.standard.removeObject(forKey: cachedFcmTokenKey)
         if FirebaseApp.app() == nil {
             NSLog("[MOOVU Push] FirebaseApp.configure called")
             FirebaseApp.configure()
@@ -89,24 +139,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
         NSLog("[MOOVU Push] APNs token received (%lu chars); never forwarding raw APNs token to JavaScript", apnsToken.count)
         Messaging.messaging().apnsToken = deviceToken
         NSLog("[MOOVU Push] Messaging.messaging().apnsToken assigned")
-        NSLog("[MOOVU Push] Messaging.messaging().token callback requested")
-        Messaging.messaging().token { token, error in
-            if let error = error {
-                self.publishFcmError(error, source: "token callback")
-                return
-            }
-            guard let token = token, !token.isEmpty else {
-                let error = NSError(
-                    domain: "MOOVUPush",
-                    code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "Firebase returned an empty FCM token."]
-                )
-                self.publishFcmError(error, source: "token callback")
-                return
-            }
-            NSLog("[MOOVU Push] Messaging.messaging().token callback succeeded (%lu chars)", token.count)
-            self.publishFcmToken(token, source: "token callback")
-        }
+        UserDefaults.standard.set(true, forKey: apnsReadyKey)
+        refreshApnsBoundFcmTokenIfNeeded()
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
