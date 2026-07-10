@@ -12,6 +12,44 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
     private let apnsReadyKey = "moovu.firebase.apnsTokenAssigned"
     private let apnsBoundTokenVersionKey = "moovu.firebase.apnsBoundTokenVersion"
     private let apnsBoundTokenVersion = "2026-07-08-apns-bound-v1"
+    private let tripOfferCategory = "MOOVU_TRIP_OFFER"
+    private let chatReplyCategory = "MOOVU_CHAT_REPLY"
+
+    private func registerMoovuNotificationCategories() {
+        let acceptAction = UNNotificationAction(
+            identifier: "ACCEPT_TRIP",
+            title: "Accept",
+            options: [.foreground]
+        )
+        let declineAction = UNNotificationAction(
+            identifier: "DECLINE_TRIP",
+            title: "Decline",
+            options: [.destructive, .foreground]
+        )
+        let tripOffer = UNNotificationCategory(
+            identifier: tripOfferCategory,
+            actions: [acceptAction, declineAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        let replyAction = UNTextInputNotificationAction(
+            identifier: "REPLY_CHAT",
+            title: "Reply",
+            options: [.foreground],
+            textInputButtonTitle: "Send",
+            textInputPlaceholder: "Reply to MOOVU"
+        )
+        let chatReply = UNNotificationCategory(
+            identifier: chatReplyCategory,
+            actions: [replyAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        UNUserNotificationCenter.current().setNotificationCategories([tripOffer, chatReply])
+        NSLog("[MOOVU Push] iOS notification categories registered: %@, %@", tripOfferCategory, chatReplyCategory)
+    }
 
     private func hexString(from data: Data) -> String {
         data.map { String(format: "%02.2hhx", $0) }.joined()
@@ -94,6 +132,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
         }
         Messaging.messaging().isAutoInitEnabled = true
         Messaging.messaging().delegate = self
+        registerMoovuNotificationCategories()
         NSLog("[MOOVU Push] Capacitor notification router will handle notification presentation and taps")
         return true
     }

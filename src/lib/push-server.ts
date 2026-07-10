@@ -11,8 +11,11 @@ import {
 
 const MOOVU_NOTIFICATION_SOUND = "moovu_premium_alert";
 const MOOVU_TRIP_OFFER_SOUND = "moovu_trip_offer_buzz";
+const MOOVU_IOS_TRIP_OFFER_SOUND = "moovu_trip_offer_buzz.wav";
 const MOOVU_ANDROID_CHANNEL_ID = "moovu_premium_v1";
-const MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID = "moovu_trip_offer_buzz_v1";
+const MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID = "moovu_trip_offers_v2";
+const MOOVU_IOS_TRIP_OFFER_CATEGORY = "MOOVU_TRIP_OFFER";
+const MOOVU_IOS_CHAT_REPLY_CATEGORY = "MOOVU_CHAT_REPLY";
 
 type SendPushParams = {
   userIds?: string[];
@@ -221,6 +224,8 @@ function pushSoundNames(data: PushData | undefined) {
 }
 
 function apnsOptions(title: string, body: string, data?: PushData) {
+  const tripOffer = isTripOfferData(data);
+  const chatReply = String(data?.nativeActionType ?? "").toLowerCase() === "chat_reply";
   return {
     headers: {
       "apns-priority": "10",
@@ -232,9 +237,10 @@ function apnsOptions(title: string, body: string, data?: PushData) {
           title,
           body,
         },
-        sound: "default",
+        sound: tripOffer ? MOOVU_IOS_TRIP_OFFER_SOUND : "default",
         badge: 1,
-        ...(isTripOfferData(data) ? { "interruption-level": "time-sensitive" } : {}),
+        ...(tripOffer ? { category: MOOVU_IOS_TRIP_OFFER_CATEGORY, "interruption-level": "time-sensitive" } : {}),
+        ...(chatReply ? { category: MOOVU_IOS_CHAT_REPLY_CATEGORY } : {}),
       },
     },
     fcmOptions: {
@@ -333,6 +339,11 @@ async function withNativeActionData(params: {
     androidChannelId: params.data.nativeActionType === "trip_offer"
       ? MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID
       : MOOVU_ANDROID_CHANNEL_ID,
+    iosCategory: params.data.nativeActionType === "trip_offer"
+      ? MOOVU_IOS_TRIP_OFFER_CATEGORY
+      : params.data.nativeActionType === "chat_reply"
+        ? MOOVU_IOS_CHAT_REPLY_CATEGORY
+        : "",
   };
 }
 

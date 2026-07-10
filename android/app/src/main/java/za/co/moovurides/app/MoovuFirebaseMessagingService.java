@@ -17,7 +17,7 @@ import java.util.Map;
 
 public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
     private static final String CHANNEL_ID = "moovu_premium_v1";
-    private static final String TRIP_OFFER_CHANNEL_ID = "moovu_trip_offer_buzz_v1";
+    private static final String TRIP_OFFER_CHANNEL_ID = "moovu_trip_offers_v2";
 
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
@@ -139,10 +139,10 @@ public class MoovuFirebaseMessagingService extends FirebaseMessagingService {
         if (manager.getNotificationChannel(TRIP_OFFER_CHANNEL_ID) == null) {
             NotificationChannel tripOfferChannel = new NotificationChannel(
                 TRIP_OFFER_CHANNEL_ID,
-                "MOOVU trip offer buzz",
+                "MOOVU Trip Requests",
                 NotificationManager.IMPORTANCE_HIGH
             );
-            tripOfferChannel.setDescription("Loud MOOVU driver trip offer alerts with a 5 second premium buzz.");
+            tripOfferChannel.setDescription("Urgent nearby trip requests for MOOVU drivers.");
             tripOfferChannel.enableVibration(true);
             tripOfferChannel.setVibrationPattern(tripOfferVibrationPattern());
             tripOfferChannel.setSound(soundUri(true), audioAttributes);

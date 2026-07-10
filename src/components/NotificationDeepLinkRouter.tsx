@@ -81,6 +81,52 @@ function sameLocation(target: string) {
   return target === `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
+function notificationActionKind(actionId: unknown) {
+  const normalized = String(actionId ?? "").trim().toUpperCase();
+  if (normalized === "ACCEPT_TRIP" || normalized.endsWith("ACTION_ACCEPT_TRIP")) return "accept";
+  if (normalized === "DECLINE_TRIP" || normalized.endsWith("ACTION_DECLINE_TRIP")) return "decline";
+  if (normalized === "REPLY_CHAT" || normalized.endsWith("ACTION_REPLY_CHAT")) return "reply";
+  return null;
+}
+
+async function performSignedNativeAction(params: {
+  payload: NotificationRoutingPayload;
+  action: "accept" | "decline" | "reply";
+  replyText?: string;
+}) {
+  const token = String(params.payload.nativeActionToken ?? "").trim();
+  const apiUrl = safeInternalNotificationUrl(params.payload.nativeActionApiUrl)
+    || String(params.payload.nativeActionApiUrl ?? "").trim();
+
+  if (!token || !apiUrl) return false;
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token,
+      action: params.action,
+      ...(params.action === "reply" ? { replyText: params.replyText ?? "" } : {}),
+    }),
+  }).catch(() => null);
+  const json = await response?.json().catch(() => null);
+
+  if (!response?.ok || !json?.ok) {
+    console.warn("[notification-routing] native action failed", {
+      action: params.action,
+      status: response?.status ?? null,
+      error: json?.error ?? "Notification action failed.",
+    });
+    return false;
+  }
+
+  console.info("[notification-routing] native action completed", {
+    action: params.action,
+    type: params.payload.notificationType || params.payload.type || params.payload.nativeActionType || null,
+  });
+  return true;
+}
+
 async function resolveDriverOfferTarget(
   target: string,
   payload: NotificationRoutingPayload,
@@ -159,7 +205,20 @@ export default function NotificationDeepLinkRouter() {
       const actionHandle = await PushNotifications.addListener(
         "pushNotificationActionPerformed",
         (action) => {
-          capture((action.notification.data ?? {}) as NotificationRoutingPayload);
+          const payload = (action.notification.data ?? {}) as NotificationRoutingPayload;
+          const actionKind = notificationActionKind(action.actionId);
+          if (actionKind) {
+            void performSignedNativeAction({
+              payload,
+              action: actionKind,
+              replyText: typeof action.inputValue === "string" ? action.inputValue : "",
+            }).finally(() => {
+              if (actionKind !== "decline") capture(payload);
+            });
+            return;
+          }
+
+          capture(payload);
         },
       );
       if (!active) {
