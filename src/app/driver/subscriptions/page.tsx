@@ -48,6 +48,17 @@ type SubscriptionPayment = {
   created_at: string;
 };
 
+type DriverWallet = {
+  balance_due?: number | null;
+  account_status?: string | null;
+};
+
+const PLAN_BENEFITS: Record<DriverSubscriptionPlan, string> = {
+  day: "Best for occasional driving",
+  week: "Best for regular driving",
+  month: "Best value for active drivers",
+};
+
 const BANK_DETAILS = {
   bankName: "NEDBANK",
   accountName: "Current Account",
@@ -85,6 +96,7 @@ export default function DriverSubscriptionsPage() {
   const [driver, setDriver] = useState<DriverInfo | null>(null);
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
+  const [wallet, setWallet] = useState<DriverWallet | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<DriverSubscriptionPlan>("week");
   const [amountSubmitted, setAmountSubmitted] = useState(String(DRIVER_SUBSCRIPTION_PLANS.week.amount));
   const [note, setNote] = useState("");
@@ -135,6 +147,7 @@ export default function DriverSubscriptionsPage() {
     }
 
     setDriver(json.earnings?.driver ?? null);
+    setWallet(json.earnings?.wallet ?? null);
     setRequests(
       ((json.earnings?.payment_requests ?? []) as PaymentRequest[]).filter(
         (row) => row.payment_type === "subscription",
@@ -234,6 +247,9 @@ export default function DriverSubscriptionsPage() {
                 </p>
               </div>
               <div className="moovu-driver-toolbar-actions">
+                <Link href="/driver/contact" className="moovu-btn moovu-btn-secondary">
+                  Help
+                </Link>
                 <Link href="/driver/earnings" className="moovu-btn moovu-btn-secondary">
                   Earnings
                 </Link>
@@ -252,9 +268,20 @@ export default function DriverSubscriptionsPage() {
           </div>
         </section>
 
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-100 bg-amber-50 px-4 py-3">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">Commission owed</div>
+            <div className="mt-1 text-2xl font-black text-slate-950">{money(wallet?.balance_due)}</div>
+          </div>
+          <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-secondary">
+            Pay commission
+          </Link>
+        </section>
+
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           {(Object.entries(DRIVER_SUBSCRIPTION_PLANS) as Array<[DriverSubscriptionPlan, typeof DRIVER_SUBSCRIPTION_PLANS[DriverSubscriptionPlan]]>).map(([key, item]) => {
             const active = selectedPlan === key;
+            const current = driver?.subscription_plan === key && ["active", "grace"].includes(String(driver.subscription_status ?? "").toLowerCase());
             return (
               <button
                 key={key}
@@ -263,7 +290,7 @@ export default function DriverSubscriptionsPage() {
                   setSelectedPlan(key);
                   setAmountSubmitted(String(item.amount));
                 }}
-                className={`rounded-[28px] border p-5 text-left transition ${
+                className={`rounded-[20px] border p-5 text-left transition ${
                   active
                     ? "border-sky-300 bg-sky-50 shadow-[0_16px_38px_rgba(31,116,201,0.14)]"
                     : "border-[var(--moovu-border)] bg-white shadow-sm hover:border-sky-200"
@@ -276,7 +303,14 @@ export default function DriverSubscriptionsPage() {
                 <p className="mt-2 text-sm text-slate-600">
                   {item.days} day{item.days === 1 ? "" : "s"} driver access.
                 </p>
-                {active ? <div className="mt-4"><StatusBadge status="selected" /></div> : null}
+                <p className="mt-1 text-xs font-semibold text-slate-500">{PLAN_BENEFITS[key]}</p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {current ? <StatusBadge status="current plan" /> : null}
+                  {active ? <StatusBadge status="selected" /> : null}
+                  <span className="text-xs font-black text-blue-700">
+                    {current ? "Renew" : active ? "Ready to pay" : "Select plan"}
+                  </span>
+                </div>
               </button>
             );
           })}

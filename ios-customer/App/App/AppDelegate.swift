@@ -15,6 +15,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
     private let tripOfferCategory = "MOOVU_TRIP_OFFER"
     private let chatReplyCategory = "MOOVU_CHAT_REPLY"
 
+    private func clearApplicationBadge(_ application: UIApplication) {
+        if #available(iOS 16.0, *) {
+            UNUserNotificationCenter.current().setBadgeCount(0) { error in
+                if let error = error {
+                    NSLog("[MOOVU Push] Could not clear app badge: %@", error.localizedDescription)
+                }
+            }
+        } else {
+            application.applicationIconBadgeNumber = 0
+        }
+    }
+
     private func registerMoovuNotificationCategories() {
         let acceptAction = UNNotificationAction(
             identifier: "ACCEPT_TRIP",
@@ -133,6 +145,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
         Messaging.messaging().isAutoInitEnabled = true
         Messaging.messaging().delegate = self
         registerMoovuNotificationCategories()
+        clearApplicationBadge(application)
         NSLog("[MOOVU Push] Capacitor notification router will handle notification presentation and taps")
         return true
     }
@@ -152,7 +165,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        clearApplicationBadge(application)
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

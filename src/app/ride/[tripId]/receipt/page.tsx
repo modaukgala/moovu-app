@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
+import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import LoadingState from "@/components/ui/LoadingState";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -234,11 +235,10 @@ export default function TripReceiptPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-app-container">
+        <CustomerBackHomeNav fallbackHref="/ride/history" />
         {/* Print controls */}
         <div className="moovu-no-print mb-4 flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/ride/${trip.id}`} className="moovu-btn moovu-btn-secondary">
-            Back to trip
-          </Link>
+          <Link href={`/ride/${trip.id}`} className="moovu-btn moovu-btn-secondary">Open trip</Link>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => void shareReceipt()} className="moovu-btn moovu-btn-secondary">
               Share

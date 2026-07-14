@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
+import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -128,6 +129,7 @@ export default function CustomerAccountPage() {
       {message && <CenteredMessageBox message={message} onClose={() => setMessage(null)} />}
 
       <div className="moovu-shell max-w-4xl space-y-5 py-6">
+        <CustomerBackHomeNav fallbackHref="/book" />
         <section className="moovu-card p-5 sm:p-7">
           <div className="moovu-section-title">Customer account</div>
           <h1 className="mt-2 text-3xl font-black">Account and privacy</h1>

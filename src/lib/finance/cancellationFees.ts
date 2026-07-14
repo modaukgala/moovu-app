@@ -1,6 +1,10 @@
 import { getFareRules, normalizeRideOptionId, type RideOptionId } from "@/lib/domain/fare";
+import {
+  FREE_CANCELLATION_WINDOW_MS,
+  isWithinFreeCancellationWindow,
+} from "@/lib/finance/cancellationWindow";
 
-export const FREE_CANCELLATION_WINDOW_MS = 2 * 60 * 1000;
+export { FREE_CANCELLATION_WINDOW_MS, isWithinFreeCancellationWindow };
 export const NO_SHOW_WAIT_MS = 5 * 60 * 1000;
 
 export type CancellationFeeType = "free_cancel" | "late_cancel" | "no_show";
@@ -81,12 +85,11 @@ export function calculateCustomerCancellationFee(params: {
   status: string;
   createdAt: string | null | undefined;
   rideOptionId?: unknown;
+  nowMs?: number;
 }) {
   const status = params.status;
   const rideOptionId = normalizeRideOptionId(params.rideOptionId);
-  const createdMs = params.createdAt ? new Date(params.createdAt).getTime() : NaN;
-  const insideFreeWindow =
-    Number.isFinite(createdMs) && Date.now() - createdMs <= FREE_CANCELLATION_WINDOW_MS;
+  const insideFreeWindow = isWithinFreeCancellationWindow(params.createdAt, params.nowMs);
 
   if (insideFreeWindow || status === "requested" || status === "offered") {
     return freeCancellationFee(rideOptionId);

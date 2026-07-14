@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import LoadingState from "@/components/ui/LoadingState";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import { notifyInApp } from "@/lib/in-app-notifications";
@@ -16,6 +17,11 @@ import {
 } from "@/lib/maps/liveMapMarkers";
 import { minimumRequiredTripSeconds } from "@/lib/geo/tripGuards";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
+import {
+  FREE_CANCELLATION_WINDOW_MS,
+  calculateCustomerCancellationFee,
+  isWithinFreeCancellationWindow,
+} from "@/lib/finance/cancellationFees";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type RideTrip = {
@@ -138,11 +144,13 @@ declare global {
 const DEFAULT_CENTER = { lat: -25.12, lng: 29.05 };
 
 const CANCEL_REASONS = [
-  "Driver is taking too long",
   "Booked by mistake",
-  "Changed my plans",
+  "Testing the app",
+  "Changed my mind",
+  "Wrong pickup or destination",
+  "Driver taking too long",
   "Found another ride",
-  "Pickup location issue",
+  "Emergency",
   "Other",
 ] as const;
 
@@ -271,7 +279,8 @@ export default function RideTrackingPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelReason, setCancelReason] =
-    useState<(typeof CANCEL_REASONS)[number]>("Driver is taking too long");
+    useState<(typeof CANCEL_REASONS)[number]>("Booked by mistake");
+  const [cancelReasonDetails, setCancelReasonDetails] = useState("");
   const [mapError, setMapError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
@@ -899,6 +908,7 @@ export default function RideTrackingPage() {
         body: JSON.stringify({
           tripId: trip.id,
           reason: cancelReason,
+          reasonDetails: cancelReason === "Other" ? cancelReasonDetails : "",
         }),
       });
 
@@ -1037,15 +1047,35 @@ export default function RideTrackingPage() {
   }, [trip, tripStops.length]);
 
   const cancellationPreview = useMemo(() => {
-    if (!trip) return { fee: 0, label: "Cancel ride for free" };
-    const createdMs = trip.created_at ? new Date(trip.created_at).getTime() : NaN;
-    const insideFreeWindow = Number.isFinite(createdMs) && nowMs - createdMs <= 2 * 60 * 1000;
-    const fee = !insideFreeWindow && (trip.status === "assigned" || trip.status === "arrived") ? 15 : 0;
+    if (!trip) return { fee: 0, label: "Cancel ride for free", insideFreeWindow: false };
+    const result = calculateCustomerCancellationFee({
+      status: trip.status,
+      createdAt: trip.created_at,
+      rideOptionId: trip.ride_type,
+      nowMs,
+    });
+    const insideFreeWindow = isWithinFreeCancellationWindow(trip.created_at, nowMs);
     return {
-      fee,
-      label: fee > 0 ? `Confirm cancellation fee R${fee}` : "Cancel ride for free",
+      fee: result.feeAmount,
+      label: result.feeAmount > 0
+        ? `Confirm cancellation fee R${result.feeAmount}`
+        : "Cancel trip",
+      insideFreeWindow,
     };
   }, [nowMs, trip]);
+
+  const freeCancellationCountdown = useMemo(() => {
+    const createdMs = trip?.created_at ? new Date(trip.created_at).getTime() : NaN;
+    if (!Number.isFinite(createdMs)) return "";
+    const seconds = Math.max(
+      0,
+      Math.ceil((createdMs + FREE_CANCELLATION_WINDOW_MS - nowMs) / 1000),
+    );
+    if (seconds <= 0) return "";
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  }, [nowMs, trip?.created_at]);
+
+  const cancellationReasonValid = cancelReason !== "Other" || cancelReasonDetails.trim().length >= 3;
 
   const canOpenChat = useMemo(() => {
     if (!trip?.driver_id) return false;
@@ -1743,8 +1773,18 @@ export default function RideTrackingPage() {
                         </option>
                       ))}
                     </select>
+                    {cancelReason === "Other" && (
+                      <textarea
+                        className="moovu-input mt-3 min-h-24 resize-y"
+                        value={cancelReasonDetails}
+                        maxLength={240}
+                        onChange={(event) => setCancelReasonDetails(event.target.value)}
+                        placeholder="Briefly tell us why you are cancelling"
+                        aria-label="Other cancellation reason"
+                      />
+                    )}
                     <button
-                      disabled={!canCancel || cancelBusy}
+                      disabled={!canCancel || cancelBusy || !cancellationReasonValid}
                       onClick={cancelTrip}
                       className="moovu-btn mt-3 bg-red-600 text-white disabled:opacity-60"
                     >
@@ -1926,6 +1966,7 @@ export default function RideTrackingPage() {
       )}
 
       <div className="moovu-shell">
+        <CustomerBackHomeNav fallbackHref="/book" />
         <section className="customer-trip-hero mb-4 hidden">
           <div className="min-w-0">
             <div className="moovu-section-title">{stageDetail.eyebrow}</div>
@@ -2048,6 +2089,26 @@ export default function RideTrackingPage() {
                 {statusLabel(trip.status)}
               </div>
             </div>
+
+            {canCancel && cancellationPreview.insideFreeWindow && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-blue-100 bg-blue-50 px-4 py-3">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                    Booking correction window
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">
+                    Free cancellation available for {freeCancellationCountdown || "00:00"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="moovu-btn moovu-btn-secondary min-h-11"
+                  onClick={() => setActiveDetailModal("support")}
+                >
+                  Cancel trip
+                </button>
+              </div>
+            )}
 
             {trip.status === "ongoing" && (
               <div className="rounded-[22px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
@@ -2375,10 +2436,20 @@ export default function RideTrackingPage() {
                       </option>
                     ))}
                   </select>
+                  {cancelReason === "Other" && (
+                    <textarea
+                      className="moovu-input mt-3 min-h-24 resize-y"
+                      value={cancelReasonDetails}
+                      maxLength={240}
+                      onChange={(event) => setCancelReasonDetails(event.target.value)}
+                      placeholder="Briefly tell us why you are cancelling"
+                      aria-label="Other cancellation reason"
+                    />
+                  )}
                 </div>
 
                 <button
-                  disabled={!canCancel || cancelBusy}
+                  disabled={!canCancel || cancelBusy || !cancellationReasonValid}
                   onClick={cancelTrip}
                   className="moovu-btn bg-red-600 text-white disabled:opacity-60"
                 >

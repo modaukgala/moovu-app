@@ -385,6 +385,7 @@ export default function DriverHomePage() {
   const [cancelTripReason, setCancelTripReason] = useState<string>(DRIVER_CANCEL_REASONS[0]);
   const [completedFareSummary, setCompletedFareSummary] = useState<CompletedFareSummary | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [subscriptionPromptOpen, setSubscriptionPromptOpen] = useState(false);
 
   const subscriptionReminder = subscriptionTone(driver);
   const subscriptionAllowsOnline = canReceiveTripOffers(driver);
@@ -397,6 +398,17 @@ export default function DriverHomePage() {
   const notificationTripId = searchParams.get("tripId") || searchParams.get("offerTripId") || "";
   const gpsTone = gpsInfo ? gpsNoticeTone(gpsInfo) : null;
   const gpsAttentionNotice = gpsInfo && gpsTone !== "success" ? gpsInfo : null;
+
+  useEffect(() => {
+    if (!driver || subscriptionAllowsOnline) return;
+    if (currentTrip && ["assigned", "arrived", "ongoing"].includes(currentTrip.status)) return;
+
+    const key = `moovu-subscription-reminder:${driver.id}:${driver.subscription_status ?? "inactive"}:${driver.subscription_expires_at ?? "none"}`;
+    if (window.sessionStorage.getItem(key)) return;
+
+    window.sessionStorage.setItem(key, "shown");
+    setSubscriptionPromptOpen(true);
+  }, [currentTrip, driver, subscriptionAllowsOnline]);
 
   const offersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tripTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1335,6 +1347,20 @@ export default function DriverHomePage() {
         />
       )}
 
+      {subscriptionPromptOpen && (
+        <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-sm rounded-[28px] border border-blue-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.28)]" role="dialog" aria-modal="true" aria-labelledby="subscription-reminder-title">
+            <div className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-amber-700">Subscription required</div>
+            <h2 id="subscription-reminder-title" className="mt-4 text-2xl font-black text-slate-950">Your MOOVU subscription has expired.</h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">You need an active subscription to continue receiving trip requests. Any active trip remains uninterrupted.</p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" className="moovu-btn moovu-btn-secondary" onClick={() => setSubscriptionPromptOpen(false)}>Not now</button>
+              <button type="button" className="moovu-btn moovu-btn-primary" onClick={() => router.push("/driver/subscriptions")}>Choose a plan</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {completedFareSummary && (
         <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <section className="w-full max-w-sm rounded-[28px] border border-emerald-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.3)]" role="dialog" aria-modal="true" aria-labelledby="driver-final-fare-title">
@@ -1602,6 +1628,13 @@ export default function DriverHomePage() {
               <div className="flex justify-end px-1">
                 <EnableNotificationsButton role="driver" variant="chip" />
               </div>
+
+              {!subscriptionAllowsOnline && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
+                  <span>Activate a plan to go online and receive trip offers.</span>
+                  <button type="button" className="moovu-btn moovu-btn-secondary" onClick={() => router.push("/driver/subscriptions")}>Choose plan</button>
+                </div>
+              )}
 
               <div className="moovu-driver-map-card">
                 <div className={`moovu-driver-map-status ${driverModeClass}`}>

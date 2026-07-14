@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import TimedPasswordField from "@/components/ui/TimedPasswordField";
+import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import { supabaseClient } from "@/lib/supabase/client";
 import {
   customerEmailFromPhone,
@@ -229,6 +230,7 @@ export default function CustomerAuthPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-auth-card moovu-customer-auth-card">
+        <CustomerBackHomeNav fallbackHref="/" homeHref="/" homeLabel="Home" />
         <div className="moovu-customer-task-hero mb-6">
           <div className="moovu-section-title">MOOVU Customer</div>
           <h1 className="mt-3 text-3xl font-black text-slate-950">

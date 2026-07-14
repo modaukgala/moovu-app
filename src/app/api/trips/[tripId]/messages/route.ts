@@ -148,6 +148,28 @@ export async function POST(req: Request) {
     }
 
     const preview = chatPreview(normalized.body);
+    const { count: recipientUnreadCount, error: unreadCountError } = await auth.access.supabaseAdmin
+      .from("trip_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("trip_id", tripId)
+      .eq("sender_role", auth.access.role)
+      .is("read_at", null);
+
+    if (unreadCountError) {
+      console.error("[trip-chat] unread badge count failed", {
+        tripId,
+        role: auth.access.role,
+        reason: unreadCountError.message,
+      });
+    }
+
+    const notificationData = {
+      nativeActionType: "chat_reply",
+      tripId,
+      ...(typeof recipientUnreadCount === "number"
+        ? { iosBadgeCount: Math.max(0, recipientUnreadCount) }
+        : {}),
+    };
 
     try {
       if (auth.access.role === "customer") {
@@ -156,10 +178,7 @@ export async function POST(req: Request) {
           "New MOOVU message",
           preview,
           `/driver?chat=1&tripId=${tripId}`,
-          {
-            nativeActionType: "chat_reply",
-            tripId,
-          },
+          notificationData,
         );
       } else {
         await notifyCustomerForTrip(
@@ -167,10 +186,7 @@ export async function POST(req: Request) {
           "New MOOVU message",
           preview,
           `/ride/${tripId}?chat=1`,
-          {
-            nativeActionType: "chat_reply",
-            tripId,
-          },
+          notificationData,
         );
       }
     } catch (pushError: unknown) {

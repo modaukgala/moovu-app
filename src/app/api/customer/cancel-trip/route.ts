@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
-import { calculateCustomerCancellationFee } from "@/lib/finance/cancellationFees";
+import {
+  calculateCustomerCancellationFee,
+  isWithinFreeCancellationWindow,
+} from "@/lib/finance/cancellationFees";
 import { notifyAdmins, notifyDriverForTrip } from "@/lib/push-notify";
+import { sendPushSafe } from "@/lib/push-server";
 
 const VALID_REASONS = [
-  "Driver is taking too long",
   "Booked by mistake",
-  "Changed my plans",
+  "Testing the app",
+  "Changed my mind",
+  "Wrong pickup or destination",
+  "Driver taking too long",
   "Found another ride",
-  "Pickup location issue",
+  "Emergency",
   "Other",
 ];
 
@@ -18,7 +24,16 @@ function errorMessage(error: unknown, fallback: string) {
 
 function isMissingCancellationColumn(error: { message?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() || "";
-  return message.includes("cancellation_") || message.includes("cancelled_at");
+  return (
+    message.includes("cancellation_") ||
+    message.includes("cancelled_at") ||
+    message.includes("cancelled_within_free_window")
+  );
+}
+
+function isMissingOfferTable(error: { message?: string; code?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() || "";
+  return error?.code === "PGRST205" || message.includes("driver_trip_offers");
 }
 
 function isMissingCancellationFeeTable(error: { message?: string; code?: string } | null | undefined) {
@@ -105,6 +120,7 @@ export async function POST(req: Request) {
 
     const tripId = String(body?.tripId ?? "").trim();
     const reason = String(body?.reason ?? "").trim();
+    const reasonDetails = String(body?.reasonDetails ?? "").trim().slice(0, 240);
 
     if (!tripId) {
       return NextResponse.json(
@@ -162,12 +178,119 @@ export async function POST(req: Request) {
       );
     }
 
+    const cancellationNowMs = Date.now();
     const fee = calculateCustomerCancellationFee({
       status: trip.status,
       createdAt: trip.created_at,
       rideOptionId: trip.ride_option,
+      nowMs: cancellationNowMs,
     });
     const cancelledAt = new Date().toISOString();
+    const cancelledWithinFreeWindow = isWithinFreeCancellationWindow(trip.created_at, cancellationNowMs);
+    const { data: activeOffers, error: activeOffersError } = await auth.supabaseAdmin
+      .from("driver_trip_offers")
+      .select("id,driver_id")
+      .eq("trip_id", tripId)
+      .in("status", ["pending", "shown"]);
+
+    if (activeOffersError && !isMissingOfferTable(activeOffersError)) {
+      console.error("[cancel-trip] active offer lookup failed", {
+        tripId,
+        reason: activeOffersError.message,
+      });
+    }
+
+    const { data: updatedTrip, error: updateError } = await auth.supabaseAdmin
+      .from("trips")
+      .update({
+        status: "cancelled",
+        cancel_reason: reason,
+        cancellation_reason: reason,
+        cancellation_reason_details: reason === "Other" ? reasonDetails : null,
+        cancellation_status_at_request: trip.status,
+        cancelled_within_free_window: cancelledWithinFreeWindow,
+        cancellation_type: fee.type,
+        cancelled_by: "customer",
+        cancelled_at: cancelledAt,
+        cancellation_fee_amount: fee.feeAmount,
+        cancellation_driver_amount: fee.driverAmount,
+        cancellation_moovu_amount: fee.moovuAmount,
+        cancellation_policy_code: fee.policyCode,
+      })
+      .eq("id", tripId)
+      .eq("status", trip.status)
+      .select("id")
+      .maybeSingle();
+
+    let tripUpdated = Boolean(updatedTrip);
+
+    if (updateError && isMissingCancellationColumn(updateError)) {
+      const { data: legacyUpdatedTrip, error: legacyUpdateError } = await auth.supabaseAdmin
+        .from("trips")
+        .update({
+          status: "cancelled",
+          cancel_reason: reason,
+          cancelled_by: "customer",
+          cancellation_fee_amount: fee.feeAmount,
+          cancellation_policy_code: fee.policyCode,
+        })
+        .eq("id", tripId)
+        .eq("status", trip.status)
+        .select("id")
+        .maybeSingle();
+
+      if (legacyUpdateError) {
+        console.error("[cancel-trip] legacy trip update failed", {
+          tripId,
+          reason: legacyUpdateError.message,
+        });
+        return NextResponse.json(
+          { ok: false, error: "We could not cancel this trip. Please refresh and try again." },
+          { status: 500 }
+        );
+      }
+      tripUpdated = Boolean(legacyUpdatedTrip);
+    } else if (updateError) {
+      console.error("[cancel-trip] trip update failed", { tripId, reason: updateError.message });
+      return NextResponse.json(
+        { ok: false, error: "We could not cancel this trip. Please refresh and try again." },
+        { status: 500 }
+      );
+    }
+
+    if (!tripUpdated) {
+      return NextResponse.json(
+        { ok: false, error: "This trip changed while you were cancelling. Please refresh and try again." },
+        { status: 409 },
+      );
+    }
+
+    if (reason === "Other" && reasonDetails.length < 3) {
+      return NextResponse.json(
+        { ok: false, error: "Please briefly explain why you are cancelling." },
+        { status: 400 },
+      );
+    }
+
+    if (activeOffers && activeOffers.length > 0) {
+      const { error: offerCancelError } = await auth.supabaseAdmin
+        .from("driver_trip_offers")
+        .update({
+          status: "cancelled",
+          cancelled_at: cancelledAt,
+          responded_at: cancelledAt,
+          updated_at: cancelledAt,
+        })
+        .eq("trip_id", tripId)
+        .in("status", ["pending", "shown"]);
+
+      if (offerCancelError && !isMissingOfferTable(offerCancelError)) {
+        console.error("[cancel-trip] offer cleanup failed", {
+          tripId,
+          reason: offerCancelError.message,
+        });
+      }
+    }
 
     const feeAudit = await recordCancellationFee({
       supabaseAdmin: auth.supabaseAdmin,
@@ -178,61 +301,16 @@ export async function POST(req: Request) {
       feeAmount: fee.feeAmount,
       driverAmount: fee.driverAmount,
       moovuAmount: fee.moovuAmount,
-      reason,
+      reason: reason === "Other" ? `${reason}: ${reasonDetails}` : reason,
       createdBy: auth.user.id,
     });
 
     if (!feeAudit.ok) {
-      console.error("[cancel-trip] fee audit insert failed", {
+      console.error("[cancel-trip] fee audit insert failed after cancellation", {
         tripId,
         customerId: auth.customer.id,
         reason: feeAudit.error,
       });
-      return NextResponse.json(
-        { ok: false, error: "Cancellation fee could not be recorded. Please try again or contact support." },
-        { status: 500 }
-      );
-    }
-
-    const { error: updateError } = await auth.supabaseAdmin
-      .from("trips")
-      .update({
-        status: "cancelled",
-        cancel_reason: reason,
-        cancellation_reason: reason,
-        cancellation_type: fee.type,
-        cancelled_by: "customer",
-        cancelled_at: cancelledAt,
-        cancellation_fee_amount: fee.feeAmount,
-        cancellation_driver_amount: fee.driverAmount,
-        cancellation_moovu_amount: fee.moovuAmount,
-        cancellation_policy_code: fee.policyCode,
-      })
-      .eq("id", tripId);
-
-    if (updateError && isMissingCancellationColumn(updateError)) {
-      const { error: legacyUpdateError } = await auth.supabaseAdmin
-        .from("trips")
-        .update({
-          status: "cancelled",
-          cancel_reason: reason,
-          cancelled_by: "customer",
-          cancellation_fee_amount: fee.feeAmount,
-          cancellation_policy_code: fee.policyCode,
-        })
-        .eq("id", tripId);
-
-      if (legacyUpdateError) {
-        return NextResponse.json(
-          { ok: false, error: legacyUpdateError.message },
-          { status: 500 }
-        );
-      }
-    } else if (updateError) {
-      return NextResponse.json(
-        { ok: false, error: updateError.message },
-        { status: 500 }
-      );
     }
 
     if (trip.driver_id) {
@@ -269,6 +347,38 @@ export async function POST(req: Request) {
       "/driver"
     );
 
+    const offeredDriverIds = Array.from(
+      new Set((activeOffers ?? []).map((offer) => String(offer.driver_id)).filter(Boolean)),
+    ).filter((driverId) => driverId !== trip.driver_id);
+
+    if (offeredDriverIds.length > 0) {
+      const { data: offeredAccounts, error: accountError } = await auth.supabaseAdmin
+        .from("driver_accounts")
+        .select("user_id")
+        .in("driver_id", offeredDriverIds);
+
+      if (accountError) {
+        console.error("[cancel-trip] offered driver notification lookup failed", {
+          tripId,
+          reason: accountError.message,
+        });
+      } else {
+        const userIds = Array.from(
+          new Set((offeredAccounts ?? []).map((account) => String(account.user_id)).filter(Boolean)),
+        );
+        if (userIds.length > 0) {
+          await sendPushSafe({
+            userIds,
+            role: "driver",
+            title: "Trip cancelled",
+            body: "This trip is no longer available because the customer cancelled it.",
+            url: "/driver",
+            data: { type: "trip_cancelled", tripId },
+          });
+        }
+      }
+    }
+
     await notifyAdmins(
       "Trip cancelled by customer",
       fee.feeAmount > 0
@@ -276,6 +386,17 @@ export async function POST(req: Request) {
         : `Trip ${tripId} was cancelled by the customer.`,
       "/admin/trips"
     );
+
+    await sendPushSafe({
+      userIds: [auth.user.id],
+      role: "customer",
+      title: "Trip cancelled",
+      body: fee.feeAmount > 0
+        ? `Your trip was cancelled. A fee of R${fee.feeAmount.toFixed(2)} was applied.`
+        : "Your trip was cancelled successfully.",
+      url: `/ride/${tripId}`,
+      data: { type: "trip_cancelled", tripId },
+    });
 
     return NextResponse.json({
       ok: true,
@@ -287,7 +408,12 @@ export async function POST(req: Request) {
       cancellationDriverAmount: fee.driverAmount,
       cancellationMoovuAmount: fee.moovuAmount,
       cancellationPolicyCode: fee.policyCode,
-      cancellationAuditWarning: "warning" in feeAudit ? feeAudit.warning : null,
+      cancellationAuditWarning:
+        feeAudit.ok && "warning" in feeAudit
+          ? feeAudit.warning
+          : feeAudit.ok
+            ? null
+            : "Fee audit could not be recorded.",
     });
   } catch (e: unknown) {
     return NextResponse.json(

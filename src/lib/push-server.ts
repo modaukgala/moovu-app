@@ -226,6 +226,10 @@ function pushSoundNames(data: PushData | undefined) {
 function apnsOptions(title: string, body: string, data?: PushData) {
   const tripOffer = isTripOfferData(data);
   const chatReply = String(data?.nativeActionType ?? "").toLowerCase() === "chat_reply";
+  const requestedBadge = Number(data?.iosBadgeCount);
+  const badge = Number.isInteger(requestedBadge) && requestedBadge >= 0
+    ? requestedBadge
+    : null;
   return {
     headers: {
       "apns-priority": "10",
@@ -238,7 +242,7 @@ function apnsOptions(title: string, body: string, data?: PushData) {
           body,
         },
         sound: tripOffer ? MOOVU_IOS_TRIP_OFFER_SOUND : "default",
-        badge: 1,
+        ...(badge !== null ? { badge } : {}),
         ...(tripOffer ? { category: MOOVU_IOS_TRIP_OFFER_CATEGORY, "interruption-level": "time-sensitive" } : {}),
         ...(chatReply ? { category: MOOVU_IOS_CHAT_REPLY_CATEGORY } : {}),
       },

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import CustomerAppHeader from "@/components/app-shell/CustomerAppHeader";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
+import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -167,6 +168,7 @@ export default function RiderHistoryPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-app-container">
+        <CustomerBackHomeNav fallbackHref="/book" />
         <CustomerAppHeader
           title="My trips"
           subtitle="Track past rides, open active trips, and view receipts."

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
+import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -86,6 +86,7 @@ export default function ShareTripPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-app-container max-w-3xl space-y-5">
+        <CustomerBackHomeNav fallbackHref={`/ride/${params.tripId}`} />
         <section className="moovu-app-card overflow-hidden p-0">
           <div className="moovu-customer-task-hero">
             <div className="flex items-start justify-between gap-4">
@@ -96,9 +97,6 @@ export default function ShareTripPage() {
                   Sharing becomes available after the start OTP is verified. Send live trip context to someone you trust.
                 </p>
               </div>
-              <Link href={`/ride/${params.tripId}`} className="moovu-btn moovu-btn-secondary">
-                Back
-              </Link>
             </div>
           </div>
         </section>
