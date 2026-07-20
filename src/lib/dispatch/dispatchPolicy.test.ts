@@ -7,10 +7,11 @@ import { scoreDriverForTrip } from "./driverScoring.ts";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
 import { dispatchJobsQueued } from "./dispatchScheduler.ts";
 
-test("dispatch timing uses ten-second escalation and thirty-second acceptance", () => {
-  assert.equal(DISPATCH_CONFIG.escalationSeconds, 10);
+test("dispatch timing uses simultaneous thirty-second offer rounds", () => {
+  assert.equal(DISPATCH_CONFIG.escalationSeconds, 30);
   assert.equal(DISPATCH_CONFIG.acceptWindowSeconds, 30);
-  assert.ok(DISPATCH_CONFIG.acceptWindowSeconds > DISPATCH_CONFIG.escalationSeconds * 2);
+  assert.equal(DISPATCH_CONFIG.maxSearchSeconds, 300);
+  assert.equal(DISPATCH_CONFIG.maxCycles, 10);
 });
 
 test("an online driver remains offer-eligible while the native app is backgrounded", () => {
@@ -59,4 +60,3 @@ test("dispatch reports incomplete scheduler enqueue results", () => {
   assert.equal(dispatchJobsQueued([{ ok: true }, { ok: true }]), true);
   assert.equal(dispatchJobsQueued([{ ok: true }, { ok: false, error: "queue unavailable" }]), false);
 });
-

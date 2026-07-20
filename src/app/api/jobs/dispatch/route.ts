@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
-import { DISPATCH_CONFIG, } from "@/lib/dispatch/config";
 import { isDispatchWorkerAuthorized } from "@/lib/dispatch/dispatchScheduler";
 import { enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
 import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
@@ -97,17 +96,17 @@ export async function POST(req: Request) {
               supabase: supabaseAdmin,
               tripId: job.trip_id,
               jobType: "recover",
-              runAt: new Date(Date.now() + DISPATCH_CONFIG.cycleCooldownSeconds * 1000).toISOString(),
+              runAt: new Date().toISOString(),
               dispatchCycle: nextCycle,
               sequenceNumber: 1,
             });
           }
         }
-      } else {
+      } else if (job.job_type === "recover") {
         const dispatchResult = await dispatchTrip({
           tripId: job.trip_id,
           cycle: job.dispatch_cycle,
-          sequenceNumber: job.sequence_number + (job.job_type === "escalate" ? 1 : 0),
+          sequenceNumber: 1,
         });
         if (!dispatchResult.ok && !dispatchResult.exhausted) {
           throw new Error(dispatchResult.error ?? "Dispatch step failed.");

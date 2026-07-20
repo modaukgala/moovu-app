@@ -73,12 +73,6 @@ export async function dispatchTrip(params: {
 }): Promise<DispatchResult> {
   const cycle = Math.max(1, params.cycle ?? 1);
   const sequenceNumber = Math.max(1, params.sequenceNumber ?? 1);
-  console.log("[dispatch] trip dispatch requested", {
-    tripId: params.tripId,
-    cycle,
-    sequenceNumber,
-    preferredDriverId: params.preferredDriverId ?? null,
-  });
   const { data: trip, error: tripError } = await supabaseAdmin
     .from("trips")
     .select("id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,ride_option,dispatch_started_at,dispatch_cycle")
@@ -96,6 +90,24 @@ export async function dispatchTrip(params: {
   }
   if (trip.pickup_lat == null || trip.pickup_lng == null) {
     return { ok: false, tripId: trip.id, error: "Trip pickup coordinates are missing." };
+  }
+
+  if (!trip.dispatch_started_at) {
+    const dispatchStartedAt = new Date().toISOString();
+    const { error: startError } = await supabaseAdmin
+      .from("trips")
+      .update({
+        dispatch_started_at: dispatchStartedAt,
+        dispatch_state: "searching",
+        dispatch_updated_at: dispatchStartedAt,
+      })
+      .eq("id", trip.id)
+      .is("dispatch_started_at", null)
+      .in("status", ["requested", "offered"]);
+    if (startError) {
+      return { ok: false, tripId: trip.id, error: "Could not start the dispatch clock." };
+    }
+    trip.dispatch_started_at = dispatchStartedAt;
   }
 
   const expiryNow = new Date().toISOString();
@@ -121,22 +133,17 @@ export async function dispatchTrip(params: {
   }
 
   const startedAtMs = trip.dispatch_started_at ? new Date(trip.dispatch_started_at).getTime() : Date.now();
-  if (Date.now() - startedAtMs > DISPATCH_CONFIG.maxSearchSeconds * 1000 || cycle > DISPATCH_CONFIG.maxCycles) {
-    console.warn("[dispatch] search exhausted", {
-      tripId: trip.id,
-      cycle,
-      startedAt: trip.dispatch_started_at,
-    });
+  if (Date.now() - startedAtMs >= DISPATCH_CONFIG.maxSearchSeconds * 1000 || cycle > DISPATCH_CONFIG.maxCycles) {
     try {
       await supabaseAdmin.rpc("mark_dispatch_exhausted", { p_trip_id: trip.id });
     } catch {}
     await notifyCustomerForTrip(
       trip.id,
-      "Nearby drivers are unavailable",
-      "We could not find an available driver yet. You can keep the request open or try again shortly.",
+      "Trip cancelled",
+      "No driver accepted your trip within 5 minutes. The trip has been cancelled.",
       `/ride/${trip.id}`,
     ).catch(() => null);
-    await notifyAdmins("Dispatch needs attention", `No eligible driver accepted trip ${trip.id}.`, "/admin/dispatch").catch(() => null);
+    await notifyAdmins("Trip automatically cancelled", `Trip ${trip.id} was cancelled after 5 minutes without acceptance.`, "/admin/dispatch").catch(() => null);
     return { ok: false, tripId: trip.id, exhausted: true, error: "Dispatch search exhausted." };
   }
 
@@ -207,7 +214,7 @@ export async function dispatchTrip(params: {
         supabase: supabaseAdmin,
         tripId: trip.id,
         jobType: "recover",
-        runAt: new Date(Date.now() + DISPATCH_CONFIG.cycleCooldownSeconds * 1000).toISOString(),
+        runAt: new Date(Date.now() + DISPATCH_CONFIG.acceptWindowSeconds * 1000).toISOString(),
         dispatchCycle: nextCycle,
         sequenceNumber: 1,
       });
@@ -215,14 +222,14 @@ export async function dispatchTrip(params: {
     return { ok: false, tripId: trip.id, exhausted: nextCycle > DISPATCH_CONFIG.maxCycles, error: "No eligible drivers available." };
   }
 
-  let row: AtomicOfferRow | null = null;
+  const rows: AtomicOfferRow[] = [];
   let reservationError: string | null = null;
-  for (const candidate of candidatesToTry) {
+  for (const [candidateIndex, candidate] of candidatesToTry.entries()) {
     const { data, error } = await supabaseAdmin.rpc("reserve_trip_offer", {
       p_trip_id: trip.id,
       p_driver_id: candidate.driverId,
       p_dispatch_cycle: cycle,
-      p_sequence_number: sequenceNumber,
+      p_sequence_number: candidateIndex + 1,
       p_distance_km: candidate.distanceKm,
       p_road_eta_seconds: candidate.roadEtaSeconds,
       p_dispatch_score: candidate.score,
@@ -265,11 +272,11 @@ export async function dispatchTrip(params: {
       continue;
     }
 
-    row = (Array.isArray(data) ? data[0] : data) as AtomicOfferRow | null;
-    if (row?.offer_id) break;
+    const row = (Array.isArray(data) ? data[0] : data) as AtomicOfferRow | null;
+    if (row?.offer_id) rows.push(row);
   }
 
-  if (!row?.offer_id && reservationError) {
+  if (rows.length === 0 && reservationError) {
     console.error("[dispatch] reservation failed for all candidates", {
       tripId: trip.id,
       cycle,
@@ -278,7 +285,7 @@ export async function dispatchTrip(params: {
     });
     return { ok: false, tripId: trip.id, error: reservationError };
   }
-  if (!row?.offer_id) return { ok: false, tripId: trip.id, error: "Offer reservation was not created." };
+  if (rows.length === 0) return { ok: false, tripId: trip.id, error: "Offer round was not created." };
 
   if (cycle > 1 && sequenceNumber === 1) {
     try {
@@ -292,24 +299,16 @@ export async function dispatchTrip(params: {
     } catch {}
   }
 
+  const firstOffer = rows[0];
   const schedulerResults = await Promise.all([
     enqueueDispatchJob({
       supabase: supabaseAdmin,
       tripId: trip.id,
-      offerId: row.offer_id,
-      jobType: "escalate",
-      runAt: row.escalates_at,
-      dispatchCycle: cycle,
-      sequenceNumber,
-    }),
-    enqueueDispatchJob({
-      supabase: supabaseAdmin,
-      tripId: trip.id,
-      offerId: row.offer_id,
+      offerId: firstOffer.offer_id,
       jobType: "expire",
-      runAt: row.accept_deadline_at,
+      runAt: firstOffer.accept_deadline_at,
       dispatchCycle: cycle,
-      sequenceNumber,
+      sequenceNumber: 1,
     }),
   ]);
   const schedulerQueued = dispatchJobsQueued(schedulerResults);
@@ -320,8 +319,8 @@ export async function dispatchTrip(params: {
   if (!schedulerQueued) {
     console.error("[dispatch] offer created without complete scheduler jobs", {
       tripId: trip.id,
-      offerId: row.offer_id,
-      driverId: row.driver_id,
+      offerIds: rows.map((row) => row.offer_id),
+      driverIds: rows.map((row) => row.driver_id),
       schedulerResults,
     });
     await notifyAdmins(
@@ -331,17 +330,15 @@ export async function dispatchTrip(params: {
     ).catch(() => null);
   }
 
-  console.log("[dispatch] driver offered", {
+  console.log("[dispatch] offer round created", {
     tripId: trip.id,
-    offerId: row.offer_id,
-    driverId: row.driver_id,
+    offerCount: rows.length,
     cycle,
     sequenceNumber,
-    expiresAt: row.accept_deadline_at,
-    escalatesAt: row.escalates_at,
+    expiresAt: firstOffer.accept_deadline_at,
   });
 
-  await notifyDriverOffer({
+  await Promise.all(rows.map((row) => notifyDriverOffer({
     tripId: trip.id,
     driverId: row.driver_id,
     pickup: trip.pickup_address,
@@ -352,15 +349,15 @@ export async function dispatchTrip(params: {
       driverId: row.driver_id,
       reason: notificationError instanceof Error ? notificationError.message : "Unknown push error",
     });
-  });
+  })));
 
   return {
     ok: true,
     tripId: trip.id,
-    offerId: row.offer_id,
-    driverId: row.driver_id,
-    expiresAt: row.accept_deadline_at,
-    escalatesAt: row.escalates_at,
+    offerId: firstOffer.offer_id,
+    driverId: firstOffer.driver_id,
+    expiresAt: firstOffer.accept_deadline_at,
+    escalatesAt: firstOffer.escalates_at,
     mode: "atomic",
     schedulerQueued,
     schedulerWarning,

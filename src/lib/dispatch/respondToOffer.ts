@@ -1,7 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 import { sendPushSafe } from "@/lib/push-server";
-import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 import type { OfferAction } from "@/lib/dispatch/types";
 
 type ResponseRow = {
@@ -100,51 +99,6 @@ export async function respondToOffer(params: {
     ]);
 
     return { ok: true, status: 200, tripId: params.tripId, state: "assigned" };
-  }
-
-  const nextDispatch = await dispatchTrip({
-    tripId: params.tripId,
-    cycle: Number(row.dispatch_cycle ?? 1),
-    sequenceNumber: Number(row.sequence_number ?? 1) + 1,
-  }).catch((error: unknown) => ({
-    ok: false as const,
-    tripId: params.tripId,
-    error: error instanceof Error ? error.message : "Next-driver dispatch failed.",
-  }));
-
-  if (!nextDispatch.ok) {
-    console.warn("[dispatch] decline saved but next offer was not created", {
-      tripId: params.tripId,
-      driverId: params.driverId,
-      reason: nextDispatch.error,
-    });
-
-    const now = new Date().toISOString();
-    const { data: activeOffer } = await supabaseAdmin
-      .from("driver_trip_offers")
-      .select("id")
-      .eq("trip_id", params.tripId)
-      .in("status", ["pending", "shown"])
-      .gt("accept_deadline_at", now)
-      .limit(1)
-      .maybeSingle();
-
-    if (!activeOffer) {
-      await supabaseAdmin
-        .from("trips")
-        .update({ offer_status: null, offer_expires_at: null })
-        .eq("id", params.tripId)
-        .is("driver_id", null)
-        .in("status", ["requested", "offered"]);
-
-      await supabaseAdmin.from("trip_events").insert({
-        trip_id: params.tripId,
-        event_type: "dispatch_retry_available",
-        message: `Driver declined. No next offer was created automatically: ${nextDispatch.error}`,
-        old_status: "offered",
-        new_status: "offered",
-      }).then(() => undefined, () => undefined);
-    }
   }
 
   return { ok: true, status: 200, tripId: params.tripId, state: "declined" };

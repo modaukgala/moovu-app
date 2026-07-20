@@ -1,213 +1,117 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { requireAdminUser } from "@/lib/auth/admin";
 import { applyTripCommissionServer } from "@/lib/finance/applyTripCommissionServer";
-import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
+import { notifyAdmins, notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
 
-const ALLOWED_ADMIN_ROLES = ["owner", "admin", "dispatcher", "support"];
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
+const REASONS = new Set([
+  "Driver forgot to complete trip",
+  "Driver app issue",
+  "Customer confirmed trip ended",
+  "Support-assisted completion",
+  "Other",
+]);
 
 export async function POST(req: Request) {
-  try {
-    const authHeader = req.headers.get("authorization") || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-    if (!token) {
-      return NextResponse.json(
-        { ok: false, error: "Missing access token." },
-        { status: 401 }
-      );
-    }
-
-    const body = await req.json();
-    const tripId = String(body?.tripId ?? "").trim();
-
-    if (!tripId) {
-      return NextResponse.json(
-        { ok: false, error: "Trip ID is required." },
-        { status: 400 }
-      );
-    }
-
-    const supabaseUser = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      }
-    );
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseUser.auth.getUser();
-
-    if (userError || !user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized." },
-        { status: 401 }
-      );
-    }
-
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError || !profile?.role || !ALLOWED_ADMIN_ROLES.includes(profile.role)) {
-      return NextResponse.json(
-        { ok: false, error: "You are not allowed to complete trips." },
-        { status: 403 }
-      );
-    }
-
-    const { data: trip, error: tripError } = await supabaseAdmin
-      .from("trips")
-      .select("id,status,driver_id,fare_amount,commission_amount,ride_option")
-      .eq("id", tripId)
-      .maybeSingle();
-
-    if (tripError) {
-      return NextResponse.json(
-        { ok: false, error: tripError.message },
-        { status: 500 }
-      );
-    }
-
-    if (!trip) {
-      return NextResponse.json(
-        { ok: false, error: "Trip not found." },
-        { status: 404 }
-      );
-    }
-
-    if (trip.status !== "ongoing") {
-      return NextResponse.json(
-        { ok: false, error: "Only ongoing trips can be completed." },
-        { status: 400 }
-      );
-    }
-
-    const fareAmount = Number(trip.fare_amount || 0);
-    if (!Number.isFinite(fareAmount) || fareAmount <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "Trip fare is missing or invalid." },
-        { status: 400 }
-      );
-    }
-
-    const { error: updateTripError } = await supabaseAdmin
-      .from("trips")
-      .update({
-        status: "completed",
-      })
-      .eq("id", tripId);
-
-    if (updateTripError) {
-      return NextResponse.json(
-        { ok: false, error: updateTripError.message },
-        { status: 500 }
-      );
-    }
-
-    let commissionResult:
-      | Awaited<ReturnType<typeof applyTripCommissionServer>>
-      | null = null;
-
-    if (trip.driver_id) {
-      commissionResult = await applyTripCommissionServer({
-        tripId,
-        driverId: trip.driver_id,
-        fareAmount,
-        createdBy: user.id,
-        rideOptionId: trip.ride_option,
-      });
-
-      if (!commissionResult.ok) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `Trip was marked completed, but commission failed: ${commissionResult.error}`,
-          },
-          { status: 500 }
-        );
-      }
-
-      await supabaseAdmin
-        .from("drivers")
-        .update({ busy: false })
-        .eq("id", trip.driver_id);
-    }
-
-    try {
-      await supabaseAdmin.from("trip_events").insert([
-        {
-          trip_id: tripId,
-          event_type: "trip_completed_admin",
-          message: "Trip completed by admin",
-          old_status: "ongoing",
-          new_status: "completed",
-          created_by: user.id,
-        },
-        ...(commissionResult
-          ? [
-              {
-                trip_id: tripId,
-                event_type: "commission_applied",
-                message: commissionResult.skipped
-                  ? "Commission already existed for this trip"
-                  : `Commission applied: R${commissionResult.calc.commissionAmount} | Driver net: R${commissionResult.calc.driverNet}`,
-                old_status: "completed",
-                new_status: "completed",
-                created_by: user.id,
-              },
-            ]
-          : []),
-      ]);
-    } catch {}
-
-    await notifyCustomerForTrip(
-      tripId,
-      "Trip completed",
-      "Your trip has been completed by MOOVU support.",
-      `/ride/${tripId}`
-    );
-
-    await notifyAdmins(
-      "Trip completed by admin",
-      `Trip ${tripId} was completed by admin.`,
-      "/admin/trips"
-    );
-
-    return NextResponse.json({
-      ok: true,
-      message: "Trip completed successfully.",
-      commission: commissionResult
-        ? {
-            skipped: commissionResult.skipped,
-            fareAmount: commissionResult.calc.fareAmount,
-            commissionPct: commissionResult.calc.commissionPct,
-            commissionAmount: commissionResult.calc.commissionAmount,
-            driverNet: commissionResult.calc.driverNet,
-          }
-        : null,
-    });
-  } catch (e: unknown) {
-    return NextResponse.json(
-      { ok: false, error: errorMessage(e, "Server error.") },
-      { status: 500 }
-    );
+  const auth = await requireAdminUser(req);
+  if (!auth.ok) {
+    return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   }
+
+  const body = await req.json().catch(() => ({}));
+  const tripId = String(body?.tripId ?? "").trim();
+  const reason = String(body?.reason ?? "").trim();
+  const note = String(body?.note ?? "").trim();
+  const finalFare = Number(body?.finalFare);
+
+  if (!tripId || !REASONS.has(reason)) {
+    return NextResponse.json({ ok: false, error: "Trip ID and a valid completion reason are required." }, { status: 400 });
+  }
+  if (reason === "Other" && !note) {
+    return NextResponse.json({ ok: false, error: "Please provide details for Other." }, { status: 400 });
+  }
+  if (!Number.isFinite(finalFare) || finalFare <= 0) {
+    return NextResponse.json({ ok: false, error: "A valid final fare is required." }, { status: 400 });
+  }
+
+  const { data: trip, error: tripError } = await auth.supabaseAdmin
+    .from("trips")
+    .select("id,status,driver_id,ride_option")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (tripError || !trip) {
+    return NextResponse.json({ ok: false, error: tripError?.message ?? "Trip not found." }, { status: tripError ? 500 : 404 });
+  }
+  if (trip.status !== "ongoing") {
+    return NextResponse.json({ ok: false, error: "Only ongoing trips can be completed by admin." }, { status: 409 });
+  }
+  if (!trip.driver_id) {
+    return NextResponse.json({ ok: false, error: "The ongoing trip has no assigned driver." }, { status: 409 });
+  }
+
+  const completedAt = new Date().toISOString();
+  const { data: completed, error: completionError } = await auth.supabaseAdmin
+    .from("trips")
+    .update({
+      status: "completed",
+      fare_amount: finalFare,
+      final_fare: finalFare,
+      fare_finalized_at: completedAt,
+      completed_at: completedAt,
+      completed_by: "admin",
+      admin_completion_reason: reason,
+      admin_completion_note: note || null,
+    })
+    .eq("id", tripId)
+    .eq("status", "ongoing")
+    .select("id")
+    .maybeSingle();
+
+  if (completionError || !completed) {
+    return NextResponse.json({ ok: false, error: completionError?.message ?? "Trip state changed before completion." }, { status: completionError ? 500 : 409 });
+  }
+
+  const commission = await applyTripCommissionServer({
+    tripId,
+    driverId: trip.driver_id,
+    fareAmount: finalFare,
+    createdBy: auth.user.id,
+    rideOptionId: trip.ride_option,
+  });
+  if (!commission.ok) {
+    console.error("[admin-trip-complete] commission reconciliation failed", { tripId, error: commission.error });
+    return NextResponse.json({ ok: false, error: `Trip completed, but financial reconciliation needs attention: ${commission.error}` }, { status: 500 });
+  }
+
+  await auth.supabaseAdmin.from("drivers").update({ busy: false }).eq("id", trip.driver_id);
+  const { error: auditError } = await auth.supabaseAdmin.from("audit_logs").insert({
+    actor_id: auth.user.id,
+    action: "trip_completed",
+    entity_type: "trip",
+    entity_id: tripId,
+    detail: {
+      reason,
+      note: note || null,
+      previous_status: trip.status,
+      final_status: "completed",
+      final_fare: finalFare,
+    },
+  });
+  if (auditError) console.error("[admin-trip-complete] audit insert failed", { tripId, error: auditError.message });
+
+  await auth.supabaseAdmin.from("trip_events").insert({
+    trip_id: tripId,
+    event_type: "trip_completed_admin",
+    message: `Admin override completion: ${reason}${note ? ` — ${note}` : ""}`,
+    old_status: trip.status,
+    new_status: "completed",
+    created_by: auth.user.id,
+  });
+
+  await Promise.all([
+    notifyCustomerForTrip(tripId, "Trip completed", "MOOVU support confirmed that your trip is complete.", `/ride/${tripId}`),
+    notifyDriverForTrip(tripId, "Trip completed", "MOOVU support completed this trip after verification.", "/driver"),
+    notifyAdmins("Trip completed by admin", `Trip ${tripId} was completed using an audited admin override.`, `/admin/trips/${tripId}`),
+  ].map((promise) => promise.catch(() => null)));
+
+  return NextResponse.json({ ok: true, commission });
 }

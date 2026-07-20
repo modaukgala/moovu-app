@@ -116,7 +116,7 @@ export async function getDispatchCandidates(params: {
   if (driversError) throw new Error(driversError.message);
 
   const prelim = ((drivers ?? []) as CandidateRow[]).filter((driver) => {
-    if (excluded.has(driver.id) || driver.is_deleted) return false;
+    if (excluded.has(driver.id) || driver.is_deleted || driver.busy) return false;
     if (driver.profile_completed === false) return false;
     if (!["approved", "active"].includes(String(driver.status ?? ""))) return false;
     if (driver.verification_status && driver.verification_status !== "approved") return false;
