@@ -20,6 +20,12 @@ type Trip = {
   created_at: string;
   offer_status: string | null;
   offer_expires_at: string | null;
+  dispatch_started_at?: string | null;
+  dispatch_cycle?: number | null;
+  auto_cancel_at?: string | null;
+  cancellation_reason?: string | null;
+  cancelled_by?: string | null;
+  cancelled_at?: string | null;
   stops?: unknown;
   original_fare?: number | null;
   final_add_stop_increase?: number | null;
@@ -50,6 +56,17 @@ type Driver = {
   status: string;
 };
 
+type Offer = {
+  id: string;
+  driver_id: string;
+  status: string;
+  dispatch_cycle: number;
+  offered_at: string;
+  accept_deadline_at: string;
+};
+
+type OtpStatus = { startAvailable: boolean; endAvailable: boolean; startVerified: boolean; endVerified: boolean };
+
 function parseTripStops(value: unknown): TripStop[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -69,6 +86,14 @@ export default function TripDetailPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [events, setEvents] = useState<TripEvent[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [otpStatus, setOtpStatus] = useState<OtpStatus | null>(null);
+  const [revealedOtp, setRevealedOtp] = useState<{ startOtp: string | null; endOtp: string | null } | null>(null);
+  const [showComplete, setShowComplete] = useState(false);
+  const [completionReason, setCompletionReason] = useState("Driver forgot to complete trip");
+  const [completionNote, setCompletionNote] = useState("");
+  const [completionFare, setCompletionFare] = useState("");
+  const [completing, setCompleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [offering, setOffering] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -109,6 +134,8 @@ export default function TripDetailPage() {
     setTrip((json.trip as Trip | null) ?? null);
     setEvents((json.events as TripEvent[] | null) ?? []);
     setDrivers((json.drivers as Driver[] | null) ?? []);
+    setOffers((json.offers as Offer[] | null) ?? []);
+    setOtpStatus((json.otp as OtpStatus | null) ?? null);
     setLoading(false);
   }, [tripId]);
 
@@ -198,6 +225,32 @@ export default function TripDetailPage() {
     await loadAll();
   }
 
+  async function revealOtp() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const res = await fetch(`/api/admin/trips/${encodeURIComponent(tripId)}/otp`, {
+      method: "POST",
+      headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) return setPageError(json?.error || "Could not reveal OTPs.");
+    setRevealedOtp({ startOtp: json.startOtp, endOtp: json.endOtp });
+  }
+
+  async function completeTrip() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    setCompleting(true);
+    const res = await fetch("/api/admin/trips/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+      body: JSON.stringify({ tripId, reason: completionReason, note: completionNote, finalFare: Number(completionFare) }),
+    });
+    const json = await res.json().catch(() => null);
+    setCompleting(false);
+    if (!res.ok || !json?.ok) return setPageError(json?.error || "Could not complete trip.");
+    setShowComplete(false);
+    await loadAll();
+  }
+
   if (loading) {
     return (
       <main className="space-y-6 text-black">
@@ -242,6 +295,11 @@ export default function TripDetailPage() {
     !trip.driver_id &&
     ["requested", "offered"].includes(trip.status) &&
     !hasActiveOffer;
+  const currentRound = Math.max(Number(trip.dispatch_cycle ?? 0), ...offers.map((offer) => offer.dispatch_cycle), 0);
+  const currentOffers = offers.filter((offer) => offer.dispatch_cycle === currentRound);
+  const dispatchDeadline = trip.auto_cancel_at ?? (trip.dispatch_started_at
+    ? new Date(new Date(trip.dispatch_started_at).getTime() + 300_000).toISOString()
+    : null);
 
   return (
     <main className="space-y-6 text-black">
@@ -390,6 +448,52 @@ export default function TripDetailPage() {
           )}
         </div>
       </section>
+
+      <section className="moovu-card p-5 sm:p-6">
+        <div className="moovu-section-title">Dispatch</div>
+        <h2 className="mt-2 text-xl font-black text-slate-950">Offer rounds</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="moovu-data-row"><div className="text-sm text-gray-600">Started</div><div className="mt-1 font-semibold">{trip.dispatch_started_at ? new Date(trip.dispatch_started_at).toLocaleString() : "—"}</div></div>
+          <div className="moovu-data-row"><div className="text-sm text-gray-600">Current round</div><div className="mt-1 font-semibold">{currentRound || "—"}</div></div>
+          <div className="moovu-data-row"><div className="text-sm text-gray-600">Eligible / offered</div><div className="mt-1 font-semibold">{currentOffers.length} / {offers.length}</div></div>
+          <div className="moovu-data-row"><div className="text-sm text-gray-600">Auto-cancel deadline</div><div className="mt-1 font-semibold">{dispatchDeadline ? new Date(dispatchDeadline).toLocaleString() : "—"}</div></div>
+          {[["Accepted", "accepted"], ["Declined", "declined"], ["Timed out", "expired"]].map(([label, status]) => (
+            <div className="moovu-data-row" key={status}><div className="text-sm text-gray-600">{label}</div><div className="mt-1 font-semibold">{offers.filter((offer) => offer.status === status).length}</div></div>
+          ))}
+          <div className="moovu-data-row"><div className="text-sm text-gray-600">Next round</div><div className="mt-1 font-semibold">{currentOffers[0]?.accept_deadline_at ? new Date(currentOffers[0].accept_deadline_at).toLocaleTimeString() : "—"}</div></div>
+        </div>
+      </section>
+
+      <section className="moovu-card p-5 sm:p-6">
+        <div className="moovu-section-title">Secure OTP</div>
+        <h2 className="mt-2 text-xl font-black text-slate-950">Trip verification</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="moovu-data-row"><div className="text-sm text-gray-600">Start OTP</div><div className="mt-1 text-2xl font-black tracking-[0.25em]">{revealedOtp?.startOtp ?? "••••"}</div><div className="mt-2 text-sm">{otpStatus?.startVerified ? "Verified" : "Unused"}</div></div>
+          <div className="moovu-data-row"><div className="text-sm text-gray-600">End OTP</div><div className="mt-1 text-2xl font-black tracking-[0.25em]">{revealedOtp?.endOtp ?? "••••"}</div><div className="mt-2 text-sm">{otpStatus?.endVerified ? "Verified" : trip.status === "ongoing" ? "Available" : "Locked"}</div></div>
+        </div>
+        {!revealedOtp && <button className="moovu-btn moovu-btn-secondary mt-4" onClick={revealOtp}>Reveal OTPs</button>}
+      </section>
+
+      {trip.status === "ongoing" && (
+        <section className="moovu-card p-5 sm:p-6">
+          <div className="moovu-section-title">Recovery action</div>
+          <h2 className="mt-2 text-xl font-black text-slate-950">Complete an active trip safely</h2>
+          <p className="mt-2 text-sm text-gray-700">Use only after support has confirmed the trip ended. The override is audited.</p>
+          <button className="moovu-btn moovu-btn-primary mt-4" onClick={() => { setCompletionFare(String(trip.final_fare ?? trip.fare_amount ?? "")); setShowComplete(true); }}>Complete Trip</button>
+        </section>
+      )}
+
+      {showComplete && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="moovu-card w-full max-w-lg space-y-4 p-6">
+            <div><div className="moovu-section-title">Confirm recovery</div><h2 className="mt-2 text-2xl font-black">Complete Trip</h2></div>
+            <label className="block text-sm font-bold">Reason<select className="mt-2 w-full rounded-2xl border p-3" value={completionReason} onChange={(e) => setCompletionReason(e.target.value)}>{["Driver forgot to complete trip", "Driver app issue", "Customer confirmed trip ended", "Support-assisted completion", "Other"].map((reason) => <option key={reason}>{reason}</option>)}</select></label>
+            <label className="block text-sm font-bold">Final fare<input className="mt-2 w-full rounded-2xl border p-3" type="number" min="1" step="0.01" value={completionFare} onChange={(e) => setCompletionFare(e.target.value)} /></label>
+            <label className="block text-sm font-bold">Internal note{completionReason === "Other" ? " (required)" : " (optional)"}<textarea className="mt-2 w-full rounded-2xl border p-3" value={completionNote} onChange={(e) => setCompletionNote(e.target.value)} /></label>
+            <div className="flex gap-3"><button className="moovu-btn moovu-btn-secondary" onClick={() => setShowComplete(false)}>Back</button><button className="moovu-btn moovu-btn-primary" disabled={completing} onClick={completeTrip}>{completing ? "Completing…" : "Confirm completion"}</button></div>
+          </div>
+        </div>
+      )}
 
       <section className="moovu-card p-5 sm:p-6">
         <div className="moovu-section-title">Activity</div>

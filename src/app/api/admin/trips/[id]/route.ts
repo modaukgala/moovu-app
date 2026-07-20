@@ -43,7 +43,7 @@ export async function GET(req: Request, context: RouteContext) {
       return NextResponse.json({ ok: false, error: "Trip not found." }, { status: 404 });
     }
 
-    const [{ data: events, error: eventError }, { data: drivers, error: driverError }] = await Promise.all([
+    const [{ data: events, error: eventError }, { data: drivers, error: driverError }, { data: offers, error: offersError }] = await Promise.all([
       supabaseAdmin
         .from("trip_events")
         .select("id,event_type,message,old_status,new_status,created_at,created_by")
@@ -54,6 +54,11 @@ export async function GET(req: Request, context: RouteContext) {
         .select("id,first_name,last_name,phone,status,online,busy")
         .in("status", ["approved", "active"])
         .order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("driver_trip_offers")
+        .select("id,driver_id,status,dispatch_cycle,offered_at,accept_deadline_at,responded_at,expired_at,cancelled_at")
+        .eq("trip_id", tripId)
+        .order("offered_at", { ascending: false }),
     ]);
 
     if (eventError) {
@@ -64,11 +69,24 @@ export async function GET(req: Request, context: RouteContext) {
       console.error("[admin-trip-detail] failed to load drivers", { tripId, error: driverError });
     }
 
+    if (offersError) {
+      console.error("[admin-trip-detail] failed to load offers", { tripId, error: offersError });
+    }
+
+    const { start_otp: _startOtp, end_otp: _endOtp, ...safeTrip } = trip;
+
     return NextResponse.json({
       ok: true,
-      trip,
+      trip: safeTrip,
+      otp: {
+        startAvailable: Boolean(_startOtp),
+        endAvailable: Boolean(_endOtp),
+        startVerified: Boolean(trip.start_otp_verified),
+        endVerified: Boolean(trip.end_otp_verified),
+      },
       events: events ?? [],
       drivers: drivers ?? [],
+      offers: offers ?? [],
     });
   } catch (error: unknown) {
     console.error("[admin-trip-detail] unexpected error", errorMessage(error, "Unknown error"));

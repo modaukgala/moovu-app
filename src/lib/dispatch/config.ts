@@ -1,14 +1,14 @@
 export const DISPATCH_CONFIG = {
-  escalationSeconds: 10,
+  escalationSeconds: 30,
   acceptWindowSeconds: 30,
-  cycleCooldownSeconds: 8,
+  cycleCooldownSeconds: 0,
   gpsFreshnessSeconds: 90,
   backgroundOfferEligibilitySeconds: 8 * 60 * 60,
   initialRadiusKm: 8,
   expandedRadiusKm: 20,
-  maxSearchSeconds: 600,
-  maxCycles: 50,
-  maxCandidatesPerStep: 25,
+  maxSearchSeconds: 300,
+  maxCycles: 10,
+  maxCandidatesPerStep: 250,
 } as const;
 
 export function dispatchRadiusForCycle(cycle: number) {
