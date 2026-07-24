@@ -28,6 +28,7 @@ type DriverCurrentTripResponse = {
   final_add_stop_increase?: number | null;
   final_fare?: number | null;
   stop_waiting_fee?: number | null;
+  fare_breakdown?: { pickupInstruction?: unknown } | null;
 };
 
 const CURRENT_TRIP_SELECT = `
@@ -50,7 +51,8 @@ const CURRENT_TRIP_SELECT = `
   original_fare,
   final_add_stop_increase,
   final_fare,
-  stop_waiting_fee
+  stop_waiting_fee,
+  fare_breakdown
 `;
 
 const LEGACY_CURRENT_TRIP_SELECT = `
@@ -78,7 +80,8 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
     message.includes("final_add_stop_increase") ||
     message.includes("final_fare") ||
     message.includes("stop_waiting_fee") ||
-    message.includes("ride_option")
+    message.includes("ride_option") ||
+    message.includes("fare_breakdown")
   );
 }
 

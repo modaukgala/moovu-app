@@ -104,6 +104,8 @@ type BookTripBody = {
   ride_option?: string | null;
   scheduledFor?: string | null;
   scheduled_for?: string | null;
+  pickupInstruction?: string | null;
+  pickup_instruction?: string | null;
   notes?: string | null;
 };
 
@@ -220,6 +222,10 @@ export async function POST(req: Request) {
     const pickupLng = asNumber(body.pickupLng ?? body.pickup_lng);
     const dropoffLat = asNumber(body.dropoffLat ?? body.dropoff_lat);
     const dropoffLng = asNumber(body.dropoffLng ?? body.dropoff_lng);
+    const pickupInstruction = pickFirstString(
+      body.pickupInstruction,
+      body.pickup_instruction
+    ).slice(0, 240);
 
     const paymentMethod = pickFirstString(body.paymentMethod, body.payment_method) || "cash";
     let distanceKm = asNumber(body.distanceKm ?? body.distance_km);
@@ -433,6 +439,7 @@ export async function POST(req: Request) {
         stops,
         addStop,
         stopWaiting,
+        pickupInstruction: pickupInstruction || null,
         finalFare,
       },
       stops,

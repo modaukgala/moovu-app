@@ -13,6 +13,7 @@
     "test:cancellation": "node --test --experimental-strip-types src/lib/finance/cancellationFees.test.ts",
     "test:status-contracts": "node --test --experimental-strip-types src/lib/drivers/statusContract.test.ts",
     "test:notification-routing": "node --test --experimental-strip-types src/lib/notifications/deepLinkRouting.test.ts",
+    "test:location": "node --test --experimental-strip-types src/lib/locationPaste.test.ts",
     "sync:customer": "node scripts/capacitor-ios-target.mjs customer sync",
     "sync:driver": "node scripts/capacitor-ios-target.mjs driver sync",
     "copy:customer": "node scripts/capacitor-ios-target.mjs customer copy",

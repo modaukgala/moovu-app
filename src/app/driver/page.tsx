@@ -75,6 +75,7 @@ type CurrentTrip = {
   current_fare?: number | null;
   actual_distance_km?: number | null;
   actual_duration_min?: number | null;
+  fare_breakdown?: { pickupInstruction?: unknown } | null;
 };
 
 type TripStop = {
@@ -164,7 +165,7 @@ const END_OTP_BYPASS_REASONS = [
 
 function googleMapsLink(lat: number | null | undefined, lng: number | null | undefined) {
   if (typeof lat !== "number" || typeof lng !== "number") return null;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}&travelmode=driving`;
 }
 
 function wazeLink(lat: number | null | undefined, lng: number | null | undefined) {
@@ -1315,6 +1316,10 @@ export default function DriverHomePage() {
   );
   const offerStops = useMemo(() => parseTripStops(offer?.stops), [offer?.stops]);
   const currentTripStops = useMemo(() => parseTripStops(currentTrip?.stops), [currentTrip?.stops]);
+  const pickupInstruction =
+    typeof currentTrip?.fare_breakdown?.pickupInstruction === "string"
+      ? currentTrip.fare_breakdown.pickupInstruction.trim()
+      : "";
   const stageDetail = useMemo(
     () => driverStageDetail({ driver, offer, currentTrip }),
     [currentTrip, driver, offer]
@@ -1780,6 +1785,16 @@ export default function DriverHomePage() {
                       <div className="mt-1 text-sm font-medium text-slate-900">
                         {currentTrip.pickup_address ?? "-"}
                       </div>
+                      {pickupInstruction && (
+                        <div className="mt-3 rounded-xl bg-white/85 px-3 py-2">
+                          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-blue-700">
+                            Pickup instruction
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-slate-900">
+                            {pickupInstruction}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="rounded-2xl bg-slate-50 p-4">

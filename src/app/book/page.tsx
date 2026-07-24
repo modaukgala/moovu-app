@@ -5,6 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
+import LocationMapPicker, {
+  type ConfirmedMapLocation,
+} from "@/components/booking/LocationMapPicker";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import {
   DEFAULT_RIDE_OPTION_ID,
@@ -145,6 +148,9 @@ export default function RiderBookingPage() {
   const [routeVisible, setRouteVisible] = useState(false);
   const [pendingPastedLocation, setPendingPastedLocation] = useState<PendingPastedLocation | null>(null);
   const [pasteResolving, setPasteResolving] = useState(false);
+  const [mapPickerKind, setMapPickerKind] = useState<LocationKind | null>(null);
+  const [pickupPinned, setPickupPinned] = useState(false);
+  const [pickupInstruction, setPickupInstruction] = useState("");
 
   // ── Bottom sheet drag state ──────────────────────────────────────
   const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">("expanded");
@@ -393,6 +399,7 @@ export default function RiderBookingPage() {
 
   function clearPickupSelection() {
     setPickupPlaceId(""); setPickupLat(null); setPickupLng(null);
+    setPickupPinned(false); setPickupInstruction("");
     setPickupError(null); resetRouteState();
   }
 
@@ -453,7 +460,7 @@ export default function RiderBookingPage() {
 
         if (detail?.ok && typeof detail.lat === "number" && typeof detail.lng === "number") {
           const resolved = { address: selectedPlaceLabel(first.description, detail.name), placeId: detail.place_id || first.place_id, lat: detail.lat, lng: detail.lng };
-          if (kind === "pickup") { setPickupAddress(resolved.address); setPickupPlaceId(resolved.placeId); setPickupLat(detail.lat); setPickupLng(detail.lng); setPickupPredictions([]); setShowPickupDropdown(false); }
+          if (kind === "pickup") { setPickupAddress(resolved.address); setPickupPlaceId(resolved.placeId); setPickupLat(detail.lat); setPickupLng(detail.lng); setPickupPinned(false); setPickupInstruction(""); setPickupPredictions([]); setShowPickupDropdown(false); }
           else { setDropoffAddress(resolved.address); setDropoffPlaceId(resolved.placeId); setDropoffLat(detail.lat); setDropoffLng(detail.lng); setDropoffPredictions([]); setShowDropoffDropdown(false); }
           resetRouteState();
           return resolved;
@@ -467,7 +474,7 @@ export default function RiderBookingPage() {
 
       if (geo?.ok && typeof geo.lat === "number" && typeof geo.lng === "number") {
         const resolved = { address: input, placeId: "", lat: geo.lat, lng: geo.lng };
-        if (kind === "pickup") { setPickupAddress(resolved.address); setPickupPlaceId(""); setPickupLat(geo.lat); setPickupLng(geo.lng); setPickupPredictions([]); setShowPickupDropdown(false); }
+        if (kind === "pickup") { setPickupAddress(resolved.address); setPickupPlaceId(""); setPickupLat(geo.lat); setPickupLng(geo.lng); setPickupPinned(false); setPickupInstruction(""); setPickupPredictions([]); setShowPickupDropdown(false); }
         else { setDropoffAddress(resolved.address); setDropoffPlaceId(""); setDropoffLat(geo.lat); setDropoffLng(geo.lng); setDropoffPredictions([]); setShowDropoffDropdown(false); }
         resetRouteState();
         return resolved;
@@ -493,17 +500,53 @@ export default function RiderBookingPage() {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       setPickupLat(lat); setPickupLng(lng); setPickupPlaceId("");
+      setPickupPinned(false); setPickupInstruction("");
       setPickupPredictions([]); setShowPickupDropdown(false); setPickupError(null);
       resetRouteState();
 
       const json = await reverseGeocode(lat, lng).catch(() => null);
-      setPickupAddress(json?.ok && json.address ? json.address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      setPickupAddress(
+        json?.ok
+          ? bestReverseGeocodeLabel(json, "Current pickup location")
+          : "Current pickup location"
+      );
     } catch (e) {
       const msg = isGeolocationPositionError(e) ? getLocationErrorMessage(e) : "Could not detect location.";
       setPickupError(msg); setMsg(msg);
     } finally {
       setLocationLoading(false);
     }
+  }
+
+  function openMapPicker(kind: LocationKind) {
+    setMsg(null);
+    setShowPickupDropdown(false);
+    setShowDropoffDropdown(false);
+    setMapPickerKind(kind);
+  }
+
+  function confirmMapLocation(location: ConfirmedMapLocation, instruction: string) {
+    if (mapPickerKind === "pickup") {
+      setPickupAddress(location.address);
+      setPickupPlaceId(location.placeId);
+      setPickupLat(location.lat);
+      setPickupLng(location.lng);
+      setPickupPinned(true);
+      setPickupInstruction(instruction);
+      setPickupPredictions([]);
+      setShowPickupDropdown(false);
+      setPickupError(null);
+    } else if (mapPickerKind === "dropoff") {
+      setDropoffAddress(location.address);
+      setDropoffPlaceId(location.placeId);
+      setDropoffLat(location.lat);
+      setDropoffLng(location.lng);
+      setDropoffPredictions([]);
+      setShowDropoffDropdown(false);
+      setDropoffError(null);
+    }
+    setMapPickerKind(null);
+    resetRouteState();
   }
 
   async function fetchPredictions(kind: "pickup" | "dropoff", input: string) {
@@ -750,6 +793,7 @@ export default function RiderBookingPage() {
     if (kind === "pickup") {
       setPickupAddress(selectedPlaceLabel(description, json.name)); setPickupPlaceId(json.place_id || placeId);
       setPickupLat(typeof json.lat === "number" ? json.lat : null); setPickupLng(typeof json.lng === "number" ? json.lng : null);
+      setPickupPinned(false); setPickupInstruction("");
       setPickupPredictions([]); setShowPickupDropdown(false); setPickupError(null);
     } else {
       setDropoffAddress(selectedPlaceLabel(description, json.name)); setDropoffPlaceId(json.place_id || placeId);
@@ -794,12 +838,17 @@ export default function RiderBookingPage() {
         typeof serverJson.location?.lat === "number" &&
         typeof serverJson.location?.lng === "number"
       ) {
+        const fallback = target === "pickup"
+          ? "Pinned pickup location"
+          : target === "dropoff"
+            ? "Pinned destination"
+            : "Pinned stop";
         setPendingPastedLocation({
           target,
           stopIndex,
           source,
           resolved: {
-            address: serverJson.location.label || `${serverJson.location.lat.toFixed(5)}, ${serverJson.location.lng.toFixed(5)}`,
+            address: serverJson.location.label || fallback,
             placeId: serverJson.location.placeId || "",
             lat: serverJson.location.lat,
             lng: serverJson.location.lng,
@@ -812,8 +861,13 @@ export default function RiderBookingPage() {
 
       if (parsed.kind === "coordinates") {
         const json = await reverseGeocode(parsed.lat, parsed.lng).catch(() => null);
+        const fallback = target === "pickup"
+          ? "Pinned pickup location"
+          : target === "dropoff"
+            ? "Pinned destination"
+            : "Pinned stop";
         const resolved = {
-          address: json?.ok ? bestReverseGeocodeLabel(json, source) : `${parsed.lat.toFixed(5)}, ${parsed.lng.toFixed(5)}`,
+          address: json?.ok ? bestReverseGeocodeLabel(json, fallback) : fallback,
           placeId: json?.placeId || "",
           lat: parsed.lat,
           lng: parsed.lng,
@@ -955,6 +1009,8 @@ export default function RiderBookingPage() {
       setPickupPlaceId(resolved.placeId);
       setPickupLat(resolved.lat);
       setPickupLng(resolved.lng);
+      setPickupPinned(false);
+      setPickupInstruction("");
       setPickupPredictions([]);
       setShowPickupDropdown(false);
       setPickupError(null);
@@ -1036,14 +1092,14 @@ export default function RiderBookingPage() {
     const route = await ensureResolvedRoute();
     if (!route) { if (!silent) setMsg("Please choose valid pickup and destination locations."); return null; }
 
-    const waypoints = route.stops.map((stop) =>
-      stop.placeId
-        ? { place_id: stop.placeId }
-        : { lat: stop.lat, lng: stop.lng }
-    );
-    const payload = route.pickup.placeId && route.dropoff.placeId
-      ? { origin_place_id: route.pickup.placeId, destination_place_id: route.dropoff.placeId, waypoints }
-      : { origin_lat: route.pickup.lat, origin_lng: route.pickup.lng, destination_lat: route.dropoff.lat, destination_lng: route.dropoff.lng, waypoints };
+    const waypoints = route.stops.map((stop) => ({ lat: stop.lat, lng: stop.lng }));
+    const payload = {
+      origin_lat: route.pickup.lat,
+      origin_lng: route.pickup.lng,
+      destination_lat: route.dropoff.lat,
+      destination_lng: route.dropoff.lng,
+      waypoints,
+    };
 
     const requestKey = routeKey || [
       route.pickup.address,
@@ -1192,6 +1248,7 @@ export default function RiderBookingPage() {
           originalDurationMin: bOriginalDurMin,
           rideType, rideOption: selectedRideOption,
           scheduledFor: rideType === "scheduled" ? scheduledFor : null,
+          pickupInstruction: pickupInstruction.trim() || null,
           fare_amount: finalFare, notes: `Ride option: ${rideOptionLabel}`,
         }),
       });
@@ -1593,7 +1650,7 @@ export default function RiderBookingPage() {
         <div className="moovu-control-card hidden">
           <div className="moovu-field-label">Payment</div>
           <button type="button" className="mt-2 min-h-11 w-full rounded-2xl bg-slate-100 px-4 text-sm font-bold text-slate-950" onClick={() => setPaymentMethod("cash")}>
-            {paymentMethod === "cash" ? "Cash" : paymentMethod}
+            {paymentMethod === "cash" ? "Cash / Transfer" : paymentMethod}
           </button>
         </div>
       </div>
@@ -1642,6 +1699,25 @@ export default function RiderBookingPage() {
   return (
     <main className="mbk-page">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {mapPickerKind && (
+        <LocationMapPicker
+          kind={mapPickerKind}
+          mapsReady={mapReady}
+          initialLocation={
+            mapPickerKind === "pickup"
+              ? pickupLat != null && pickupLng != null
+                ? { lat: pickupLat, lng: pickupLng }
+                : null
+              : dropoffLat != null && dropoffLng != null
+                ? { lat: dropoffLat, lng: dropoffLng }
+                : null
+          }
+          defaultCenter={DEFAULT_CENTER}
+          initialPickupInstruction={pickupInstruction}
+          onClose={() => setMapPickerKind(null)}
+          onConfirm={confirmMapLocation}
+        />
+      )}
       {pendingPastedLocation && (
         <div className="customer-detail-overlay" onClick={() => setPendingPastedLocation(null)}>
           <section
@@ -1778,23 +1854,41 @@ export default function RiderBookingPage() {
                 <span className="moovu-route-line" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="moovu-field-label" htmlFor="pickup-input">Pickup</label>
-                  <button type="button" className="moovu-loc-inline-btn" onClick={useCurrentLocation}
-                    disabled={busy || locationLoading} title="Use my current location">
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="8" cy="8" r="3" fill="currentColor" />
-                      <path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
-                    <span>{locationLoading ? "Locating…" : "My location"}</span>
-                  </button>
-                </div>
-                <input id="pickup-input" className="moovu-route-input" placeholder="Pickup location"
+                <label className="moovu-field-label" htmlFor="pickup-input">Pickup</label>
+                <input id="pickup-input" className="moovu-route-input" placeholder="Search pickup location..."
                   value={pickupAddress} onChange={(e) => onPickupInputChange(e.target.value)}
                   onPaste={(e) => handleLocationPaste(e, "pickup")}
                   onBlur={() => void onPickupBlur()}
                   onFocus={() => { if (pickupPredictions.length > 0) setShowPickupDropdown(true); }}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onPickupBlur(); } }} />
+                <div className="moovu-location-chip-row">
+                  <button type="button" className="moovu-loc-inline-btn" onClick={useCurrentLocation}
+                    disabled={busy || locationLoading} title="Use current location">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="3" fill="currentColor" />
+                      <path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    <span>{locationLoading ? "Locating..." : "Use current location"}</span>
+                  </button>
+                  <button type="button" className="moovu-loc-inline-btn" onClick={() => openMapPicker("pickup")}>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8 14s4-4.2 4-8a4 4 0 1 0-8 0c0 3.8 4 8 4 8Z" stroke="currentColor" strokeWidth="1.5" />
+                      <circle cx="8" cy="6" r="1.4" fill="currentColor" />
+                    </svg>
+                    <span>{pickupLat != null && pickupLng != null ? "Adjust pin" : "Select from map"}</span>
+                  </button>
+                </div>
+                {pickupPinned && (
+                  <details className="moovu-pickup-help">
+                    <summary>Help your driver find you <span>Optional</span></summary>
+                    <input
+                      value={pickupInstruction}
+                      maxLength={240}
+                      onChange={(event) => setPickupInstruction(event.target.value)}
+                      placeholder="Gate colour, stand number or nearby landmark"
+                    />
+                  </details>
+                )}
                 {pickupLoading && <div className="moovu-field-hint">Searching…</div>}
                 {pickupResolving && <div className="moovu-field-hint">Resolving…</div>}
                 {pickupError && <div className="moovu-field-error">{pickupError}</div>}
@@ -1914,7 +2008,16 @@ export default function RiderBookingPage() {
                 <span className="moovu-route-dot moovu-route-dot-dropoff" />
               </div>
               <div className="min-w-0 flex-1">
-                <label className="moovu-field-label" htmlFor="dropoff-input">Destination</label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="moovu-field-label" htmlFor="dropoff-input">Destination</label>
+                  <button type="button" className="moovu-loc-inline-btn" onClick={() => openMapPicker("dropoff")}>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8 14s4-4.2 4-8a4 4 0 1 0-8 0c0 3.8 4 8 4 8Z" stroke="currentColor" strokeWidth="1.5" />
+                      <circle cx="8" cy="6" r="1.4" fill="currentColor" />
+                    </svg>
+                    <span>{dropoffLat != null && dropoffLng != null ? "Adjust pin" : "Select from map"}</span>
+                  </button>
+                </div>
                 <input id="dropoff-input" className="moovu-route-input" placeholder="Where are you going?"
                   value={dropoffAddress} onChange={(e) => onDropoffInputChange(e.target.value)}
                   onPaste={(e) => handleLocationPaste(e, "dropoff")}
@@ -1984,7 +2087,7 @@ export default function RiderBookingPage() {
           <div className="customer-booking-payment-strip">
             <div>
               <span>Payment</span>
-              <strong>{paymentMethod === "cash" ? "Cash" : paymentMethod}</strong>
+              <strong>{paymentMethod === "cash" ? "Cash / Transfer" : paymentMethod}</strong>
             </div>
             <div className="text-right">
               <span>Personal trip</span>

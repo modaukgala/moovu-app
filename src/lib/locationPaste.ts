@@ -150,12 +150,12 @@ export function parsePastedLocation(input: string): ParsedPastedLocation {
 
 export function bestReverseGeocodeLabel(result: ReverseGeocodeResult, fallback: string) {
   return (
-    result.compoundPlusCode?.trim() ||
-    result.globalPlusCode?.trim() ||
+    result.label?.trim() ||
+    result.name?.trim() ||
     result.formattedAddress?.trim() ||
     result.address?.trim() ||
-    result.name?.trim() ||
+    result.compoundPlusCode?.trim() ||
+    result.globalPlusCode?.trim() ||
     fallback.trim()
   );
 }
-
