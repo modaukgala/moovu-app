@@ -11,6 +11,10 @@ import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
+import {
+  DRIVER_COMMISSION_LOCK_LIMIT,
+  DRIVER_COMMISSION_WARNING_RATIO,
+} from "@/lib/finance/commission";
 
 type Wallet = {
   balance_due: number | null;
@@ -86,6 +90,20 @@ type CancellationFee = {
   created_at: string | null;
 };
 
+type CommissionTransaction = {
+  id: string;
+  trip_id: string | null;
+  tx_type: string;
+  amount: number | null;
+  direction: "debit" | "credit";
+  description: string | null;
+  meta?: {
+    fare_amount?: number;
+    commission_pct?: number;
+  } | null;
+  created_at: string;
+};
+
 type PlanType = DriverSubscriptionPlan;
 
 function money(value: number | null | undefined) {
@@ -119,6 +137,7 @@ export default function DriverEarningsPage() {
   const [cancellationDriverEarnings, setCancellationDriverEarnings] = useState(0);
   const [lateCancellationDriverEarnings, setLateCancellationDriverEarnings] = useState(0);
   const [noShowDriverEarnings, setNoShowDriverEarnings] = useState(0);
+  const [commissionBreakdown, setCommissionBreakdown] = useState<CommissionTransaction[]>([]);
 
   const [selectedPlan, setSelectedPlan] = useState<PlanType>("month");
 
@@ -168,6 +187,7 @@ export default function DriverEarningsPage() {
     setCancellationDriverEarnings(Number(json.earnings?.cancellation_driver_earnings ?? 0));
     setLateCancellationDriverEarnings(Number(json.earnings?.late_cancellation_driver_earnings ?? 0));
     setNoShowDriverEarnings(Number(json.earnings?.no_show_driver_earnings ?? 0));
+    setCommissionBreakdown(json.earnings?.commission_breakdown ?? []);
     setLoading(false);
   }, [getToken]);
 
@@ -180,6 +200,8 @@ export default function DriverEarningsPage() {
   }, [loadData]);
 
   const commissionDue = Number(wallet?.balance_due ?? 0);
+  const commissionRatio = commissionDue / DRIVER_COMMISSION_LOCK_LIMIT;
+  const commissionRemaining = Math.max(0, DRIVER_COMMISSION_LOCK_LIMIT - commissionDue);
   const subscriptionSelectedPrice = DRIVER_SUBSCRIPTION_PLANS[selectedPlan].amount;
 
   const now = useMemo(() => new Date(), []);
@@ -259,6 +281,20 @@ export default function DriverEarningsPage() {
           <MetricCard label="Commission owed" value={money(commissionDue)} helper="Payable to MOOVU" tone={commissionDue > 0 ? "warning" : "success"} />
         </section>
 
+        {commissionRatio >= DRIVER_COMMISSION_WARNING_RATIO && (
+          <section className={`rounded-[24px] border p-5 ${commissionRatio >= 1 ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
+            <div className={`text-lg font-black ${commissionRatio >= 1 ? "text-red-950" : "text-amber-950"}`}>
+              {commissionRatio >= 1 ? "Commission payment required" : "You’re approaching your MOOVU commission limit."}
+            </div>
+            <p className={`mt-2 text-sm font-semibold ${commissionRatio >= 1 ? "text-red-800" : "text-amber-800"}`}>
+              {money(commissionDue)} owed · {money(DRIVER_COMMISSION_LOCK_LIMIT)} limit · {money(commissionRemaining)} remaining
+            </p>
+            <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary mt-4">
+              View Commission / Pay Commission
+            </Link>
+          </section>
+        )}
+
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <MetricCard
             label="Cancellation payouts"
@@ -275,7 +311,7 @@ export default function DriverEarningsPage() {
           <MetricCard
             label="Fee payouts total"
             value={money(cancellationDriverEarnings)}
-            helper="Separate from MOOVU commission debt"
+            helper="Credits reduce MOOVU commission owed"
             tone="success"
           />
         </section>
@@ -340,6 +376,37 @@ export default function DriverEarningsPage() {
               </Link>
             </div>
           </div>
+        </section>
+
+        <section className="moovu-card p-5 sm:p-6 space-y-4">
+          <h2 className="text-xl font-black text-slate-950">Commission breakdown</h2>
+          <p className="text-sm font-semibold text-slate-600">
+            One ledger explains commission charges, cancellation credits, and the balance owed to MOOVU.
+          </p>
+          {commissionBreakdown.length === 0 ? (
+            <EmptyState title="No commission activity" description="Trip commission and cancellation credits will appear here." />
+          ) : (
+            <div className="space-y-3">
+              {commissionBreakdown.map((row) => (
+                <div key={row.id} className="moovu-card-interactive grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div>
+                    <div className="font-black text-slate-950">
+                      {row.tx_type === "commission" ? "Trip commission" : row.tx_type === "cancellation_credit" ? "Cancellation credit" : row.tx_type.replaceAll("_", " ")}
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-slate-600">{row.description ?? "MOOVU wallet adjustment"}</div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      {displayDate(row.created_at)}
+                      {row.meta?.fare_amount != null ? ` · Fare ${money(row.meta.fare_amount)}` : ""}
+                      {row.meta?.commission_pct != null ? ` · ${row.meta.commission_pct}%` : ""}
+                    </div>
+                  </div>
+                  <div className={`text-xl font-black ${row.direction === "credit" ? "text-emerald-700" : "text-slate-950"}`}>
+                    {row.direction === "credit" ? "-" : "+"}{money(row.amount)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="moovu-card p-5 sm:p-6 space-y-4">

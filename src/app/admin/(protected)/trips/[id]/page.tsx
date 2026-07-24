@@ -25,6 +25,23 @@ type Trip = {
   final_add_stop_increase?: number | null;
   final_fare?: number | null;
   stop_waiting_fee?: number | null;
+  current_fare?: number | null;
+  actual_distance_km?: number | null;
+  actual_duration_min?: number | null;
+  start_otp?: string | null;
+  end_otp?: string | null;
+  start_otp_verified?: boolean | null;
+  end_otp_verified?: boolean | null;
+  completed_without_end_otp?: boolean | null;
+  end_otp_bypass_reason?: string | null;
+  end_otp_bypass_note?: string | null;
+  completed_by?: string | null;
+  completed_at?: string | null;
+  cancellation_fee_amount?: number | null;
+  cancellation_driver_amount?: number | null;
+  cancellation_moovu_amount?: number | null;
+  cancellation_reason?: string | null;
+  cancelled_by?: string | null;
 };
 
 type TripStop = {
@@ -71,6 +88,9 @@ export default function TripDetailPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [offering, setOffering] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completionNote, setCompletionNote] = useState("");
+  const [completing, setCompleting] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pageError, setPageError] = useState<string | null>(null);
 
@@ -133,6 +153,8 @@ export default function TripDetailPage() {
   const offerSecondsLeft = trip?.offer_expires_at
     ? Math.ceil((new Date(trip.offer_expires_at).getTime() - nowMs) / 1000)
     : null;
+  const tripStartedAt =
+    events.find((event) => event.event_type === "trip_started")?.created_at ?? null;
 
   async function offerNearest(exclude: string[] = []) {
     if (!trip) return;
@@ -198,6 +220,32 @@ export default function TripDetailPage() {
     await loadAll();
   }
 
+  async function completeTrip() {
+    if (!trip || completionNote.trim().length < 3) return;
+    setCompleting(true);
+    setPageError(null);
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+    const response = await fetch("/api/admin/trips/complete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ tripId: trip.id, note: completionNote.trim() }),
+    });
+    const json = await response.json().catch(() => null);
+    setCompleting(false);
+    if (!response.ok || !json?.ok) {
+      setPageError(json?.error || "Could not complete this trip.");
+      return;
+    }
+    setCompleteOpen(false);
+    setCompletionNote("");
+    await loadAll();
+  }
+
   if (loading) {
     return (
       <main className="space-y-6 text-black">
@@ -251,6 +299,51 @@ export default function TripDetailPage() {
           message={pageError}
           onClose={() => setPageError(null)}
         />
+      )}
+      {completeOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/55 p-4">
+          <section className="w-full max-w-lg rounded-[28px] bg-white p-5 shadow-2xl sm:p-6">
+            <div className="moovu-section-title">Admin trip completion</div>
+            <h2 className="mt-2 text-2xl font-black text-slate-950">Complete Trip</h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+              This uses the same fare, earnings, commission, receipt, driver-release, and notification flow as driver completion.
+            </p>
+            <div className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-4 text-sm">
+              <div><strong>Customer:</strong> {trip.rider_name ?? "Customer"}</div>
+              <div><strong>Driver:</strong> {driverLabel}</div>
+              <div><strong>Pickup:</strong> {trip.pickup_address}</div>
+              <div><strong>Destination:</strong> {trip.dropoff_address}</div>
+              <div><strong>Started:</strong> {tripStartedAt ? new Date(tripStartedAt).toLocaleString() : "--"}</div>
+              <div><strong>Tracked:</strong> {Number(trip.actual_distance_km ?? 0).toFixed(2)} km / {Number(trip.actual_duration_min ?? 0).toFixed(0)} min</div>
+              <div><strong>Current fare:</strong> R{Number(trip.current_fare ?? trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
+            </div>
+            <textarea
+              className="moovu-input mt-4 min-h-24 resize-y"
+              value={completionNote}
+              onChange={(event) => setCompletionNote(event.target.value)}
+              placeholder="Why is admin completing this trip?"
+              maxLength={240}
+            />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-primary"
+                disabled={completing || completionNote.trim().length < 3}
+                onClick={() => void completeTrip()}
+              >
+                {completing ? "Completing..." : "Confirm completion"}
+              </button>
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-secondary"
+                disabled={completing}
+                onClick={() => setCompleteOpen(false)}
+              >
+                Keep trip open
+              </button>
+            </div>
+          </section>
+        </div>
       )}
       <header className="moovu-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
         <div>
@@ -365,6 +458,44 @@ export default function TripDetailPage() {
       </section>
 
       <section className="moovu-card p-5 sm:p-6">
+        <div className="moovu-section-title">Trip security and accounting</div>
+        <h2 className="mt-2 text-xl font-black text-slate-950">Security, fare and cancellation</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="moovu-data-row">
+            <div className="text-sm text-gray-600">Start OTP</div>
+            <div className="mt-1 text-2xl font-black tracking-[0.2em]">{trip.start_otp ?? "--"}</div>
+            <div className="mt-1 text-xs font-bold text-slate-500">{trip.start_otp_verified ? "Verified" : "Not verified"}</div>
+          </div>
+          <div className="moovu-data-row">
+            <div className="text-sm text-gray-600">End OTP</div>
+            <div className="mt-1 text-2xl font-black tracking-[0.2em]">{trip.end_otp ?? "--"}</div>
+            <div className="mt-1 text-xs font-bold text-slate-500">
+              {trip.completed_without_end_otp ? "Not used - driver bypass" : trip.end_otp_verified ? "Verified" : "Not verified"}
+            </div>
+          </div>
+          <div className="moovu-data-row">
+            <div className="text-sm text-gray-600">Completion</div>
+            <div className="mt-1 font-black capitalize">{trip.completed_by ?? "--"}</div>
+            {trip.end_otp_bypass_reason && <div className="mt-1 text-sm text-amber-700">{trip.end_otp_bypass_reason}</div>}
+            {trip.end_otp_bypass_note && <div className="mt-1 text-xs text-slate-600">{trip.end_otp_bypass_note}</div>}
+          </div>
+          <div className="moovu-data-row">
+            <div className="text-sm text-gray-600">Live / final fare</div>
+            <div className="mt-1 text-xl font-black">R{Number(trip.current_fare ?? trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
+            <div className="mt-1 text-xs text-slate-500">{Number(trip.actual_distance_km ?? 0).toFixed(2)} km / {Number(trip.actual_duration_min ?? 0).toFixed(0)} min</div>
+          </div>
+        </div>
+        {Number(trip.cancellation_fee_amount ?? 0) > 0 && (
+          <div className="mt-4 grid gap-3 rounded-2xl bg-amber-50 p-4 sm:grid-cols-4">
+            <div><div className="text-xs font-bold text-amber-700">Cancellation fee</div><strong>R{Number(trip.cancellation_fee_amount).toFixed(2)}</strong></div>
+            <div><div className="text-xs font-bold text-amber-700">MOOVU share</div><strong>R{Number(trip.cancellation_moovu_amount ?? 0).toFixed(2)}</strong></div>
+            <div><div className="text-xs font-bold text-amber-700">Driver credit</div><strong>R{Number(trip.cancellation_driver_amount ?? 0).toFixed(2)}</strong></div>
+            <div><div className="text-xs font-bold text-amber-700">Commission effect</div><strong>-R{Number(trip.cancellation_driver_amount ?? 0).toFixed(2)}</strong></div>
+          </div>
+        )}
+      </section>
+
+      <section className="moovu-card p-5 sm:p-6">
         <div className="moovu-action-row">
           {canOfferNearest && (
             <button
@@ -386,6 +517,14 @@ export default function TripDetailPage() {
               onClick={cancelTrip}
             >
               Cancel
+            </button>
+          )}
+          {trip.status === "ongoing" && (
+            <button
+              className="moovu-btn bg-emerald-600 text-white"
+              onClick={() => setCompleteOpen(true)}
+            >
+              Complete Trip
             </button>
           )}
         </div>

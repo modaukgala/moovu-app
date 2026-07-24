@@ -586,16 +586,62 @@ export default function RideTrackingPage() {
     setLoading(false);
   }, [getAccessToken, router, tripId]);
 
+  const loadLiveLocation = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+    const response = await fetch(`/api/customer/trip-location?tripId=${encodeURIComponent(tripId)}`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.ok) return;
+
+    if (json.location) {
+      setDriver((current) =>
+        current
+          ? {
+              ...current,
+              lat: json.location.lat,
+              lng: json.location.lng,
+              last_seen: json.location.last_seen,
+            }
+          : current,
+      );
+      setTracking((current) =>
+        current
+          ? {
+              ...current,
+              driverFresh: true,
+              freshnessSeconds: 0,
+              driverLastSeen: json.location.last_seen,
+            }
+          : current,
+      );
+    }
+    if (json.fare) {
+      setTrip((current) =>
+        current
+          ? {
+              ...current,
+              current_fare: json.fare.current_fare,
+              final_fare: json.fare.final_fare,
+              fare_amount: json.fare.fare_amount,
+              actual_distance_km: json.fare.actual_distance_km,
+              actual_duration_min: json.fare.actual_duration_min,
+            }
+          : current,
+      );
+    }
+  }, [getAccessToken, tripId]);
+
   const clearMapLayers = useCallback(() => {
     if (pickupMarkerRef.current) pickupMarkerRef.current.setMap(null);
     if (dropoffMarkerRef.current) dropoffMarkerRef.current.setMap(null);
-    if (driverMarkerRef.current) driverMarkerRef.current.setMap(null);
     if (directionsRendererRef.current) directionsRendererRef.current.setMap(null);
     stopMarkerRefs.current.forEach((marker) => marker.setMap(null));
 
     pickupMarkerRef.current = null;
     dropoffMarkerRef.current = null;
-    driverMarkerRef.current = null;
     directionsRendererRef.current = null;
     stopMarkerRefs.current = [];
   }, []);
@@ -657,18 +703,6 @@ export default function RideTrackingPage() {
       points.push(pos);
     });
 
-    if (driver?.lat != null && driver?.lng != null) {
-      const pos = { lat: Number(driver.lat), lng: Number(driver.lng) };
-      driverMarkerRef.current = createOrMoveMarker({
-        map,
-        position: pos,
-        title: "Driver",
-        marker: driverMarkerRef.current,
-        icon: carMarkerIcon(),
-      });
-      points.push(pos);
-    }
-
     if (points.length > 0) {
       fitBoundsToPoints(map, points);
     } else {
@@ -676,37 +710,24 @@ export default function RideTrackingPage() {
       map.setZoom(11);
     }
 
-    const routeDestination =
-      driver?.lat != null &&
-      driver?.lng != null &&
+    if (
       trip.pickup_lat != null &&
       trip.pickup_lng != null &&
-      (trip.status === "assigned" || trip.status === "arrived")
-        ? { lat: Number(trip.pickup_lat), lng: Number(trip.pickup_lng) }
-        : driver?.lat != null &&
-            driver?.lng != null &&
-            trip.dropoff_lat != null &&
-            trip.dropoff_lng != null &&
-            trip.status === "ongoing"
-          ? { lat: Number(trip.dropoff_lat), lng: Number(trip.dropoff_lng) }
-          : null;
-
-    if (driver?.lat != null && driver?.lng != null && routeDestination) {
+      trip.dropoff_lat != null &&
+      trip.dropoff_lng != null
+    ) {
       const directionsService = new window.google.maps.DirectionsService();
       const directionsRenderer = makeRouteRenderer(map);
       directionsRendererRef.current = directionsRenderer;
 
       directionsService.route(
         {
-          origin: { lat: Number(driver.lat), lng: Number(driver.lng) },
-          destination: routeDestination,
-          waypoints:
-            trip.status === "ongoing"
-              ? tripStops.map((stop) => ({
-                  location: { lat: stop.lat, lng: stop.lng },
-                  stopover: true,
-                }))
-              : [],
+          origin: { lat: Number(trip.pickup_lat), lng: Number(trip.pickup_lng) },
+          destination: { lat: Number(trip.dropoff_lat), lng: Number(trip.dropoff_lng) },
+          waypoints: tripStops.map((stop) => ({
+            location: { lat: stop.lat, lng: stop.lng },
+            stopover: true,
+          })),
           optimizeWaypoints: false,
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
@@ -717,7 +738,27 @@ export default function RideTrackingPage() {
         }
       );
     }
-  }, [clearMapLayers, driver, initMapIfNeeded, trip, tripStops]);
+  }, [clearMapLayers, initMapIfNeeded, trip, tripStops]);
+
+  useEffect(() => {
+    if (!initMapIfNeeded()) return;
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (driver?.lat == null || driver.lng == null) {
+      driverMarkerRef.current?.setMap(null);
+      driverMarkerRef.current = null;
+      return;
+    }
+
+    driverMarkerRef.current = createOrMoveMarker({
+      map,
+      position: { lat: Number(driver.lat), lng: Number(driver.lng) },
+      title: "Driver live location",
+      marker: driverMarkerRef.current,
+      icon: carMarkerIcon(),
+    });
+  }, [driver?.lat, driver?.lng, initMapIfNeeded]);
 
   useEffect(() => {
     const firstLoadTimer = window.setTimeout(() => {
@@ -732,6 +773,14 @@ export default function RideTrackingPage() {
       window.clearInterval(pollTimer);
     };
   }, [loadTrip]);
+
+  useEffect(() => {
+    if (!trip || !["assigned", "arrived", "ongoing"].includes(trip.status)) return;
+    const timer = window.setInterval(() => {
+      void loadLiveLocation();
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [loadLiveLocation, trip]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1783,16 +1832,26 @@ export default function RideTrackingPage() {
                         aria-label="Other cancellation reason"
                       />
                     )}
-                    <button
-                      disabled={!canCancel || cancelBusy || !cancellationReasonValid}
-                      onClick={cancelTrip}
-                      className="moovu-btn mt-3 bg-red-600 text-white disabled:opacity-60"
-                    >
-                      {cancelBusy ? "Cancelling..." : cancellationPreview.label}
-                    </button>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <button
+                        disabled={!canCancel || cancelBusy || !cancellationReasonValid}
+                        onClick={cancelTrip}
+                        className="moovu-btn bg-red-600 text-white disabled:opacity-60"
+                      >
+                        {cancelBusy ? "Cancelling..." : cancellationPreview.label}
+                      </button>
+                      <button
+                        type="button"
+                        className="moovu-btn moovu-btn-secondary"
+                        disabled={cancelBusy}
+                        onClick={() => setActiveDetailModal(null)}
+                      >
+                        Keep ride
+                      </button>
+                    </div>
                     <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
                       {cancellationPreview.fee > 0
-                        ? "A late cancellation fee applies because a driver has started travelling to your pickup."
+                        ? "The free cancellation window has ended. The fee shown above applies only if you confirm."
                         : "Cancellation is currently free under the MOOVU cancellation policy."}
                     </p>
                   </div>
@@ -2458,7 +2517,7 @@ export default function RideTrackingPage() {
 
                 <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
                   {cancellationPreview.fee > 0
-                    ? "A late cancellation fee applies because a driver has started travelling to your pickup."
+                    ? "The free cancellation window has ended. The fee shown above applies only if you confirm."
                     : "Cancellation is currently free under the MOOVU cancellation policy."}
                 </div>
               </div>
@@ -2480,6 +2539,20 @@ export default function RideTrackingPage() {
           </section>
         </div>
       </div>
+
+      {["arrived", "ongoing"].includes(trip.status) && (
+        <button
+          type="button"
+          className="fixed bottom-[calc(146px+env(safe-area-inset-bottom))] right-4 z-[7999] min-h-11 rounded-full border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 shadow-lg"
+          onClick={() => {
+            if (startOtpAvailable) setActiveOtpModal("start");
+            else if (endOtpAvailable) setActiveOtpModal("end");
+            else setActiveDetailModal("otp");
+          }}
+        >
+          View OTPs
+        </button>
+      )}
 
       {canOpenChat && (
         <div className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-4 z-[8000]">

@@ -1,16 +1,23 @@
 ﻿import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
-import { DISPATCH_CONFIG, dispatchRadiusForCycle } from "./config.ts";
+import { DISPATCH_CONFIG, dispatchRadiusForCycle, isDispatchExpired } from "./config.ts";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
 import { scoreDriverForTrip } from "./driverScoring.ts";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
 import { dispatchJobsQueued } from "./dispatchScheduler.ts";
 
-test("dispatch timing uses ten-second escalation and thirty-second acceptance", () => {
-  assert.equal(DISPATCH_CONFIG.escalationSeconds, 10);
+test("dispatch timing uses thirty-second rounds and a five-minute maximum", () => {
+  assert.equal(DISPATCH_CONFIG.escalationSeconds, 30);
   assert.equal(DISPATCH_CONFIG.acceptWindowSeconds, 30);
-  assert.ok(DISPATCH_CONFIG.acceptWindowSeconds > DISPATCH_CONFIG.escalationSeconds * 2);
+  assert.equal(DISPATCH_CONFIG.maxSearchSeconds, 5 * 60);
+  assert.equal(DISPATCH_CONFIG.maxCycles, 10);
+});
+
+test("dispatch expiry is measured from the original request time", () => {
+  const now = Date.parse("2026-07-24T10:05:00.000Z");
+  assert.equal(isDispatchExpired("2026-07-24T10:00:00.000Z", now), true);
+  assert.equal(isDispatchExpired("2026-07-24T10:00:01.000Z", now), false);
 });
 
 test("an online driver remains offer-eligible while the native app is backgrounded", () => {

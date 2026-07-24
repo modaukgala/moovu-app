@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { recalculateDriverWalletServer } from "@/lib/finance/driverWalletLedger";
 
 type CompletedTripRow = {
   id: string;
@@ -11,15 +12,6 @@ type CompletedTripRow = {
   dropoff_address: string | null;
   created_at: string | null;
   status: string | null;
-};
-
-type SettlementRow = {
-  id: string;
-  amount_paid: number | string | null;
-  payment_method: string | null;
-  reference: string | null;
-  note: string | null;
-  created_at: string | null;
 };
 
 type TripEventRow = {
@@ -115,6 +107,7 @@ export async function GET(req: Request) {
       { data: subscriptionPayments, error: subscriptionPaymentsError },
       { data: paymentRequests, error: paymentRequestsError },
       { data: completedTrips, error: tripError },
+      { data: walletTransactions, error: walletTransactionsError },
     ] = await Promise.all([
       supabaseAdmin
         .from("driver_wallets")
@@ -184,6 +177,12 @@ export async function GET(req: Request) {
         .eq("driver_id", driverId)
         .eq("status", "completed")
         .limit(100),
+      supabaseAdmin
+        .from("driver_wallet_transactions")
+        .select("id,trip_id,tx_type,amount,direction,description,meta,created_at")
+        .eq("driver_id", driverId)
+        .order("created_at", { ascending: false })
+        .limit(200),
     ]);
 
     if (walletError) {
@@ -204,74 +203,16 @@ export async function GET(req: Request) {
     if (tripError) {
       return NextResponse.json({ ok: false, error: tripError.message }, { status: 500 });
     }
+    if (walletTransactionsError) {
+      return NextResponse.json({ ok: false, error: walletTransactionsError.message }, { status: 500 });
+    }
 
     const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
-    const typedSettlements = (settlements ?? []) as SettlementRow[];
-
-    const totalCommission = typedCompletedTrips.reduce(
-      (sum, trip) => sum + num(trip.commission_amount),
-      0
-    );
-
-    const totalDriverNet = typedCompletedTrips.reduce((sum, trip) => {
-      if (trip.driver_net_earnings != null) {
-        return sum + num(trip.driver_net_earnings);
-      }
-      return sum + (num(trip.fare_amount) - num(trip.commission_amount));
-    }, 0);
-
-    const totalTripsCompleted = typedCompletedTrips.length;
-
-    const totalSettled = typedSettlements.reduce(
-      (sum, row) => sum + num(row.amount_paid),
-      0
-    );
-
-    const balanceDue = Math.max(0, totalCommission - totalSettled);
-
-    let normalizedWallet = wallet;
-
-    if (wallet?.id) {
-      const { data: updatedWallet, error: walletUpdateError } = await supabaseAdmin
-        .from("driver_wallets")
-        .update({
-          balance_due: balanceDue,
-          total_commission: totalCommission,
-          total_driver_net: totalDriverNet,
-          total_trips_completed: totalTripsCompleted,
-          account_status: balanceDue > 0 ? "due" : "settled",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", wallet.id)
-        .select("*")
-        .single();
-
-      if (walletUpdateError) {
-        return NextResponse.json({ ok: false, error: walletUpdateError.message }, { status: 500 });
-      }
-
-      normalizedWallet = updatedWallet;
-    } else {
-      const { data: createdWallet, error: createWalletError } = await supabaseAdmin
-        .from("driver_wallets")
-        .insert({
-          driver_id: driverId,
-          balance_due: balanceDue,
-          total_commission: totalCommission,
-          total_driver_net: totalDriverNet,
-          total_trips_completed: totalTripsCompleted,
-          account_status: balanceDue > 0 ? "due" : "settled",
-          updated_at: new Date().toISOString(),
-        })
-        .select("*")
-        .single();
-
-      if (createWalletError) {
-        return NextResponse.json({ ok: false, error: createWalletError.message }, { status: 500 });
-      }
-
-      normalizedWallet = createdWallet;
+    const walletResult = await recalculateDriverWalletServer(driverId);
+    if (!walletResult.ok) {
+      return NextResponse.json({ ok: false, error: walletResult.error }, { status: 500 });
     }
+    const normalizedWallet = walletResult.wallet ?? wallet;
 
     const tripIds = typedCompletedTrips.map((trip) => trip.id);
     const completedAtMap = new Map<string, string>();
@@ -329,6 +270,8 @@ export async function GET(req: Request) {
         settlements: settlements ?? [],
         subscription_payments: subscriptionPayments ?? [],
         payment_requests: paymentRequests ?? [],
+        commission_breakdown: walletTransactions ?? [],
+        commission_totals: walletResult.totals,
         recent_completed_trips: normalizedTrips,
         cancellation_fees: typedCancellationFees,
         cancellation_driver_earnings: cancellationDriverEarnings,

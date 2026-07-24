@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getNoShowFee, isNoShowEligible, noShowEligibleAt } from "@/lib/finance/cancellationFees";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
+import { applyCancellationCreditServer } from "@/lib/finance/driverWalletLedger";
 
 function isMissingCancellationColumn(error: { message?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() || "";
@@ -170,6 +171,20 @@ export async function POST(req: Request) {
     }
 
     await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", driverId);
+
+    const creditResult = await applyCancellationCreditServer({
+      tripId,
+      driverId,
+      amount: noShowFee.driverAmount,
+      description: `Customer no-show payout for trip ${tripId}`,
+    });
+    if (!creditResult.ok) {
+      console.error("[driver-no-show] commission credit failed", {
+        tripId,
+        driverId,
+        reason: creditResult.error,
+      });
+    }
 
     const { error: eventError } = await supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,

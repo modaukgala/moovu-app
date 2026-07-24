@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
-import { DISPATCH_CONFIG, } from "@/lib/dispatch/config";
+import { isDispatchExpired } from "@/lib/dispatch/config";
+import { cancelExpiredDispatch } from "@/lib/dispatch/cancelExpiredDispatch";
 import { isDispatchWorkerAuthorized } from "@/lib/dispatch/dispatchScheduler";
-import { enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
 import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
 
 type ClaimedJob = {
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
 
         const { data: trip, error: tripError } = await supabaseAdmin
           .from("trips")
-          .select("id,status,driver_id,dispatch_cycle")
+          .select("id,status,driver_id,dispatch_cycle,created_at")
           .eq("id", job.trip_id)
           .maybeSingle();
 
@@ -89,18 +89,22 @@ export async function POST(req: Request) {
 
           if ((activeOffers ?? []).length === 0) {
             const nextCycle = Math.max(1, Number(trip.dispatch_cycle ?? job.dispatch_cycle)) + 1;
-            console.log("[dispatch-worker] no active offers remain, scheduling recover", {
+            console.log("[dispatch-worker] no active offers remain, starting next round", {
               tripId: job.trip_id,
               nextCycle,
             });
-            await enqueueDispatchJob({
-              supabase: supabaseAdmin,
-              tripId: job.trip_id,
-              jobType: "recover",
-              runAt: new Date(Date.now() + DISPATCH_CONFIG.cycleCooldownSeconds * 1000).toISOString(),
-              dispatchCycle: nextCycle,
-              sequenceNumber: 1,
-            });
+            if (isDispatchExpired(trip.created_at)) {
+              await cancelExpiredDispatch(job.trip_id);
+            } else {
+              const nextRound = await dispatchTrip({
+                tripId: job.trip_id,
+                cycle: nextCycle,
+                sequenceNumber: 1,
+              });
+              if (!nextRound.ok && !nextRound.exhausted) {
+                throw new Error(nextRound.error ?? "Next dispatch round failed.");
+              }
+            }
           }
         }
       } else {

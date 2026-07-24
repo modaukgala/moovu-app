@@ -3,6 +3,7 @@ import { getCommissionPctForRideOption } from "@/lib/domain/fare";
 export const MOOVU_COMMISSION_PCT = 9.5;
 export const MOOVU_COMMISSION_RATE = MOOVU_COMMISSION_PCT / 100;
 export const DRIVER_COMMISSION_LOCK_LIMIT = 100;
+export const DRIVER_COMMISSION_WARNING_RATIO = 0.85;
 
 export function resolveCommissionPct(params?: {
   rideOptionId?: unknown;

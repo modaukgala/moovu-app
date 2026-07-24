@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { recalculateDriverWalletServer } from "@/lib/finance/driverWalletLedger";
+import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
 
 function num(value: unknown) {
   const n = Number(value ?? 0);
@@ -53,13 +55,7 @@ export async function GET(req: Request) {
           .maybeSingle(),
         supabaseAdmin
           .from("driver_wallet_transactions")
-          .select(`
-            id,
-            trip_id,
-            tx_type,
-            amount,
-            created_at
-          `)
+          .select("id,trip_id,tx_type,amount,direction,description,meta,created_at")
           .eq("driver_id", driverId)
           .order("created_at", { ascending: false })
           .limit(20),
@@ -114,42 +110,28 @@ export async function GET(req: Request) {
     const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
     const typedSettlements = (settlements ?? []) as SettlementRow[];
 
-    const totalCommission = typedCompletedTrips.reduce((sum, row) => sum + num(row.commission_amount), 0);
-    const totalDriverNet = typedCompletedTrips.reduce(
-      (sum, row) =>
-        sum +
-        (row.driver_net_earnings != null
-          ? num(row.driver_net_earnings)
-          : num(row.fare_amount) - num(row.commission_amount)),
-      0
-    );
     const totalTripsCompleted = typedCompletedTrips.length;
     const totalSettled = typedSettlements.reduce((sum, row) => sum + num(row.amount_paid), 0);
-    const balanceDue = Math.max(0, totalCommission - totalSettled);
-
-    if (walletRow?.id) {
-      await supabaseAdmin
-        .from("driver_wallets")
-        .update({
-          balance_due: balanceDue,
-          total_commission: totalCommission,
-          total_driver_net: totalDriverNet,
-          total_trips_completed: totalTripsCompleted,
-          account_status: balanceDue > 0 ? "due" : "settled",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", walletRow.id);
+    const recalculated = await recalculateDriverWalletServer(driverId);
+    if (!recalculated.ok) {
+      return NextResponse.json({ ok: false, error: recalculated.error }, { status: 500 });
     }
+    const balanceDue = recalculated.totals.balanceDue;
 
     return NextResponse.json({
       ok: true,
       wallet: {
         driver_id: driverId,
         balance_due: balanceDue,
-        total_commission: totalCommission,
-        total_driver_net: totalDriverNet,
+        total_commission: recalculated.totals.totalCommission,
+        total_driver_net: recalculated.totals.totalDriverNet + recalculated.totals.cancellationCredits,
         total_trips_completed: totalTripsCompleted,
         total_paid: totalSettled,
+        cancellation_credits: recalculated.totals.cancellationCredits,
+        threshold_percentage: Math.min(
+          100,
+          Math.round((balanceDue / DRIVER_COMMISSION_LOCK_LIMIT) * 100),
+        ),
         last_payment_at: walletRow?.last_payment_at ?? null,
         last_payment_amount: walletRow?.last_payment_amount ?? null,
         account_status: balanceDue > 0 ? "due" : "settled",

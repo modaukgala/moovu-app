@@ -140,7 +140,6 @@ export async function sendApnsToDeviceToken(params: ApnsSendParams): Promise<Apn
         body: params.body,
       },
       sound: params.sound || DEFAULT_SOUND,
-      badge: 1,
       ...(isTripOffer ? { "interruption-level": "time-sensitive" } : {}),
     },
     url: params.url || "/",

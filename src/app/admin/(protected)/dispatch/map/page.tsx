@@ -62,6 +62,7 @@ export default function DispatchMapPage() {
   const driverMarkersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const tripMarkersRef = useRef<google.maps.Marker[]>([]);
   const routeRenderersRef = useRef<google.maps.DirectionsRenderer[]>([]);
+  const routeSignatureRef = useRef("");
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
 
   const [drivers, setDrivers] = useState<DriverMarker[]>([]);
@@ -121,7 +122,21 @@ export default function DispatchMapPage() {
     if (!map || !window.google) return;
 
     clearMarkers(tripMarkersRef.current);
-    clearRoutes();
+    const routeSignature = JSON.stringify(
+      trips.map((trip) => [
+        trip.id,
+        trip.status,
+        trip.pickup_lat,
+        trip.pickup_lng,
+        trip.dropoff_lat,
+        trip.dropoff_lng,
+      ]),
+    );
+    const routeChanged = routeSignatureRef.current !== routeSignature;
+    if (routeChanged) {
+      clearRoutes();
+      routeSignatureRef.current = routeSignature;
+    }
 
     if (!infoWindowRef.current) {
       infoWindowRef.current = new window.google.maps.InfoWindow();
@@ -195,17 +210,14 @@ export default function DispatchMapPage() {
 
       tripMarkersRef.current.push(marker);
 
-      const driverLat = t.driver?.lat;
-      const driverLng = t.driver?.lng;
-      const destination =
-        t.status === "ongoing" && t.dropoff_lat != null && t.dropoff_lng != null
-          ? { lat: t.dropoff_lat, lng: t.dropoff_lng }
-          : ["assigned", "arrived"].includes(t.status)
-            ? { lat: t.pickup_lat, lng: t.pickup_lng }
-            : null;
-
-      if (driverLat != null && driverLng != null && destination) {
-        const origin = { lat: driverLat, lng: driverLng };
+      const hasRoute =
+        t.pickup_lat != null &&
+        t.pickup_lng != null &&
+        t.dropoff_lat != null &&
+        t.dropoff_lng != null;
+      if (routeChanged && hasRoute) {
+        const origin = { lat: Number(t.pickup_lat), lng: Number(t.pickup_lng) };
+        const destination = { lat: Number(t.dropoff_lat), lng: Number(t.dropoff_lng) };
         const renderer = makeRouteRenderer(map);
         routeRenderersRef.current.push(renderer);
         routeBoundsPoints.push(origin, destination);
@@ -290,7 +302,7 @@ export default function DispatchMapPage() {
   useEffect(() => {
     const t = setInterval(() => {
       void loadBoardMap();
-    }, 5000);
+    }, 1000);
 
     return () => clearInterval(t);
   }, [loadBoardMap]);

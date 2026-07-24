@@ -3,6 +3,7 @@ import {
   FREE_CANCELLATION_WINDOW_MS,
   isWithinFreeCancellationWindow,
 } from "@/lib/finance/cancellationWindow";
+import { applyCancellationTimingPolicy } from "@/lib/finance/cancellationPolicy";
 
 export { FREE_CANCELLATION_WINDOW_MS, isWithinFreeCancellationWindow };
 export const NO_SHOW_WAIT_MS = 5 * 60 * 1000;
@@ -90,16 +91,25 @@ export function calculateCustomerCancellationFee(params: {
   const status = params.status;
   const rideOptionId = normalizeRideOptionId(params.rideOptionId);
   const insideFreeWindow = isWithinFreeCancellationWindow(params.createdAt, params.nowMs);
+  const fee = getLateCancellationFee(rideOptionId);
+  const policy = applyCancellationTimingPolicy({
+    status,
+    insideFreeWindow,
+    feeAmount: fee.feeAmount,
+    driverAmount: fee.driverAmount,
+    moovuAmount: fee.moovuAmount,
+  });
 
-  if (insideFreeWindow || status === "requested" || status === "offered") {
-    return freeCancellationFee(rideOptionId);
+  if (!policy.charge) return freeCancellationFee(rideOptionId);
+  if (status === "requested" || status === "offered") {
+    return {
+      ...fee,
+      driverAmount: policy.driverAmount,
+      moovuAmount: policy.moovuAmount,
+      policyCode: "late_cancel_unassigned",
+    };
   }
-
-  if (status === "assigned" || status === "arrived") {
-    return getLateCancellationFee(rideOptionId);
-  }
-
-  return freeCancellationFee(rideOptionId);
+  return { ...fee, driverAmount: policy.driverAmount, moovuAmount: policy.moovuAmount };
 }
 
 export function noShowEligibleAt(arrivedAt: string | null | undefined) {

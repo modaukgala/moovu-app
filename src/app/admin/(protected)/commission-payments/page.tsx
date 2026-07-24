@@ -58,6 +58,23 @@ type SettlementDriver = {
   };
 };
 
+type CommissionLedgerEntry = {
+  id: string;
+  trip_id?: string | null;
+  tx_type: string;
+  amount: number;
+  direction: string;
+  description?: string | null;
+  created_at: string;
+};
+
+type CommissionLedger = {
+  driverId: string;
+  driverName: string;
+  balanceDue: number;
+  transactions: CommissionLedgerEntry[];
+};
+
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
 }
@@ -103,6 +120,10 @@ export default function AdminCommissionPaymentsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [requests, setRequests] = useState<CommissionRequest[]>([]);
   const [drivers, setDrivers] = useState<SettlementDriver[]>([]);
+  const [ledger, setLedger] = useState<CommissionLedger | null>(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerType, setLedgerType] = useState("all");
+  const [ledgerDate, setLedgerDate] = useState("");
   const [reviewDraft, setReviewDraft] = useState<{
     requestId: string;
     action: "approve" | "reject" | "waiting";
@@ -208,6 +229,64 @@ export default function AdminCommissionPaymentsPage() {
     await loadData();
   }
 
+  async function openLedger(row: SettlementDriver) {
+    const id = driverId(row);
+    if (!id) return;
+    setLedgerLoading(true);
+    setMsg(null);
+    const token = await getToken();
+    const response = await fetch(
+      `/api/admin/driver-wallet-summary?driverId=${encodeURIComponent(id)}`,
+      {
+        cache: "no-store",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+    const json = await response.json().catch(() => null);
+    setLedgerLoading(false);
+    if (!response.ok || !json?.ok) {
+      setMsg(json?.error || "Could not load the commission breakdown.");
+      return;
+    }
+
+    const transactions: CommissionLedgerEntry[] = [
+      ...(json.transactions ?? []).map((entry: CommissionLedgerEntry) => ({
+        ...entry,
+        amount: Number(entry.amount ?? 0),
+      })),
+      ...(json.settlements ?? []).map(
+        (entry: { id: string; amount_paid: number; created_at: string; reference?: string | null }) => ({
+          id: `settlement-${entry.id}`,
+          tx_type: "payment",
+          amount: Number(entry.amount_paid ?? 0),
+          direction: "credit",
+          description: entry.reference ? `Payment ${entry.reference}` : "Commission payment",
+          created_at: entry.created_at,
+        }),
+      ),
+    ].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+
+    setLedger({
+      driverId: id,
+      driverName: driverName(row),
+      balanceDue: Number(json.wallet?.balance_due ?? 0),
+      transactions,
+    });
+    setLedgerType("all");
+    setLedgerDate("");
+  }
+
+  const filteredLedgerEntries = useMemo(() => {
+    if (!ledger) return [];
+    return ledger.transactions.filter((entry) => {
+      if (ledgerType !== "all" && entry.tx_type !== ledgerType) return false;
+      if (ledgerDate && entry.created_at.slice(0, 10) !== ledgerDate) return false;
+      return true;
+    });
+  }, [ledger, ledgerDate, ledgerType]);
+
   const pendingRequests = requests.filter((row) =>
     ["pending_payment_review", "waiting_confirmation"].includes(row.status)
   );
@@ -281,6 +360,65 @@ export default function AdminCommissionPaymentsPage() {
               >
                 {busyId === reviewDraft.requestId ? "Working..." : "Confirm"}
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {ledger && (
+        <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <section className="max-h-[88dvh] w-full max-w-3xl overflow-y-auto rounded-[30px] bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="moovu-section-title">Commission breakdown</div>
+                <h2 className="mt-2 text-2xl font-black text-slate-950">{ledger.driverName}</h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">
+                  Current amount owed: {money(ledger.balanceDue)}
+                </p>
+              </div>
+              <button className="moovu-icon-button" aria-label="Close breakdown" onClick={() => setLedger(null)}>
+                X
+              </button>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <select className="moovu-input" value={ledgerType} onChange={(event) => setLedgerType(event.target.value)}>
+                <option value="all">All transaction types</option>
+                <option value="commission">Trip commission</option>
+                <option value="cancellation_credit">Cancellation credit</option>
+                <option value="payment">Payments</option>
+              </select>
+              <input
+                className="moovu-input"
+                type="date"
+                value={ledgerDate}
+                onChange={(event) => setLedgerDate(event.target.value)}
+                aria-label="Filter commission history by date"
+              />
+            </div>
+            <div className="mt-5 space-y-3">
+              {filteredLedgerEntries.length === 0 ? (
+                <EmptyState title="No matching transactions" description="Change the transaction or date filter." />
+              ) : (
+                filteredLedgerEntries.map((entry) => (
+                  <div key={entry.id} className="rounded-2xl border border-slate-200 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="font-black capitalize text-slate-950">
+                          {entry.tx_type.replaceAll("_", " ")}
+                        </div>
+                        <div className="mt-1 text-xs font-semibold text-slate-500">
+                          {entry.trip_id ? `Trip ${entry.trip_id.slice(0, 8)} · ` : ""}
+                          {displayDate(entry.created_at)}
+                        </div>
+                        {entry.description && <p className="mt-2 text-sm text-slate-600">{entry.description}</p>}
+                      </div>
+                      <div className={`font-black ${entry.tx_type === "commission" ? "text-red-600" : "text-emerald-700"}`}>
+                        {entry.tx_type === "commission" ? "+" : "-"}{money(entry.amount)}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </div>
@@ -459,6 +597,14 @@ export default function AdminCommissionPaymentsPage() {
                       <div>
                         <div className="text-sm text-slate-500">Status</div>
                         <StatusBadge status={standing(balance, hasPending)} />
+                        <button
+                          type="button"
+                          className="mt-3 text-sm font-black text-blue-700 underline"
+                          disabled={ledgerLoading}
+                          onClick={() => void openLedger(row)}
+                        >
+                          {ledgerLoading ? "Loading..." : "View breakdown"}
+                        </button>
                       </div>
                     </div>
                   </div>

@@ -117,6 +117,7 @@ export async function getDispatchCandidates(params: {
 
   const prelim = ((drivers ?? []) as CandidateRow[]).filter((driver) => {
     if (excluded.has(driver.id) || driver.is_deleted) return false;
+    if (driver.busy) return false;
     if (driver.profile_completed === false) return false;
     if (!["approved", "active"].includes(String(driver.status ?? ""))) return false;
     if (driver.verification_status && driver.verification_status !== "approved") return false;
@@ -170,8 +171,7 @@ export async function getDispatchCandidates(params: {
         scoreBreakdown,
       };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, DISPATCH_CONFIG.maxCandidatesPerStep);
+    .sort((a, b) => b.score - a.score);
 }
 
 export async function getPreferredDispatchCandidate(params: {
@@ -200,6 +200,7 @@ export async function getPreferredDispatchCandidate(params: {
   const row = driver as CandidateRow;
   if (row.is_deleted) return { ok: false as const, error: "Driver is deleted." };
   if (!row.online) return { ok: false as const, error: "Driver is offline." };
+  if (row.busy) return { ok: false as const, error: "Driver is already busy." };
   if (!row.last_seen || row.last_seen < offerEligibleAfter) {
     return { ok: false as const, error: "Driver online session is stale. Ask the driver to open the app and go online again." };
   }

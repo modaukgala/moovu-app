@@ -67,7 +67,7 @@ function displayDate(value: string | null | undefined) {
 
 function paymentStatus(balanceDue: number) {
   if (balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT) return "Payment required";
-  if (balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT * 0.7) return "Warning";
+  if (balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT * 0.85) return "Warning";
   return "Good standing";
 }
 

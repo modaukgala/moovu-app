@@ -6,6 +6,7 @@ import {
 } from "@/lib/finance/cancellationFees";
 import { notifyAdmins, notifyDriverForTrip } from "@/lib/push-notify";
 import { sendPushSafe } from "@/lib/push-server";
+import { applyCancellationCreditServer } from "@/lib/finance/driverWalletLedger";
 
 const VALID_REASONS = [
   "Booked by mistake",
@@ -135,6 +136,12 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    if (reason === "Other" && reasonDetails.length < 3) {
+      return NextResponse.json(
+        { ok: false, error: "Please briefly explain why you are cancelling." },
+        { status: 400 },
+      );
+    }
 
     const { data: trip, error: tripError } = await auth.supabaseAdmin
       .from("trips")
@@ -257,18 +264,10 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-
     if (!tripUpdated) {
       return NextResponse.json(
         { ok: false, error: "This trip changed while you were cancelling. Please refresh and try again." },
         { status: 409 },
-      );
-    }
-
-    if (reason === "Other" && reasonDetails.length < 3) {
-      return NextResponse.json(
-        { ok: false, error: "Please briefly explain why you are cancelling." },
-        { status: 400 },
       );
     }
 
@@ -311,6 +310,24 @@ export async function POST(req: Request) {
         customerId: auth.customer.id,
         reason: feeAudit.error,
       });
+    }
+
+    let cancellationCreditWarning: string | null = null;
+    if (trip.driver_id && fee.driverAmount > 0) {
+      const creditResult = await applyCancellationCreditServer({
+        tripId,
+        driverId: trip.driver_id,
+        amount: fee.driverAmount,
+        description: `Customer cancellation payout for trip ${tripId}`,
+      });
+      if (!creditResult.ok) {
+        cancellationCreditWarning = creditResult.error;
+        console.error("[cancel-trip] driver cancellation credit failed", {
+          tripId,
+          driverId: trip.driver_id,
+          reason: creditResult.error,
+        });
+      }
     }
 
     if (trip.driver_id) {
@@ -414,6 +431,7 @@ export async function POST(req: Request) {
           : feeAudit.ok
             ? null
             : "Fee audit could not be recorded.",
+      cancellationCreditWarning,
     });
   } catch (e: unknown) {
     return NextResponse.json(

@@ -20,6 +20,9 @@ export type DispatchResult = {
   tripId: string;
   offerId?: string | null;
   driverId?: string | null;
+  offerIds?: string[];
+  driverIds?: string[];
+  offerCount?: number;
   expiresAt?: string | null;
   escalatesAt?: string | null;
   mode?: "atomic" | "legacy";
