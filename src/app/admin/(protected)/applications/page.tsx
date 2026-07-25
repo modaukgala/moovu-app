@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import CompactTabs from "@/components/ui/CompactTabs";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
 
@@ -50,8 +51,25 @@ type ApplicationRow = {
   }[];
 };
 
+type ApplicationFilter = "all" | "pending" | "needs_attention" | "approved" | "rejected";
+
+function applicationCategory(application: ApplicationRow): Exclude<ApplicationFilter, "all"> {
+  const verification = String(application.verification_status ?? "").toLowerCase();
+  const status = String(application.status ?? "").toLowerCase();
+
+  if (verification === "approved") return "approved";
+  if (verification === "rejected" || status === "rejected") return "rejected";
+
+  const needsAttention =
+    ["more_info_needed", "requested", "needs_attention"].includes(verification) ||
+    (application.approval_blockers?.length ?? 0) > 0 ||
+    (application.validation_issues?.some((issue) => issue.severity === "blocked") ?? false);
+
+  return needsAttention ? "needs_attention" : "pending";
+}
+
 export default function AdminDriverApplicationsPage() {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<ApplicationFilter>("all");
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [selected, setSelected] = useState<ApplicationRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,7 +85,7 @@ export default function AdminDriverApplicationsPage() {
   }, []);
 
   const loadApplications = useCallback(
-    async (nextFilter?: string) => {
+    async () => {
       setBusy(true);
       setMsg(null);
 
@@ -81,10 +99,8 @@ export default function AdminDriverApplicationsPage() {
           return;
         }
 
-        const useFilter = nextFilter ?? filter;
-
         const res = await fetch(
-          `/api/admin/driver-applications?status=${encodeURIComponent(useFilter)}`,
+          "/api/admin/driver-applications?status=all",
           {
             method: "GET",
             cache: "no-store",
@@ -121,12 +137,45 @@ export default function AdminDriverApplicationsPage() {
         setBusy(false);
       }
     },
-    [filter, getAccessToken]
+    [getAccessToken]
   );
 
   useEffect(() => {
-    void loadApplications("all");
+    void loadApplications();
   }, [loadApplications]);
+
+  const applicationCounts = useMemo(() => {
+    const counts = {
+      all: applications.length,
+      pending: 0,
+      needs_attention: 0,
+      approved: 0,
+      rejected: 0,
+    };
+
+    for (const application of applications) {
+      counts[applicationCategory(application)] += 1;
+    }
+
+    return counts;
+  }, [applications]);
+
+  const filteredApplications = useMemo(
+    () =>
+      filter === "all"
+        ? applications
+        : applications.filter((application) => applicationCategory(application) === filter),
+    [applications, filter],
+  );
+
+  useEffect(() => {
+    setSelected((current) => {
+      if (current && filteredApplications.some((application) => application.id === current.id)) {
+        return current;
+      }
+      return filteredApplications[0] ?? null;
+    });
+  }, [filteredApplications]);
 
   const selectedVehicle = useMemo(() => {
     if (!selected) return "--";
@@ -196,7 +245,7 @@ export default function AdminDriverApplicationsPage() {
             ? "Application suspended. The driver cannot go online until reactivated."
             : "Application removed from the active review queue.",
       );
-      await loadApplications(filter);
+      await loadApplications();
     } catch {
       setMsg("Could not update this application. Please try again.");
     } finally {
@@ -225,23 +274,23 @@ export default function AdminDriverApplicationsPage() {
           </div>
         </section>
 
-        <div className="moovu-card flex flex-wrap items-center gap-3 p-4">
-          <select
-            className="moovu-input max-w-xs bg-white"
+        <div className="moovu-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <CompactTabs
+            ariaLabel="Driver application status"
             value={filter}
-            onChange={(e) => {
-              const value = e.target.value;
-              setFilter(value);
-              void loadApplications(value);
-            }}
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="pending_review">Pending Review</option>
-            <option value="draft">Draft</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
+            onChange={(value) => setFilter(value as ApplicationFilter)}
+            items={[
+              { value: "all", label: "All", count: applicationCounts.all },
+              { value: "pending", label: "Pending", count: applicationCounts.pending },
+              {
+                value: "needs_attention",
+                label: "Needs Attention",
+                count: applicationCounts.needs_attention,
+              },
+              { value: "approved", label: "Approved", count: applicationCounts.approved },
+              { value: "rejected", label: "Rejected", count: applicationCounts.rejected },
+            ]}
+          />
 
           <button className="moovu-btn moovu-btn-primary" disabled={busy} onClick={() => void loadApplications()}>
             {busy ? "Refreshing..." : "Refresh"}
@@ -306,13 +355,13 @@ export default function AdminDriverApplicationsPage() {
         <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="moovu-card p-5 sm:p-6">
             <div className="moovu-section-title">Applications Queue</div>
-            <h2 className="mt-2 text-2xl font-black">Applications ({applications.length})</h2>
+            <h2 className="mt-2 text-2xl font-black">Applications ({filteredApplications.length})</h2>
 
             <div className="mt-5 space-y-3">
-              {applications.length === 0 ? (
+              {filteredApplications.length === 0 ? (
                 <EmptyState title="No applications found" description="Try another status filter or refresh the queue." />
               ) : (
-                applications.map((app) => {
+                filteredApplications.map((app) => {
                   const name =
                     `${app.first_name ?? ""} ${app.last_name ?? ""}`.trim() || "Unnamed";
 

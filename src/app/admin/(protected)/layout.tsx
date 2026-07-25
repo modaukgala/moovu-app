@@ -12,6 +12,7 @@ const navItems = [
   { href: "/admin/trips", label: "Trips", group: "Operations" },
   { href: "/admin/dispatch/map", label: "Dispatch Map", group: "Operations" },
   { href: "/admin/receipts", label: "Receipts", group: "Operations" },
+  { href: "/admin/customers", label: "Customers", group: "Customers" },
   { href: "/admin/drivers", label: "Drivers", group: "Drivers" },
   { href: "/admin/applications", label: "Applications", group: "Drivers" },
   { href: "/admin/link-driver", label: "Link Driver", group: "Drivers" },

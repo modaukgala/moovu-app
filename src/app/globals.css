@@ -2575,6 +2575,64 @@ tr:last-child td {
   box-shadow: 0 8px 18px rgba(5, 5, 5, 0.08);
 }
 
+.moovu-compact-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.moovu-compact-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.moovu-compact-tabs button {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--moovu-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px 13px;
+  color: #526072;
+  font-size: 12px;
+  font-weight: 850;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.moovu-compact-tabs button:hover {
+  border-color: #b6cff3;
+  background: #f7fbff;
+  color: #0d58b8;
+}
+
+.moovu-compact-tabs button.is-active {
+  border-color: var(--moovu-primary);
+  background: #eaf3ff;
+  color: var(--moovu-primary-strong);
+  box-shadow: 0 8px 20px rgba(19, 102, 205, 0.12);
+}
+
+.moovu-compact-tab-count {
+  min-width: 20px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.07);
+  padding: 2px 6px;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.moovu-compact-tabs button.is-active .moovu-compact-tab-count {
+  background: rgba(19, 102, 205, 0.13);
+}
+
 .moovu-trip-metric {
   min-width: 0;
   border: 1px solid var(--moovu-border);

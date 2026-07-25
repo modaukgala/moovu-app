@@ -9,6 +9,7 @@ import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { PageHeader } from "@/components/ui/MoovuPrimitives";
 import { supabaseClient } from "@/lib/supabase/client";
 import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
 import {
@@ -249,29 +250,41 @@ export default function DriverEarningsPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-shell space-y-6">
-        <div className="moovu-hero-panel p-5 sm:p-7">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">MOOVU Driver</div>
-              <h1 className="mt-2 text-2xl font-black text-white sm:text-4xl">Earnings and payments</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/74">
-                Track your trip earnings, subscription status, and MOOVU commission balance from one clean wallet view.
-              </p>
-            </div>
+        <PageHeader
+          kicker="MOOVU Driver"
+          title="Earnings and payments"
+          description="Track your trip earnings, subscription status, and MOOVU commission balance from one clean wallet view."
+        />
 
-            <div className="moovu-driver-hero-actions">
-              <Link href="/driver" className="moovu-btn bg-white text-slate-950">
-                Dashboard
-              </Link>
-              <Link href="/driver/commission-payments" className="moovu-btn bg-white text-slate-950">
-                Commission
-              </Link>
-              <Link href="/driver/subscriptions" className="moovu-btn bg-white text-slate-950">
-                Subscriptions
-              </Link>
-            </div>
-          </div>
-        </div>
+        <nav className="grid gap-3 sm:grid-cols-3" aria-label="Driver money sections">
+          {[
+            { href: "/driver", label: "Dashboard", tone: "bg-sky-50 text-blue-700" },
+            {
+              href: "/driver/commission-payments",
+              label: "Commission",
+              tone: "bg-emerald-50 text-emerald-700",
+            },
+            {
+              href: "/driver/subscriptions",
+              label: "Subscriptions",
+              tone: "bg-violet-50 text-violet-700",
+            },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="moovu-card-interactive flex min-h-20 items-center justify-between gap-3 p-4"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${item.tone}`}>
+                  <span className="h-2.5 w-2.5 rounded-full bg-current" />
+                </span>
+                <strong className="truncate text-sm text-slate-950">{item.label}</strong>
+              </span>
+              <span aria-hidden="true" className="text-xl text-slate-400">›</span>
+            </Link>
+          ))}
+        </nav>
 
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-5">
           <MetricCard label="Today" value={money(earningsSummary.today)} helper="Recent completed trips" />
