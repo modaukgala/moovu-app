@@ -8,9 +8,16 @@ export type MoovuKnownPlace = {
   keywords: string[];
 };
 
+export const MOOVU_OPERATING_AREA = {
+  name: "Siyabuswa",
+  latitude: -25.11015,
+  longitude: 29.06548,
+  defaultZoom: 15,
+} as const;
+
 export const MOOVU_OPERATING_CENTER = {
-  lat: -25.11015,
-  lng: 29.06548,
+  lat: MOOVU_OPERATING_AREA.latitude,
+  lng: MOOVU_OPERATING_AREA.longitude,
 };
 
 export const MOOVU_SEARCH_RADIUS_METERS = 35_000;

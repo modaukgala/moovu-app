@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { CircleHelp, Home, LogOut, ReceiptText } from "lucide-react";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
+import ExactLocationIcon from "@/components/booking/ExactLocationIcon";
 import LocationMapPicker, {
   type ConfirmedMapLocation,
 } from "@/components/booking/LocationMapPicker";
@@ -31,6 +32,13 @@ import {
   gpsMarkerIcon,
   stopMarkerIcon,
 } from "@/lib/maps/liveMapMarkers";
+import { MOOVU_OPERATING_AREA } from "@/lib/maps/moovuPlaces";
+import {
+  isFreshLiveLocation,
+  selectMapPickerInitialLocation,
+  type MapLocation,
+  type SessionMapLocation,
+} from "@/lib/location/bookingMapLocation";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { getMoovuCurrentPosition, watchMoovuPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -68,7 +76,10 @@ type StopInput = Omit<ResolvedLocation, "lat" | "lng"> & {
   error: string | null;
 };
 
-const DEFAULT_CENTER = { lat: -26.188, lng: 28.3206 };
+const DEFAULT_CENTER = {
+  lat: MOOVU_OPERATING_AREA.latitude,
+  lng: MOOVU_OPERATING_AREA.longitude,
+};
 const FAVORITE_PLACE_SHORTCUTS = [
   { label: "Home", detail: "Save your usual pickup" },
   { label: "Work", detail: "Fast weekday trips" },
@@ -165,9 +176,11 @@ export default function RiderBookingPage() {
   const [pendingPastedLocation, setPendingPastedLocation] = useState<PendingPastedLocation | null>(null);
   const [pasteResolving, setPasteResolving] = useState(false);
   const [mapPickerKind, setMapPickerKind] = useState<LocationKind | null>(null);
+  const [mapPickerInitialLocation, setMapPickerInitialLocation] = useState<MapLocation | null>(null);
+  const [mapPickerAllowsLateGps, setMapPickerAllowsLateGps] = useState(false);
   const [pickupPinned, setPickupPinned] = useState(false);
   const [pickupInstruction, setPickupInstruction] = useState("");
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<SessionMapLocation | null>(null);
   const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriverMarker[]>([]);
 
   // ── Bottom sheet drag state ──────────────────────────────────────
@@ -541,7 +554,7 @@ export default function RiderBookingPage() {
 
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
-      setCurrentLocation({ lat, lng });
+      setCurrentLocation({ lat, lng, capturedAt: Date.now() });
       setPickupLat(lat); setPickupLng(lng); setPickupPlaceId("");
       setPickupPinned(false); setPickupInstruction("");
       setPickupPredictions([]); setShowPickupDropdown(false); setPickupError(null);
@@ -565,6 +578,20 @@ export default function RiderBookingPage() {
     setMsg(null);
     setShowPickupDropdown(false);
     setShowDropoffDropdown(false);
+    const initial = selectMapPickerInitialLocation({
+      kind,
+      pickup:
+        pickupLat != null && pickupLng != null
+          ? { lat: pickupLat, lng: pickupLng }
+          : null,
+      destination:
+        dropoffLat != null && dropoffLng != null
+          ? { lat: dropoffLat, lng: dropoffLng }
+          : null,
+      sessionLocation: currentLocation,
+    });
+    setMapPickerInitialLocation(initial.location);
+    setMapPickerAllowsLateGps(initial.source === "operating_area");
     setMapPickerKind(kind);
   }
 
@@ -1331,7 +1358,7 @@ export default function RiderBookingPage() {
     if (!mapRef.current || !window.google?.maps) return false;
     if (!mapInstanceRef.current) {
       mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-        center: DEFAULT_CENTER, zoom: 12, streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
+        center: DEFAULT_CENTER, zoom: MOOVU_OPERATING_AREA.defaultZoom, streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
         zoomControl: false, gestureHandling: "greedy",
       });
     }
@@ -1500,7 +1527,7 @@ export default function RiderBookingPage() {
     clearMapVisuals(); setRouteVisible(false);
     if (mapInstanceRef.current) {
       mapInstanceRef.current.setCenter(currentLocation ?? DEFAULT_CENTER);
-      mapInstanceRef.current.setZoom(currentLocation ? 15 : 11);
+      mapInstanceRef.current.setZoom(currentLocation ? 15 : MOOVU_OPERATING_AREA.defaultZoom);
     }
     // Map render helpers read refs and latest coordinates; listing them recreates this effect unnecessarily.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1518,6 +1545,7 @@ export default function RiderBookingPage() {
       setCurrentLocation({
         lat: position.coords.latitude,
         lng: position.coords.longitude,
+        capturedAt: Date.now(),
       });
     };
     void getMoovuCurrentPosition({
@@ -1890,16 +1918,11 @@ export default function RiderBookingPage() {
         <LocationMapPicker
           kind={mapPickerKind}
           mapsReady={mapReady}
-          initialLocation={
-            mapPickerKind === "pickup"
-              ? pickupLat != null && pickupLng != null
-                ? { lat: pickupLat, lng: pickupLng }
-                : null
-              : dropoffLat != null && dropoffLng != null
-                ? { lat: dropoffLat, lng: dropoffLng }
-                : null
-          }
+          initialLocation={mapPickerInitialLocation}
+          liveLocation={isFreshLiveLocation(currentLocation) ? currentLocation : null}
           defaultCenter={DEFAULT_CENTER}
+          defaultZoom={MOOVU_OPERATING_AREA.defaultZoom}
+          allowLateLiveRecenter={mapPickerAllowsLateGps}
           initialPickupInstruction={pickupInstruction}
           onClose={() => setMapPickerKind(null)}
           onConfirm={confirmMapLocation}
@@ -2089,10 +2112,7 @@ export default function RiderBookingPage() {
                     <span>{locationLoading ? "Locating..." : "Use current location"}</span>
                   </button>
                   <button type="button" className="moovu-loc-inline-btn" onClick={() => openMapPicker("pickup")}>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M8 14s4-4.2 4-8a4 4 0 1 0-8 0c0 3.8 4 8 4 8Z" stroke="currentColor" strokeWidth="1.5" />
-                      <circle cx="8" cy="6" r="1.4" fill="currentColor" />
-                    </svg>
+                    <ExactLocationIcon className="moovu-exact-location-icon" />
                     <span>{pickupLat != null && pickupLng != null ? "Adjust pin" : "Select from map"}</span>
                   </button>
                 </div>
@@ -2229,10 +2249,7 @@ export default function RiderBookingPage() {
                 <div className="flex items-center justify-between gap-2">
                   <label className="moovu-field-label" htmlFor="dropoff-input">Destination</label>
                   <button type="button" className="moovu-loc-inline-btn" onClick={() => openMapPicker("dropoff")}>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M8 14s4-4.2 4-8a4 4 0 1 0-8 0c0 3.8 4 8 4 8Z" stroke="currentColor" strokeWidth="1.5" />
-                      <circle cx="8" cy="6" r="1.4" fill="currentColor" />
-                    </svg>
+                    <ExactLocationIcon className="moovu-exact-location-icon" />
                     <span>{dropoffLat != null && dropoffLng != null ? "Adjust pin" : "Select from map"}</span>
                   </button>
                 </div>

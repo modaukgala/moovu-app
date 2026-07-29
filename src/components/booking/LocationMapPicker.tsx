@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { LocateFixed } from "lucide-react";
 import {
   bestReverseGeocodeLabel,
   type ReverseGeocodeResult,
 } from "@/lib/locationPaste";
+import { isValidMapLocation } from "@/lib/location/bookingMapLocation";
 
 export type ConfirmedMapLocation = {
   address: string;
@@ -17,7 +19,10 @@ type LocationMapPickerProps = {
   kind: "pickup" | "dropoff";
   mapsReady: boolean;
   initialLocation: { lat: number; lng: number } | null;
+  liveLocation: { lat: number; lng: number } | null;
   defaultCenter: { lat: number; lng: number };
+  defaultZoom: number;
+  allowLateLiveRecenter: boolean;
   initialPickupInstruction?: string;
   onClose: () => void;
   onConfirm: (location: ConfirmedMapLocation, pickupInstruction: string) => void;
@@ -31,7 +36,10 @@ export default function LocationMapPicker({
   kind,
   mapsReady,
   initialLocation,
+  liveLocation,
   defaultCenter,
+  defaultZoom,
+  allowLateLiveRecenter,
   initialPickupInstruction = "",
   onClose,
   onConfirm,
@@ -41,6 +49,12 @@ export default function LocationMapPicker({
   const onCloseRef = useRef(onClose);
   const reverseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
+  const userMovedMapRef = useRef(false);
+  const appliedLateLiveLocationRef = useRef(false);
+  const liveLocationRef = useRef(liveLocation);
+  const allowLateLiveRecenterRef = useRef(allowLateLiveRecenter);
+  liveLocationRef.current = liveLocation;
+  allowLateLiveRecenterRef.current = allowLateLiveRecenter;
   const defaultLat = defaultCenter.lat;
   const defaultLng = defaultCenter.lng;
   const initialLat = initialLocation?.lat;
@@ -71,15 +85,25 @@ export default function LocationMapPicker({
   }, []);
 
   useEffect(() => {
-    if (!mapsReady || !mapNodeRef.current || !window.google?.maps) return;
+    const mapNode = mapNodeRef.current;
+    if (!mapsReady || !mapNode || !window.google?.maps) return;
 
     const hasInitialLocation = typeof initialLat === "number" && typeof initialLng === "number";
+    const liveLocationAtInitialization =
+      allowLateLiveRecenterRef.current && isValidMapLocation(liveLocationRef.current)
+        ? liveLocationRef.current
+        : null;
     const initialCenter = hasInitialLocation
       ? { lat: initialLat, lng: initialLng }
+      : liveLocationAtInitialization
+        ? { lat: liveLocationAtInitialization.lat, lng: liveLocationAtInitialization.lng }
       : { lat: defaultLat, lng: defaultLng };
-    const map = new window.google.maps.Map(mapNodeRef.current, {
+    if (liveLocationAtInitialization) {
+      appliedLateLiveLocationRef.current = true;
+    }
+    const map = new window.google.maps.Map(mapNode, {
       center: initialCenter,
-      zoom: hasInitialLocation ? 17 : 13,
+      zoom: hasInitialLocation || liveLocationAtInitialization ? 17 : defaultZoom,
       streetViewControl: false,
       mapTypeControl: false,
       fullscreenControl: false,
@@ -132,10 +156,21 @@ export default function LocationMapPicker({
     const clickListener = map.addListener("click", (event: google.maps.MapMouseEvent) => {
       if (event.latLng) map.panTo(event.latLng);
     });
+    const dragStartListener = map.addListener("dragstart", () => {
+      userMovedMapRef.current = true;
+    });
+    const markManualInteraction = () => {
+      userMovedMapRef.current = true;
+    };
+    mapNode.addEventListener("pointerdown", markManualInteraction);
+    mapNode.addEventListener("wheel", markManualInteraction, { passive: true });
 
     return () => {
       idleListener.remove();
       clickListener.remove();
+      dragStartListener.remove();
+      mapNode.removeEventListener("pointerdown", markManualInteraction);
+      mapNode.removeEventListener("wheel", markManualInteraction);
       if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current);
       requestSequenceRef.current += 1;
       mapRef.current = null;
@@ -143,11 +178,35 @@ export default function LocationMapPicker({
   }, [
     defaultLat,
     defaultLng,
+    defaultZoom,
     initialLat,
     initialLng,
     kind,
     mapsReady,
   ]);
+
+  useEffect(() => {
+    if (
+      !allowLateLiveRecenter ||
+      appliedLateLiveLocationRef.current ||
+      userMovedMapRef.current ||
+      !isValidMapLocation(liveLocation) ||
+      !mapRef.current
+    ) {
+      return;
+    }
+
+    appliedLateLiveLocationRef.current = true;
+    mapRef.current.panTo(liveLocation);
+    mapRef.current.setZoom(17);
+  }, [allowLateLiveRecenter, liveLocation, mapsReady]);
+
+  function recenterOnLiveLocation() {
+    if (!isValidMapLocation(liveLocation) || !mapRef.current) return;
+    userMovedMapRef.current = true;
+    mapRef.current.panTo(liveLocation);
+    mapRef.current.setZoom(17);
+  }
 
   return (
     <section
@@ -172,6 +231,16 @@ export default function LocationMapPicker({
         <div className={`moovu-location-picker-pin ${kind === "pickup" ? "is-pickup" : "is-dropoff"}`} aria-hidden="true">
           <span />
         </div>
+        <button
+          type="button"
+          className="moovu-location-picker-recenter"
+          disabled={!isValidMapLocation(liveLocation)}
+          onClick={recenterOnLiveLocation}
+          aria-label="Recenter map on my live location"
+          title="My live location"
+        >
+          <LocateFixed aria-hidden="true" size={20} strokeWidth={2.2} />
+        </button>
         <div className="moovu-location-picker-tip">Move the map to place the pin exactly</div>
       </div>
 
