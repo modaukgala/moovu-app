@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { CarFront, ChevronRight, CircleUserRound, FileCheck2, Headphones, LogOut, ShieldCheck, WalletCards } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { PageHeader, ProfileSectionCard, QuickActionGrid } from "@/components/ui/MoovuPrimitives";
+import { ProfileSectionCard, QuickActionGrid } from "@/components/ui/MoovuPrimitives";
 import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -147,18 +148,21 @@ export default function DriverAccountPage() {
   }
 
   return (
-    <main className="moovu-page min-h-screen pb-32 text-slate-950">
+    <main className="driver-mobile-page driver-account-v3 text-slate-950">
       {message && <CenteredMessageBox message={message} onClose={() => setMessage(null)} />}
 
-      <div className="moovu-shell max-w-5xl space-y-5 py-6">
-        <PageHeader
-          kicker="Driver account"
-          title="Your MOOVU overview"
-          description="Subscription, earnings, trips, readiness, and account actions in one place."
-        />
+      <div className="driver-mobile-container space-y-5">
+        <header className="driver-account-heading">
+          <div className="driver-account-avatar"><CircleUserRound aria-hidden="true" /></div>
+          <div>
+            <span>MOOVU Driver</span>
+            <h1>{`${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Your account"}</h1>
+            <p>{driver?.phone || "Manage your driver profile and access"}</p>
+          </div>
+        </header>
 
         <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="moovu-card p-5 sm:p-6">
+          <div className="moovu-card driver-account-subscription p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="moovu-section-title">Subscription</div>
@@ -173,11 +177,11 @@ export default function DriverAccountPage() {
               <Info label="Commission owed" value={money(earnings?.wallet?.balance_due)} />
             </div>
             <Link href="/driver/subscriptions" className="moovu-btn moovu-btn-primary mt-5">
-              Renew or change plan
+              Renew or change plan <ChevronRight aria-hidden="true" />
             </Link>
           </div>
 
-          <div className="moovu-card p-5 sm:p-6">
+          <div className="moovu-card driver-account-readiness p-5 sm:p-6">
             <div className="moovu-section-title">Driver readiness</div>
             <h2 className="mt-2 text-2xl font-black">Account checks</h2>
             <div className="mt-5 space-y-3">
@@ -220,14 +224,14 @@ export default function DriverAccountPage() {
 
         <ProfileSectionCard title="Quick actions" description="Open the areas used for daily driving, payments, documents, and support.">
           <QuickActionGrid actions={[
-            { href: "/driver/subscriptions", label: "Subscription", description: "Plan and payment history" },
-            { href: "/driver/earnings", label: "Earnings", description: "Trips and totals" },
-            { href: "/driver/trip-offers", label: "Trip offers", description: "Received requests" },
-            { href: "/driver/commission-payments", label: "Commission", description: "Balance and POP" },
-            { href: "/driver/complete-profile", label: "Documents", description: "Profile and vehicle" },
-            { href: "/driver", label: "Notifications", description: "Enable alerts on Home" },
-            { href: "/driver/contact", label: "Support", description: "Contact MOOVU" },
-            { label: "Logout", description: "Sign out safely", onClick: signOut },
+            { href: "/driver/subscriptions", label: "Subscription", description: "Plan and payment history", icon: WalletCards },
+            { href: "/driver/earnings", label: "Earnings", description: "Trips and totals", icon: WalletCards },
+            { href: "/driver/trip-offers", label: "Trip offers", description: "Received requests", icon: CarFront },
+            { href: "/driver/commission-payments", label: "Commission", description: "Balance and POP", icon: WalletCards },
+            { href: "/driver/complete-profile", label: "Documents", description: "Profile and vehicle", icon: FileCheck2 },
+            { href: "/driver", label: "Notifications", description: "Enable alerts on Home", icon: ShieldCheck },
+            { href: "/driver/contact", label: "Support", description: "Contact MOOVU", icon: Headphones },
+            { label: "Logout", description: "Sign out safely", onClick: signOut, icon: LogOut },
           ]} />
         </ProfileSectionCard>
 

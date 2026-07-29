@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { calculateTripFare } from "@/lib/domain/fare";
+import { calculateFinalJourneyFare, calculateTripFare } from "@/lib/domain/fare";
 import { haversineKm } from "@/lib/dispatch/driverScoring";
 
 type LiveTripRow = {
@@ -12,6 +12,8 @@ type LiveTripRow = {
   actual_duration_min: number | null;
   trip_started_at: string | null;
   fare_last_recalculated_at: string | null;
+  final_add_stop_increase: number | null;
+  stop_waiting_fee: number | null;
 };
 
 function isMissingTelemetrySchema(error: { code?: string; message?: string } | null | undefined) {
@@ -32,7 +34,7 @@ export async function recordTripTelemetry(params: {
   const capturedAt = params.capturedAt ?? new Date().toISOString();
   const { data: trip, error: tripError } = await params.supabase
     .from("trips")
-    .select("id,status,ride_option,surge_label,surge_multiplier,actual_distance_km,actual_duration_min,trip_started_at,fare_last_recalculated_at")
+    .select("id,status,ride_option,surge_label,surge_multiplier,actual_distance_km,actual_duration_min,trip_started_at,fare_last_recalculated_at,final_add_stop_increase,stop_waiting_fee")
     .eq("driver_id", params.driverId)
     .in("status", ["assigned", "arrived", "ongoing"])
     .order("created_at", { ascending: false })
@@ -107,13 +109,25 @@ export async function recordTripTelemetry(params: {
     const fare = calculateTripFare({
       rideOptionId: typedTrip.ride_option,
       distanceKm: currentDistance,
+      distanceDiscountKm: 0,
       durationMin,
       surgeLabel: typedTrip.surge_label,
       surgeMultiplier: typedTrip.surge_multiplier,
     });
-    update.current_fare = fare.totalFare;
+    const journeyFare = calculateFinalJourneyFare({
+      baseFare: fare,
+      routeDistanceKm: currentDistance,
+      addStopIncrease: typedTrip.final_add_stop_increase,
+      stopWaitingFee: typedTrip.stop_waiting_fee,
+    });
+    update.current_fare = journeyFare.totalFare;
     update.fare_last_recalculated_at = capturedAt;
-    update.actual_fare_breakdown = fare;
+    update.actual_fare_breakdown = {
+      ...fare,
+      ...journeyFare,
+      addStopIncrease: Number(typedTrip.final_add_stop_increase ?? 0),
+      stopWaitingFee: Number(typedTrip.stop_waiting_fee ?? 0),
+    };
   }
 
   const { error: updateError } = await params.supabase.from("trips").update(update).eq("id", typedTrip.id).eq("status", "ongoing");

@@ -37,11 +37,25 @@ type Trip = {
   end_otp_bypass_note?: string | null;
   completed_by?: string | null;
   completed_at?: string | null;
+  admin_completion_reason?: string | null;
+  admin_completion_note?: string | null;
   cancellation_fee_amount?: number | null;
   cancellation_driver_amount?: number | null;
   cancellation_moovu_amount?: number | null;
   cancellation_reason?: string | null;
   cancelled_by?: string | null;
+  actual_fare_breakdown?: {
+    distanceDiscountPct?: number;
+    distanceDiscountAmount?: number;
+    fareBeforeDistanceDiscount?: number;
+  } | null;
+  fare_breakdown?: {
+    journeyFare?: {
+      distanceDiscountPct?: number;
+      distanceDiscountAmount?: number;
+      fareBeforeDistanceDiscount?: number;
+    };
+  } | null;
 };
 
 type TripStop = {
@@ -155,6 +169,8 @@ export default function TripDetailPage() {
     : null;
   const tripStartedAt =
     events.find((event) => event.event_type === "trip_started")?.created_at ?? null;
+  const distanceFareBreakdown =
+    trip?.actual_fare_breakdown ?? trip?.fare_breakdown?.journeyFare ?? null;
 
   async function offerNearest(exclude: string[] = []) {
     if (!trip) return;
@@ -313,9 +329,12 @@ export default function TripDetailPage() {
               <div><strong>Driver:</strong> {driverLabel}</div>
               <div><strong>Pickup:</strong> {trip.pickup_address}</div>
               <div><strong>Destination:</strong> {trip.dropoff_address}</div>
+              <div><strong>Current status:</strong> <span className="capitalize">{trip.status}</span></div>
               <div><strong>Started:</strong> {tripStartedAt ? new Date(tripStartedAt).toLocaleString() : "--"}</div>
               <div><strong>Tracked:</strong> {Number(trip.actual_distance_km ?? 0).toFixed(2)} km / {Number(trip.actual_duration_min ?? 0).toFixed(0)} min</div>
               <div><strong>Current fare:</strong> R{Number(trip.current_fare ?? trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
+              <div><strong>Start OTP:</strong> {trip.start_otp_verified ? "Verified" : "Not verified"}</div>
+              <div><strong>End OTP:</strong> {trip.end_otp_verified ? "Verified" : trip.end_otp ? "Available, not verified" : "Not available"}</div>
             </div>
             <textarea
               className="moovu-input mt-4 min-h-24 resize-y"
@@ -470,12 +489,20 @@ export default function TripDetailPage() {
             <div className="text-sm text-gray-600">End OTP</div>
             <div className="mt-1 text-2xl font-black tracking-[0.2em]">{trip.end_otp ?? "--"}</div>
             <div className="mt-1 text-xs font-bold text-slate-500">
-              {trip.completed_without_end_otp ? "Not used - driver bypass" : trip.end_otp_verified ? "Verified" : "Not verified"}
+              {trip.completed_by === "admin" && !trip.end_otp_verified
+                ? "Not used - admin completion"
+                : trip.completed_without_end_otp
+                  ? "Not used - driver bypass"
+                  : trip.end_otp_verified
+                    ? "Verified"
+                    : "Not verified"}
             </div>
           </div>
           <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Completion</div>
             <div className="mt-1 font-black capitalize">{trip.completed_by ?? "--"}</div>
+            {trip.admin_completion_reason && <div className="mt-1 text-sm text-emerald-700">{trip.admin_completion_reason}</div>}
+            {trip.admin_completion_note && <div className="mt-1 text-xs text-slate-600">{trip.admin_completion_note}</div>}
             {trip.end_otp_bypass_reason && <div className="mt-1 text-sm text-amber-700">{trip.end_otp_bypass_reason}</div>}
             {trip.end_otp_bypass_note && <div className="mt-1 text-xs text-slate-600">{trip.end_otp_bypass_note}</div>}
           </div>
@@ -483,6 +510,12 @@ export default function TripDetailPage() {
             <div className="text-sm text-gray-600">Live / final fare</div>
             <div className="mt-1 text-xl font-black">R{Number(trip.current_fare ?? trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
             <div className="mt-1 text-xs text-slate-500">{Number(trip.actual_distance_km ?? 0).toFixed(2)} km / {Number(trip.actual_duration_min ?? 0).toFixed(0)} min</div>
+            {Number(distanceFareBreakdown?.distanceDiscountPct ?? 0) > 0 && (
+              <div className="mt-2 text-xs font-bold text-emerald-700">
+                {Number(distanceFareBreakdown?.distanceDiscountPct).toFixed(0)}% distance saving:
+                {" "}-R{Number(distanceFareBreakdown?.distanceDiscountAmount ?? 0).toFixed(2)}
+              </div>
+            )}
           </div>
         </div>
         {Number(trip.cancellation_fee_amount ?? 0) > 0 && (

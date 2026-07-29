@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/lib/auth/admin";
 
 type CustomerRow = {
@@ -17,6 +18,7 @@ type CustomerRow = {
 type CustomerTripRow = {
   id: string;
   customer_id: string | null;
+  customer_auth_user_id?: string | null;
   status: string | null;
   fare_amount: number | null;
   final_fare?: number | null;
@@ -39,83 +41,159 @@ function activityTime(trip: CustomerTripRow) {
   return trip.completed_at || trip.created_at || "";
 }
 
+function textMeta(user: User | null | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = user?.user_metadata?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+async function listAllAuthUsers(
+  admin: SupabaseClient,
+) {
+  const users: User[] = [];
+  for (let page = 1; page <= 50; page += 1) {
+    const result = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (result.error) throw result.error;
+    users.push(...result.data.users);
+    if (result.data.users.length < 1000) break;
+  }
+  return users;
+}
+
+async function fetchTripsByIds(params: {
+  admin: SupabaseClient;
+  column: "customer_id" | "customer_auth_user_id";
+  ids: string[];
+}) {
+  const rows: CustomerTripRow[] = [];
+  for (let offset = 0; offset < params.ids.length; offset += 100) {
+    const ids = params.ids.slice(offset, offset + 100);
+    if (ids.length === 0) continue;
+    const full = await params.admin
+      .from("trips")
+      .select(
+        "id,customer_id,customer_auth_user_id,status,fare_amount,final_fare,pickup_address,dropoff_address,payment_method,created_at,completed_at",
+      )
+      .in(params.column, ids)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+
+    if (!full.error) {
+      rows.push(...((full.data ?? []) as CustomerTripRow[]));
+      continue;
+    }
+
+    const legacy = await params.admin
+      .from("trips")
+      .select(
+        "id,customer_id,status,fare_amount,pickup_address,dropoff_address,payment_method,created_at",
+      )
+      .in("customer_id", ids)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (legacy.error) throw legacy.error;
+    rows.push(...((legacy.data ?? []) as CustomerTripRow[]));
+  }
+  return rows;
+}
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
     if (!auth.ok) {
-      return NextResponse.json(
-        { ok: false, error: auth.error },
-        { status: auth.status },
-      );
+      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
 
-    const customerId = new URL(req.url).searchParams.get("customerId")?.trim();
-    let customerQuery = auth.supabaseAdmin
-      .from("customers")
-      .select("*")
-      .limit(customerId ? 1 : 500);
+    const customerId = new URL(req.url).searchParams.get("customerId")?.trim() || null;
+    let profiles: CustomerRow[] = [];
 
     if (customerId) {
-      customerQuery = customerQuery.eq("id", customerId);
-    }
+      const byId = await auth.supabaseAdmin
+        .from("customers")
+        .select("*")
+        .eq("id", customerId)
+        .maybeSingle();
+      if (byId.error) throw byId.error;
 
-    const { data: customerData, error: customerError } = await customerQuery;
-    if (customerError) {
-      console.error("[admin-customers] customer lookup failed", customerError);
-      return NextResponse.json(
-        { ok: false, error: "Could not load customers. Please try again." },
-        { status: 500 },
-      );
-    }
-
-    const customers = (customerData ?? []) as CustomerRow[];
-    const customerIds = customers.map((customer) => customer.id);
-    let trips: CustomerTripRow[] = [];
-
-    if (customerIds.length > 0) {
-      const tripQuery = await auth.supabaseAdmin
-        .from("trips")
-        .select(
-          "id,customer_id,status,fare_amount,final_fare,pickup_address,dropoff_address,payment_method,created_at,completed_at",
-        )
-        .in("customer_id", customerIds)
-        .order("created_at", { ascending: false })
-        .limit(5000);
-
-      if (tripQuery.error) {
-        const legacyTripQuery = await auth.supabaseAdmin
-          .from("trips")
-          .select(
-            "id,customer_id,status,fare_amount,pickup_address,dropoff_address,payment_method,created_at",
-          )
-          .in("customer_id", customerIds)
-          .order("created_at", { ascending: false })
-          .limit(5000);
-
-        if (legacyTripQuery.error) {
-          console.error("[admin-customers] trip summary lookup failed", legacyTripQuery.error);
-          return NextResponse.json(
-            { ok: false, error: "Could not load customer trip summaries. Please try again." },
-            { status: 500 },
-          );
-        }
-
-        trips = (legacyTripQuery.data ?? []) as CustomerTripRow[];
+      if (byId.data) {
+        profiles = [byId.data as CustomerRow];
       } else {
-        trips = (tripQuery.data ?? []) as CustomerTripRow[];
+        const byAuthId = await auth.supabaseAdmin
+          .from("customers")
+          .select("*")
+          .eq("auth_user_id", customerId)
+          .maybeSingle();
+        if (byAuthId.error) throw byAuthId.error;
+        if (byAuthId.data) profiles = [byAuthId.data as CustomerRow];
       }
+    } else {
+      const result = await auth.supabaseAdmin.from("customers").select("*").limit(5000);
+      if (result.error) throw result.error;
+      profiles = (result.data ?? []) as CustomerRow[];
     }
 
-    const tripsByCustomer = new Map<string, CustomerTripRow[]>();
-    for (const trip of trips) {
-      if (!trip.customer_id) continue;
-      const rows = tripsByCustomer.get(trip.customer_id) ?? [];
-      rows.push(trip);
-      tripsByCustomer.set(trip.customer_id, rows);
+    const [allAuthUsers, driverAccounts, adminUsers] = await Promise.all([
+      listAllAuthUsers(auth.supabaseAdmin),
+      auth.supabaseAdmin.from("driver_accounts").select("user_id").limit(5000),
+      auth.supabaseAdmin.from("admin_users").select("user_id").limit(5000),
+    ]);
+    const nonCustomerIds = new Set<string>([
+      ...(driverAccounts.data ?? []).map((row) => String(row.user_id ?? "")).filter(Boolean),
+      ...(adminUsers.data ?? []).map((row) => String(row.user_id ?? "")).filter(Boolean),
+    ]);
+    const authUsers = allAuthUsers.filter((user) => {
+      const role = String(user.user_metadata?.role ?? user.app_metadata?.role ?? "").toLowerCase();
+      return !nonCustomerIds.has(user.id) && !["admin", "driver"].includes(role);
+    });
+    const authById = new Map(authUsers.map((user) => [user.id, user]));
+    const profileByAuthId = new Map(
+      profiles
+        .filter((profile) => profile.auth_user_id)
+        .map((profile) => [String(profile.auth_user_id), profile]),
+    );
+
+    const identities: Array<{ profile: CustomerRow | null; authUser: User | null }> = [];
+    for (const profile of profiles) {
+      identities.push({
+        profile,
+        authUser: profile.auth_user_id ? authById.get(profile.auth_user_id) ?? null : null,
+      });
+    }
+    for (const authUser of authUsers) {
+      if (!profileByAuthId.has(authUser.id)) identities.push({ profile: null, authUser });
     }
 
-    const enriched = customers.map((customer) => {
-      const customerTrips = tripsByCustomer.get(customer.id) ?? [];
+    const filteredIdentities = customerId
+      ? identities.filter(({ profile, authUser }) =>
+          profile?.id === customerId ||
+          profile?.auth_user_id === customerId ||
+          authUser?.id === customerId
+        )
+      : identities;
+
+    const customerIds = filteredIdentities
+      .map(({ profile }) => profile?.id)
+      .filter((value): value is string => Boolean(value));
+    const authIds = filteredIdentities
+      .map(({ profile, authUser }) => profile?.auth_user_id ?? authUser?.id)
+      .filter((value): value is string => Boolean(value));
+
+    const [profileTrips, authTrips] = await Promise.all([
+      fetchTripsByIds({ admin: auth.supabaseAdmin, column: "customer_id", ids: customerIds }),
+      fetchTripsByIds({ admin: auth.supabaseAdmin, column: "customer_auth_user_id", ids: authIds }),
+    ]);
+    const tripById = new Map<string, CustomerTripRow>();
+    for (const trip of [...profileTrips, ...authTrips]) tripById.set(trip.id, trip);
+    const trips = [...tripById.values()];
+
+    const enriched = filteredIdentities.map(({ profile, authUser }) => {
+      const authUserId = profile?.auth_user_id ?? authUser?.id ?? null;
+      const customerTrips = trips.filter((trip) =>
+        (profile?.id && trip.customer_id === profile.id) ||
+        (authUserId && trip.customer_auth_user_id === authUserId)
+      );
       const completedTrips = customerTrips.filter((trip) => trip.status === "completed");
       const cancelledTrips = customerTrips.filter((trip) =>
         ["cancelled", "canceled", "no_show"].includes(String(trip.status ?? "").toLowerCase()),
@@ -123,16 +201,24 @@ export async function GET(req: Request) {
       const lastTrip = [...customerTrips].sort((a, b) =>
         activityTime(b).localeCompare(activityTime(a)),
       )[0] ?? null;
+      const bannedUntil = authUser?.banned_until ? new Date(authUser.banned_until).getTime() : 0;
+      const status = profile?.status ?? (bannedUntil > Date.now() ? "inactive" : "active");
 
       return {
-        id: customer.id,
-        first_name: customer.first_name ?? null,
-        last_name: customer.last_name ?? null,
-        phone: customer.phone ?? customer.normalized_phone ?? null,
-        email: customer.email ?? null,
-        status: customer.status ?? "active",
-        created_at: customer.created_at ?? null,
-        updated_at: customer.updated_at ?? null,
+        id: profile?.id ?? authUser?.id,
+        auth_user_id: authUserId,
+        account_source: profile ? "customer_profile" : "auth_only",
+        first_name: profile?.first_name ?? textMeta(authUser, "first_name", "firstName"),
+        last_name: profile?.last_name ?? textMeta(authUser, "last_name", "lastName"),
+        phone:
+          profile?.phone ??
+          profile?.normalized_phone ??
+          authUser?.phone ??
+          textMeta(authUser, "phone", "cellphone"),
+        email: profile?.email ?? authUser?.email ?? null,
+        status,
+        created_at: profile?.created_at ?? authUser?.created_at ?? null,
+        updated_at: profile?.updated_at ?? authUser?.updated_at ?? null,
         total_trips: customerTrips.length,
         completed_trips: completedTrips.length,
         cancelled_trips: cancelledTrips.length,
@@ -140,12 +226,16 @@ export async function GET(req: Request) {
         last_trip_status: lastTrip?.status ?? null,
         last_activity:
           (lastTrip ? activityTime(lastTrip) : null) ||
-          customer.updated_at ||
-          customer.created_at ||
+          profile?.updated_at ||
+          authUser?.last_sign_in_at ||
+          profile?.created_at ||
+          authUser?.created_at ||
           null,
         trips: customerId ? customerTrips : undefined,
       };
     });
+
+    enriched.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
 
     return NextResponse.json({
       ok: true,
@@ -153,6 +243,7 @@ export async function GET(req: Request) {
       customer: customerId ? enriched[0] ?? null : undefined,
     });
   } catch (error: unknown) {
+    console.error("[admin-customers] lookup failed", error);
     return NextResponse.json(
       { ok: false, error: errorMessage(error, "Could not load customers.") },
       { status: 500 },

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Headphones, ReceiptText, Route, ShieldCheck, Tag } from "lucide-react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import LoadingState from "@/components/ui/LoadingState";
@@ -1311,6 +1312,14 @@ export default function RideTrackingPage() {
     return "This total stays pending until the trip ends and the end OTP is verified.";
   }, [trip?.status]);
 
+  const tripActionIcons = {
+    route: Route,
+    fare: Tag,
+    safety: ShieldCheck,
+    support: Headphones,
+    receipt: ReceiptText,
+  } as const;
+
   if (loading) {
     return (
       <LoadingState
@@ -1330,7 +1339,7 @@ export default function RideTrackingPage() {
   }
 
   return (
-    <main className="moovu-page text-black">
+    <main className={`moovu-page customer-trip-v3 is-${trip.status} text-black`}>
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
       {addStopOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
@@ -2103,14 +2112,20 @@ export default function RideTrackingPage() {
               </div>
               <div className="customer-command-actions">
                 {(["route", "fare", "safety", "support", "receipt"] as const).map((action) => (
+                  (() => {
+                    const Icon = tripActionIcons[action];
+                    return (
                   <button
                     key={action}
                     type="button"
                     className="customer-command-button"
                     onClick={() => setActiveDetailModal(action)}
                   >
+                    <Icon aria-hidden="true" />
                     {action}
                   </button>
+                    );
+                  })()
                 ))}
               </div>
             </div>
@@ -2179,14 +2194,20 @@ export default function RideTrackingPage() {
 
             <div className="customer-trip-action-tabs" aria-label="Trip actions">
               {(["route", "fare", "safety", "support", "receipt"] as const).map((action) => (
+                (() => {
+                  const Icon = tripActionIcons[action];
+                  return (
                 <button
                   key={action}
                   type="button"
                   className="customer-trip-action-tab"
                   onClick={() => setActiveDetailModal(action)}
                 >
+                  <Icon aria-hidden="true" />
                   {action}
                 </button>
+                  );
+                })()
               ))}
             </div>
 

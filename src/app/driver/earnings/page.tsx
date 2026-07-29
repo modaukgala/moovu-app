@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  CalendarDays,
+  ChevronRight,
+  CircleDollarSign,
+  LayoutDashboard,
+  ReceiptText,
+  WalletCards,
+} from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -9,7 +17,6 @@ import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { PageHeader } from "@/components/ui/MoovuPrimitives";
 import { supabaseClient } from "@/lib/supabase/client";
 import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
 import {
@@ -246,52 +253,76 @@ export default function DriverEarningsPage() {
   }
 
   return (
-    <main className="moovu-page moovu-driver-shell text-black">
+    <main className="driver-mobile-page driver-earnings-v3 text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="moovu-shell space-y-6">
-        <PageHeader
-          kicker="MOOVU Driver"
-          title="Earnings and payments"
-          description="Track your trip earnings, subscription status, and MOOVU commission balance from one clean wallet view."
-        />
+      <div className="driver-mobile-container space-y-5">
+        <header className="driver-money-heading">
+          <span>MOOVU Driver</span>
+          <h1>Earnings and payments</h1>
+          <p>Track your trip earnings, subscription status, and MOOVU commission balance from one clean wallet view.</p>
+        </header>
 
-        <nav className="grid gap-3 sm:grid-cols-3" aria-label="Driver money sections">
+        <nav className="driver-money-nav" aria-label="Driver money sections">
           {[
-            { href: "/driver", label: "Dashboard", tone: "bg-sky-50 text-blue-700" },
+            { href: "/driver", label: "Dashboard", icon: LayoutDashboard, tone: "is-blue" },
             {
               href: "/driver/commission-payments",
               label: "Commission",
-              tone: "bg-emerald-50 text-emerald-700",
+              icon: CircleDollarSign,
+              tone: "is-green",
             },
             {
               href: "/driver/subscriptions",
               label: "Subscriptions",
-              tone: "bg-violet-50 text-violet-700",
+              icon: ReceiptText,
+              tone: "is-violet",
             },
-          ].map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="moovu-card-interactive flex min-h-20 items-center justify-between gap-3 p-4"
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${item.tone}`}>
-                  <span className="h-2.5 w-2.5 rounded-full bg-current" />
-                </span>
-                <strong className="truncate text-sm text-slate-950">{item.label}</strong>
-              </span>
-              <span aria-hidden="true" className="text-xl text-slate-400">›</span>
-            </Link>
-          ))}
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} className={item.tone}>
+                <Icon aria-hidden="true" />
+                <strong>{item.label}</strong>
+                <ChevronRight aria-hidden="true" />
+              </Link>
+            );
+          })}
         </nav>
 
-        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-5">
-          <MetricCard label="Today" value={money(earningsSummary.today)} helper="Recent completed trips" />
-          <MetricCard label="This week" value={money(earningsSummary.week)} helper="Last 7 days" />
-          <MetricCard label="This month" value={money(earningsSummary.month)} helper="Current month" />
-          <MetricCard label="Total earned" value={money(Number(wallet?.total_driver_net ?? earningsSummary.total) + cancellationDriverEarnings)} helper={`${wallet?.total_trips_completed ?? trips.length} completed trips + fees`} tone="primary" />
-          <MetricCard label="Commission owed" value={money(commissionDue)} helper="Payable to MOOVU" tone={commissionDue > 0 ? "warning" : "success"} />
+        <section className="driver-money-grid" aria-label="Earnings summary">
+          <article className="is-blue">
+            <span className="driver-money-icon"><CalendarDays aria-hidden="true" /></span>
+            <div><small>Today</small><strong>{money(earningsSummary.today)}</strong><p>Recent completed trips</p></div>
+          </article>
+          <article className="is-green">
+            <span className="driver-money-icon"><CalendarDays aria-hidden="true" /></span>
+            <div><small>This week</small><strong>{money(earningsSummary.week)}</strong><p>Last 7 days</p></div>
+          </article>
+          <article className="is-orange">
+            <span className="driver-money-icon"><CalendarDays aria-hidden="true" /></span>
+            <div><small>This month</small><strong>{money(earningsSummary.month)}</strong><p>Current month</p></div>
+          </article>
+          <article className="is-violet">
+            <span className="driver-money-icon"><WalletCards aria-hidden="true" /></span>
+            <div>
+              <small>Total earned</small>
+              <strong>{money(Number(wallet?.total_driver_net ?? earningsSummary.total) + cancellationDriverEarnings)}</strong>
+              <p>{wallet?.total_trips_completed ?? trips.length} completed trips + fees</p>
+            </div>
+          </article>
+        </section>
+
+        <section className="driver-wallet-summary">
+          <div>
+            <small>Commission balance</small>
+            <strong>{money(commissionDue)}</strong>
+            <p>{commissionDue > 0 ? "Outstanding amount owed to MOOVU" : "Your MOOVU balance is clear"}</p>
+          </div>
+          <Link href="/driver/commission-payments">
+            View commission
+            <ChevronRight aria-hidden="true" />
+          </Link>
         </section>
 
         {commissionRatio >= DRIVER_COMMISSION_WARNING_RATIO && (

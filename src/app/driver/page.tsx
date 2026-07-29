@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Bell, Layers3, LocateFixed, Menu } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
@@ -14,11 +15,13 @@ import {
 import { notifyInApp } from "@/lib/in-app-notifications";
 import {
   carMarkerIcon,
+  createOrMoveMarker,
   fitBoundsToPoints,
   gpsMarkerIcon,
   makeRouteRenderer,
   stopMarkerIcon,
 } from "@/lib/maps/liveMapMarkers";
+import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
@@ -386,6 +389,7 @@ export default function DriverHomePage() {
   const [loadingDriver, setLoadingDriver] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [mapError, setMapError] = useState<string | null>(null);
+  const [satelliteMap, setSatelliteMap] = useState(false);
 
   const [startOtp, setStartOtp] = useState("");
   const [showStartOtp, setShowStartOtp] = useState(false);
@@ -430,6 +434,8 @@ export default function DriverHomePage() {
   const gpsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsPermissionBlockedRef = useRef(false);
   const lastNotifiedOfferIdRef = useRef<string | null>(null);
+  const lastHeartbeatSentRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
+  const lastRouteRenderRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -738,11 +744,30 @@ export default function DriverHomePage() {
         async (pos) => {
           gpsPermissionBlockedRef.current = false;
           const extendedCoords = pos.coords as typeof pos.coords & { heading?: number | null; speed?: number | null };
-          const ok = await sendHeartbeat(pos.coords.latitude, pos.coords.longitude, {
-            heading: extendedCoords.heading,
-            speedMps: extendedCoords.speed,
-            accuracyM: pos.coords.accuracy,
-          });
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setDriver((current) => current ? {
+            ...current,
+            lat,
+            lng,
+            last_seen: new Date().toISOString(),
+          } : current);
+
+          const activeTrip = currentTrip && ["assigned", "arrived", "ongoing"].includes(currentTrip.status);
+          const previous = lastHeartbeatSentRef.current;
+          const movedEnough = !previous ||
+            Math.abs(previous.lat - lat) + Math.abs(previous.lng - lng) >= 0.00005;
+          const heartbeatDue =
+            !previous || Date.now() - previous.at >= LIVE_LOCATION_CONFIG.idleHeartbeatMs;
+          let ok = true;
+          if (activeTrip || movedEnough || heartbeatDue) {
+            ok = await sendHeartbeat(lat, lng, {
+              heading: extendedCoords.heading,
+              speedMps: extendedCoords.speed,
+              accuracyM: pos.coords.accuracy,
+            });
+            if (ok) lastHeartbeatSentRef.current = { lat, lng, at: Date.now() };
+          }
           if (refreshProfile) await loadDriverProfile(silent);
           resolve(ok);
         },
@@ -967,14 +992,14 @@ export default function DriverHomePage() {
     );
   }
 
-  function clearMapLayers() {
-    if (driverMarkerRef.current) driverMarkerRef.current.setMap(null);
+  function clearMapLayers(preserveDriver = false) {
+    if (!preserveDriver && driverMarkerRef.current) driverMarkerRef.current.setMap(null);
     if (pickupMarkerRef.current) pickupMarkerRef.current.setMap(null);
     if (dropoffMarkerRef.current) dropoffMarkerRef.current.setMap(null);
     if (directionsRendererRef.current) directionsRendererRef.current.setMap(null);
     stopMarkerRefs.current.forEach((marker) => marker.setMap(null));
 
-    driverMarkerRef.current = null;
+    if (!preserveDriver) driverMarkerRef.current = null;
     pickupMarkerRef.current = null;
     dropoffMarkerRef.current = null;
     directionsRendererRef.current = null;
@@ -985,21 +1010,42 @@ export default function DriverHomePage() {
     const map = mapInstanceRef.current;
     if (!map || !window.google?.maps || !driver) return;
 
-    clearMapLayers();
     const routePreview = currentTrip ?? offer;
     const routeStops = parseTripStops(routePreview?.stops);
 
-    const points: google.maps.LatLngLiteral[] = [];
-
     if (typeof driver.lat === "number" && typeof driver.lng === "number") {
       const driverPos = { lat: driver.lat, lng: driver.lng };
-      driverMarkerRef.current = new window.google.maps.Marker({
+      driverMarkerRef.current = createOrMoveMarker({
         map,
+        marker: driverMarkerRef.current,
         position: driverPos,
         title: "You",
         icon: currentTrip || offer ? carMarkerIcon() : gpsMarkerIcon(),
       });
-      points.push(driverPos);
+    }
+
+    const routeKey = [
+      routePreview?.id ?? "idle",
+      routePreview?.status ?? "none",
+      routePreview?.pickup_lat ?? "",
+      routePreview?.pickup_lng ?? "",
+      routePreview?.dropoff_lat ?? "",
+      routePreview?.dropoff_lng ?? "",
+      routeStops.map((stop) => `${stop.lat}:${stop.lng}`).join("|"),
+    ].join(":");
+    const now = Date.now();
+    if (
+      lastRouteRenderRef.current.key === routeKey &&
+      now - lastRouteRenderRef.current.at < 5000
+    ) {
+      return;
+    }
+    lastRouteRenderRef.current = { key: routeKey, at: now };
+    clearMapLayers(true);
+
+    const points: google.maps.LatLngLiteral[] = [];
+    if (typeof driver.lat === "number" && typeof driver.lng === "number") {
+      points.push({ lat: driver.lat, lng: driver.lng });
     }
 
     if (routePreview?.pickup_lat != null && routePreview?.pickup_lng != null) {
@@ -1197,10 +1243,9 @@ export default function DriverHomePage() {
     gpsPermissionBlockedRef.current = false;
     captureCurrentLocationAndSave(true);
 
-    const activeTrip = currentTrip && ["assigned", "arrived", "ongoing"].includes(currentTrip.status);
     gpsTimerRef.current = setInterval(() => {
       captureCurrentLocationAndSave(true, false);
-    }, activeTrip ? 1000 : 5000);
+    }, LIVE_LOCATION_CONFIG.driverSampleMs);
 
     return () => {
       if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
@@ -1674,10 +1719,6 @@ export default function DriverHomePage() {
                 </div>
               </div>
 
-              <div className="flex justify-end px-1">
-                <EnableNotificationsButton role="driver" variant="chip" />
-              </div>
-
               {!subscriptionAllowsOnline && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
                   <span>Activate a plan to go online and receive trip offers.</span>
@@ -1686,12 +1727,51 @@ export default function DriverHomePage() {
               )}
 
               <div className="moovu-driver-map-card">
+                <div className="driver-map-top-controls">
+                  <button
+                    type="button"
+                    className="driver-map-round-button"
+                    onClick={() => setDriverToolsOpen((value) => !value)}
+                    aria-label={driverToolsOpen ? "Close driver menu" : "Open driver menu"}
+                  >
+                    <Menu aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className={`driver-map-online-pill ${driver.online ? "is-online" : ""}`}
+                    disabled={busy || !subscriptionAllowsOnline}
+                    onClick={() => {
+                      if (subscriptionAllowsOnline) void setOnlineServer(!driver.online);
+                      else router.push("/driver/subscriptions");
+                    }}
+                  >
+                    <span />
+                    {driver.online ? "Online" : "Offline"}
+                  </button>
+                  <div className="driver-map-notification-button">
+                    <Bell aria-hidden="true" />
+                    <EnableNotificationsButton role="driver" variant="chip" />
+                  </div>
+                </div>
                 <div className={`moovu-driver-map-status ${driverModeClass}`}>
                   <span>{driverMode}</span>
                   <strong>{driverModeCopy}</strong>
                 </div>
-                <div className="absolute right-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700 shadow">
-                  Driver map
+                <div className="driver-map-side-controls">
+                  <button type="button" onClick={() => void retryCurrentGps()} aria-label="Center current location">
+                    <LocateFixed aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !satelliteMap;
+                      setSatelliteMap(next);
+                      mapInstanceRef.current?.setMapTypeId(next ? "hybrid" : "roadmap");
+                    }}
+                    aria-label={satelliteMap ? "Show road map" : "Show satellite map"}
+                  >
+                    <Layers3 aria-hidden="true" />
+                  </button>
                 </div>
 
                 {mapError ? (
@@ -1703,36 +1783,36 @@ export default function DriverHomePage() {
                 )}
 
                 <div className="moovu-driver-map-sheet">
-                  <div className="moovu-driver-map-sheet-grid">
-                    <button
-                      type="button"
-                      className="moovu-driver-map-menu-button"
-                      onClick={() => setDriverToolsOpen((value) => !value)}
-                    >
-                      <span>Driver menu</span>
-                      <strong>{driverToolsOpen ? "Hide tools" : "Show tools"}</strong>
-                    </button>
-
-                    <div className="moovu-driver-go-panel">
-                      {subscriptionAllowsOnline ? (
-                        <button
-                          type="button"
-                          className={driver.online ? "moovu-driver-go-button is-online" : "moovu-driver-go-button"}
-                          disabled={busy}
-                          onClick={() => setOnlineServer(!driver.online)}
-                        >
-                          {busy ? "WORKING..." : primaryOnlineAction}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="moovu-driver-go-button"
-                          onClick={() => router.push("/driver/subscriptions")}
-                        >
-                          SUBSCRIBE
-                        </button>
-                      )}
+                  <div className="driver-map-sheet-handle" />
+                  <div className="driver-map-status-card">
+                    <div>
+                      <span className={driver.online ? "is-online" : ""} />
+                      <div>
+                        <strong>{driver.online ? "You're online" : "Ready to earn today?"}</strong>
+                        <p>{driver.online ? "Waiting for trips nearby" : "Go online to receive nearby requests"}</p>
+                      </div>
                     </div>
+                    {subscriptionAllowsOnline ? (
+                      <button type="button" disabled={busy} onClick={() => setOnlineServer(!driver.online)}>
+                        {busy ? "Working..." : driver.online ? "Go Offline" : "Go Online"}
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => router.push("/driver/subscriptions")}>Subscribe</button>
+                    )}
+                  </div>
+                  <div className="driver-map-snapshot">
+                    <button type="button" onClick={() => router.push("/driver/earnings")}>
+                      <small>Today&apos;s earnings</small>
+                      <strong>{money(earningsSnapshot.todayEarnings)}</strong>
+                    </button>
+                    <button type="button" onClick={() => router.push("/driver/history")}>
+                      <small>Trips today</small>
+                      <strong>{earningsSnapshot.todayTrips}</strong>
+                    </button>
+                    <button type="button" onClick={() => setDriverToolsOpen(true)}>
+                      <small>Status</small>
+                      <strong>{driverLevel.label}</strong>
+                    </button>
                   </div>
                 </div>
               </div>

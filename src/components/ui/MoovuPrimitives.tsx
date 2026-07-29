@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 
 type PageHeaderProps = {
   kicker: string;
@@ -68,15 +69,19 @@ type QuickAction = {
   label: string;
   description?: string;
   onClick?: () => void;
+  icon?: LucideIcon;
 };
 
 export function QuickActionGrid({ actions }: { actions: QuickAction[] }) {
   return (
     <div className="moovu-quick-action-grid">
       {actions.map((action) => {
+        const Icon = action.icon;
         const content = (
           <>
-            <span className="moovu-quick-action-mark" />
+            <span className="moovu-quick-action-mark">
+              {Icon ? <Icon aria-hidden="true" /> : null}
+            </span>
             <span>
               <strong>{action.label}</strong>
               {action.description ? <small>{action.description}</small> : null}

@@ -13,6 +13,21 @@ MOOVU currently supports admin-controlled manual surge pricing for new bookings 
 
 The maximum supported surge multiplier is `1.4`. Customers see only the final estimate and a simple note when surge is active.
 
+## Distance Savings
+
+MOOVU applies a distance-tier saving after manual surge, before the minimum fare
+and final whole-rand rounding:
+
+| Total route distance | Saving |
+| --- | ---: |
+| 0-10 km | 0% |
+| More than 10 km up to 18 km | 8% |
+| More than 18 km | 20% |
+
+For a trip with stops, the total route distance selects the tier and the saving
+also applies to the discounted add-stop increase. The server recalculates this
+value; customer-provided discount values are never trusted.
+
 ## Safety Rules
 
 - Surge is controlled by admin-only server APIs.

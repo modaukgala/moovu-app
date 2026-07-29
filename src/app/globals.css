@@ -36,25 +36,6 @@
   --radius-xl: 34px;
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(47, 128, 237, 0.07), transparent 24%),
-    linear-gradient(180deg, #f8fbff 0%, #f5f8fc 42%, #f3f6fa 100%);
-  color: var(--moovu-text);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@supports (padding-top: env(safe-area-inset-top)) {
-  body {
-    min-height: 100svh;
-  }
-}
-
 * {
   box-sizing: border-box;
 }
@@ -2015,9 +1996,9 @@ tr:last-child td {
   50% { opacity: 1; transform: scale(1.16); }
 }
 
-/* ─────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    UBER-STYLE BOOKING: full-screen map + draggable bottom sheet
-───────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Keep old selectors as no-ops so other pages don't break */
 .moovu-booking-page { display: none; }
@@ -2027,7 +2008,7 @@ tr:last-child td {
 .moovu-booking-header { display: none; }
 .moovu-booking-header > * { pointer-events: auto; }
 
-/* ── Page shell ── */
+/* â”€â”€ Page shell â”€â”€ */
 .mbk-page {
   position: fixed;
   inset: 0;
@@ -2036,13 +2017,30 @@ tr:last-child td {
   min-height: 100dvh;
 }
 
-/* ── Full-screen map ── */
+/* â”€â”€ Full-screen map â”€â”€ */
 .mbk-map-layer {
   position: absolute;
   inset: 0;
   z-index: 0;
 }
 .mbk-map { width: 100%; height: 100%; }
+.mbk-map-recenter {
+  position: absolute;
+  top: calc(108px + env(safe-area-inset-top));
+  right: 16px;
+  z-index: 12;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  color: #075ee6;
+  font-size: 27px;
+  font-weight: 900;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
 .mbk-map-error {
   display: grid;
   place-items: center;
@@ -2056,7 +2054,7 @@ tr:last-child td {
   background: radial-gradient(circle at top, rgba(176,224,240,0.72), transparent 36%), #f6fafc;
 }
 
-/* ── Floating top header ── */
+/* â”€â”€ Floating top header â”€â”€ */
 .mbk-header {
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -2070,7 +2068,7 @@ tr:last-child td {
 }
 .mbk-header > * { pointer-events: auto; }
 
-/* ── Bottom sheet ── */
+/* â”€â”€ Bottom sheet â”€â”€ */
 .mbk-sheet {
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -2095,7 +2093,7 @@ tr:last-child td {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18) !important;
 }
 
-/* ── Drag handle ── */
+/* â”€â”€ Drag handle â”€â”€ */
 .mbk-handle-wrap {
   flex-shrink: 0;
   display: flex;
@@ -2112,7 +2110,7 @@ tr:last-child td {
   background: #c8d5e2;
 }
 
-/* ── Scroll area ── */
+/* â”€â”€ Scroll area â”€â”€ */
 .mbk-sheet-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -2130,7 +2128,7 @@ tr:last-child td {
   overflow-y: auto;
 }
 
-/* ── Confirm bar ── */
+/* â”€â”€ Confirm bar â”€â”€ */
 .mbk-confirm-bar {
   flex-shrink: 0;
   display: flex;
@@ -2156,7 +2154,7 @@ tr:last-child td {
   white-space: nowrap;
 }
 
-/* ── Ride options block ── */
+/* â”€â”€ Ride options block â”€â”€ */
 .mbk-ride-options {
   margin-top: 12px;
   padding: 12px;
@@ -2179,7 +2177,7 @@ tr:last-child td {
   padding: 12px;
 }
 
-/* ── Loading screen ── */
+/* â”€â”€ Loading screen â”€â”€ */
 .mbk-loading {
   display: flex;
   flex-direction: column;
@@ -2243,7 +2241,7 @@ tr:last-child td {
   backdrop-filter: blur(14px);
 }
 
-/* .moovu-booking-panel replaced by .mbk-sheet — kept as no-op */
+/* .moovu-booking-panel replaced by .mbk-sheet â€” kept as no-op */
 .moovu-booking-panel { display: none; }
 
 .moovu-bottom-sheet-handle {
@@ -5128,9 +5126,9 @@ tr:last-child td {
   }
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   TASK 1 — inline "My location" button beside pickup label
-───────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   TASK 1 â€” inline "My location" button beside pickup label
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .moovu-loc-inline-btn {
   display: inline-flex;
   align-items: center;
@@ -5479,9 +5477,9 @@ tr:last-child td {
   }
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   TASK 2 — inline field error message
-───────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   TASK 2 â€” inline field error message
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .moovu-field-error {
   margin-top: 4px;
   font-size: 11px;
@@ -5490,9 +5488,9 @@ tr:last-child td {
   letter-spacing: 0.01em;
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   TASK 7 — Classic receipt document styles
-───────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   TASK 7 â€” Classic receipt document styles
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .moovu-receipt-doc {
   background: #fff;
   border: 1px solid #d7e2ea;
@@ -5851,10 +5849,10 @@ tr:last-child td {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   HOME PAGE — clean mobile-first layout (mhp = moovu-home-page)
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   HOME PAGE â€” clean mobile-first layout (mhp = moovu-home-page)
    Replaces the old overlapping map-hero approach
-═══════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .mhp-screen {
   min-height: 100svh;
@@ -5865,7 +5863,7 @@ tr:last-child td {
   padding-bottom: calc(88px + env(safe-area-inset-bottom));
 }
 
-/* ── Header ──────────────────────────────────────────────────── */
+/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-header {
   display: flex;
   align-items: center;
@@ -5931,7 +5929,7 @@ tr:last-child td {
   white-space: nowrap;
 }
 
-/* ── Hero banner ─────────────────────────────────────────────── */
+/* â”€â”€ Hero banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-hero {
   margin: 0 16px 16px;
   border-radius: 24px;
@@ -5952,7 +5950,7 @@ tr:last-child td {
   flex-shrink: 0;
 }
 
-/* ── Animated route bar ─────────────────────────────────────── */
+/* â”€â”€ Animated route bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-route-bar {
   background: rgba(255, 255, 255, 0.90);
   border-radius: 18px;
@@ -6011,7 +6009,7 @@ tr:last-child td {
   text-overflow: ellipsis;
 }
 
-/* ── Body content ────────────────────────────────────────────── */
+/* â”€â”€ Body content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-body {
   flex: 1;
   display: flex;
@@ -6020,7 +6018,7 @@ tr:last-child td {
   padding: 0 16px;
 }
 
-/* ── Book card ───────────────────────────────────────────────── */
+/* â”€â”€ Book card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-book-card {
   display: flex;
   align-items: center;
@@ -6068,7 +6066,7 @@ tr:last-child td {
   box-shadow: 0 6px 18px rgba(31, 116, 201, 0.28);
 }
 
-/* ── Stats row ───────────────────────────────────────────────── */
+/* â”€â”€ Stats row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-stats-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -6116,7 +6114,7 @@ tr:last-child td {
   line-height: 1.3;
 }
 
-/* ── Section ─────────────────────────────────────────────────── */
+/* â”€â”€ Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-section {
   background: #fff;
   border: 1px solid #d7e2ea;
@@ -6134,7 +6132,7 @@ tr:last-child td {
   margin-bottom: 12px;
 }
 
-/* ── Quick actions ───────────────────────────────────────────── */
+/* â”€â”€ Quick actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-actions {
   display: flex;
   flex-direction: column;
@@ -6176,7 +6174,7 @@ tr:last-child td {
   line-height: 1.35;
 }
 
-/* ── Driver section ──────────────────────────────────────────── */
+/* â”€â”€ Driver section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .mhp-driver-card {
   display: flex;
   flex-direction: column;
@@ -6224,7 +6222,7 @@ tr:last-child td {
   text-align: center;
 }
 
-/* ── Tablet / desktop tweaks ─────────────────────────────────── */
+/* â”€â”€ Tablet / desktop tweaks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (min-width: 640px) {
   .mhp-hero {
     flex-direction: row;
@@ -7166,6 +7164,80 @@ tr:last-child td {
   }
 }
 
+@media (min-width: 768px) and (max-width: 959px) {
+  .customer-landing {
+    padding-bottom: calc(112px + env(safe-area-inset-bottom));
+  }
+
+  .customer-landing-shell {
+    padding-top: max(42px, calc(22px + env(safe-area-inset-top)));
+  }
+
+  .customer-hero-grid {
+    grid-template-columns: minmax(0, 0.94fr) minmax(320px, 0.76fr);
+    align-items: center;
+    gap: 30px;
+    padding-top: 42px;
+  }
+
+  .customer-hero-copy h1 {
+    font-size: clamp(3.6rem, 8vw, 5.2rem);
+  }
+
+  .customer-map-card {
+    min-height: 520px;
+  }
+
+  .customer-phone-mockup {
+    width: min(252px, calc(100% - 42px));
+  }
+
+  .customer-bottom-cta-dock {
+    bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (min-width: 1200px) {
+  .customer-landing {
+    padding-bottom: 48px;
+  }
+
+  .customer-landing-shell {
+    width: min(1240px, calc(100% - 72px));
+    padding-top: max(40px, calc(20px + env(safe-area-inset-top)));
+  }
+
+  .customer-hero-grid {
+    grid-template-columns: minmax(0, 1.08fr) minmax(440px, 0.82fr);
+    min-height: min(720px, calc(100dvh - 104px));
+    gap: 64px;
+  }
+
+  .customer-hero-copy h1 {
+    font-size: clamp(4.8rem, 6.5vw, 6.6rem);
+  }
+
+  .customer-map-card {
+    min-height: 620px;
+  }
+
+  .customer-booking-preview {
+    grid-template-columns: minmax(0, 0.72fr) minmax(520px, 1.28fr);
+  }
+
+  .customer-bottom-cta-dock {
+    right: 32px;
+    bottom: 28px;
+    left: auto;
+    width: 280px;
+    margin: 0;
+  }
+
+  .customer-landing > .moovu-customer-bottom-nav {
+    display: none;
+  }
+}
+
 @media (max-width: 430px) {
   .customer-landing-shell {
     padding-left: 14px;
@@ -7516,5 +7588,1997 @@ tr:last-child td {
   .moovu-driver-offer-drop-inner {
     border-radius: 24px;
     padding: 14px;
+  }
+}
+
+/* ================================================================
+   MOOVU PREMIUM MOBILE REFERENCE PASS
+   Shared customer + driver surfaces, July 2026
+   ================================================================ */
+
+:root {
+  --moovu-v3-ink: #071633;
+  --moovu-v3-muted: #53627c;
+  --moovu-v3-blue: #075ee6;
+  --moovu-v3-cyan: #0b9db4;
+  --moovu-v3-line: #dce5f1;
+  --moovu-v3-surface: rgba(255, 255, 255, 0.96);
+  --moovu-v3-shadow: 0 12px 32px rgba(20, 49, 91, 0.09);
+}
+
+.customer-home-v3,
+.driver-mobile-page {
+  min-height: 100svh;
+  overflow-x: hidden;
+  color: var(--moovu-v3-ink);
+  background:
+    radial-gradient(circle at 100% 16%, rgba(198, 221, 255, 0.55), transparent 20rem),
+    linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%);
+}
+
+.customer-home-v3-shell,
+.driver-mobile-container {
+  width: min(100%, 920px);
+  margin: 0 auto;
+}
+
+.customer-home-v3-shell {
+  position: relative;
+  min-height: 100svh;
+  padding: calc(22px + env(safe-area-inset-top)) 22px calc(128px + env(safe-area-inset-bottom));
+}
+
+.customer-home-v3-header,
+.customer-home-v3-brand,
+.customer-home-v3-trips,
+.customer-home-v3-trust > div,
+.customer-home-v3-book,
+.customer-home-v3-phone-bar,
+.customer-home-v3-phone-status {
+  display: flex;
+  align-items: center;
+}
+
+.customer-home-v3-header {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.customer-home-v3-brand {
+  gap: 12px;
+  color: var(--moovu-v3-ink);
+  text-decoration: none;
+}
+
+.customer-home-v3-logo {
+  display: grid;
+  width: 62px;
+  height: 62px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: var(--moovu-v3-shadow);
+}
+
+.customer-home-v3-logo img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+.customer-home-v3-brand small,
+.customer-home-v3-brand strong {
+  display: block;
+  letter-spacing: 0;
+}
+
+.customer-home-v3-brand small {
+  color: #0c51c9;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.customer-home-v3-brand strong {
+  margin-top: 1px;
+  font-size: clamp(22px, 7vw, 32px);
+  line-height: 1;
+}
+
+.customer-home-v3-trips {
+  min-height: 48px;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--moovu-v3-ink);
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgba(20, 49, 91, 0.06);
+}
+
+.customer-home-v3-trips svg {
+  width: 20px;
+}
+
+.customer-home-v3-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 34px;
+  padding: 9px 14px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #154dab;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.customer-home-v3-eyebrow span {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #21b969;
+  box-shadow: 0 0 0 7px rgba(33, 185, 105, 0.12);
+}
+
+.customer-home-v3-copy {
+  margin-top: 24px;
+}
+
+.customer-home-v3-copy h1 {
+  margin: 0;
+  max-width: 760px;
+  font-size: clamp(46px, 12vw, 86px);
+  font-weight: 950;
+  line-height: 0.96;
+  letter-spacing: 0;
+}
+
+.customer-home-v3-copy h1 em {
+  color: #0a55cf;
+  font-style: normal;
+}
+
+.customer-home-v3-copy p {
+  max-width: 610px;
+  margin: 24px 0 0;
+  color: var(--moovu-v3-muted);
+  font-size: clamp(17px, 4.8vw, 24px);
+  font-weight: 550;
+  line-height: 1.55;
+}
+
+.customer-home-v3-trust {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.customer-home-v3-trust > div {
+  min-width: 0;
+  min-height: 78px;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(20, 49, 91, 0.06);
+}
+
+.customer-home-v3-trust svg {
+  width: 26px;
+  flex: 0 0 auto;
+  color: #0a58db;
+}
+
+.customer-home-v3-trust span {
+  min-width: 0;
+  color: #27344d;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.customer-home-v3-trust strong {
+  display: block;
+  color: var(--moovu-v3-ink);
+  font-size: 14px;
+}
+
+.customer-home-v3-preview {
+  position: relative;
+  height: clamp(405px, 105vw, 640px);
+  margin: 18px -22px 0;
+  overflow: hidden;
+}
+
+.customer-home-v3-skyline {
+  position: absolute;
+  inset: 42% 0 0;
+  opacity: 0.55;
+  background:
+    linear-gradient(90deg, transparent 0 5%, #d6e8ff 5% 12%, transparent 12% 16%, #d6e8ff 16% 24%, transparent 24% 75%, #d6e8ff 75% 86%, transparent 86%),
+    linear-gradient(180deg, transparent 0 42%, #c6ddfc 42% 100%);
+  clip-path: polygon(0 64%, 6% 55%, 11% 63%, 17% 46%, 23% 61%, 31% 52%, 42% 64%, 54% 49%, 63% 61%, 72% 47%, 82% 57%, 90% 38%, 100% 55%, 100% 100%, 0 100%);
+}
+
+.customer-home-v3-phone {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: min(64vw, 390px);
+  height: min(84vw, 510px);
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 8px solid #101216;
+  border-bottom-width: 14px;
+  border-radius: 48px;
+  background: #fff;
+  box-shadow: 0 28px 55px rgba(8, 25, 55, 0.24);
+}
+
+.customer-home-v3-phone-status {
+  height: 38px;
+  justify-content: space-between;
+  padding: 0 20px;
+  color: #111;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.customer-home-v3-phone-status i {
+  width: 78px;
+  height: 22px;
+  border-radius: 999px;
+  background: #050505;
+}
+
+.customer-home-v3-phone-bar {
+  height: 54px;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.customer-home-v3-phone-bar svg {
+  width: 21px;
+}
+
+.customer-home-v3-phone-bar strong {
+  color: #155acf;
+  font-size: 16px;
+}
+
+.customer-home-v3-bell {
+  width: 18px;
+  height: 19px;
+  border: 2px solid #071633;
+  border-radius: 9px 9px 5px 5px;
+}
+
+.customer-home-v3-phone-card {
+  margin: 18px;
+  padding: 20px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 24px;
+  box-shadow: var(--moovu-v3-shadow);
+}
+
+.customer-home-v3-phone-card h2 {
+  margin: 0 0 16px;
+  font-size: clamp(18px, 5vw, 28px);
+}
+
+.customer-home-v3-phone-card > div {
+  display: flex;
+  align-items: center;
+  min-height: 58px;
+  gap: 12px;
+  padding: 0 15px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 16px;
+  color: #728096;
+  font-size: 13px;
+}
+
+.customer-home-v3-phone-card .pickup {
+  width: 13px;
+  height: 13px;
+  border: 4px solid #1766df;
+  border-radius: 50%;
+  box-shadow: 0 0 0 7px #e8f1ff;
+}
+
+.customer-home-v3-phone-card button {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  border: 0;
+  border-top: 1px solid #edf1f6;
+  background: transparent;
+  color: var(--moovu-v3-ink);
+  font-weight: 750;
+}
+
+.customer-home-v3-phone-card button svg:first-child {
+  width: 18px;
+  color: #1b63db;
+}
+
+.customer-home-v3-phone-card button svg:last-child {
+  width: 16px;
+  margin-left: auto;
+  color: #9ba7b7;
+}
+
+.customer-home-v3-book {
+  position: absolute;
+  z-index: 4;
+  top: min(56vw, 345px);
+  left: 50%;
+  width: min(calc(100% - 44px), 620px);
+  min-height: 76px;
+  transform: translateX(-50%);
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 14px 10px 20px;
+  border: 4px solid #fff;
+  border-radius: 24px;
+  background: linear-gradient(100deg, #0757d9, #073eb9);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 20px 42px rgba(7, 73, 190, 0.32);
+}
+
+.customer-home-v3-book strong {
+  font-size: clamp(21px, 6vw, 34px);
+  line-height: 1;
+}
+
+.customer-home-v3-book-car {
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.customer-home-v3-book-arrow {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.customer-home-v3-car {
+  position: absolute;
+  z-index: 3;
+  right: 50%;
+  bottom: -7%;
+  width: min(74vw, 500px);
+  height: auto;
+  transform: translateX(50%);
+  object-fit: contain;
+  filter: drop-shadow(0 18px 18px rgba(10, 38, 79, 0.18));
+}
+
+.customer-home-v3-secondary {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  margin-top: -10px;
+}
+
+.customer-home-v3-secondary > a {
+  color: #0758d4;
+  font-weight: 900;
+}
+
+.customer-home-v3-secondary > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.customer-home-v3-secondary > div a {
+  color: #607089;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+/* Mobile bottom navigation */
+.moovu-customer-bottom-nav,
+.moovu-driver-bottom-nav {
+  position: fixed;
+  z-index: 1000;
+  right: 12px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  left: 12px;
+  width: auto;
+  max-width: 760px;
+  min-height: 72px;
+  margin: 0 auto;
+  padding: 7px;
+  border: 1px solid rgba(214, 225, 240, 0.95);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 38px rgba(10, 35, 76, 0.16);
+  backdrop-filter: blur(22px);
+}
+
+.moovu-customer-bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.moovu-customer-nav-item,
+.moovu-driver-bottom-nav a {
+  display: flex;
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 18px;
+  color: #526178;
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.moovu-customer-nav-item {
+  flex-direction: column;
+}
+
+.moovu-customer-nav-icon,
+.moovu-driver-bottom-nav a svg {
+  width: 22px;
+  height: 22px;
+}
+
+.moovu-customer-nav-item.active,
+.moovu-driver-bottom-nav a.active {
+  background: #edf4ff;
+  color: #075ee6;
+}
+
+/* Booking reference */
+.booking-v3 .mbk-header {
+  top: env(safe-area-inset-top);
+  right: 0;
+  left: 0;
+  min-height: 88px;
+  padding: 10px 18px;
+  border-radius: 0 0 22px 22px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 24px rgba(15, 38, 71, 0.08);
+  backdrop-filter: blur(18px);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.booking-v3 .mbk-customer-back {
+  display: flex;
+  align-items: center;
+}
+
+.booking-v3 .moovu-brand-lockup {
+  min-width: 0;
+}
+
+.booking-v3 .moovu-brand-lockup img {
+  width: 72px;
+  height: auto;
+  object-fit: contain;
+}
+
+.booking-v3 .moovu-icon-link {
+  min-width: 52px;
+  min-height: 52px;
+  padding: 0 11px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 16px;
+  background: #fff;
+  color: #17233a;
+  font-size: 11px;
+  font-weight: 850;
+  box-shadow: 0 6px 16px rgba(15, 38, 71, 0.06);
+}
+
+.booking-v3 .mbk-map-layer {
+  top: 0;
+  height: 55svh;
+}
+
+.booking-v3 .mbk-sheet {
+  right: 0;
+  left: 0;
+  border-radius: 30px 30px 0 0;
+  background: #fff;
+  box-shadow: 0 -15px 36px rgba(15, 38, 71, 0.12);
+}
+
+.booking-v3 .mbk-sheet-scroll {
+  padding-bottom: 150px;
+}
+
+.booking-v3 .mbk-handle {
+  width: 50px;
+  height: 5px;
+  background: #b9c4d3;
+}
+
+.booking-v3 .moovu-route-fields {
+  gap: 0;
+  margin: 0 16px;
+  padding: 0;
+  overflow: visible;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 22px;
+  background: #fff;
+}
+
+.booking-v3 .moovu-route-field {
+  min-height: 72px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.booking-v3 .moovu-route-field:last-child {
+  border-bottom: 0;
+}
+
+.booking-v3 .moovu-route-input {
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.booking-v3 .customer-destination-help {
+  margin: 12px -14px -10px;
+  padding: 14px 18px;
+  border-radius: 0 0 21px 21px;
+  background: #eaf3ff;
+  color: #24344d;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.booking-v3 .customer-booking-favorites {
+  display: none;
+}
+
+.booking-v3 .customer-ride-option-list {
+  display: grid;
+  gap: 8px;
+}
+
+.booking-v3 .moovu-ride-option-card {
+  min-height: 82px;
+  padding: 8px 12px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.booking-v3 .moovu-ride-option-card.active {
+  border: 2px solid #0a63e8;
+  background: #eef6ff;
+}
+
+.booking-v3 .moovu-ride-row-main {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.booking-v3 .moovu-ride-vehicle-art {
+  width: 80px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.booking-v3 .moovu-ride-price {
+  color: #071633;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.booking-v3 .mbk-confirm-bar {
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--moovu-v3-line);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 -9px 24px rgba(15, 38, 71, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.booking-v3 .customer-booking-payment-strip {
+  min-height: 48px;
+  padding: 0 2px 8px;
+  border: 0;
+  background: transparent;
+}
+
+.booking-v3 .mbk-confirm-summary {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.booking-v3 .mbk-footer-fare {
+  font-size: 30px;
+}
+
+.booking-v3 .moovu-confirm-button {
+  min-height: 58px;
+  border-radius: 22px;
+  background: linear-gradient(100deg, #075ee6, #0645c7);
+  font-size: 17px;
+  box-shadow: 0 12px 24px rgba(7, 94, 230, 0.24);
+}
+
+.booking-v3 .moovu-place-menu {
+  z-index: 1200;
+  max-height: min(300px, 38svh);
+  border-radius: 20px;
+  box-shadow: 0 18px 48px rgba(15, 38, 71, 0.2);
+}
+
+/* Customer trip status */
+.customer-trip-v3 {
+  min-height: 100svh;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+  background: #f5f8fd;
+}
+
+.customer-trip-v3 > .moovu-shell {
+  width: min(100%, 900px);
+  padding: calc(12px + env(safe-area-inset-top)) 12px 24px;
+}
+
+.customer-trip-v3 .customer-back-home-nav {
+  position: absolute;
+  z-index: 30;
+  top: calc(16px + env(safe-area-inset-top));
+  left: 18px;
+  margin: 0;
+}
+
+.customer-trip-v3 .customer-trip-map-card {
+  min-height: min(58svh, 620px);
+  overflow: hidden;
+  border: 0;
+  border-radius: 0 0 30px 30px;
+  background: #eef3f8;
+  box-shadow: 0 12px 32px rgba(15, 38, 71, 0.12);
+}
+
+.customer-trip-v3 .customer-trip-map-card > div[style],
+.customer-trip-v3 .customer-trip-map-card > div[ref] {
+  min-height: min(58svh, 620px);
+}
+
+.customer-trip-v3 .customer-trip-map-card > .absolute {
+  top: calc(16px + env(safe-area-inset-top));
+}
+
+.customer-trip-v3 .customer-trip-map-sheet {
+  display: none;
+}
+
+.customer-trip-v3 .customer-trip-compact-stack {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  gap: 12px;
+  margin: -24px 10px 0;
+  padding: 20px;
+  border: 1px solid rgba(220, 229, 241, 0.95);
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 18px 42px rgba(15, 38, 71, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.customer-trip-v3 .customer-trip-compact-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.customer-trip-v3 .customer-trip-compact-kicker {
+  color: #0b5ddd;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.customer-trip-v3 .customer-trip-compact-card h2 {
+  margin-top: 5px;
+  color: var(--moovu-v3-ink);
+  font-size: clamp(24px, 7vw, 34px);
+  line-height: 1.04;
+}
+
+.customer-trip-v3 .customer-trip-compact-card p,
+.customer-trip-v3 .customer-trip-compact-card span {
+  color: #65748b;
+}
+
+.customer-trip-v3 .customer-trip-compact-card strong {
+  display: block;
+  margin-top: 9px;
+  color: #111b2f;
+  font-size: 16px;
+}
+
+.customer-trip-v3 .customer-driver-avatar {
+  width: 64px;
+  height: 64px;
+  font-size: 22px;
+}
+
+.customer-trip-v3 .customer-trip-current-card {
+  min-height: 88px;
+  padding: 15px;
+  border: 1px solid #d8e4f4;
+  border-radius: 20px;
+  background: #fbfdff;
+}
+
+.customer-trip-v3 .customer-trip-current-card h3 {
+  font-size: 17px;
+}
+
+.customer-trip-v3 .customer-trip-current-card p {
+  margin-top: 4px;
+  color: #66758a;
+  font-size: 12px;
+}
+
+.customer-trip-v3 .customer-trip-action-tabs,
+.customer-trip-v3 .customer-command-actions {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.customer-trip-v3 .customer-trip-action-tab,
+.customer-trip-v3 .customer-command-button {
+  display: flex;
+  min-width: 0;
+  min-height: 58px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 2px;
+  border: 1px solid #dfe7f1;
+  border-radius: 16px;
+  background: #fff;
+  color: #1c2940;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.customer-trip-v3 .customer-trip-action-tab svg,
+.customer-trip-v3 .customer-command-button svg {
+  width: 19px;
+  height: 19px;
+}
+
+.customer-trip-v3 .customer-trip-action-tab:first-child,
+.customer-trip-v3 .customer-command-button:first-child {
+  color: #075ee6;
+}
+
+.customer-trip-v3 .customer-trip-compact-footer {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.customer-trip-v3 .customer-trip-more-button {
+  min-height: 48px;
+  border: 1px solid #dce5f1;
+  border-radius: 16px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.customer-trip-v3 .customer-trip-more-button.is-primary {
+  border-color: transparent;
+  background: linear-gradient(100deg, #075ee6, #0b9db4);
+  color: #fff;
+}
+
+.customer-trip-v3 .rounded-\[22px\].bg-gradient-to-r {
+  border-radius: 20px;
+  background: #fff;
+  color: #075ee6;
+  box-shadow: none;
+  border: 1px solid #d6e4f8;
+}
+
+.customer-trip-v3 .rounded-\[22px\].bg-gradient-to-r .text-blue-100 {
+  color: #58708f;
+}
+
+/* Receipt */
+.moovu-receipt-screen {
+  background: #f4f8fd;
+}
+
+.moovu-receipt-screen .moovu-app-container {
+  width: min(100%, 860px);
+  padding: calc(16px + env(safe-area-inset-top)) 14px calc(120px + env(safe-area-inset-bottom));
+}
+
+.moovu-receipt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.moovu-receipt-toolbar a,
+.moovu-receipt-toolbar button {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: #0a2c67;
+  font-size: 14px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.moovu-receipt-toolbar button {
+  padding: 0 16px;
+  background: #075bd8;
+  color: #fff;
+}
+
+.moovu-receipt-toolbar svg {
+  width: 20px;
+}
+
+.moovu-receipt-doc {
+  padding: clamp(22px, 5vw, 38px);
+  border: 1px solid #d8e2ef;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(15, 38, 71, 0.08);
+}
+
+.moovu-receipt-doc-header {
+  display: block;
+}
+
+.moovu-receipt-logo-row {
+  align-items: center;
+}
+
+.moovu-receipt-logo-img {
+  width: 82px;
+  height: 82px;
+  object-fit: contain;
+}
+
+.moovu-receipt-brand {
+  color: #050b16;
+  font-size: clamp(24px, 6vw, 42px);
+  font-weight: 950;
+}
+
+.moovu-receipt-tagline {
+  color: #2d4a75;
+}
+
+.moovu-receipt-title,
+.moovu-receipt-section-title,
+.moovu-receipt-route-label,
+.moovu-receipt-stat-label {
+  color: #075bd8;
+  letter-spacing: 0;
+}
+
+.moovu-receipt-title {
+  margin: 24px 0 10px;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.moovu-receipt-meta-table {
+  width: 100%;
+  max-width: 520px;
+}
+
+.moovu-receipt-meta-table td {
+  padding: 8px 0;
+  border: 0;
+}
+
+.moovu-receipt-meta-table td:first-child {
+  width: 32%;
+  color: #596b84;
+}
+
+.moovu-receipt-route {
+  margin-top: 18px;
+}
+
+.moovu-receipt-route-value {
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.moovu-receipt-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.moovu-receipt-stat {
+  min-height: 88px;
+  border-right: 1px solid #dce5f1;
+  border-bottom: 1px solid #dce5f1;
+}
+
+.moovu-receipt-stat:nth-child(2n) {
+  border-right: 0;
+}
+
+.moovu-receipt-stat-value {
+  color: #080f1d;
+  font-size: 17px;
+}
+
+.moovu-receipt-people {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.moovu-receipt-fare-block {
+  overflow: hidden;
+  border: 1px solid #cfdced;
+  border-radius: 15px;
+}
+
+.moovu-receipt-fare-row,
+.moovu-receipt-fare-total-row {
+  padding: 13px 16px;
+}
+
+.moovu-receipt-fare-total-row {
+  color: #075bd8;
+}
+
+.moovu-receipt-doc-footer {
+  margin-top: 22px;
+  padding: 16px;
+  border: 1px solid #d9e5f4;
+  border-radius: 15px;
+  background: #fbfdff;
+  text-align: left;
+}
+
+.moovu-receipt-doc-footer strong,
+.moovu-receipt-doc-footer span {
+  display: block;
+}
+
+/* Driver home */
+.moovu-driver-shell {
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+  background: #f5f8fd;
+}
+
+.moovu-driver-shell > .moovu-shell {
+  width: min(100%, 940px);
+  padding: calc(8px + env(safe-area-inset-top)) 12px 30px;
+}
+
+.moovu-driver-home-stack {
+  gap: 14px;
+}
+
+.moovu-driver-map-card {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: 30px;
+  background: #edf3f8;
+  box-shadow: 0 14px 36px rgba(15, 38, 71, 0.12);
+}
+
+.moovu-driver-map-card > .h-\[58vh\] {
+  min-height: 54svh;
+}
+
+.driver-map-top-controls {
+  position: absolute;
+  z-index: 30;
+  top: calc(12px + env(safe-area-inset-top));
+  right: 14px;
+  left: 14px;
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  align-items: center;
+  gap: 12px;
+}
+
+.driver-map-round-button,
+.driver-map-online-pill,
+.driver-map-notification-button,
+.driver-map-side-controls button {
+  border: 1px solid rgba(215, 225, 238, 0.9);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 9px 24px rgba(15, 38, 71, 0.14);
+  backdrop-filter: blur(16px);
+}
+
+.driver-map-round-button,
+.driver-map-notification-button,
+.driver-map-side-controls button {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 17px;
+  color: #0f1c32;
+}
+
+.driver-map-round-button svg,
+.driver-map-notification-button > svg,
+.driver-map-side-controls svg {
+  width: 23px;
+}
+
+.driver-map-online-pill {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  justify-self: center;
+  padding: 0 22px;
+  border-radius: 999px;
+  color: #617087;
+  font-size: 14px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.driver-map-online-pill span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #9aa7b6;
+}
+
+.driver-map-online-pill.is-online {
+  color: #0ba453;
+}
+
+.driver-map-online-pill.is-online span {
+  background: #0ebc62;
+}
+
+.driver-map-notification-button {
+  position: relative;
+  justify-self: end;
+}
+
+.driver-map-notification-button > div,
+.driver-map-notification-button > button {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0.001;
+}
+
+.driver-map-side-controls {
+  position: absolute;
+  z-index: 25;
+  top: 38%;
+  right: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.moovu-driver-map-status {
+  z-index: 20;
+  top: calc(76px + env(safe-area-inset-top));
+  right: auto;
+  left: 16px;
+  min-width: 190px;
+  max-width: calc(100% - 32px);
+  padding: 12px 16px;
+  border: 1px solid rgba(215, 225, 238, 0.9);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 9px 24px rgba(15, 38, 71, 0.12);
+}
+
+.moovu-driver-map-status span {
+  color: #0a60dd;
+  font-size: 10px;
+}
+
+.moovu-driver-map-status strong {
+  margin-top: 2px;
+  font-size: 14px;
+}
+
+.moovu-driver-map-sheet {
+  position: relative;
+  padding: 10px 14px 16px;
+  border-radius: 26px 26px 0 0;
+  background: #fff;
+}
+
+.driver-map-sheet-handle {
+  width: 48px;
+  height: 5px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: #bdc6d2;
+}
+
+.driver-map-status-card {
+  display: flex;
+  min-height: 92px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 20px;
+}
+
+.driver-map-status-card > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.driver-map-status-card > div > span {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #edf2f8;
+}
+
+.driver-map-status-card > div > span.is-online {
+  background: #e6f8ed;
+  box-shadow: inset 0 0 0 13px #17b85e;
+}
+
+.driver-map-status-card strong,
+.driver-map-status-card p {
+  display: block;
+}
+
+.driver-map-status-card strong {
+  font-size: 17px;
+}
+
+.driver-map-status-card p {
+  margin: 3px 0 0;
+  color: #69778d;
+  font-size: 12px;
+}
+
+.driver-map-status-card > button {
+  min-width: 118px;
+  min-height: 58px;
+  border: 0;
+  border-radius: 17px;
+  background: #075ee6;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.driver-map-snapshot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.driver-map-snapshot button {
+  min-width: 0;
+  min-height: 76px;
+  padding: 10px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 17px;
+  background: #fff;
+  text-align: left;
+}
+
+.driver-map-snapshot small,
+.driver-map-snapshot strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driver-map-snapshot small {
+  color: #627188;
+  font-size: 10px;
+}
+
+.driver-map-snapshot strong {
+  margin-top: 5px;
+  color: #091630;
+  font-size: 16px;
+}
+
+/* Driver history, earnings, account */
+.driver-mobile-container {
+  padding: calc(24px + env(safe-area-inset-top)) 16px calc(112px + env(safe-area-inset-bottom));
+}
+
+.driver-page-heading,
+.driver-money-heading {
+  color: var(--moovu-v3-ink);
+}
+
+.driver-page-heading {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  text-align: center;
+}
+
+.driver-icon-button {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--moovu-v3-ink);
+  box-shadow: 0 8px 22px rgba(15, 38, 71, 0.08);
+}
+
+.driver-icon-button svg {
+  width: 22px;
+}
+
+.driver-page-heading span,
+.driver-money-heading span,
+.driver-account-heading span {
+  display: block;
+  color: #075ee6;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.driver-page-heading h1,
+.driver-money-heading h1 {
+  margin: 5px 0 0;
+  font-size: clamp(32px, 8vw, 48px);
+  line-height: 1.04;
+  letter-spacing: 0;
+}
+
+.driver-page-heading p,
+.driver-money-heading p {
+  max-width: 620px;
+  margin: 12px 0 0;
+  color: #5d6d84;
+  font-size: 15px;
+  font-weight: 550;
+  line-height: 1.55;
+}
+
+.driver-top-actions,
+.driver-money-nav {
+  display: grid;
+  gap: 10px;
+}
+
+.driver-top-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.driver-top-actions a,
+.driver-money-nav a {
+  display: flex;
+  min-width: 0;
+  min-height: 66px;
+  align-items: center;
+  gap: 11px;
+  padding: 0 14px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--moovu-v3-ink);
+  text-decoration: none;
+  box-shadow: 0 7px 18px rgba(15, 38, 71, 0.05);
+}
+
+.driver-top-actions svg,
+.driver-money-nav a > svg:first-child {
+  width: 22px;
+  flex: 0 0 auto;
+  color: #075ee6;
+}
+
+.driver-top-actions svg:last-child,
+.driver-money-nav a > svg:last-child {
+  width: 17px;
+  margin-left: auto;
+  color: #6f7c90;
+}
+
+.driver-top-actions strong,
+.driver-money-nav strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driver-refresh-button {
+  display: flex;
+  width: 100%;
+  min-height: 58px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 18px;
+  background: #075ee6;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  box-shadow: 0 12px 24px rgba(7, 94, 230, 0.2);
+}
+
+.driver-refresh-button svg {
+  width: 20px;
+}
+
+.driver-history-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.driver-history-stats article {
+  min-width: 0;
+  min-height: 120px;
+  padding: 14px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.driver-history-stats small,
+.driver-history-stats strong,
+.driver-history-stats span {
+  display: block;
+}
+
+.driver-history-stats small {
+  color: #075ee6;
+  font-size: 9px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.driver-history-stats strong {
+  margin-top: 10px;
+  font-size: clamp(19px, 5.5vw, 28px);
+  line-height: 1;
+}
+
+.driver-history-stats span {
+  margin-top: 12px;
+  color: #63738a;
+  font-size: 10px;
+}
+
+.driver-history-stats article.is-success small {
+  color: #0ca64f;
+}
+
+.driver-history-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.driver-history-filters label {
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.driver-history-filters label + label {
+  border-left: 1px solid var(--moovu-v3-line);
+}
+
+.driver-history-filters span,
+.driver-history-filters select {
+  display: block;
+}
+
+.driver-history-filters span {
+  color: #63738a;
+  font-size: 10px;
+}
+
+.driver-history-filters select {
+  width: 100%;
+  margin-top: 2px;
+  border: 0;
+  background: transparent;
+  color: #075ee6;
+  font-weight: 900;
+}
+
+.driver-trip-list {
+  display: grid;
+  gap: 10px;
+}
+
+.driver-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.driver-section-heading h2 {
+  font-size: 23px;
+}
+
+.driver-trip-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px 13px 14px 17px;
+  overflow: hidden;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.driver-trip-row::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #15b966;
+  content: "";
+}
+
+.driver-trip-row.is-cancelled::before {
+  background: #075ee6;
+}
+
+.driver-trip-row-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9f8ef;
+  color: #0cb35a;
+}
+
+.driver-trip-row-icon svg {
+  width: 20px;
+}
+
+.driver-trip-route {
+  min-width: 0;
+}
+
+.driver-trip-route > small {
+  color: #61728d;
+  font-size: 10px;
+}
+
+.driver-trip-route > span {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  margin-top: 7px;
+  overflow: hidden;
+  color: #17233a;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driver-trip-route i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #13b864;
+}
+
+.driver-trip-money {
+  text-align: right;
+}
+
+.driver-trip-money strong {
+  display: block;
+  font-size: 17px;
+}
+
+.driver-trip-money span {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #e9f8ef;
+  color: #079348;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+
+.driver-trip-details {
+  grid-column: 1 / -1;
+  border-top: 1px solid #edf1f6;
+  padding-top: 10px;
+}
+
+.driver-money-nav {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.driver-money-nav a.is-green > svg:first-child {
+  color: #0cab50;
+}
+
+.driver-money-nav a.is-violet > svg:first-child {
+  color: #6332d1;
+}
+
+.driver-money-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.driver-money-grid article {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  min-height: 150px;
+  gap: 12px;
+  align-items: start;
+  padding: 18px 14px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 7px 18px rgba(15, 38, 71, 0.05);
+}
+
+.driver-money-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9f3ff;
+  color: #075ee6;
+}
+
+.driver-money-icon svg {
+  width: 23px;
+}
+
+.driver-money-grid article.is-green .driver-money-icon {
+  background: #e6f8ed;
+  color: #0ba64d;
+}
+
+.driver-money-grid article.is-orange .driver-money-icon {
+  background: #fff0e4;
+  color: #f16b09;
+}
+
+.driver-money-grid article.is-violet .driver-money-icon {
+  background: #eee9ff;
+  color: #6332d1;
+}
+
+.driver-money-grid small,
+.driver-money-grid strong,
+.driver-money-grid p {
+  display: block;
+}
+
+.driver-money-grid small {
+  color: #53627b;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.driver-money-grid strong {
+  margin-top: 9px;
+  font-size: clamp(21px, 6vw, 32px);
+  line-height: 1;
+}
+
+.driver-money-grid p {
+  margin: 12px 0 0;
+  color: #617189;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.driver-wallet-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--moovu-v3-line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.driver-wallet-summary small,
+.driver-wallet-summary strong,
+.driver-wallet-summary p {
+  display: block;
+}
+
+.driver-wallet-summary small {
+  color: #075ee6;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.driver-wallet-summary strong {
+  margin-top: 5px;
+  font-size: 28px;
+}
+
+.driver-wallet-summary p {
+  margin: 4px 0 0;
+  color: #65748a;
+  font-size: 10px;
+}
+
+.driver-wallet-summary a {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px solid #075ee6;
+  border-radius: 15px;
+  color: #075ee6;
+  font-size: 11px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.driver-wallet-summary a svg {
+  width: 15px;
+}
+
+.driver-account-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.driver-account-avatar {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 22px;
+  background: #eaf3ff;
+  color: #075ee6;
+}
+
+.driver-account-avatar svg {
+  width: 34px;
+}
+
+.driver-account-heading h1 {
+  margin: 4px 0 0;
+  font-size: clamp(27px, 7vw, 40px);
+  line-height: 1.04;
+}
+
+.driver-account-heading p {
+  margin: 5px 0 0;
+  color: #68778c;
+  font-size: 12px;
+}
+
+.driver-account-v3 .moovu-card,
+.driver-account-v3 .moovu-profile-section-card {
+  border-color: var(--moovu-v3-line);
+  border-radius: 20px;
+  box-shadow: 0 8px 22px rgba(15, 38, 71, 0.05);
+}
+
+.driver-account-v3 .moovu-data-row {
+  border-radius: 15px;
+  background: #f7faff;
+}
+
+.driver-account-v3 .moovu-quick-action-grid {
+  gap: 8px;
+}
+
+.driver-account-v3 .moovu-quick-action-card {
+  min-height: 70px;
+  border-radius: 17px;
+}
+
+.driver-account-v3 .moovu-quick-action-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  background: #edf4ff;
+  color: #075ee6;
+}
+
+.driver-account-v3 .moovu-quick-action-mark svg {
+  width: 19px;
+}
+
+@media (max-width: 430px) {
+  .customer-home-v3-shell {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .customer-home-v3-copy h1 {
+    font-size: clamp(44px, 13vw, 58px);
+  }
+
+  .customer-home-v3-preview {
+    margin-right: -18px;
+    margin-left: -18px;
+  }
+
+  .customer-home-v3-trust > div {
+    padding: 10px 8px;
+  }
+
+  .customer-home-v3-trust svg {
+    width: 22px;
+  }
+
+  .customer-home-v3-trust span {
+    font-size: 11px;
+  }
+
+  .customer-home-v3-trust strong {
+    font-size: 12px;
+  }
+
+  .booking-v3 .mbk-header {
+    min-height: 82px;
+    grid-template-columns: auto 1fr auto;
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .booking-v3 .moovu-brand-lockup {
+    display: none;
+  }
+
+  .booking-v3 .mbk-customer-back {
+    justify-self: start;
+  }
+
+  .booking-v3 .moovu-icon-link {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .customer-trip-v3 > .moovu-shell {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .customer-trip-v3 .customer-trip-map-card {
+    border-radius: 0;
+  }
+
+  .customer-trip-v3 .customer-trip-compact-stack {
+    margin-right: 8px;
+    margin-left: 8px;
+    padding: 16px;
+  }
+
+  .driver-mobile-container {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+
+  .driver-money-nav a {
+    min-height: 62px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 7px 3px;
+  }
+
+  .driver-money-nav a > svg:last-child {
+    display: none;
+  }
+
+  .driver-money-nav strong {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 370px) {
+  .customer-home-v3-brand small {
+    font-size: 14px;
+  }
+
+  .customer-home-v3-brand strong {
+    font-size: 20px;
+  }
+
+  .customer-home-v3-logo {
+    width: 54px;
+    height: 54px;
+  }
+
+  .customer-home-v3-trips {
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .customer-home-v3-copy h1 {
+    font-size: 43px;
+  }
+
+  .customer-home-v3-trust {
+    gap: 6px;
+  }
+
+  .customer-home-v3-trust > div {
+    min-height: 70px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .driver-map-status-card > button {
+    min-width: 102px;
+  }
+
+  .driver-map-snapshot small {
+    font-size: 9px;
+  }
+
+  .driver-history-stats article {
+    padding: 11px;
+  }
+
+  .driver-trip-row {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .driver-trip-row-icon {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (min-width: 768px) {
+  .customer-home-v3-shell {
+    padding-right: 40px;
+    padding-left: 40px;
+  }
+
+  .customer-home-v3-preview {
+    margin-right: -40px;
+    margin-left: -40px;
+  }
+
+  .booking-v3 .mbk-sheet {
+    right: 28px;
+    bottom: 24px;
+    left: auto;
+    width: min(480px, calc(100vw - 56px));
+    max-height: calc(100svh - 122px);
+    border-radius: 30px;
+  }
+
+  .booking-v3 .mbk-map-layer {
+    height: 100svh;
+  }
+
+  .customer-trip-v3 .customer-trip-compact-stack {
+    margin-right: auto;
+    margin-left: auto;
+    max-width: 800px;
+  }
+}
+
+@media print {
+  .moovu-receipt-screen {
+    background: #fff;
+  }
+
+  .moovu-receipt-screen .moovu-app-container {
+    width: 100%;
+    max-width: none;
+    padding: 0;
+  }
+
+  .moovu-receipt-doc {
+    border: 0;
+    box-shadow: none;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(47, 128, 237, 0.07), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, #f5f8fc 42%, #f3f6fa 100%);
+  color: var(--moovu-text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    min-height: 100svh;
   }
 }

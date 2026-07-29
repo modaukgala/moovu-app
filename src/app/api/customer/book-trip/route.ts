@@ -3,6 +3,7 @@ import { calculateFare } from "@/lib/fare/calculateFare";
 import {
   MAX_TRIP_STOPS,
   calculateAddStopIncrease,
+  calculateFinalJourneyFare,
   calculateStopWaitingFee,
   getRideOption,
   normalizeRideOptionId,
@@ -370,6 +371,15 @@ export async function POST(req: Request) {
     const activeSurge = await getActiveManualSurge();
     const fare = calculateFare({
       distanceKm: originalDistanceKm,
+      distanceDiscountKm: originalDistanceKm,
+      durationMin: originalDurationMin,
+      rideOptionId,
+      surgeLabel: activeSurge.mode,
+      surgeMultiplier: activeSurge.multiplier,
+    });
+    const journeyBaseFare = calculateFare({
+      distanceKm: originalDistanceKm,
+      distanceDiscountKm: 0,
       durationMin: originalDurationMin,
       rideOptionId,
       surgeLabel: activeSurge.mode,
@@ -387,7 +397,13 @@ export async function POST(req: Request) {
       rideOptionId,
       stopWaitingMinutes: [],
     });
-    const finalFare = Math.round(fare.totalFare + addStop.finalAddStopIncrease + stopWaiting.stopWaitingFee);
+    const journeyFare = calculateFinalJourneyFare({
+      baseFare: journeyBaseFare,
+      routeDistanceKm: distanceKm,
+      addStopIncrease: addStop.finalAddStopIncrease,
+      stopWaitingFee: stopWaiting.stopWaitingFee,
+    });
+    const finalFare = journeyFare.totalFare;
 
     const startOtp = generateOtp();
     const endOtp = generateOtp();
@@ -439,6 +455,7 @@ export async function POST(req: Request) {
         stops,
         addStop,
         stopWaiting,
+        journeyFare,
         pickupInstruction: pickupInstruction || null,
         finalFare,
       },

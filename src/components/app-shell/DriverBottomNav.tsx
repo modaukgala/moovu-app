@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CircleUserRound, House, ListChecks, WalletCards } from "lucide-react";
 
 const items = [
-  { href: "/driver", label: "Home" },
-  { href: "/driver/history", label: "Trips" },
-  { href: "/driver/earnings", label: "Earnings" },
-  { href: "/driver/account", label: "Account" },
+  { href: "/driver", label: "Home", icon: House },
+  { href: "/driver/history", label: "Trips", icon: ListChecks },
+  { href: "/driver/earnings", label: "Earnings", icon: WalletCards },
+  { href: "/driver/account", label: "Account", icon: CircleUserRound },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -38,6 +39,7 @@ export default function DriverBottomNav() {
       >
         {items.map((item) => {
           const active = isActive(pathname, item.href);
+          const Icon = item.icon;
 
           return (
             <Link
@@ -46,7 +48,7 @@ export default function DriverBottomNav() {
               aria-current={active ? "page" : undefined}
               className={active ? "moovu-customer-nav-item active" : "moovu-customer-nav-item"}
             >
-              <span className="moovu-customer-nav-dot" />
+              <Icon className="moovu-customer-nav-icon" aria-hidden="true" />
               <span className="moovu-customer-nav-label">{item.label}</span>
             </Link>
           );

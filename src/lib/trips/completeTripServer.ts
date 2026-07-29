@@ -2,17 +2,17 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { calculateFinalFare } from "@/lib/domain/fare";
 import { applyTripCommissionServer } from "@/lib/finance/applyTripCommissionServer";
 import { haversineKm, isFreshHeartbeat, minimumRequiredTripSeconds } from "@/lib/geo/tripGuards";
-import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
+import { notifyAdmins, notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
+import {
+  buildCompletionAuditFields,
+  completionSchemaErrorMessage,
+  completionSchemaSelect,
+  END_OTP_BYPASS_REASONS,
+  missingCompletionColumn,
+  type CompletionMode,
+} from "@/lib/trips/completionContract";
 
-export const END_OTP_BYPASS_REASONS = [
-  "Customer phone unavailable/dead",
-  "Customer unable to access OTP",
-  "Connectivity issue",
-  "Customer left vehicle",
-  "Other",
-] as const;
-
-type CompletionMode = "otp" | "bypass" | "admin";
+export { END_OTP_BYPASS_REASONS } from "@/lib/trips/completionContract";
 
 type CompletionTrip = {
   id: string;
@@ -23,8 +23,10 @@ type CompletionTrip = {
   distance_km?: number | null;
   dropoff_lat: number | null;
   dropoff_lng: number | null;
+  start_otp_verified: boolean | null;
   end_otp: string | null;
   end_otp_verified: boolean | null;
+  trip_started_at?: string | null;
   ride_option?: string | null;
   original_fare?: number | null;
   final_add_stop_increase?: number | null;
@@ -40,15 +42,10 @@ type CompletionTrip = {
 
 const COMPLETE_SELECT = `
   id,status,driver_id,fare_amount,duration_min,distance_km,dropoff_lat,dropoff_lng,
-  end_otp,end_otp_verified,ride_option,original_fare,final_add_stop_increase,
+  start_otp_verified,end_otp,end_otp_verified,trip_started_at,ride_option,original_fare,final_add_stop_increase,
   stop_waiting_fee,final_fare,route_distance_km,route_duration_min,estimated_fare,
   current_fare,actual_distance_km,actual_duration_min
 `;
-
-function missingCompletionColumn(error: { code?: string; message?: string } | null | undefined) {
-  const message = String(error?.message ?? "").toLowerCase();
-  return error?.code === "42703" || message.includes("schema cache") || message.includes("column");
-}
 
 export type CompleteTripServerResult =
   | {
@@ -96,7 +93,20 @@ export async function completeTripServer(params: {
     return { ok: false, status: 403, error: "This trip is not assigned to you." };
   }
   if (trip.status !== "ongoing") {
-    return { ok: false, status: 400, error: "Only ongoing trips can be completed." };
+    if (trip.status === "completed") {
+      return { ok: false, status: 409, error: "Trip has already been completed." };
+    }
+    if (trip.status === "cancelled") {
+      return { ok: false, status: 400, error: "Cancelled trips cannot be completed." };
+    }
+    return { ok: false, status: 400, error: "Trip is not currently active." };
+  }
+  if (params.mode === "admin" && !trip.start_otp_verified) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Start OTP has not been verified for this trip.",
+    };
   }
 
   if (params.mode === "otp") {
@@ -120,17 +130,23 @@ export async function completeTripServer(params: {
     return { ok: false, status: 400, error: "Add an admin completion note." };
   }
 
-  if (params.mode !== "otp") {
+  if (params.mode === "admin" || params.mode === "bypass") {
     const schemaProbe = await supabaseAdmin
       .from("trips")
-      .select("id,completed_without_end_otp,end_otp_bypass_reason,completed_by")
+      .select(completionSchemaSelect(params.mode))
       .eq("id", params.tripId)
       .maybeSingle();
     if (schemaProbe.error && missingCompletionColumn(schemaProbe.error)) {
+      console.error("[trip-complete] completion schema is incomplete", {
+        tripId: params.tripId,
+        mode: params.mode,
+        code: schemaProbe.error.code,
+        message: schemaProbe.error.message,
+      });
       return {
         ok: false,
         status: 503,
-        error: "The latest trip-completion migration must be applied before this completion option can be used.",
+        error: completionSchemaErrorMessage(params.mode),
       };
     }
     if (schemaProbe.error) {
@@ -148,7 +164,9 @@ export async function completeTripServer(params: {
   if (startError) return { ok: false, status: 500, error: startError.message };
   const startedAt = startEvents?.[0]?.created_at
     ? new Date(startEvents[0].created_at).getTime()
-    : null;
+    : trip.trip_started_at
+      ? new Date(trip.trip_started_at).getTime()
+      : null;
   if (!startedAt) return { ok: false, status: 400, error: "Trip start record is missing." };
 
   const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
@@ -168,7 +186,12 @@ export async function completeTripServer(params: {
     fallbackFare: trip.final_fare ?? trip.fare_amount,
   });
   const liveFare = Number(trip.current_fare ?? 0);
-  const fareAmount = Number.isFinite(liveFare) && liveFare > 0 ? liveFare : calculated.finalFare;
+  const storedFinalFare = Number(trip.final_fare ?? trip.fare_amount ?? 0);
+  const fareAmount = Number.isFinite(liveFare) && liveFare > 0
+    ? liveFare
+    : Number.isFinite(storedFinalFare) && storedFinalFare > 0
+      ? storedFinalFare
+      : calculated.finalFare;
   if (!Number.isFinite(fareAmount) || fareAmount <= 0) {
     return { ok: false, status: 400, error: "Trip fare is missing or invalid." };
   }
@@ -212,14 +235,13 @@ export async function completeTripServer(params: {
   const update = {
     status: "completed",
     completed_at: now,
-    completed_by: params.mode === "admin" ? "admin" : "driver",
-    completion_note: params.mode === "admin" ? String(params.note ?? "").trim() : null,
-    end_otp_verified: params.mode === "otp",
-    completed_without_end_otp: params.mode === "bypass",
-    end_otp_bypass_reason: params.mode === "bypass" ? params.reason : null,
-    end_otp_bypass_note: params.mode === "bypass" ? String(params.note ?? "").trim() || null : null,
-    end_otp_bypassed_by: params.mode === "bypass" ? params.actorId : null,
-    end_otp_bypassed_at: params.mode === "bypass" ? now : null,
+    ...buildCompletionAuditFields({
+      mode: params.mode,
+      actorId: params.actorId,
+      now,
+      note: params.note,
+      reason: params.reason,
+    }),
     fare_amount: fare.finalFare,
     final_fare: fare.finalFare,
     estimated_fare: fare.estimatedFare,
@@ -246,11 +268,17 @@ export async function completeTripServer(params: {
     .maybeSingle();
 
   if (updated.error && missingCompletionColumn(updated.error)) {
-    if (params.mode !== "otp") {
+    if (params.mode === "admin" || params.mode === "bypass") {
+      console.error("[trip-complete] completion update schema is incomplete", {
+        tripId: params.tripId,
+        mode: params.mode,
+        code: updated.error.code,
+        message: updated.error.message,
+      });
       return {
         ok: false,
         status: 503,
-        error: "The latest trip-completion migration must be applied before this completion option can be used.",
+        error: completionSchemaErrorMessage(params.mode),
       };
     }
     const legacy = await supabaseAdmin
@@ -271,13 +299,6 @@ export async function completeTripServer(params: {
     return { ok: false, status: 409, error: "Trip status changed while it was being completed." };
   }
 
-  await applyTripCommissionServer({
-    tripId: params.tripId,
-    driverId: trip.driver_id,
-    fareAmount,
-    createdBy: params.actorId,
-    rideOptionId: trip.ride_option,
-  }).catch(() => null);
   await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", trip.driver_id);
 
   const completionLabel =
@@ -324,6 +345,13 @@ export async function completeTripServer(params: {
       "Trip completed",
       `Your trip is complete. Final fare: R${fare.finalFare.toFixed(2)}.`,
       `/ride/${params.tripId}`,
+      { type: "trip_completed", tripId: params.tripId },
+    ).catch(() => null),
+    notifyDriverForTrip(
+      params.tripId,
+      params.mode === "admin" ? "Trip completed by MOOVU" : "Trip completed",
+      `Trip complete. Final fare: R${fare.finalFare.toFixed(2)}.`,
+      "/driver/history",
       { type: "trip_completed", tripId: params.tripId },
     ).catch(() => null),
     notifyAdmins(

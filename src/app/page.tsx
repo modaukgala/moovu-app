@@ -94,7 +94,9 @@ export default function HomePage() {
           </Link>
 
           <nav className="customer-landing-actions" aria-label="Customer links">
-            <Link href="/ride/history" className="customer-header-link">Trips</Link>
+            {!isLoggedIn ? (
+              <Link href="/ride/history" className="customer-header-link">Trips</Link>
+            ) : null}
             <Link href={accountHref} className="customer-header-pill">{accountLabel}</Link>
           </nav>
         </header>

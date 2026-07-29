@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
+import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import LocationMapPicker, {
   type ConfirmedMapLocation,
 } from "@/components/booking/LocationMapPicker";
@@ -15,14 +16,22 @@ import {
   RIDE_OPTIONS,
   SURGE_MODES,
   calculateAddStopIncrease,
+  calculateFinalJourneyFare,
   calculateTripFare,
+  getDistanceTierDiscountPct,
   type RideOptionId,
   type SurgeModeConfig,
 } from "@/lib/domain/fare";
 import { bestReverseGeocodeLabel, parsePastedLocation, type ReverseGeocodeResult } from "@/lib/locationPaste";
 import { MOOVU_LEGAL_VERSION } from "@/lib/legal";
-import { gpsMarkerIcon, stopMarkerIcon } from "@/lib/maps/liveMapMarkers";
-import { getMoovuCurrentPosition } from "@/lib/native-permissions";
+import {
+  carMarkerIcon,
+  createOrMoveMarker,
+  gpsMarkerIcon,
+  stopMarkerIcon,
+} from "@/lib/maps/liveMapMarkers";
+import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
+import { getMoovuCurrentPosition, watchMoovuPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type CustomerMe = {
@@ -41,6 +50,12 @@ type PendingPastedLocation = {
   stopIndex?: number;
   source: string;
   resolved: ResolvedLocation;
+};
+type NearbyDriverMarker = {
+  markerId: string;
+  lat: number;
+  lng: number;
+  updatedAt: string | null;
 };
 type StopInput = Omit<ResolvedLocation, "lat" | "lng"> & {
   lat: number | null;
@@ -151,6 +166,8 @@ export default function RiderBookingPage() {
   const [mapPickerKind, setMapPickerKind] = useState<LocationKind | null>(null);
   const [pickupPinned, setPickupPinned] = useState(false);
   const [pickupInstruction, setPickupInstruction] = useState("");
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriverMarker[]>([]);
 
   // ── Bottom sheet drag state ──────────────────────────────────────
   const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">("expanded");
@@ -169,6 +186,9 @@ export default function RiderBookingPage() {
   const calculatingKeyRef = useRef("");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const currentLocationMarkerRef = useRef<google.maps.Marker | null>(null);
+  const nearbyDriverMarkerRefs = useRef<Map<string, google.maps.Marker>>(new Map());
+  const autoLocationAttemptedRef = useRef(false);
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const stopMarkerRefs = useRef<google.maps.Marker[]>([]);
@@ -198,21 +218,41 @@ export default function RiderBookingPage() {
     });
   }, [distanceKm, durationMin, originalDistanceKm, originalDurationMin, selectedRideOption, stopCount]);
 
-  const originalFare = useMemo(() => {
+  const originalFareBreakdown = useMemo(() => {
     if (originalDistanceKm == null || originalDurationMin == null) return null;
     return calculateTripFare({
       distanceKm: originalDistanceKm,
+      distanceDiscountKm: originalDistanceKm,
       durationMin: originalDurationMin,
       rideOptionId: selectedRideOption,
       surgeLabel: activeSurge.mode,
       surgeMultiplier: activeSurge.multiplier,
-    }).totalFare;
+    });
   }, [activeSurge.mode, activeSurge.multiplier, originalDistanceKm, originalDurationMin, selectedRideOption]);
 
+  const journeyBaseFare = useMemo(() => {
+    if (originalDistanceKm == null || originalDurationMin == null) return null;
+    return calculateTripFare({
+      distanceKm: originalDistanceKm,
+      distanceDiscountKm: 0,
+      durationMin: originalDurationMin,
+      rideOptionId: selectedRideOption,
+      surgeLabel: activeSurge.mode,
+      surgeMultiplier: activeSurge.multiplier,
+    });
+  }, [activeSurge.mode, activeSurge.multiplier, originalDistanceKm, originalDurationMin, selectedRideOption]);
+
+  const originalFare = originalFareBreakdown?.totalFare ?? null;
+
   const fare = useMemo(() => {
-    if (originalFare == null) return null;
-    return Math.round(originalFare + (addStopBreakdown?.finalAddStopIncrease ?? 0));
-  }, [addStopBreakdown?.finalAddStopIncrease, originalFare]);
+    if (!journeyBaseFare || distanceKm == null) return null;
+    return calculateFinalJourneyFare({
+      baseFare: journeyBaseFare,
+      routeDistanceKm: distanceKm,
+      addStopIncrease: addStopBreakdown?.finalAddStopIncrease ?? 0,
+    }).totalFare;
+  }, [addStopBreakdown?.finalAddStopIncrease, distanceKm, journeyBaseFare]);
+  const distanceDiscountPct = getDistanceTierDiscountPct(distanceKm ?? 0);
   const displayFare = useMemo(() => {
     if (fare != null) return fare;
     if (baseFare != null) return Math.round(baseFare + addStopIncrease);
@@ -499,6 +539,7 @@ export default function RiderBookingPage() {
 
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
+      setCurrentLocation({ lat, lng });
       setPickupLat(lat); setPickupLng(lng); setPickupPlaceId("");
       setPickupPinned(false); setPickupInstruction("");
       setPickupPredictions([]); setShowPickupDropdown(false); setPickupError(null);
@@ -1141,6 +1182,7 @@ export default function RiderBookingPage() {
       }
       const est = calculateTripFare({
         distanceKm: originalKm,
+        distanceDiscountKm: 0,
         durationMin: originalMins,
         rideOptionId: selectedRideOption,
         surgeLabel: activeSurge.mode,
@@ -1154,6 +1196,11 @@ export default function RiderBookingPage() {
         routeDurationMin: mins,
         stopCount: route.stops.length,
       });
+      const journeyEstimate = calculateFinalJourneyFare({
+        baseFare: est,
+        routeDistanceKm: km,
+        addStopIncrease: stopBreakdown.finalAddStopIncrease,
+      });
       const roundedKm = Number(km.toFixed(2));
       const roundedMins = Math.ceil(mins);
       const roundedOriginalKm = Number(originalKm.toFixed(2));
@@ -1162,8 +1209,8 @@ export default function RiderBookingPage() {
       setDurationMin(roundedMins);
       setOriginalDistanceKm(roundedOriginalKm);
       setOriginalDurationMin(roundedOriginalMins);
-      setBaseFare(est.totalFare);
-      setAddStopIncrease(stopBreakdown.finalAddStopIncrease);
+      setBaseFare(journeyEstimate.totalFare);
+      setAddStopIncrease(0);
       setRouteCalculationError(null);
       lastCalculatedKeyRef.current = requestKey;
       return {
@@ -1223,14 +1270,19 @@ export default function RiderBookingPage() {
             stopCount: route.stops.length,
           })
         : null;
-      const finalFare = bOriginalDistKm != null && bOriginalDurMin != null
-        ? Math.round(calculateTripFare({
-            distanceKm: bOriginalDistKm,
-            durationMin: bOriginalDurMin,
-            rideOptionId: selectedRideOption,
-            surgeLabel: activeSurge.mode,
-            surgeMultiplier: activeSurge.multiplier,
-          }).totalFare + (stopBreakdown?.finalAddStopIncrease ?? 0))
+      const finalFare = bOriginalDistKm != null && bOriginalDurMin != null && bDistKm != null
+        ? calculateFinalJourneyFare({
+            baseFare: calculateTripFare({
+              distanceKm: bOriginalDistKm,
+              distanceDiscountKm: 0,
+              durationMin: bOriginalDurMin,
+              rideOptionId: selectedRideOption,
+              surgeLabel: activeSurge.mode,
+              surgeMultiplier: activeSurge.multiplier,
+            }),
+            routeDistanceKm: bDistKm,
+            addStopIncrease: stopBreakdown?.finalAddStopIncrease ?? 0,
+          }).totalFare
         : fare ?? baseFare ?? 0;
       const rideOptionLabel = RIDE_OPTIONS.find((o) => o.id === selectedRideOption)?.name ?? "MOOVU Go";
 
@@ -1282,6 +1334,12 @@ export default function RiderBookingPage() {
       });
     }
     return true;
+  }
+
+  function centerOnCurrentLocation() {
+    if (!currentLocation || !ensureMap()) return;
+    mapInstanceRef.current?.panTo(currentLocation);
+    mapInstanceRef.current?.setZoom(15);
   }
 
   function renderPickupOnlyMap() {
@@ -1438,10 +1496,133 @@ export default function RiderBookingPage() {
     if (pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null) { renderRouteMap(); return; }
     if (pickupLat != null && pickupLng != null) { renderPickupOnlyMap(); return; }
     clearMapVisuals(); setRouteVisible(false);
-    if (mapInstanceRef.current) { mapInstanceRef.current.setCenter(DEFAULT_CENTER); mapInstanceRef.current.setZoom(11); }
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setCenter(currentLocation ?? DEFAULT_CENTER);
+      mapInstanceRef.current.setZoom(currentLocation ? 15 : 11);
+    }
     // Map render helpers read refs and latest coordinates; listing them recreates this effect unnecessarily.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng, resolvedStops]);
+  }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng, resolvedStops, currentLocation]);
+
+  useEffect(() => {
+    if (!mapReady || autoLocationAttemptedRef.current) return;
+    autoLocationAttemptedRef.current = true;
+    let watcher: Awaited<ReturnType<typeof watchMoovuPosition>> | null = null;
+    let cancelled = false;
+    const updateLocation = (position: {
+      coords: { latitude: number; longitude: number };
+    }) => {
+      if (cancelled) return;
+      setCurrentLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      });
+    };
+    void getMoovuCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 60000,
+    })
+      .then(updateLocation)
+      .catch(() => undefined)
+      .finally(() => {
+        if (cancelled) return;
+        void watchMoovuPosition({
+          options: {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 5000,
+          },
+          onPosition: updateLocation,
+        })
+          .then((activeWatcher) => {
+            if (cancelled) {
+              void activeWatcher.stop();
+              return;
+            }
+            watcher = activeWatcher;
+          })
+          .catch(() => {
+            // Typed pickup and the map picker remain available without GPS.
+          });
+      });
+    return () => {
+      cancelled = true;
+      if (watcher) void watcher.stop();
+    };
+  }, [mapReady]);
+
+  useEffect(() => {
+    if (!mapReady || !currentLocation || !ensureMap()) return;
+    const map = mapInstanceRef.current!;
+    currentLocationMarkerRef.current = createOrMoveMarker({
+      map,
+      marker: currentLocationMarkerRef.current,
+      position: currentLocation,
+      title: "Your current location",
+      icon: gpsMarkerIcon(),
+    });
+    if (pickupLat == null && pickupLng == null) {
+      map.panTo(currentLocation);
+      map.setZoom(15);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLocation, mapReady]);
+
+  useEffect(() => {
+    if (!customer || !currentLocation) return;
+    let cancelled = false;
+
+    async function loadNearbyDrivers() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (!session || cancelled) return;
+      const query = new URLSearchParams({
+        lat: String(currentLocation!.lat),
+        lng: String(currentLocation!.lng),
+        rideOption: selectedRideOption,
+      });
+      const response = await fetch(`/api/customer/nearby-drivers?${query}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await response.json().catch(() => null);
+      if (!cancelled && response.ok && json?.ok) {
+        setNearbyDrivers(Array.isArray(json.drivers) ? json.drivers : []);
+      }
+    }
+
+    void loadNearbyDrivers();
+    const timer = window.setInterval(
+      () => void loadNearbyDrivers(),
+      LIVE_LOCATION_CONFIG.customerRefreshMs,
+    );
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [customer, currentLocation, selectedRideOption]);
+
+  useEffect(() => {
+    if (!mapReady || !ensureMap()) return;
+    const map = mapInstanceRef.current!;
+    const activeIds = new Set(nearbyDrivers.map((driver) => driver.markerId));
+    for (const [markerId, marker] of nearbyDriverMarkerRefs.current) {
+      if (!activeIds.has(markerId)) {
+        marker.setMap(null);
+        nearbyDriverMarkerRefs.current.delete(markerId);
+      }
+    }
+    for (const driver of nearbyDrivers) {
+      const marker = createOrMoveMarker({
+        map,
+        marker: nearbyDriverMarkerRefs.current.get(driver.markerId) ?? null,
+        position: { lat: driver.lat, lng: driver.lng },
+        title: "Nearby MOOVU driver",
+        icon: carMarkerIcon(),
+      });
+      nearbyDriverMarkerRefs.current.set(driver.markerId, marker);
+    }
+  }, [mapReady, nearbyDrivers]);
 
   useEffect(() => {
     if (!canCalculate || !routeKey) return;
@@ -1555,25 +1736,29 @@ export default function RiderBookingPage() {
           <div className="customer-ride-option-list">
             {RIDE_OPTIONS.map((opt) => {
               const active = selectedRideOption === opt.id;
-              const optionFare = Math.round(
-                calculateTripFare({
+              const optionBaseFare = calculateTripFare({
                   distanceKm: originalDistanceKm ?? distanceKm,
+                  distanceDiscountKm: 0,
                   durationMin: originalDurationMin ?? durationMin,
                   rideOptionId: opt.id,
                   surgeLabel: activeSurge.mode,
                   surgeMultiplier: activeSurge.multiplier,
-                }).totalFare +
-                  (stopCount > 0
-                    ? calculateAddStopIncrease({
-                        rideOptionId: opt.id,
-                        originalDistanceKm: originalDistanceKm ?? distanceKm,
-                        originalDurationMin: originalDurationMin ?? durationMin,
-                        routeDistanceKm: distanceKm,
-                        routeDurationMin: durationMin,
-                        stopCount,
-                      }).finalAddStopIncrease
-                    : 0)
-              );
+                });
+              const optionStopIncrease = stopCount > 0
+                ? calculateAddStopIncrease({
+                    rideOptionId: opt.id,
+                    originalDistanceKm: originalDistanceKm ?? distanceKm,
+                    originalDurationMin: originalDurationMin ?? durationMin,
+                    routeDistanceKm: distanceKm,
+                    routeDurationMin: durationMin,
+                    stopCount,
+                  }).finalAddStopIncrease
+                : 0;
+              const optionFare = calculateFinalJourneyFare({
+                baseFare: optionBaseFare,
+                routeDistanceKm: distanceKm,
+                addStopIncrease: optionStopIncrease,
+              }).totalFare;
               const description = opt.id === "group" ? "More space for groups" : "Everyday local trips";
               return (
                 <button key={opt.id} type="button"
@@ -1697,7 +1882,7 @@ export default function RiderBookingPage() {
     </>
   );
   return (
-    <main className="mbk-page">
+    <main className="mbk-page booking-v3">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
       {mapPickerKind && (
         <LocationMapPicker
@@ -1788,10 +1973,24 @@ export default function RiderBookingPage() {
           ? <div className="mbk-map-error">{mapError}</div>
           : <div ref={mapRef} className="mbk-map" />
         }
+        {currentLocation ? (
+          <button
+            type="button"
+            className="mbk-map-recenter"
+            onClick={centerOnCurrentLocation}
+            aria-label="Center map on my location"
+            title="My location"
+          >
+            <span aria-hidden="true">◎</span>
+          </button>
+        ) : null}
       </div>
 
       {/* Floating top header */}
       <header className="mbk-header">
+        <div className="mbk-customer-back">
+          <CustomerBackHomeNav fallbackHref="/" homeHref="/" homeLabel="Home" compact />
+        </div>
         <div className="moovu-brand-lockup">
           <Image src="/logo.png" alt="MOOVU Kasi Rides" width={96} height={58} priority />
           <div>
@@ -2100,6 +2299,11 @@ export default function RiderBookingPage() {
               <div className="mbk-footer-fare" aria-label={displayFare == null ? "Estimate pending" : undefined}>
                 {displayFare == null ? "\u00A0" : money(displayFare)}
               </div>
+              {distanceDiscountPct > 0 ? (
+                <div className="text-[10px] font-black text-emerald-700">
+                  {distanceDiscountPct}% distance saving included
+                </div>
+              ) : null}
             </div>
             <button
               className="moovu-confirm-button flex-1"

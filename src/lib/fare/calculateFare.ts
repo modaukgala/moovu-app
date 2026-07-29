@@ -3,6 +3,7 @@ import type { SurgeLabel } from "@/lib/domain/fare";
 
 type CalculateFareParams = {
   distanceKm?: number | null;
+  distanceDiscountKm?: number | null;
   durationMin?: number | null;
   rideOptionId?: RideOptionId | null;
   surgeLabel?: SurgeLabel | null;
@@ -14,6 +15,7 @@ type CalculateFareParams = {
 export function calculateFare(params: CalculateFareParams) {
   return calculateTripFare({
     distanceKm: Number(params.distanceKm ?? 0),
+    distanceDiscountKm: params.distanceDiscountKm,
     durationMin: Number(params.durationMin ?? 0),
     rideOptionId: params.rideOptionId,
     surgeLabel: params.surgeLabel,

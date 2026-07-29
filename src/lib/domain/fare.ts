@@ -11,6 +11,7 @@ export type SurgeModeConfig = {
 
 export type FareInput = {
   distanceKm: number;
+  distanceDiscountKm?: number | null;
   durationMin: number;
   rideOptionId?: RideOptionId | null;
   surgeLabel?: SurgeLabel | null;
@@ -70,6 +71,15 @@ export type FinalFareBreakdown = {
   adjustmentAmount: number;
 };
 
+export type JourneyFareBreakdown = {
+  fareBeforeDistanceDiscount: number;
+  distanceDiscountKm: number;
+  distanceDiscountPct: number;
+  distanceDiscountAmount: number;
+  fareBeforeMinimum: number;
+  totalFare: number;
+};
+
 export type RideOption = {
   id: RideOptionId;
   name: string;
@@ -105,6 +115,10 @@ export type FareBreakdown = FareRules & {
   chargeableWaitingMinutes: number;
   waitingFee: number;
   remotePickupFee: number;
+  distanceDiscountKm: number;
+  distanceDiscountPct: number;
+  distanceDiscountAmount: number;
+  fareBeforeDistanceDiscount: number;
   longDistanceUpliftPct: number;
   longDistanceUpliftAmount: number;
   surgeLabel: SurgeLabel;
@@ -257,10 +271,15 @@ export function getCommissionPctForRideOption(value: unknown) {
   return getFareRules(value).platformCommissionPct;
 }
 
-export function getLongDistanceUpliftPct(distanceKm: number) {
-  if (distanceKm >= 50) return 8.5;
-  if (distanceKm >= 30) return 6.5;
-  if (distanceKm >= 15) return 4.5;
+export function getDistanceTierDiscountPct(distanceKm: number) {
+  const distance = safePositiveNumber(distanceKm);
+  if (distance > 18) return 20;
+  if (distance > 10) return 8;
+  return 0;
+}
+
+/** @deprecated Long-distance uplifts were replaced by distance-tier discounts. */
+export function getLongDistanceUpliftPct() {
   return 0;
 }
 
@@ -294,6 +313,7 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
   const rideOption = getRideOption(rideOptionId);
   const rules = getFareRules(rideOptionId);
   const distanceKm = safePositiveNumber(input.distanceKm);
+  const distanceDiscountKm = safePositiveNumber(input.distanceDiscountKm ?? distanceKm);
   const durationMin = safePositiveNumber(input.durationMin);
   const waitingMinutes = safePositiveNumber(input.waitingMinutes);
   const chargeableWaitingMinutes = Math.max(0, Math.ceil(waitingMinutes - rules.freeWaitingMinutes));
@@ -312,12 +332,19 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
       waitingFee +
       remotePickupFee
   );
-  const longDistanceUpliftPct = getLongDistanceUpliftPct(distanceKm);
-  const longDistanceUpliftAmount = roundMoney(rawFare * (longDistanceUpliftPct / 100));
+  const longDistanceUpliftPct = 0;
+  const longDistanceUpliftAmount = 0;
   const fareBeforeUplift = rawFare;
-  const fareBeforeSurge = roundMoney(fareBeforeUplift + longDistanceUpliftAmount);
+  const fareBeforeSurge = fareBeforeUplift;
   const surgeAmount = roundMoney(fareBeforeSurge * (surge.multiplier - 1));
-  const fareBeforeMinimum = roundMoney(fareBeforeSurge * surge.multiplier);
+  const fareBeforeDistanceDiscount = roundMoney(fareBeforeSurge * surge.multiplier);
+  const distanceDiscountPct = getDistanceTierDiscountPct(distanceDiscountKm);
+  const distanceDiscountAmount = roundMoney(
+    fareBeforeDistanceDiscount * (distanceDiscountPct / 100)
+  );
+  const fareBeforeMinimum = roundMoney(
+    Math.max(0, fareBeforeDistanceDiscount - distanceDiscountAmount)
+  );
   const fareBeforeRounding = Math.max(rules.minFare, fareBeforeMinimum);
   const totalFare = Math.round(fareBeforeRounding);
   const platformCommission = roundMoney(totalFare * (rules.platformCommissionPct / 100));
@@ -332,6 +359,10 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
     chargeableWaitingMinutes,
     waitingFee,
     remotePickupFee,
+    distanceDiscountKm,
+    distanceDiscountPct,
+    distanceDiscountAmount,
+    fareBeforeDistanceDiscount,
     longDistanceUpliftPct,
     longDistanceUpliftAmount,
     surgeLabel: surge.label,
@@ -346,6 +377,37 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
     platformCommission,
     driverNetEstimate,
   };
+}
+
+export function calculateFinalJourneyFare(params: {
+  baseFare: FareBreakdown;
+  routeDistanceKm: number;
+  addStopIncrease?: number | null;
+  stopWaitingFee?: number | null;
+}) {
+  const addStopIncrease = safePositiveNumber(params.addStopIncrease);
+  const stopWaitingFee = safePositiveNumber(params.stopWaitingFee);
+  const distanceDiscountKm = safePositiveNumber(params.routeDistanceKm);
+  const fareBeforeDistanceDiscount = roundMoney(
+    params.baseFare.fareBeforeDistanceDiscount + addStopIncrease + stopWaitingFee,
+  );
+  const distanceDiscountPct = getDistanceTierDiscountPct(distanceDiscountKm);
+  const distanceDiscountAmount = roundMoney(
+    fareBeforeDistanceDiscount * (distanceDiscountPct / 100),
+  );
+  const fareBeforeMinimum = roundMoney(
+    Math.max(0, fareBeforeDistanceDiscount - distanceDiscountAmount),
+  );
+  const totalFare = Math.round(Math.max(params.baseFare.minFare, fareBeforeMinimum));
+
+  return {
+    fareBeforeDistanceDiscount,
+    distanceDiscountKm,
+    distanceDiscountPct,
+    distanceDiscountAmount,
+    fareBeforeMinimum,
+    totalFare,
+  } satisfies JourneyFareBreakdown;
 }
 
 export function calculateAddStopIncrease(input: AddStopInput): AddStopBreakdown {

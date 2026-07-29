@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   MAX_TRIP_STOPS,
   calculateAddStopIncrease,
+  calculateFinalJourneyFare,
   calculateFinalFare,
   calculateStopWaitingFee,
   normalizeRideOptionId,
@@ -304,6 +305,17 @@ export async function POST(req: Request) {
     const rideOptionId = normalizeRideOptionId(typedTrip.ride_option);
     const baseFare = calculateFare({
       distanceKm: route.originalDistanceKm,
+      distanceDiscountKm: route.originalDistanceKm,
+      durationMin: route.originalDurationMin,
+      rideOptionId,
+      surgeLabel: typedTrip.surge_label === "busy" || typedTrip.surge_label === "heavy_demand" || typedTrip.surge_label === "rain_event"
+        ? typedTrip.surge_label
+        : "normal",
+      surgeMultiplier: typedTrip.surge_multiplier,
+    });
+    const journeyBaseFare = calculateFare({
+      distanceKm: route.originalDistanceKm,
+      distanceDiscountKm: 0,
       durationMin: route.originalDurationMin,
       rideOptionId,
       surgeLabel: typedTrip.surge_label === "busy" || typedTrip.surge_label === "heavy_demand" || typedTrip.surge_label === "rain_event"
@@ -323,10 +335,14 @@ export async function POST(req: Request) {
       rideOptionId,
       stopWaitingMinutes: [],
     });
-    const finalFare = calculateFinalFare({
-      originalFare: baseFare.totalFare,
+    const journeyFare = calculateFinalJourneyFare({
+      baseFare: journeyBaseFare,
+      routeDistanceKm: route.routeDistanceKm,
       addStopIncrease: addStop.finalAddStopIncrease,
       stopWaitingFee: stopWaiting.stopWaitingFee,
+    });
+    const finalFare = calculateFinalFare({
+      originalFare: journeyFare.totalFare,
       fallbackFare: typedTrip.final_fare ?? typedTrip.fare_amount,
     });
 
@@ -347,7 +363,7 @@ export async function POST(req: Request) {
       final_add_stop_increase: addStop.finalAddStopIncrease,
       stop_waiting_fee: stopWaiting.stopWaitingFee,
       final_fare: finalFare.finalFare,
-      estimated_fare: finalFare.estimatedFare,
+      estimated_fare: Number(typedTrip.final_fare ?? typedTrip.fare_amount ?? journeyFare.totalFare),
       fare_adjustment_amount: finalFare.adjustmentAmount,
       fare_adjustment_reason: stops.length > 0 ? "active_stop_added" : null,
       active_stop_added_at: new Date().toISOString(),

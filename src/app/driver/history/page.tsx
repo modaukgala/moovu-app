@@ -2,11 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CarFront,
+  CheckCircle2,
+  ChevronRight,
+  LayoutGrid,
+  RefreshCw,
+  SlidersHorizontal,
+  WalletCards,
+} from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
-import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -173,33 +183,36 @@ export default function DriverHistoryPage() {
   }
 
   return (
-    <main className="moovu-page moovu-driver-shell text-black">
-      <div className="moovu-shell space-y-6">
-        <div className="moovu-card p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="moovu-section-title">MOOVU Driver</div>
-              <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">
-                Trip history
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Review your routes, rider details, payment methods, and trip outcomes.
-              </p>
-            </div>
-
-            <div className="moovu-driver-toolbar-actions">
-              <Link href="/driver/trip-offers" className="moovu-btn moovu-btn-secondary">
-                Trip offers
-              </Link>
-              <Link href="/driver" className="moovu-btn moovu-btn-secondary">
-                Driver dashboard
-              </Link>
-              <button onClick={loadTrips} className="moovu-btn moovu-btn-primary">
-                Refresh
-              </button>
-            </div>
+    <main className="driver-mobile-page driver-history-v3 text-black">
+      <div className="driver-mobile-container">
+        <header className="driver-page-heading">
+          <Link href="/driver" className="driver-icon-button" aria-label="Back to driver home">
+            <ArrowLeft aria-hidden="true" />
+          </Link>
+          <div>
+            <span>MOOVU Driver</span>
+            <h1>Trip history</h1>
+            <p>Review your routes, rider details, payment methods, and trip outcomes.</p>
           </div>
-        </div>
+        </header>
+
+        <nav className="driver-top-actions" aria-label="Trip history shortcuts">
+          <Link href="/driver/trip-offers">
+            <CarFront aria-hidden="true" />
+            <strong>Trip offers</strong>
+            <ChevronRight aria-hidden="true" />
+          </Link>
+          <Link href="/driver">
+            <LayoutGrid aria-hidden="true" />
+            <strong>Driver dashboard</strong>
+            <ChevronRight aria-hidden="true" />
+          </Link>
+        </nav>
+
+        <button type="button" onClick={loadTrips} className="driver-refresh-button">
+          <RefreshCw aria-hidden="true" />
+          Refresh
+        </button>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
@@ -271,41 +284,48 @@ export default function DriverHistoryPage() {
           </div>
         )}
 
-        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
-          <MetricCard label="Total trips" value={String(trips.length)} helper="All recorded trips" />
-          <MetricCard
-            label="Completed"
-            value={String(completedTrips.length)}
-            helper="Finished trips"
-            tone="success"
-          />
-          <MetricCard
-            label="Completed fare"
-            value={money(completedFare)}
-            helper="Gross fare value"
-            tone="primary"
-          />
+        <section className="driver-history-stats" aria-label="Trip totals">
+          <article>
+            <CalendarDays aria-hidden="true" />
+            <span>Total trips</span>
+            <strong>{trips.length}</strong>
+            <small>All recorded trips</small>
+          </article>
+          <article className="is-success">
+            <CheckCircle2 aria-hidden="true" />
+            <span>Completed</span>
+            <strong>{completedTrips.length}</strong>
+            <small>Finished trips</small>
+          </article>
+          <article>
+            <WalletCards aria-hidden="true" />
+            <span>Completed fare</span>
+            <strong>{money(completedFare)}</strong>
+            <small>Gross fare value</small>
+          </article>
         </section>
 
-        <section className="moovu-card p-4 sm:p-5">
-          <div className="moovu-driver-filter-row">
-            {FILTERS.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setFilter(item.id)}
-                className={`rounded-xl border px-4 py-2 text-sm font-black transition ${
-                  filter === item.id
-                    ? "border-[var(--moovu-blue)] bg-[var(--moovu-blue)] text-white"
-                    : "border-[var(--moovu-border)] bg-white text-slate-700"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+        <section className="driver-history-filters">
+          <div>
+            <CalendarDays aria-hidden="true" />
+            <span><small>Date range</small><strong>All time</strong></span>
           </div>
+          <label>
+            <SlidersHorizontal aria-hidden="true" />
+            <span>
+              <small>Trip status</small>
+              <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+                {FILTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </span>
+          </label>
         </section>
 
-        <section className="space-y-3">
+        <section className="driver-trip-list">
+          <div className="driver-section-heading">
+            <h2>Recent trips</h2>
+            <span>{filteredTrips.length} shown</span>
+          </div>
           {filteredTrips.length === 0 ? (
             <EmptyState
               title="No trips found"
@@ -313,89 +333,41 @@ export default function DriverHistoryPage() {
             />
           ) : (
             filteredTrips.map((trip) => (
-              <article key={trip.id} className="moovu-card p-4 sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <StatusBadge status={trip.status} />
-                    <div className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-                      {displayDate(trip.created_at)}
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-950">{money(trip.fare_amount)}</div>
+              <article key={trip.id} className={`driver-trip-row is-${trip.status ?? "unknown"}`}>
+                <span className="driver-trip-row-icon">
+                  {trip.status === "completed" ? <CheckCircle2 aria-hidden="true" /> : <CarFront aria-hidden="true" />}
+                </span>
+                <div className="driver-trip-route">
+                  <time>{displayDate(trip.created_at)}</time>
+                  <span><i className="pickup" />{trip.pickup_address ?? "--"}</span>
+                  <span><i className="dropoff" />{trip.dropoff_address ?? "--"}</span>
                 </div>
-
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                      Pickup
-                    </div>
-                    <div className="mt-1 font-black text-slate-950">
-                      {trip.pickup_address ?? "--"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                      Destination
-                    </div>
-                    <div className="mt-1 font-black text-slate-950">
-                      {trip.dropoff_address ?? "--"}
-                    </div>
-                  </div>
+                <div className="driver-trip-money">
+                  <StatusBadge status={trip.status} />
+                  <strong>{money(trip.fare_amount)}</strong>
+                  <small>{trip.payment_method ?? "Cash"}</small>
                 </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
-                    <div className="text-xs font-bold text-slate-500">Ride type</div>
-                    <div className="mt-1 font-bold text-slate-950">{rideTypeLabel(trip.ride_option)}</div>
+                <details className="driver-trip-details">
+                  <summary aria-label="Open trip details"><ChevronRight aria-hidden="true" /></summary>
+                  <div>
+                    <span>{rideTypeLabel(trip.ride_option)}</span>
+                    <span>Commission {money(trip.commission_amount)}</span>
+                    <span>Driver earnings {money(trip.driver_net_earnings ?? trip.fare_amount)}</span>
+                    <span>{trip.rider_name ?? "Rider"}</span>
+                    {trip.status === "completed" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRatingTripId(trip.id);
+                          setRating(5);
+                          setRatingComment("");
+                        }}
+                      >
+                        Rate customer
+                      </button>
+                    )}
                   </div>
-                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
-                    <div className="text-xs font-bold text-slate-500">Rider</div>
-                    <div className="mt-1 font-bold text-slate-950">{trip.rider_name ?? "--"}</div>
-                  </div>
-                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
-                    <div className="text-xs font-bold text-slate-500">Phone</div>
-                    <div className="mt-1 font-bold text-slate-950">{trip.rider_phone ?? "--"}</div>
-                  </div>
-                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
-                    <div className="text-xs font-bold text-slate-500">Payment</div>
-                    <div className="mt-1 font-bold text-slate-950">{trip.payment_method ?? "--"}</div>
-                  </div>
-                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
-                    <div className="text-xs font-bold text-slate-500">Commission</div>
-                    <div className="mt-1 font-bold text-slate-950">{money(trip.commission_amount)}</div>
-                  </div>
-                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
-                    <div className="text-xs font-bold text-slate-500">Driver earnings</div>
-                    <div className="mt-1 font-bold text-slate-950">{money(trip.driver_net_earnings ?? trip.fare_amount)}</div>
-                  </div>
-                  <div className="rounded-2xl border border-[var(--moovu-border)] bg-[var(--moovu-bg)] p-3">
-                    <div className="text-xs font-bold text-slate-500">Completed</div>
-                    <div className="mt-1 font-bold text-slate-950">{displayDate(trip.completed_at ?? trip.created_at)}</div>
-                  </div>
-                </div>
-
-                {trip.status === "completed" && (
-                  <div className="mt-4 flex flex-wrap justify-end gap-2">
-                    <button
-                      type="button"
-                      className="moovu-btn moovu-btn-secondary"
-                      onClick={() => {
-                        setRatingTripId(trip.id);
-                        setRating(5);
-                        setRatingComment("");
-                      }}
-                    >
-                      Rate customer
-                    </button>
-                    <button
-                      type="button"
-                      className="moovu-btn moovu-btn-secondary"
-                      onClick={() => setMsg("Trip summary is shown on this card.")}
-                    >
-                      Trip summary
-                    </button>
-                  </div>
-                )}
+                </details>
               </article>
             ))
           )}

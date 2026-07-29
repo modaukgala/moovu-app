@@ -18,6 +18,10 @@ type PositionOptions = {
   maximumAge?: number;
 };
 
+export type MoovuPositionWatcher = {
+  stop: () => Promise<void>;
+};
+
 function createGeolocationError(code: number, message: string): GeolocationPositionError {
   return {
     code,
@@ -99,6 +103,60 @@ export async function getMoovuCurrentPosition(options: PositionOptions = {}): Pr
   return new Promise<GeolocationPosition>((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(resolve, reject, options);
   });
+}
+
+export async function watchMoovuPosition(params: {
+  options?: PositionOptions;
+  onPosition: (position: MoovuPosition) => void;
+  onError?: (error: GeolocationPositionError) => void;
+}): Promise<MoovuPositionWatcher> {
+  const options = params.options ?? {};
+
+  if (Capacitor.isNativePlatform()) {
+    await getMoovuCurrentPosition(options);
+    const callbackId = await Geolocation.watchPosition(
+      {
+        enableHighAccuracy: options.enableHighAccuracy ?? true,
+        timeout: options.timeout ?? 15000,
+        maximumAge: options.maximumAge ?? 0,
+        minimumUpdateInterval: 1000,
+      },
+      (position, error) => {
+        if (error) {
+          params.onError?.(createGeolocationError(error.code ?? 2, error.message));
+          return;
+        }
+        if (!position) return;
+        params.onPosition({
+          coords: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          },
+        });
+      },
+    );
+    return {
+      stop: async () => {
+        await Geolocation.clearWatch({ id: callbackId });
+      },
+    };
+  }
+
+  if (typeof window === "undefined" || !navigator.geolocation) {
+    throw createGeolocationError(2, "This device does not support location.");
+  }
+
+  const watchId = navigator.geolocation.watchPosition(
+    (position) => params.onPosition(position),
+    (error) => params.onError?.(error),
+    options,
+  );
+  return {
+    stop: async () => {
+      navigator.geolocation.clearWatch(watchId);
+    },
+  };
 }
 
 export async function requestNativeCameraPermissions() {

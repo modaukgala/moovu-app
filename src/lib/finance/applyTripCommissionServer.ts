@@ -122,6 +122,13 @@ export async function applyTripCommissionServer(params: {
     .insert(txPayload);
 
   if (txError) {
+    if (txError.code === "23505") {
+      const recalcResult = await recalculateDriverWalletServer(driverId);
+      if (!recalcResult.ok) {
+        return { ok: false, error: recalcResult.error };
+      }
+      return { ok: true, skipped: true, calc };
+    }
     return { ok: false, error: txError.message };
   }
 

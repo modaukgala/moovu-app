@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Download } from "lucide-react";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -36,6 +37,16 @@ type Trip = {
     perMinute?: number;
     bookingFee?: number;
     waitingFee?: number;
+    distanceDiscountPct?: number;
+    distanceDiscountAmount?: number;
+    fareBeforeDistanceDiscount?: number;
+  } | null;
+  fare_breakdown?: {
+    journeyFare?: {
+      distanceDiscountPct?: number;
+      distanceDiscountAmount?: number;
+      fareBeforeDistanceDiscount?: number;
+    } | null;
   } | null;
   status: string;
   created_at: string | null;
@@ -172,29 +183,24 @@ export default function TripReceiptPage() {
 
   const issueAt = trip?.completed_at ?? trip?.created_at ?? null;
   const totalPaid = Number(trip?.final_fare ?? trip?.fare_amount ?? 0);
-  const vatAmount = useMemo(() => totalPaid - totalPaid / 1.15, [totalPaid]);
-  const fareExclVat = useMemo(() => totalPaid / 1.15, [totalPaid]);
-  const receiptNumber = useMemo(() => buildReceiptNumber(trip?.id ?? "", issueAt), [trip?.id, issueAt]);
-  const receiptStops = useMemo<ReceiptStop[]>(() => {
-    if (!Array.isArray(trip?.stops)) return [];
-    return trip.stops
-      .slice(0, 2)
-      .map((stop) => {
-        const item = (stop ?? {}) as { address?: unknown };
-        return { address: typeof item.address === "string" ? item.address : "" };
-      })
-      .filter((stop) => stop.address.trim());
-  }, [trip?.stops]);
-  const routeAddition = useMemo(
-    () => Number(trip?.final_add_stop_increase ?? 0) + Number(trip?.stop_waiting_fee ?? 0),
-    [trip?.final_add_stop_increase, trip?.stop_waiting_fee]
+  const distanceFareBreakdown =
+    trip?.actual_fare_breakdown ?? trip?.fare_breakdown?.journeyFare ?? null;
+  const distanceDiscountPct = Number(distanceFareBreakdown?.distanceDiscountPct ?? 0);
+  const distanceDiscountAmount = Number(distanceFareBreakdown?.distanceDiscountAmount ?? 0);
+  const fareBeforeDistanceDiscount = Number(
+    distanceFareBreakdown?.fareBeforeDistanceDiscount ?? totalPaid + distanceDiscountAmount
   );
-
-  const vehicleLabel = useMemo(() => {
-    if (!driver) return "--";
-    return [driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(" ") || "--";
-  }, [driver]);
-
+  const vatAmount = useMemo(() => totalPaid - totalPaid / 1.15, [totalPaid]);
+  const receiptNumber = useMemo(() => buildReceiptNumber(trip?.id ?? "", issueAt), [trip?.id, issueAt]);
+  const receiptStops: ReceiptStop[] = Array.isArray(trip?.stops)
+    ? trip.stops
+        .slice(0, 2)
+        .map((stop) => {
+          const item = (stop ?? {}) as { address?: unknown };
+          return { address: typeof item.address === "string" ? item.address : "" };
+        })
+        .filter((stop) => stop.address.trim())
+    : [];
   async function shareReceipt() {
     const url = window.location.href;
     if (navigator.share) {
@@ -235,18 +241,17 @@ export default function TripReceiptPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-app-container">
-        <CustomerBackHomeNav fallbackHref="/ride/history" />
-        {/* Print controls */}
-        <div className="moovu-no-print mb-4 flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/ride/${trip.id}`} className="moovu-btn moovu-btn-secondary">Open trip</Link>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => void shareReceipt()} className="moovu-btn moovu-btn-secondary">
-              Share
-            </button>
-            <button type="button" onClick={() => window.print()} className="moovu-btn moovu-btn-primary">
-              Print / Save PDF
-            </button>
-          </div>
+        <div className="moovu-no-print moovu-receipt-toolbar">
+          <CustomerBackHomeNav
+            fallbackHref={`/ride/${trip.id}`}
+            homeHref="/book"
+            homeLabel="Book ride"
+            compact
+          />
+          <button type="button" onClick={() => void shareReceipt()}>
+            <Download aria-hidden="true" />
+            Save / Share PDF
+          </button>
         </div>
 
         <div className="moovu-receipt-doc">
@@ -259,32 +264,30 @@ export default function TripReceiptPage() {
                 <div className="moovu-receipt-tagline">Safe - Fast - Trusted</div>
               </div>
             </div>
-            <div className="moovu-receipt-doc-meta">
-              <div className="moovu-receipt-title">TRIP RECEIPT</div>
-              <table className="moovu-receipt-meta-table">
-                <tbody>
-                  <tr>
-                    <td>Receipt No.</td>
-                    <td><strong>{receiptNumber}</strong></td>
-                  </tr>
-                  <tr>
-                    <td>Issued</td>
-                    <td>{fmt(issueAt)}</td>
-                  </tr>
-                  <tr>
-                    <td>Status</td>
-                    <td>
-                      <span className={`moovu-receipt-status moovu-receipt-status-${trip.status}`}>
-                        {statusLabel(trip.status)}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </div>
 
           <div className="moovu-receipt-divider" />
+          <div className="moovu-receipt-title">TRIP RECEIPT</div>
+          <table className="moovu-receipt-meta-table">
+            <tbody>
+              <tr>
+                <td>Receipt No.</td>
+                <td><strong>{receiptNumber}</strong></td>
+              </tr>
+              <tr>
+                <td>Issued</td>
+                <td>{fmt(issueAt)}</td>
+              </tr>
+              <tr>
+                <td>Status</td>
+                <td>
+                  <span className={`moovu-receipt-status moovu-receipt-status-${trip.status}`}>
+                    {statusLabel(trip.status)}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
           {/* ROUTE */}
           <div className="moovu-receipt-section-title">Route</div>
@@ -342,7 +345,7 @@ export default function TripReceiptPage() {
 
           <div className="moovu-receipt-divider" />
 
-          {/* PEOPLE + VEHICLE */}
+          {/* PEOPLE */}
           <div className="moovu-receipt-people">
             <div>
               <div className="moovu-receipt-section-title">Rider</div>
@@ -353,15 +356,6 @@ export default function TripReceiptPage() {
               <div className="moovu-receipt-section-title">Driver</div>
               <div className="moovu-receipt-person-name">{driverName(driver)}</div>
               <div className="moovu-receipt-person-sub">{dash(driver?.phone)}</div>
-            </div>
-            <div>
-              <div className="moovu-receipt-section-title">Vehicle</div>
-              <div className="moovu-receipt-person-name">{vehicleLabel}</div>
-              <div className="moovu-receipt-person-sub">
-                {[driver?.vehicle_year, driver?.vehicle_color, driver?.vehicle_registration]
-                  .filter(Boolean)
-                  .join(" - ") || "--"}
-              </div>
             </div>
           </div>
 
@@ -383,56 +377,26 @@ export default function TripReceiptPage() {
 
           {/* FARE TOTAL */}
           <div className="moovu-receipt-fare-block">
-            {trip.actual_fare_breakdown?.baseFare != null && (
-              <div className="moovu-receipt-fare-row">
-                <span>Base fare</span>
-                <span>{money(trip.actual_fare_breakdown.baseFare)}</span>
-              </div>
-            )}
-            {trip.actual_fare_breakdown?.distanceKm != null && (
-              <div className="moovu-receipt-fare-row">
-                <span>Distance fare</span>
-                <span>{money(Number(trip.actual_fare_breakdown.distanceKm) * Number(trip.actual_fare_breakdown.perKm ?? 0))}</span>
-              </div>
-            )}
-            {trip.actual_fare_breakdown?.durationMin != null && (
-              <div className="moovu-receipt-fare-row">
-                <span>Time fare</span>
-                <span>{money(Number(trip.actual_fare_breakdown.durationMin) * Number(trip.actual_fare_breakdown.perMinute ?? 0))}</span>
-              </div>
+            {distanceDiscountPct > 0 && distanceDiscountAmount > 0 && (
+              <>
+                <div className="moovu-receipt-fare-row">
+                  <span>Fare before distance saving</span>
+                  <span>{money(fareBeforeDistanceDiscount)}</span>
+                </div>
+                <div className="moovu-receipt-fare-row text-emerald-700">
+                  <span>Distance saving ({distanceDiscountPct}%)</span>
+                  <span>-{money(distanceDiscountAmount)}</span>
+                </div>
+              </>
             )}
             <div className="moovu-receipt-fare-row">
-              <span>Trip fare (excl. VAT)</span>
-              <span>{money(fareExclVat)}</span>
+              <span>Trip fare (incl. VAT)</span>
+              <span>{money(totalPaid)}</span>
             </div>
             <div className="moovu-receipt-fare-row">
               <span>VAT (15%)</span>
               <span>{money(vatAmount)}</span>
             </div>
-            {Number(trip.original_fare ?? 0) > 0 && (
-              <div className="moovu-receipt-fare-row">
-                <span>Original route estimate</span>
-                <span>{money(trip.original_fare)}</span>
-              </div>
-            )}
-            {Number(trip.final_add_stop_increase ?? 0) > 0 && (
-              <div className="moovu-receipt-fare-row">
-                <span>Add-stop route increase</span>
-                <span>{money(trip.final_add_stop_increase)}</span>
-              </div>
-            )}
-            {Number(trip.stop_waiting_fee ?? 0) > 0 && (
-              <div className="moovu-receipt-fare-row">
-                <span>Stop waiting fee</span>
-                <span>{money(trip.stop_waiting_fee)}</span>
-              </div>
-            )}
-            {routeAddition > 0 && (
-              <div className="moovu-receipt-fare-row">
-                <span>Add-stop discount applied</span>
-                <span>40%</span>
-              </div>
-            )}
             <div className="moovu-receipt-fare-total-row">
               <span>TOTAL PAID</span>
               <span>{money(totalPaid)}</span>
@@ -441,8 +405,8 @@ export default function TripReceiptPage() {
 
           {/* FOOTER */}
           <div className="moovu-receipt-doc-footer">
-            <strong>Thank you for choosing MOOVU.</strong>
-            <span>admin@moovurides.co.za · moovurides.co.za</span>
+            <strong>Thank you for riding with MOOVU Kasi Rides.</strong>
+            <span>We appreciate your support.</span>
           </div>
         </div>
       </div>

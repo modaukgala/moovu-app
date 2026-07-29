@@ -25,6 +25,8 @@ type CustomerTrip = {
 
 type CustomerDetail = {
   id: string;
+  auth_user_id?: string | null;
+  account_source?: "customer_profile" | "auth_only";
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
@@ -40,7 +42,14 @@ type CustomerDetail = {
   trips: CustomerTrip[];
 };
 
-type ProfileTab = "overview" | "trips" | "receipts" | "support" | "activity";
+type ProfileTab =
+  | "overview"
+  | "trips"
+  | "payments"
+  | "receipts"
+  | "support"
+  | "benefits"
+  | "activity";
 
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
@@ -174,8 +183,10 @@ export default function AdminCustomerProfilePage() {
             items={[
               { value: "overview", label: "Overview" },
               { value: "trips", label: "Trips", count: customer.total_trips },
+              { value: "payments", label: "Payments" },
               { value: "receipts", label: "Receipts", count: customer.completed_trips },
               { value: "support", label: "Support" },
+              { value: "benefits", label: "Benefits" },
               { value: "activity", label: "Activity" },
             ]}
           />
@@ -201,6 +212,12 @@ export default function AdminCustomerProfilePage() {
                 <div>
                   <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Last activity</dt>
                   <dd className="mt-1 font-black text-slate-950">{displayDate(customer.last_activity)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Profile state</dt>
+                  <dd className="mt-1 font-black text-slate-950">
+                    {customer.account_source === "auth_only" ? "Auth account only" : "Customer profile linked"}
+                  </dd>
                 </div>
               </dl>
             </div>
@@ -278,6 +295,45 @@ export default function AdminCustomerProfilePage() {
             <EmptyState
               title="Customer support"
               description="Use the existing trip support records from the relevant trip. No separate customer support data is invented here."
+            />
+          </section>
+        ) : null}
+
+        {tab === "payments" ? (
+          <section className="moovu-card p-5 sm:p-6">
+            {sortedTrips.length === 0 ? (
+              <EmptyState
+                title="No payment activity"
+                description="Payment methods and completed trip values will appear here after this customer books."
+              />
+            ) : (
+              <div className="divide-y divide-[var(--moovu-border)]">
+                {sortedTrips.map((trip) => (
+                  <div key={trip.id} className="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
+                    <div>
+                      <div className="font-black text-slate-950">
+                        {trip.payment_method || "Payment method not recorded"}
+                      </div>
+                      <div className="mt-1 text-xs font-semibold text-slate-500">
+                        {displayDate(trip.completed_at || trip.created_at)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <strong>{money(trip.final_fare ?? trip.fare_amount)}</strong>
+                      <div className="mt-1"><StatusBadge status={trip.status} /></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {tab === "benefits" ? (
+          <section className="moovu-card p-5 sm:p-6">
+            <EmptyState
+              title="Customer benefits not configured"
+              description="This area is ready for future customer subscriptions or ride benefits. No plan or entitlement is assigned automatically."
             />
           </section>
         ) : null}
