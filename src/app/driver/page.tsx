@@ -2,7 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Bell, Layers3, LocateFixed, Menu } from "lucide-react";
+import {
+  Bell,
+  CarFront,
+  ChartNoAxesColumnIncreasing,
+  ChevronRight,
+  Headphones,
+  Layers3,
+  LocateFixed,
+  Menu,
+  ShieldCheck,
+  SlidersHorizontal,
+  Star,
+  WalletCards,
+} from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
@@ -1802,16 +1815,25 @@ export default function DriverHomePage() {
                   </div>
                   <div className="driver-map-snapshot">
                     <button type="button" onClick={() => router.push("/driver/earnings")}>
-                      <small>Today&apos;s earnings</small>
-                      <strong>{money(earningsSnapshot.todayEarnings)}</strong>
+                      <span className="driver-map-snapshot-icon is-blue"><WalletCards aria-hidden="true" /></span>
+                      <span>
+                        <small>Today&apos;s earnings</small>
+                        <strong>{money(earningsSnapshot.todayEarnings)}</strong>
+                      </span>
                     </button>
                     <button type="button" onClick={() => router.push("/driver/history")}>
-                      <small>Trips today</small>
-                      <strong>{earningsSnapshot.todayTrips}</strong>
+                      <span className="driver-map-snapshot-icon is-green"><ChartNoAxesColumnIncreasing aria-hidden="true" /></span>
+                      <span>
+                        <small>Trips today</small>
+                        <strong>{earningsSnapshot.todayTrips}</strong>
+                      </span>
                     </button>
                     <button type="button" onClick={() => setDriverToolsOpen(true)}>
-                      <small>Status</small>
-                      <strong>{driverLevel.label}</strong>
+                      <span className="driver-map-snapshot-icon is-violet"><Star aria-hidden="true" /></span>
+                      <span>
+                        <small>Rating</small>
+                        <strong>{driverLevel.label}</strong>
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -2269,8 +2291,10 @@ export default function DriverHomePage() {
                 </div>
 
                 {!offer ? (
-                  <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                    Stay online to receive nearby trip requests.
+                  <div className="driver-offer-empty">
+                    <span><CarFront aria-hidden="true" /></span>
+                    <strong>No trip offers right now</strong>
+                    <p>Stay online to receive nearby trip requests.</p>
                   </div>
                 ) : (
                   <div className="mt-4 space-y-4">
@@ -2394,6 +2418,38 @@ export default function DriverHomePage() {
                   </div>
                 )}
               </section>
+
+              <nav className="driver-home-quick-actions" aria-label="Driver quick actions">
+                <button type="button" onClick={() => setDriverToolsOpen(true)}>
+                  <span className="is-blue"><SlidersHorizontal aria-hidden="true" /></span>
+                  <strong>Ride preferences</strong>
+                </button>
+                <button type="button" onClick={() => router.push("/driver/earnings")}>
+                  <span className="is-green"><WalletCards aria-hidden="true" /></span>
+                  <strong>Earnings</strong>
+                </button>
+                <button type="button" onClick={() => router.push("/driver/history")}>
+                  <span className="is-orange"><ChartNoAxesColumnIncreasing aria-hidden="true" /></span>
+                  <strong>Performance</strong>
+                </button>
+                <button type="button" onClick={() => router.push("/driver/contact")}>
+                  <span className="is-violet"><Headphones aria-hidden="true" /></span>
+                  <strong>Help</strong>
+                </button>
+              </nav>
+
+              <button
+                type="button"
+                className="driver-home-safety-card"
+                onClick={() => router.push("/driver/contact")}
+              >
+                <span><ShieldCheck aria-hidden="true" /></span>
+                <span>
+                  <strong>Stay safe on the road</strong>
+                  <small>Follow traffic rules and drive safely.</small>
+                </span>
+                <ChevronRight aria-hidden="true" />
+              </button>
             </aside>
           </div>
           </>

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   SlidersHorizontal,
   WalletCards,
+  XCircle,
 } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -194,6 +195,14 @@ export default function DriverHistoryPage() {
             <h1>Trip history</h1>
             <p>Review your routes, rider details, payment methods, and trip outcomes.</p>
           </div>
+          <button
+            type="button"
+            className="driver-icon-button driver-history-calendar"
+            aria-label="Open trip filters"
+            onClick={() => document.getElementById("driver-history-filters")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+          >
+            <CalendarDays aria-hidden="true" />
+          </button>
         </header>
 
         <nav className="driver-top-actions" aria-label="Trip history shortcuts">
@@ -305,7 +314,7 @@ export default function DriverHistoryPage() {
           </article>
         </section>
 
-        <section className="driver-history-filters">
+        <section id="driver-history-filters" className="driver-history-filters">
           <div>
             <CalendarDays aria-hidden="true" />
             <span><small>Date range</small><strong>All time</strong></span>
@@ -335,7 +344,11 @@ export default function DriverHistoryPage() {
             filteredTrips.map((trip) => (
               <article key={trip.id} className={`driver-trip-row is-${trip.status ?? "unknown"}`}>
                 <span className="driver-trip-row-icon">
-                  {trip.status === "completed" ? <CheckCircle2 aria-hidden="true" /> : <CarFront aria-hidden="true" />}
+                  {trip.status === "completed"
+                    ? <CheckCircle2 aria-hidden="true" />
+                    : trip.status === "cancelled"
+                      ? <XCircle aria-hidden="true" />
+                      : <CarFront aria-hidden="true" />}
                 </span>
                 <div className="driver-trip-route">
                   <time>{displayDate(trip.created_at)}</time>

@@ -4,6 +4,7 @@ import { type ClipboardEvent, useEffect, useMemo, useRef, useState } from "react
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CircleHelp, Home, LogOut, ReceiptText } from "lucide-react";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import LocationMapPicker, {
@@ -171,6 +172,7 @@ export default function RiderBookingPage() {
 
   // ── Bottom sheet drag state ──────────────────────────────────────
   const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">("expanded");
+  const [headerCompact, setHeaderCompact] = useState(false);
   const [dragY, setDragY] = useState<number | null>(null); // live drag offset in px
   const dragStartYRef = useRef<number>(0);
   const dragStartSnapRef = useRef<"collapsed" | "expanded">("collapsed");
@@ -1987,23 +1989,37 @@ export default function RiderBookingPage() {
       </div>
 
       {/* Floating top header */}
-      <header className="mbk-header">
-        <div className="mbk-customer-back">
-          <CustomerBackHomeNav fallbackHref="/" homeHref="/" homeLabel="Home" compact />
-        </div>
+      <header className={`mbk-header${headerCompact ? " is-compact" : ""}`}>
         <div className="moovu-brand-lockup">
-          <Image src="/logo.png" alt="MOOVU Kasi Rides" width={96} height={58} priority />
+          <Image src="/logo.png" alt="MOOVU Kasi Rides" width={72} height={72} priority />
           <div>
             <div className="moovu-kicker">Kasi Rides</div>
             <div className="text-sm font-bold text-slate-950">Book a ride</div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/contact" className="moovu-icon-link hidden sm:inline-flex">Help</Link>
-          <Link href="/ride/history" className="moovu-icon-link">Trips</Link>
-          <button className="moovu-icon-link" onClick={logout}>Logout</button>
-        </div>
+        <nav className="mbk-header-actions" aria-label="Booking shortcuts">
+          <Link href="/" className="moovu-icon-link">
+            <Home aria-hidden="true" />
+            <span>Home</span>
+          </Link>
+          <Link href="/ride/history" className="moovu-icon-link">
+            <ReceiptText aria-hidden="true" />
+            <span>Trips</span>
+          </Link>
+          <Link href="/contact" className="moovu-icon-link">
+            <CircleHelp aria-hidden="true" />
+            <span>Help</span>
+          </Link>
+          <button type="button" className="moovu-icon-link" onClick={logout}>
+            <LogOut aria-hidden="true" />
+            <span>Logout</span>
+          </button>
+        </nav>
       </header>
+
+      <div className="mbk-map-back">
+        <CustomerBackHomeNav fallbackHref="/" homeHref="/" homeLabel="Home" compact />
+      </div>
 
       {/* ── Bottom sheet ── */}
       <div
@@ -2026,7 +2042,10 @@ export default function RiderBookingPage() {
         </div>
 
         {/* Scrollable inner content */}
-        <div className="mbk-sheet-scroll">
+        <div
+          className="mbk-sheet-scroll"
+          onScroll={(event) => setHeaderCompact(event.currentTarget.scrollTop > 24)}
+        >
           {/* Title row */}
           <div className="flex items-center justify-between gap-3 px-4 pb-2">
             <div>
