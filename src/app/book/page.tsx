@@ -20,7 +20,6 @@ import {
   calculateAddStopIncrease,
   calculateFinalJourneyFare,
   calculateTripFare,
-  getDistanceTierDiscountPct,
   type RideOptionId,
   type SurgeModeConfig,
 } from "@/lib/domain/fare";
@@ -267,7 +266,6 @@ export default function RiderBookingPage() {
       addStopIncrease: addStopBreakdown?.finalAddStopIncrease ?? 0,
     }).totalFare;
   }, [addStopBreakdown?.finalAddStopIncrease, distanceKm, journeyBaseFare]);
-  const distanceDiscountPct = getDistanceTierDiscountPct(distanceKm ?? 0);
   const displayFare = useMemo(() => {
     if (fare != null) return fare;
     if (baseFare != null) return Math.round(baseFare + addStopIncrease);
@@ -2335,11 +2333,6 @@ export default function RiderBookingPage() {
               <div className="mbk-footer-fare" aria-label={displayFare == null ? "Estimate pending" : undefined}>
                 {displayFare == null ? "\u00A0" : money(displayFare)}
               </div>
-              {distanceDiscountPct > 0 ? (
-                <div className="text-[10px] font-black text-emerald-700">
-                  {distanceDiscountPct}% distance saving included
-                </div>
-              ) : null}
             </div>
             <button
               className="moovu-confirm-button flex-1"

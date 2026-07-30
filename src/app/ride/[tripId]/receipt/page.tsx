@@ -183,13 +183,6 @@ export default function TripReceiptPage() {
 
   const issueAt = trip?.completed_at ?? trip?.created_at ?? null;
   const totalPaid = Number(trip?.final_fare ?? trip?.fare_amount ?? 0);
-  const distanceFareBreakdown =
-    trip?.actual_fare_breakdown ?? trip?.fare_breakdown?.journeyFare ?? null;
-  const distanceDiscountPct = Number(distanceFareBreakdown?.distanceDiscountPct ?? 0);
-  const distanceDiscountAmount = Number(distanceFareBreakdown?.distanceDiscountAmount ?? 0);
-  const fareBeforeDistanceDiscount = Number(
-    distanceFareBreakdown?.fareBeforeDistanceDiscount ?? totalPaid + distanceDiscountAmount
-  );
   const vatAmount = useMemo(() => totalPaid - totalPaid / 1.15, [totalPaid]);
   const receiptNumber = useMemo(() => buildReceiptNumber(trip?.id ?? "", issueAt), [trip?.id, issueAt]);
   const receiptStops: ReceiptStop[] = Array.isArray(trip?.stops)
@@ -377,18 +370,6 @@ export default function TripReceiptPage() {
 
           {/* FARE TOTAL */}
           <div className="moovu-receipt-fare-block">
-            {distanceDiscountPct > 0 && distanceDiscountAmount > 0 && (
-              <>
-                <div className="moovu-receipt-fare-row">
-                  <span>Fare before distance saving</span>
-                  <span>{money(fareBeforeDistanceDiscount)}</span>
-                </div>
-                <div className="moovu-receipt-fare-row text-emerald-700">
-                  <span>Distance saving ({distanceDiscountPct}%)</span>
-                  <span>-{money(distanceDiscountAmount)}</span>
-                </div>
-              </>
-            )}
             <div className="moovu-receipt-fare-row">
               <span>Trip fare (incl. VAT)</span>
               <span>{money(totalPaid)}</span>

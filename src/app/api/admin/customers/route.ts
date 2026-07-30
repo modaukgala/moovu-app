@@ -187,6 +187,26 @@ export async function GET(req: Request) {
     const tripById = new Map<string, CustomerTripRow>();
     for (const trip of [...profileTrips, ...authTrips]) tripById.set(trip.id, trip);
     const trips = [...tripById.values()];
+    let securityEvents: Array<{
+      id: string;
+      event_type: string;
+      event_metadata: unknown;
+      actor_role: string | null;
+      created_at: string;
+    }> = [];
+    if (customerId && customerIds.length > 0) {
+      const securityResult = await auth.supabaseAdmin
+        .from("customer_security_events")
+        .select("id,event_type,event_metadata,actor_role,created_at")
+        .in("customer_id", customerIds)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (!securityResult.error) {
+        securityEvents = securityResult.data ?? [];
+      } else if (securityResult.error.code !== "42P01") {
+        console.error("[admin-customers] security event lookup failed", securityResult.error);
+      }
+    }
 
     const enriched = filteredIdentities.map(({ profile, authUser }) => {
       const authUserId = profile?.auth_user_id ?? authUser?.id ?? null;
@@ -216,6 +236,8 @@ export async function GET(req: Request) {
           authUser?.phone ??
           textMeta(authUser, "phone", "cellphone"),
         email: profile?.email ?? authUser?.email ?? null,
+        email_verified_at: authUser?.email_confirmed_at ?? null,
+        phone_verified_at: authUser?.phone_confirmed_at ?? null,
         status,
         created_at: profile?.created_at ?? authUser?.created_at ?? null,
         updated_at: profile?.updated_at ?? authUser?.updated_at ?? null,
@@ -241,6 +263,7 @@ export async function GET(req: Request) {
       ok: true,
       customers: enriched,
       customer: customerId ? enriched[0] ?? null : undefined,
+      security_events: customerId ? securityEvents : undefined,
     });
   } catch (error: unknown) {
     console.error("[admin-customers] lookup failed", error);

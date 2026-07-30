@@ -192,21 +192,23 @@ export default function CustomerAccountPage() {
               <label className="grid gap-2 text-sm font-bold text-slate-700">
                 Email address
                 <input
-                  className="moovu-input"
+                  className="moovu-input bg-slate-50"
                   type="email"
                   value={form.email}
-                  onChange={(event) => setForm((value) => ({ ...value, email: event.target.value }))}
                   autoComplete="email"
+                  readOnly
                 />
+                <span className="text-xs font-semibold text-emerald-700">Verified contact</span>
               </label>
               <label className="grid gap-2 text-sm font-bold text-slate-700">
                 Cellphone number
                 <input
-                  className="moovu-input"
+                  className="moovu-input bg-slate-50"
                   value={form.phone}
-                  onChange={(event) => setForm((value) => ({ ...value, phone: event.target.value }))}
                   autoComplete="tel"
+                  readOnly
                 />
+                <span className="text-xs font-semibold text-emerald-700">Verified contact</span>
               </label>
             </div>
 
@@ -229,9 +231,23 @@ export default function CustomerAccountPage() {
               >
                 Cancel
               </button>
+              <Link className="moovu-btn moovu-btn-secondary" href="/account/security">
+                Change email or cellphone
+              </Link>
             </div>
           </section>
         )}
+
+        <section className="moovu-card p-5 sm:p-7">
+          <div className="moovu-section-title">Account security</div>
+          <h2 className="mt-2 text-2xl font-black">Verified contact details</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Email and cellphone changes require verification before MOOVU replaces your current contact details.
+          </p>
+          <Link href="/account/security" className="moovu-btn moovu-btn-secondary mt-5">
+            Open security settings
+          </Link>
+        </section>
 
         <section className="moovu-card border border-red-100 bg-red-50/50 p-5 sm:p-7">
           <div className="moovu-section-title text-red-700">Delete account</div>

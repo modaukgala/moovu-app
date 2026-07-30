@@ -273,8 +273,8 @@ export function getCommissionPctForRideOption(value: unknown) {
 
 export function getDistanceTierDiscountPct(distanceKm: number) {
   const distance = safePositiveNumber(distanceKm);
-  if (distance > 18) return 20;
-  if (distance > 10) return 8;
+  if (distance > 18) return 30;
+  if (distance > 10) return 15;
   return 0;
 }
 

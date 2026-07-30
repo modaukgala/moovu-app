@@ -5,6 +5,7 @@ import {
   validateDriverProfileFields,
 } from "@/lib/driver-validation";
 import { DEFAULT_DRIVER_VERIFICATION_STATUS } from "@/lib/drivers/statusContract";
+import { getDriverRideEligibility } from "@/lib/drivers/rideEligibility";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
@@ -309,6 +310,7 @@ export async function POST(req: Request) {
       driverId,
       profile_completed: nextProfileCompleted,
       verification_status: nextVerificationStatus,
+      ride_eligibility: getDriverRideEligibility(seating_capacity),
     });
   } catch (error: unknown) {
     return NextResponse.json(

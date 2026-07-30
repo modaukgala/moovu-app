@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { customerEmailFromPhone, normalizePhoneZA } from "@/lib/customer/auth";
+import { normalizePhoneZA } from "@/lib/customer/auth";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { getLegalAcceptanceStatus } from "@/lib/legal";
 
@@ -38,7 +38,11 @@ export async function GET(req: Request) {
       email: auth.customer.email ?? customerEmailFromAuth(auth.user),
       phone: auth.customer.phone,
       status: auth.customer.status,
+      verified_auth_email: customerEmailFromAuth(auth.user),
+      verified_auth_phone: normalizePhoneZA(auth.user.phone),
     },
+    verified_auth_email: customerEmailFromAuth(auth.user),
+    verified_auth_phone: normalizePhoneZA(auth.user.phone),
     legalAcceptance: getLegalAcceptanceStatus(
       auth.user.user_metadata ?? {},
       auth.customer as Record<string, unknown>,
@@ -81,13 +85,51 @@ export async function PATCH(req: Request) {
   }
 
   const { supabaseAdmin, customer, user } = auth;
+  const currentEmail = String(
+    customer.email ?? customerEmailFromAuth(user) ?? "",
+  ).trim().toLowerCase();
+  const currentPhone = normalizePhoneZA(customer.phone);
+  const emailChanged = email !== currentEmail;
+  const phoneChanged = phone !== currentPhone;
+  const verifiedAuthEmail = customerEmailFromAuth(user);
+  const verifiedAuthPhone = normalizePhoneZA(user.phone);
 
-  const { data: phoneOwner, error: phoneCheckError } = await supabaseAdmin
-    .from("customers")
-    .select("id")
-    .eq("normalized_phone", phone)
-    .neq("id", customer.id)
-    .maybeSingle();
+  if (
+    emailChanged &&
+    (verifiedAuthEmail !== email || !user.email_confirmed_at)
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "EMAIL_VERIFICATION_REQUIRED",
+        error: "Verify the new email address before saving it to your MOOVU account.",
+      },
+      { status: 409 },
+    );
+  }
+
+  if (
+    phoneChanged &&
+    (verifiedAuthPhone !== phone || !user.phone_confirmed_at)
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "PHONE_VERIFICATION_REQUIRED",
+        error: "Verify the new cellphone number before saving it to your MOOVU account.",
+      },
+      { status: 409 },
+    );
+  }
+
+  const { data: phoneOwner, error: phoneCheckError } = phoneChanged
+    ? await supabaseAdmin
+        .from("customers")
+        .select("id")
+        .eq("normalized_phone", phone)
+        .neq("id", customer.id)
+        .maybeSingle()
+    : { data: null, error: null };
 
   if (phoneCheckError) {
     console.error("[customer-me] phone duplicate check failed", phoneCheckError);
@@ -104,12 +146,14 @@ export async function PATCH(req: Request) {
     );
   }
 
-  const { data: emailOwner, error: emailCheckError } = await supabaseAdmin
-    .from("customers")
-    .select("id")
-    .eq("email", email)
-    .neq("id", customer.id)
-    .maybeSingle();
+  const { data: emailOwner, error: emailCheckError } = emailChanged
+    ? await supabaseAdmin
+        .from("customers")
+        .select("id")
+        .eq("email", email)
+        .neq("id", customer.id)
+        .maybeSingle()
+    : { data: null, error: null };
 
   if (emailCheckError && !isMissingEmailColumn(emailCheckError)) {
     console.error("[customer-me] email duplicate check failed", emailCheckError);
@@ -128,8 +172,6 @@ export async function PATCH(req: Request) {
 
   const currentMetadata = user.user_metadata ?? {};
   const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-    email: customerEmailFromPhone(phone),
-    email_confirm: true,
     user_metadata: {
       ...currentMetadata,
       role: "customer",

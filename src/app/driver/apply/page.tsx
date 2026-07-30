@@ -21,6 +21,7 @@ import {
   normalizeVehicleRegistration,
   normalizeVin,
 } from "@/lib/driver-validation";
+import { getDriverRideEligibility } from "@/lib/drivers/rideEligibility";
 
 const steps = [
   "Eligibility",
@@ -142,6 +143,10 @@ export default function DriverApplyPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const score = useMemo(() => readiness(form), [form]);
+  const rideEligibility = useMemo(
+    () => getDriverRideEligibility(form.seatingCapacity),
+    [form.seatingCapacity],
+  );
   const blockers = useMemo(() => {
     const items: string[] = [];
     if (form.validLicence === "no") items.push("A valid driver licence is required.");
@@ -240,7 +245,7 @@ export default function DriverApplyPage() {
           vin: normalizeVin(form.vin),
           engineNumber: normalizeEngineNumber(form.engineNumber),
           seatingCapacity: form.seatingCapacity,
-          category: form.vehicleCategory,
+          category: rideEligibility.labels.join(" + "),
           ownershipType: form.ownershipType,
         },
         documents: {
@@ -428,7 +433,11 @@ export default function DriverApplyPage() {
                 <Field label="VIN" value={form.vin} onChange={(v) => update("vin", v)} />
                 <Field label="Engine number" value={form.engineNumber} onChange={(v) => update("engineNumber", v)} />
                 <Field label="Seating capacity" value={form.seatingCapacity} onChange={(v) => update("seatingCapacity", v)} type="number" />
-                <SelectField label="Vehicle category" value={form.vehicleCategory} onChange={(v) => update("vehicleCategory", v)} options={["MOOVU Go", "MOOVU Go XL", "Both if eligible"]} />
+                <RideEligibilitySummary
+                  labels={rideEligibility.labels}
+                  reviewRequired={rideEligibility.reviewRequired}
+                  reviewReason={rideEligibility.reviewReason}
+                />
               </div>
               <DocumentGrid title="Vehicle documents" items={vehicleDocuments} />
             </div>
@@ -449,7 +458,7 @@ export default function DriverApplyPage() {
                 <SummaryCard title="Eligibility" rows={[["Licence", form.validLicence], ["PDP / PrDP", pdpLabel(form.pdpStatus)], ["Vehicle access", form.vehicleAccess], ["Area", form.operatingArea || "--"]]} />
                 <SummaryCard title="Account" rows={[["Name", form.fullName || "--"], ["Phone", form.phone || "--"], ["Email", form.email || "--"]]} />
                 <SummaryCard title="Personal" rows={[["ID/passport", form.idNumber || "--"], ["Date of birth", form.dateOfBirth || "--"], ["Emergency", form.emergencyName || "--"]]} />
-                <SummaryCard title="Vehicle" rows={[["Vehicle", `${form.vehicleMake} ${form.vehicleModel}`.trim() || "--"], ["Plate", form.plate || "--"], ["Category", form.vehicleCategory]]} />
+                <SummaryCard title="Vehicle" rows={[["Vehicle", `${form.vehicleMake} ${form.vehicleModel}`.trim() || "--"], ["Plate", form.plate || "--"], ["Eligible rides", rideEligibility.labels.join(", ")]]} />
               </div>
               <textarea
                 className="moovu-input min-h-28"
@@ -543,6 +552,34 @@ function SelectField({
         ))}
       </select>
     </label>
+  );
+}
+
+function RideEligibilitySummary({
+  labels,
+  reviewRequired,
+  reviewReason,
+}: {
+  labels: string[];
+  reviewRequired: boolean;
+  reviewReason: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+      <div className="text-sm font-black text-slate-700">Eligible ride categories</div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {labels.map((label) => (
+          <span key={label} className="rounded-full bg-white px-3 py-2 text-xs font-black text-[var(--moovu-primary)] shadow-sm">
+            {label}
+          </span>
+        ))}
+      </div>
+      {reviewRequired && (
+        <p className="mt-3 text-xs font-bold leading-5 text-amber-800">
+          Admin review required. {reviewReason}
+        </p>
+      )}
+    </div>
   );
 }
 

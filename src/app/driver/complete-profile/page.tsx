@@ -18,6 +18,7 @@ import {
   normalizeVin,
   validateDriverProfileFields,
 } from "@/lib/driver-validation";
+import { getDriverRideEligibility } from "@/lib/drivers/rideEligibility";
 
 type Driver = {
   id: string;
@@ -129,7 +130,6 @@ export default function DriverCompleteProfilePage() {
   const [vehicleEngine, setVehicleEngine] = useState("");
   const [seatingCapacity, setSeatingCapacity] = useState("");
   const [ownershipType, setOwnershipType] = useState("owned");
-  const [vehicleCategory, setVehicleCategory] = useState("MOOVU Go");
   const [hasLicence, setHasLicence] = useState("yes");
   const [hasVehicle, setHasVehicle] = useState("yes");
   const [trainingReady, setTrainingReady] = useState("yes");
@@ -256,6 +256,10 @@ export default function DriverCompleteProfilePage() {
     vehicleVin,
     vehicleYear,
   ]);
+  const rideEligibility = useMemo(
+    () => getDriverRideEligibility(seatingCapacity),
+    [seatingCapacity],
+  );
 
   const readiness = readinessResult.readiness_score;
   const applicationChecklist = readinessResult.checklist;
@@ -650,7 +654,11 @@ export default function DriverCompleteProfilePage() {
                 <Field label="Engine number" value={vehicleEngine} onChange={setVehicleEngine} />
                 <Field label="Seating capacity" value={seatingCapacity} onChange={setSeatingCapacity} type="number" />
                 <SelectField label="Ownership type" value={ownershipType} onChange={setOwnershipType} options={["owned", "rented", "fleet-owned", "borrowed"]} />
-                <SelectField label="Vehicle category" value={vehicleCategory} onChange={setVehicleCategory} options={["MOOVU Go", "MOOVU Go XL", "Both if eligible"]} />
+                <RideEligibilitySummary
+                  labels={rideEligibility.labels}
+                  reviewRequired={rideEligibility.reviewRequired}
+                  reviewReason={rideEligibility.reviewReason}
+                />
               </div>
               <UploadChecklist
                 title="Vehicle documents"
@@ -682,7 +690,7 @@ export default function DriverCompleteProfilePage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <Summary title="Account and personal" rows={[["Name", `${firstName} ${lastName}`.trim() || "--"], ["Phone", phone || "--"], ["Area", areaName || "--"], ["Emergency", emergencyName || "--"]]} />
                 <Summary title="Documents" rows={[["Licence", licenseNumber ? "Captured" : "Missing"], ["PDP / PrDP", pdpText(pdpStatus)], ["Proof uploads", "Pending review"]]} />
-                <Summary title="Vehicle" rows={[["Vehicle", `${vehicleMake} ${vehicleModel}`.trim() || "--"], ["Plate", vehicleRegistration || "--"], ["Category", vehicleCategory], ["Ownership", ownershipType]]} />
+                <Summary title="Vehicle" rows={[["Vehicle", `${vehicleMake} ${vehicleModel}`.trim() || "--"], ["Plate", vehicleRegistration || "--"], ["Eligible rides", rideEligibility.labels.join(", ")], ["Ownership", ownershipType]]} />
                 <Summary title="Admin readiness" rows={[["Readiness score", `${readiness}%`], ["Profile status", driver?.profile_completed ? "Submitted" : "Draft"], ["Verification", driver?.verification_status ?? "--"]]} />
               </div>
               {pdpStatus !== "uploaded" && <Warning>Your PDP / PrDP is not uploaded. Admin will see this warning but can still approve under MOOVU rules.</Warning>}
@@ -776,6 +784,34 @@ function SelectField({ label, value, onChange, options }: { label: string; value
         ))}
       </select>
     </label>
+  );
+}
+
+function RideEligibilitySummary({
+  labels,
+  reviewRequired,
+  reviewReason,
+}: {
+  labels: string[];
+  reviewRequired: boolean;
+  reviewReason: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+      <div className="text-sm font-black text-slate-700">Eligible ride categories</div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {labels.map((label) => (
+          <span key={label} className="rounded-full bg-white px-3 py-2 text-xs font-black text-[var(--moovu-primary)] shadow-sm">
+            {label}
+          </span>
+        ))}
+      </div>
+      {reviewRequired && (
+        <p className="mt-3 text-xs font-bold leading-5 text-amber-800">
+          Admin review required. {reviewReason}
+        </p>
+      )}
+    </div>
   );
 }
 

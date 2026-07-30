@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { customerEmailFromPhone, normalizePhoneZA } from "@/lib/customer/auth";
+import { normalizePhoneZA } from "@/lib/customer/auth";
 import { createServiceSupabase } from "@/lib/customer/server";
 import {
   buildLegalAcceptanceMetadata,
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const email = customerEmailFromPhone(normalizedPhone);
+    const email = customerEmail;
     const supabase = createServiceSupabase();
     const legalMetadata = buildLegalAcceptanceMetadata("customer_signup");
 
@@ -207,6 +207,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         ok: true,
+        login_email: email,
         warning: "Customer created. Run the customer email SQL migration to persist customers.email.",
       });
     }
@@ -218,7 +219,7 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, login_email: email });
   } catch (e: unknown) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Server error." },

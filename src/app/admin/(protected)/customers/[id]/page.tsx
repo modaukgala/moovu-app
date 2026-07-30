@@ -31,6 +31,8 @@ type CustomerDetail = {
   last_name: string | null;
   phone: string | null;
   email: string | null;
+  email_verified_at?: string | null;
+  phone_verified_at?: string | null;
   status: string | null;
   created_at: string | null;
   last_activity: string | null;
@@ -40,6 +42,13 @@ type CustomerDetail = {
   total_spend: number;
   last_trip_status: string | null;
   trips: CustomerTrip[];
+};
+
+type SecurityEvent = {
+  id: string;
+  event_type: string;
+  actor_role: string | null;
+  created_at: string;
 };
 
 type ProfileTab =
@@ -64,6 +73,7 @@ export default function AdminCustomerProfilePage() {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
   const [tab, setTab] = useState<ProfileTab>("overview");
 
   const loadCustomer = useCallback(async () => {
@@ -98,6 +108,7 @@ export default function AdminCustomerProfilePage() {
     }
 
     setCustomer(json.customer);
+    setSecurityEvents(Array.isArray(json.security_events) ? json.security_events : []);
     setLoading(false);
   }, [params.id]);
 
@@ -200,10 +211,16 @@ export default function AdminCustomerProfilePage() {
                 <div>
                   <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Phone</dt>
                   <dd className="mt-1 font-black text-slate-950">{customer.phone ?? "Not saved"}</dd>
+                  <dd className="mt-1 text-xs font-bold text-emerald-700">
+                    {customer.phone_verified_at ? "Verified" : "Verification not recorded"}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Email</dt>
                   <dd className="mt-1 break-words font-black text-slate-950">{customer.email ?? "Not saved"}</dd>
+                  <dd className="mt-1 text-xs font-bold text-emerald-700">
+                    {customer.email_verified_at ? "Verified" : "Verification not recorded"}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Joined</dt>
@@ -289,6 +306,32 @@ export default function AdminCustomerProfilePage() {
             )}
           </section>
         ) : null}
+
+        {tab === "activity" && (
+          <section className="moovu-card p-5 sm:p-6">
+            <div className="moovu-section-title">Account security activity</div>
+            <h2 className="mt-2 text-2xl font-black">Profile and recovery events</h2>
+            {securityEvents.length > 0 ? (
+              <div className="mt-5 grid gap-3">
+                {securityEvents.map((event) => (
+                  <div key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="font-black text-slate-950">
+                      {event.event_type.replaceAll("_", " ")}
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-slate-500">
+                      {displayDate(event.created_at)}
+                      {event.actor_role ? ` · ${event.actor_role}` : ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm font-semibold text-slate-600">
+                No password recovery or verified contact-change events are recorded.
+              </p>
+            )}
+          </section>
+        )}
 
         {tab === "support" ? (
           <section className="moovu-card p-5 sm:p-6">

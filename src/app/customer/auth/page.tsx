@@ -24,6 +24,13 @@ type CheckPhoneResponse = {
   error?: string;
 };
 
+type RegisterResponse = {
+  ok?: boolean;
+  error?: string;
+  warning?: string;
+  login_email?: string;
+};
+
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -54,6 +61,9 @@ export default function CustomerAuthPage() {
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [failedLoginAttempts, setFailedLoginAttempts] = useState(0);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
 
   const canCheck = useMemo(() => {
     const normalized = normalizePhoneZA(phone);
@@ -135,7 +145,8 @@ export default function CustomerAuthPage() {
       });
 
       if (error) {
-        setMsg(error.message);
+        setFailedLoginAttempts((value) => value + 1);
+        setMsg("The password was not accepted. Check it and try again.");
         setBusy(false);
         return;
       }
@@ -196,7 +207,7 @@ export default function CustomerAuthPage() {
         }),
       });
 
-      const json = await res.json().catch(() => null);
+      const json = (await res.json().catch(() => null)) as RegisterResponse | null;
 
       if (!json?.ok) {
         setMsg(json?.error || "Failed to create your account.");
@@ -204,7 +215,7 @@ export default function CustomerAuthPage() {
         return;
       }
 
-      const loginEmail = customerEmailFromPhone(normalized);
+      const loginEmail = json.login_email || customerEmailFromPhone(normalized);
 
       const { error } = await supabaseClient.auth.signInWithPassword({
         email: loginEmail,
@@ -223,6 +234,31 @@ export default function CustomerAuthPage() {
     }
 
     setBusy(false);
+  }
+
+  async function requestPasswordRecovery() {
+    if (!isEmail(recoveryEmail)) {
+      setMsg("Enter the registered email address.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await fetch("/api/customer/password-recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: phone.trim(),
+          email: recoveryEmail.trim().toLowerCase(),
+        }),
+      });
+      setShowRecovery(false);
+      setMsg("If an account matches these details, we’ll send recovery instructions.");
+    } catch {
+      setMsg("If an account matches these details, we’ll send recovery instructions.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -308,6 +344,46 @@ export default function CustomerAuthPage() {
                   Back
                 </button>
               </div>
+              {failedLoginAttempts > 0 && (
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                  {!showRecovery ? (
+                    <button
+                      type="button"
+                      className="text-sm font-black text-blue-700 underline underline-offset-4"
+                      onClick={() => setShowRecovery(true)}
+                    >
+                      Forgot password?
+                    </button>
+                  ) : (
+                    <div className="grid gap-3">
+                      <p className="text-sm font-semibold leading-6 text-slate-700">
+                        Enter the email registered with this account. MOOVU uses neutral responses to protect account privacy.
+                      </p>
+                      <input
+                        className="moovu-input bg-white"
+                        type="email"
+                        placeholder="Registered email address"
+                        value={recoveryEmail}
+                        onChange={(event) => setRecoveryEmail(event.target.value)}
+                        autoComplete="email"
+                      />
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          className="moovu-btn moovu-btn-primary"
+                          onClick={() => void requestPasswordRecovery()}
+                          disabled={busy}
+                        >
+                          {busy ? "Sending..." : "Send recovery instructions"}
+                        </button>
+                        <Link className="moovu-btn moovu-btn-secondary" href="/contact">
+                          No access to email?
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 

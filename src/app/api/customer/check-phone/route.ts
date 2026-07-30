@@ -66,12 +66,18 @@ export async function POST(req: Request) {
 
     const { data: customer, error } = await supabase
       .from("customers")
-      .select("id,first_name,last_name,normalized_phone")
+      .select("id,first_name,last_name,normalized_phone,auth_user_id")
       .eq("normalized_phone", normalizedPhone)
       .maybeSingle();
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+
+    let loginEmail = normalizedPhone ? customerEmailFromPhone(normalizedPhone) : null;
+    if (customer?.auth_user_id) {
+      const { data: authUserResult } = await supabase.auth.admin.getUserById(customer.auth_user_id);
+      loginEmail = authUserResult.user?.email ?? loginEmail;
     }
 
     return NextResponse.json({
@@ -80,7 +86,7 @@ export async function POST(req: Request) {
       first_name: customer?.first_name ?? null,
       last_name: customer?.last_name ?? null,
       normalized_phone: normalizedPhone,
-      login_email: normalizedPhone ? customerEmailFromPhone(normalizedPhone) : null,
+      login_email: loginEmail,
     });
   } catch (e: unknown) {
     return NextResponse.json(

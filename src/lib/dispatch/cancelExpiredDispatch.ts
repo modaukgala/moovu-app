@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 import { sendPushSafe } from "@/lib/push-server";
 
-const AUTO_CANCEL_REASON = "No driver accepted within 5 minutes";
+const AUTO_CANCEL_REASON = "No eligible driver accepted within 3 minutes.";
 
 function isMissingAutoCancelColumn(error: { message?: string } | null | undefined) {
   const message = String(error?.message ?? "").toLowerCase();
@@ -119,13 +119,13 @@ export async function cancelExpiredDispatch(tripId: string) {
     notifyCustomerForTrip(
       tripId,
       "No driver accepted your trip",
-      "Your request was cancelled after five minutes. You can book again when you are ready.",
+      "No driver was available for this request. Please try again.",
       `/ride/${tripId}`,
       { type: "trip_cancelled", tripId },
     ).catch(() => null),
     notifyAdmins(
       "Trip auto-cancelled",
-      `Trip ${tripId} was cancelled because no driver accepted within five minutes.`,
+      `Trip ${tripId} was cancelled because no eligible driver accepted within three minutes.`,
       `/admin/trips/${tripId}`,
     ).catch(() => null),
   ]);

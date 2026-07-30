@@ -14,6 +14,25 @@ type AtomicOfferRow = {
   escalates_at: string;
 };
 
+async function scheduleFinalCancellationCheck(params: {
+  tripId: string;
+  requestedAt: string;
+  dispatchCycle: number;
+}) {
+  const requestedAtMs = new Date(params.requestedAt).getTime();
+  const terminalAt = new Date(
+    requestedAtMs + DISPATCH_CONFIG.maxSearchSeconds * 1000,
+  ).toISOString();
+  return enqueueDispatchJob({
+    supabase: supabaseAdmin,
+    tripId: params.tripId,
+    jobType: "recover",
+    runAt: terminalAt,
+    dispatchCycle: params.dispatchCycle,
+    sequenceNumber: 1,
+  });
+}
+
 function isMissingAtomicDispatch(error: { code?: string; message?: string } | null | undefined) {
   const message = String(error?.message ?? "").toLowerCase();
   return error?.code === "PGRST202" || message.includes("reserve_trip_offer") || message.includes("dispatch_jobs");
@@ -121,7 +140,7 @@ export async function dispatchTrip(params: {
     };
   }
 
-  if (isDispatchExpired(trip.created_at) || cycle > DISPATCH_CONFIG.maxCycles) {
+  if (isDispatchExpired(trip.created_at)) {
     console.warn("[dispatch] search exhausted", {
       tripId: trip.id,
       cycle,
@@ -129,6 +148,22 @@ export async function dispatchTrip(params: {
     });
     await cancelExpiredDispatch(trip.id);
     return { ok: false, tripId: trip.id, exhausted: true, error: "Dispatch search exhausted." };
+  }
+  if (cycle > DISPATCH_CONFIG.maxCycles) {
+    const terminalJob = await scheduleFinalCancellationCheck({
+      tripId: trip.id,
+      requestedAt: trip.created_at,
+      dispatchCycle: cycle,
+    });
+    return {
+      ok: terminalJob.ok,
+      tripId: trip.id,
+      exhausted: true,
+      schedulerQueued: terminalJob.ok,
+      error: terminalJob.ok
+        ? "All offer rounds are complete. The request remains searchable until the three-minute limit."
+        : terminalJob.error,
+    };
   }
 
   const radiusKm = dispatchRadiusForCycle(cycle);
@@ -201,6 +236,12 @@ export async function dispatchTrip(params: {
         runAt: new Date(Date.now() + DISPATCH_CONFIG.acceptWindowSeconds * 1000).toISOString(),
         dispatchCycle: nextCycle,
         sequenceNumber: 1,
+      });
+    } else if (!isDispatchExpired(trip.created_at)) {
+      await scheduleFinalCancellationCheck({
+        tripId: trip.id,
+        requestedAt: trip.created_at,
+        dispatchCycle: nextCycle,
       });
     }
     return { ok: false, tripId: trip.id, exhausted: nextCycle > DISPATCH_CONFIG.maxCycles, error: "No eligible drivers available." };
@@ -298,7 +339,7 @@ export async function dispatchTrip(params: {
   const schedulerQueued = schedulerResult.ok;
   const schedulerWarning = schedulerQueued
     ? undefined
-    : "The offer round was sent, but its next 30-second dispatch step requires worker attention.";
+    : "The offer round was sent, but its next 25-second dispatch step requires worker attention.";
 
   if (!schedulerQueued) {
     console.error("[dispatch] offer created without complete scheduler jobs", {

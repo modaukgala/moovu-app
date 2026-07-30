@@ -16,6 +16,7 @@ import {
   normalizeVehicleRegistration,
   normalizeVin,
 } from "@/lib/driver-validation";
+import { getDriverRideEligibility } from "@/lib/drivers/rideEligibility";
 
 type CorrectionTarget = {
   table: "drivers" | "driver_profiles" | "driver_applications";
@@ -215,6 +216,10 @@ export async function POST(req: Request) {
       fieldName,
       oldValue,
       newValue,
+      rideEligibility:
+        target.column === "seating_capacity"
+          ? getDriverRideEligibility(Number(newValue))
+          : undefined,
     });
   } catch (error: unknown) {
     console.error("[driver-corrections] unexpected failure", { message: errorMessage(error) });

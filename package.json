@@ -10,6 +10,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:dispatch": "node --test --experimental-strip-types src/lib/dispatch/dispatchPolicy.test.ts",
+    "test:driver-eligibility": "node --test --experimental-strip-types src/lib/drivers/rideEligibility.test.ts",
+    "test:fare-tiers": "node --test --experimental-strip-types src/lib/domain/fareDiscount.test.ts",
     "test:cancellation": "node --test --experimental-strip-types src/lib/finance/cancellationFees.test.ts",
     "test:status-contracts": "node --test --experimental-strip-types src/lib/drivers/statusContract.test.ts",
     "test:notification-routing": "node --test --experimental-strip-types src/lib/notifications/deepLinkRouting.test.ts",

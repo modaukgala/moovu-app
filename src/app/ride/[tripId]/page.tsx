@@ -46,6 +46,7 @@ type RideTrip = {
   start_otp_verified: boolean | null;
   end_otp_verified: boolean | null;
   offer_status?: string | null;
+  dispatch_cycle?: number | null;
   scheduled_for?: string | null;
   scheduled_release_at?: string | null;
   ride_type?: string | null;
@@ -1141,6 +1142,7 @@ export default function RideTrackingPage() {
     if (!trip) return false;
     return !trip.driver_id && ["requested", "offered", "scheduled"].includes(trip.status);
   }, [trip]);
+  const dispatchRound = Math.min(3, Math.max(1, Number(trip?.dispatch_cycle ?? 1)));
 
   const carText = useMemo(() => {
     if (!driver) return "--";
@@ -2284,9 +2286,16 @@ export default function RideTrackingPage() {
                       <div className="text-sm font-black text-[#244f9e]">
                         {searchingForDriver ? "Looking for nearby MOOVU drivers..." : "Nearby drivers are currently unavailable."}
                       </div>
+                      {searchingForDriver && (
+                        <div className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                          Offer round {dispatchRound} of 3
+                        </div>
+                      )}
                       <p className="mt-2 text-sm font-semibold leading-6 text-[#244f9e]">
                         {searchingForDriver
-                          ? "Your request is being sent to available drivers near you."
+                          ? dispatchRound < 3
+                            ? "Your request is being sent to available drivers near you."
+                            : "Trying more available drivers while your request remains open."
                           : "Please try again shortly or keep your request open while we continue checking."}
                       </p>
                     </div>

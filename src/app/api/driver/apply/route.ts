@@ -16,6 +16,7 @@ import {
   normalizeVehicleRegistration,
   normalizeVin,
 } from "@/lib/driver-validation";
+import { getDriverRideEligibility } from "@/lib/drivers/rideEligibility";
 
 type ExistingDriverRow = {
   id: string;
@@ -124,6 +125,9 @@ export async function POST(req: Request) {
       ? Boolean(existingDriver?.profile_completed)
       : false;
     const seatingCapacity = Number(vehicle.seatingCapacity);
+    const rideEligibility = getDriverRideEligibility(
+      Number.isFinite(seatingCapacity) ? seatingCapacity : null,
+    );
     const vehiclePatch = {
       vehicle_make: vehicle.make ? String(vehicle.make).trim() : null,
       vehicle_model: vehicle.model ? String(vehicle.model).trim() : null,
@@ -143,7 +147,8 @@ export async function POST(req: Request) {
       `Vehicle access: ${eligibility.vehicleAccess ?? "unknown"}`,
       `Operating area: ${eligibility.operatingArea ?? "not captured"}`,
       `Vehicle ownership: ${eligibility.ownershipType ?? vehicle.ownershipType ?? "not captured"}`,
-      `Vehicle category: ${vehicle.category ?? "not captured"}`,
+      `Automatic ride eligibility: ${rideEligibility.labels.join(", ")}`,
+      `Seating-capacity review required: ${rideEligibility.reviewRequired ? "yes" : "no"}`,
     ]
       .filter(Boolean)
       .join("\n");

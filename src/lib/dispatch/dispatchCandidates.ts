@@ -3,6 +3,7 @@ import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
 import { DISPATCH_CONFIG } from "@/lib/dispatch/config";
 import { haversineKm } from "@/lib/dispatch/driverScoring";
 import type { DispatchCandidate, DispatchScoreBreakdown } from "@/lib/dispatch/types";
+import { isDriverEligibleForRideOption } from "@/lib/drivers/rideEligibility";
 
 type CandidateRow = {
   id: string;
@@ -42,12 +43,6 @@ function clamp(value: number, min: number, max: number) {
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
-}
-
-function compatibleCapacity(rideOption: string | null | undefined, seats: number | null) {
-  const option = String(rideOption ?? "go").toLowerCase();
-  const required = option === "group" || option === "xl" || option === "go_xl" ? 6 : 3;
-  return Number(seats ?? 0) >= required;
 }
 
 function scoreCandidate(params: {
@@ -124,7 +119,7 @@ export async function getDispatchCandidates(params: {
     if (!["active", "grace"].includes(String(driver.subscription_status ?? ""))) return false;
     if (!driver.subscription_expires_at || new Date(driver.subscription_expires_at).getTime() <= now) return false;
     if (driver.lat == null || driver.lng == null) return false;
-    if (!compatibleCapacity(rideOption, driver.seating_capacity)) return false;
+    if (!isDriverEligibleForRideOption(driver.seating_capacity, rideOption)) return false;
     return haversineKm(pickupLat, pickupLng, Number(driver.lat), Number(driver.lng)) <= radiusKm;
   });
 
@@ -210,7 +205,7 @@ export async function getPreferredDispatchCandidate(params: {
   if (!["active", "grace"].includes(String(row.subscription_status ?? ""))) return { ok: false as const, error: "Driver subscription is not active." };
   if (!row.subscription_expires_at || new Date(row.subscription_expires_at).getTime() <= now) return { ok: false as const, error: "Driver subscription has expired." };
   if (row.lat == null || row.lng == null) return { ok: false as const, error: "Driver GPS location is missing." };
-  if (!compatibleCapacity(rideOption, row.seating_capacity)) return { ok: false as const, error: "Driver vehicle does not match this ride type." };
+  if (!isDriverEligibleForRideOption(row.seating_capacity, rideOption)) return { ok: false as const, error: "Driver vehicle does not match this ride type." };
 
   const [walletResult, activeTripsResult, declinedResult, activeOfferResult, qualityResult, statsResult] = await Promise.all([
     supabase.from("driver_wallets").select("driver_id,balance_due").eq("driver_id", driverId).maybeSingle(),

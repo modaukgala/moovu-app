@@ -21,6 +21,7 @@ type CustomerTripStatusRow = {
   driver_id: string | null;
   offer_status: string | null;
   offer_expires_at: string | null;
+  dispatch_cycle?: number | null;
   start_otp: string | null;
   end_otp: string | null;
   start_otp_verified: boolean | null;
@@ -87,6 +88,7 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
     message.includes("fare_adjustment_amount") ||
     message.includes("fare_adjustment_reason") ||
     message.includes("fare_finalized_at") ||
+    message.includes("dispatch_cycle") ||
     message.includes("current_fare") ||
     message.includes("actual_distance_km") ||
     message.includes("actual_duration_min") ||
@@ -178,6 +180,7 @@ export async function GET(req: Request) {
         driver_id,
         offer_status,
         offer_expires_at,
+        dispatch_cycle,
         start_otp,
         end_otp,
         start_otp_verified,

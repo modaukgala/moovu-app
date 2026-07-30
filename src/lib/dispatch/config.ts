@@ -1,13 +1,13 @@
 export const DISPATCH_CONFIG = {
-  escalationSeconds: 30,
-  acceptWindowSeconds: 30,
+  escalationSeconds: 25,
+  acceptWindowSeconds: 25,
   cycleCooldownSeconds: 0,
   gpsFreshnessSeconds: 90,
   backgroundOfferEligibilitySeconds: 8 * 60 * 60,
   initialRadiusKm: 8,
   expandedRadiusKm: 20,
-  maxSearchSeconds: 5 * 60,
-  maxCycles: 10,
+  maxSearchSeconds: 3 * 60,
+  maxCycles: 3,
   maxCandidatesPerStep: 25,
 } as const;
 

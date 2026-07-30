@@ -9,6 +9,7 @@ import {
   getDriverDocumentLabel,
   normalizeDriverDocumentType,
 } from "@/lib/driver-documents";
+import { getDriverRideEligibility } from "@/lib/drivers/rideEligibility";
 
 type DriverProfile = {
   id: string;
@@ -522,6 +523,10 @@ export default function AdminDriverProfilePage() {
   const driverName = useMemo(() => {
     return `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() || "Unnamed Driver";
   }, [profile]);
+  const rideEligibility = useMemo(
+    () => getDriverRideEligibility(profile?.seating_capacity),
+    [profile?.seating_capacity],
+  );
 
   const editableFields = useMemo(
     () => [
@@ -617,6 +622,32 @@ export default function AdminDriverProfilePage() {
             ))}
           </div>
         </nav>
+
+        <section className="moovu-card p-5 sm:p-6">
+          <div className="moovu-section-title">Automatic ride eligibility</div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            {[
+              ["Entered / recorded seats", profile.seating_capacity == null ? "Not captured" : String(profile.seating_capacity)],
+              ["Verified capacity", corrections.some((row) => row.field_name === "seating_capacity") ? `${profile.seating_capacity ?? "--"} (admin corrected)` : "Awaiting explicit admin correction"],
+              ["Admin verification", rideEligibility.reviewRequired ? "Required" : "Category rule satisfied"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl bg-slate-50 p-4">
+                <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">{label}</div>
+                <div className="mt-2 text-sm font-black text-slate-950">{value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {rideEligibility.labels.map((label) => (
+              <span key={label} className="rounded-full bg-sky-50 px-4 py-2 text-xs font-black text-[var(--moovu-primary)]">
+                {label}
+              </span>
+            ))}
+          </div>
+          {rideEligibility.reviewRequired && (
+            <p className="mt-3 text-sm font-bold text-amber-800">{rideEligibility.reviewReason}</p>
+          )}
+        </section>
 
         {correctionDraft && (
           <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">

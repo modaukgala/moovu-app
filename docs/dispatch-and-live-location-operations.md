@@ -3,7 +3,7 @@
 ## What the application now enforces
 
 - Every eligible driver selected for a dispatch round receives the trip at once.
-- An offer remains valid for 30 seconds.
+- An offer remains valid for 25 seconds.
 - A new round starts after an expired round while the trip remains unassigned.
 - First valid acceptance wins through the existing atomic acceptance RPC.
 - Other offers are withdrawn after assignment.
@@ -13,7 +13,7 @@
 ## Required durable dispatch worker
 
 The web request cannot be the production scheduler. Configure one durable worker
-to call `POST /api/jobs/dispatch` at least every 30 seconds with:
+to call `POST /api/jobs/dispatch` at least every 25 seconds with:
 
 ```text
 Authorization: Bearer <DISPATCH_JOB_SECRET>
@@ -23,7 +23,7 @@ Content-Type: application/json
 The worker must retry transient failures and must use the same
 `DISPATCH_JOB_SECRET` configured in Vercel. Suitable options are a durable queue
 with delayed callbacks or a continuously running worker. A one-minute Vercel
-Cron is not enough for the required 30-second cadence.
+Cron is not enough for the required 25-second cadence.
 
 Do not make the endpoint public and do not reuse an admin access token as the
 machine secret.
@@ -54,7 +54,7 @@ are updated.
 1. Apply `docs/operations-reliability-migration.sql` in a staging Supabase project.
 2. Configure and verify the durable worker.
 3. Book with one, two, three, and five eligible drivers.
-4. Confirm every driver receives each 30-second round.
+4. Confirm every eligible driver receives each 25-second round, for no more than three rounds.
 5. Race two accepts and confirm exactly one succeeds.
 6. Leave a request untouched and confirm cancellation at five minutes.
 7. Test active and background location on real Android and iPhone devices.

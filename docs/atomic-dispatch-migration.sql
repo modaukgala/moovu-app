@@ -145,8 +145,8 @@ create or replace function public.reserve_trip_offer(
   p_road_eta_seconds integer,
   p_dispatch_score numeric,
   p_score_breakdown jsonb,
-  p_escalation_seconds integer default 10,
-  p_accept_window_seconds integer default 30,
+  p_escalation_seconds integer default 25,
+  p_accept_window_seconds integer default 25,
   p_search_radius_km numeric default 8
 )
 returns table(offer_id uuid, driver_id uuid, accept_deadline_at timestamptz, escalates_at timestamptz)
@@ -161,7 +161,6 @@ declare
   v_deadline timestamptz := now() + make_interval(secs => greatest(1, p_accept_window_seconds));
   v_escalates timestamptz := now() + make_interval(secs => greatest(1, p_escalation_seconds));
   v_balance numeric := 0;
-  v_required_seats integer := 3;
 begin
   select * into v_trip from public.trips where id = p_trip_id for update;
   if not found then raise exception 'Trip not found' using errcode = 'P0002'; end if;
@@ -189,8 +188,8 @@ begin
     raise exception 'Driver is not eligible' using errcode = 'P0001';
   end if;
 
-  v_required_seats := case when lower(coalesce(v_trip.ride_option, 'go')) = 'group' then 6 else 3 end;
-  if coalesce(v_driver.seating_capacity, 0) < v_required_seats then
+  if lower(coalesce(v_trip.ride_option, 'go')) = 'group'
+     and coalesce(v_driver.seating_capacity, 0) <> 7 then
     raise exception 'Driver vehicle is incompatible' using errcode = 'P0001';
   end if;
 
