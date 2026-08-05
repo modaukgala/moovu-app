@@ -3,8 +3,9 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { getFreshAccessToken } from "@/lib/auth/client-access-token";
+import { uploadDriverDocumentFromClient } from "@/lib/driver-document-upload-client";
 import {
   getDriverDocumentLabel,
   normalizeDriverDocumentType,
@@ -135,10 +136,7 @@ export default function DriverCompleteProfilePage() {
   const [trainingReady, setTrainingReady] = useState("yes");
 
   const getToken = useCallback(async () => {
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-    return session?.access_token ?? null;
+    return getFreshAccessToken();
   }, []);
 
   const loadProfile = useCallback(async () => {
@@ -382,25 +380,16 @@ export default function DriverCompleteProfilePage() {
     setUploadingDoc(item.label);
     setMsg(null);
     try {
-      const token = await getToken();
-      if (!token) {
-        router.replace("/driver/login?next=/driver/complete-profile");
-        return;
-      }
-
-      const form = new FormData();
-      form.set("documentType", item.type);
-      form.set("required", item.required ? "true" : "false");
-      form.set("file", file);
-
-      const res = await fetch("/api/driver/documents/upload", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
+      const result = await uploadDriverDocumentFromClient({
+        endpoint: "/api/driver/documents/upload",
+        documentType: item.type,
+        required: item.required,
+        file,
+        sessionExpiredMessage: "Your session has expired. Sign in again to upload this document.",
       });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        setMsg(json?.error || "Could not upload this document.");
+
+      if (!result.ok) {
+        setMsg(result.error);
         return;
       }
 

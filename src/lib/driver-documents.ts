@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  DRIVER_DOCUMENTS_BUCKET,
+  normalizeDriverDocumentStoragePath,
+} from "./driver-document-storage";
 
 export const DRIVER_DOCUMENT_TYPES = [
   "id_document",
@@ -24,9 +28,18 @@ export type DriverDocumentItem = {
   required?: boolean;
 };
 
-const MAX_FILE_BYTES = 8 * 1024 * 1024;
+export const DRIVER_DOCUMENT_MAX_FILE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_FILE_EXTENSIONS = new Set(["pdf", "jpg", "jpeg", "png", "webp"]);
 const DOCUMENT_TYPE_SET = new Set<string>(DRIVER_DOCUMENT_TYPES);
+
+export type DriverDocumentFileDescriptor = {
+  name: string;
+  size: number;
+  type?: string | null;
+};
+
+type DriverDocumentSource = "driver" | "admin" | "application" | "profile";
 
 export const DRIVER_DOCUMENT_LABELS: Record<DriverDocumentType, string> = {
   id_document: "SA ID or passport",
@@ -144,6 +157,44 @@ function safeSegment(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "document";
 }
 
+function fileExtension(fileName: string) {
+  return safeSegment(fileName.includes(".") ? fileName.split(".").pop() || "" : "");
+}
+
+export function validateDriverDocumentFile(file: DriverDocumentFileDescriptor) {
+  if (!file?.name || !Number.isFinite(file.size) || file.size <= 0) {
+    return { ok: false as const, error: "Choose a valid, non-empty document." };
+  }
+
+  if (file.size > DRIVER_DOCUMENT_MAX_FILE_BYTES) {
+    return { ok: false as const, error: "File is too large. Upload a file that is 8MB or smaller." };
+  }
+
+  const extension = fileExtension(file.name);
+  const mimeType = String(file.type ?? "").trim().toLowerCase();
+  const mimeAllowed = !mimeType || mimeType === "application/octet-stream" || ALLOWED_FILE_TYPES.has(mimeType);
+
+  if (!ALLOWED_FILE_EXTENSIONS.has(extension) || !mimeAllowed) {
+    return { ok: false as const, error: "Unsupported file type. Upload a PDF, JPG, PNG, or WEBP file." };
+  }
+
+  return {
+    ok: true as const,
+    extension,
+    contentType: mimeType && mimeType !== "application/octet-stream" ? mimeType : "application/octet-stream",
+  };
+}
+
+function createStoragePath(driverId: string, documentType: DriverDocumentType, extension: string) {
+  const uploadId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `drivers/${driverId}/${documentType}/${uploadId}.${extension}`;
+}
+
+async function verifyDriverExists(supabase: SupabaseClient, driverId: string) {
+  const result = await supabase.from("drivers").select("id").eq("id", driverId).maybeSingle();
+  return !result.error && Boolean(result.data?.id);
+}
+
 function getMissingColumn(error: { message?: string } | null | undefined) {
   const message = String(error?.message ?? "");
   return message.match(/column "([^"]+)"/i)?.[1] ?? message.match(/'([^']+)' column/i)?.[1] ?? null;
@@ -192,10 +243,11 @@ function metadataVariants(params: {
   driverId: string;
   documentType: DriverDocumentType;
   path: string;
-  uploadedBy?: string | null;
   required: boolean;
-  source: string;
   expiresOn?: string | null;
+  originalName: string;
+  mimeType: string;
+  fileSizeBytes: number;
   now: string;
 }) {
   const base: Record<string, unknown> = {
@@ -208,10 +260,14 @@ function metadataVariants(params: {
     rejection_reason: null,
     uploaded_at: params.now,
     updated_at: params.now,
-    uploaded_by: params.uploadedBy || null,
-    source: params.source,
-    required: params.required,
+    reviewed_by: null,
+    reviewed_at: null,
+    original_name: params.originalName,
+    mime_type: params.mimeType,
+    file_size_bytes: params.fileSizeBytes,
+    is_required: params.required,
     expires_on: params.expiresOn || null,
+    expires_at: params.expiresOn || null,
   };
 
   const minimal = {
@@ -289,14 +345,193 @@ async function findExistingDocument(
   return null;
 }
 
+async function saveDriverDocumentMetadata({
+  supabase,
+  driverId,
+  documentType,
+  path,
+  file,
+  required,
+  expiresOn,
+}: {
+  supabase: SupabaseClient;
+  driverId: string;
+  documentType: DriverDocumentType;
+  path: string;
+  file: DriverDocumentFileDescriptor;
+  required: boolean;
+  expiresOn?: string | null;
+}) {
+  const now = new Date().toISOString();
+  const metadata = metadataVariants({
+    driverId,
+    documentType,
+    path,
+    required,
+    expiresOn,
+    originalName: file.name,
+    mimeType: String(file.type || "application/octet-stream"),
+    fileSizeBytes: file.size,
+    now,
+  });
+
+  let existingId = await findExistingDocument(supabase, driverId, documentType);
+  let result = existingId
+    ? await writeMetadata(supabase, "update", metadata, existingId)
+    : await writeMetadata(supabase, "insert", metadata);
+
+  // A concurrent upload can create the unique driver/document row after the lookup.
+  if (!result.ok && result.error?.code === "23505") {
+    existingId = await findExistingDocument(supabase, driverId, documentType);
+    if (existingId) result = await writeMetadata(supabase, "update", metadata, existingId);
+  }
+
+  return result;
+}
+
+export async function prepareDriverDocumentUpload({
+  supabase,
+  driverId,
+  documentType,
+  file,
+}: {
+  supabase: SupabaseClient;
+  driverId: string;
+  documentType: unknown;
+  file: DriverDocumentFileDescriptor;
+}) {
+  if (!driverId) return { ok: false as const, error: "Driver account is not linked yet." };
+
+  const validated = validateDriverDocumentFile(file);
+  if (!validated.ok) return validated;
+
+  const normalizedType = normalizeDriverDocumentType(documentType);
+  if (!(await verifyDriverExists(supabase, driverId))) {
+    return { ok: false as const, error: "Driver account could not be verified." };
+  }
+
+  const path = createStoragePath(driverId, normalizedType, validated.extension);
+  const { data, error } = await supabase.storage
+    .from(DRIVER_DOCUMENTS_BUCKET)
+    .createSignedUploadUrl(path, { upsert: false });
+
+  if (error || !data?.token) {
+    console.error("[driver-doc-upload] signed upload preparation failed", {
+      driverId,
+      documentType: normalizedType,
+      message: error?.message,
+    });
+    return { ok: false as const, error: "Storage upload could not be prepared. Please retry." };
+  }
+
+  return {
+    ok: true as const,
+    bucket: DRIVER_DOCUMENTS_BUCKET,
+    path,
+    uploadToken: data.token,
+    documentType: normalizedType,
+  };
+}
+
+export async function finalizeDriverDocumentUpload({
+  supabase,
+  driverId,
+  documentType,
+  path: storedPath,
+  file,
+  required = false,
+  expiresOn,
+}: {
+  supabase: SupabaseClient;
+  driverId: string;
+  documentType: unknown;
+  path: unknown;
+  file: DriverDocumentFileDescriptor;
+  required?: boolean;
+  source?: DriverDocumentSource;
+  uploadedBy?: string | null;
+  expiresOn?: string | null;
+}) {
+  if (!driverId) return { ok: false as const, error: "Driver account is not linked yet." };
+
+  const validated = validateDriverDocumentFile(file);
+  if (!validated.ok) return validated;
+
+  const normalizedType = normalizeDriverDocumentType(documentType);
+  const path = normalizeDriverDocumentStoragePath(storedPath);
+  const expectedPrefix = `drivers/${driverId}/${normalizedType}/`;
+
+  if (!path || !path.startsWith(expectedPrefix) || path.includes("..")) {
+    return { ok: false as const, error: "The uploaded document path is invalid." };
+  }
+
+  if (!(await verifyDriverExists(supabase, driverId))) {
+    return { ok: false as const, error: "Driver account could not be verified." };
+  }
+
+  const slashIndex = path.lastIndexOf("/");
+  const folder = path.slice(0, slashIndex);
+  const fileName = path.slice(slashIndex + 1);
+  const { data: objects, error: objectError } = await supabase.storage
+    .from(DRIVER_DOCUMENTS_BUCKET)
+    .list(folder, { limit: 10, search: fileName });
+  const uploadedObject = objects?.find((object) => object.name === fileName);
+
+  if (objectError || !uploadedObject) {
+    console.error("[driver-doc-upload] uploaded object confirmation failed", {
+      driverId,
+      documentType: normalizedType,
+      path,
+      message: objectError?.message,
+    });
+    return { ok: false as const, error: "Storage upload could not be confirmed. Please retry." };
+  }
+
+  const objectMetadata = uploadedObject.metadata as Record<string, unknown> | null;
+  const storedSize = Number(objectMetadata?.size ?? file.size);
+  const storedMimeType = String(objectMetadata?.mimetype ?? file.type ?? "application/octet-stream");
+  const storedFile = {
+    name: file.name,
+    size: Number.isFinite(storedSize) && storedSize > 0 ? storedSize : file.size,
+    type: storedMimeType,
+  };
+  const storedValidation = validateDriverDocumentFile(storedFile);
+
+  if (!storedValidation.ok) {
+    await supabase.storage.from(DRIVER_DOCUMENTS_BUCKET).remove([path]).catch(() => {});
+    return storedValidation;
+  }
+
+  const result = await saveDriverDocumentMetadata({
+    supabase,
+    driverId,
+    documentType: normalizedType,
+    path,
+    file: storedFile,
+    required,
+    expiresOn,
+  });
+
+  if (!result.ok) {
+    await supabase.storage.from(DRIVER_DOCUMENTS_BUCKET).remove([path]).catch(() => {});
+    console.error("[driver-doc-upload] metadata save failed", {
+      driverId,
+      documentType: normalizedType,
+      message: result.error?.message,
+      code: result.error?.code,
+    });
+    return { ok: false as const, error: "Could not save the document record. Please try again." };
+  }
+
+  return { ok: true as const, path, documentType: normalizedType };
+}
+
 export async function uploadDriverDocument({
   supabase,
   driverId,
   documentType,
   file,
-  uploadedBy,
   required = false,
-  source = "driver",
   expiresOn,
 }: {
   supabase: SupabaseClient;
@@ -305,11 +540,9 @@ export async function uploadDriverDocument({
   file: File;
   uploadedBy?: string | null;
   required?: boolean;
-  source?: "driver" | "admin" | "application" | "profile";
+  source?: DriverDocumentSource;
   expiresOn?: string | null;
 }) {
-  const normalizedType = normalizeDriverDocumentType(documentType);
-
   if (!driverId) {
     return { ok: false as const, error: "Driver account is not linked yet." };
   }
@@ -318,25 +551,19 @@ export async function uploadDriverDocument({
     return { ok: false as const, error: "Choose a document to upload." };
   }
 
-  if (file.size > MAX_FILE_BYTES) {
-    return { ok: false as const, error: "File must be 8MB or smaller." };
-  }
+  const validated = validateDriverDocumentFile(file);
+  if (!validated.ok) return validated;
 
-  if (file.type && !ALLOWED_FILE_TYPES.has(file.type)) {
-    return { ok: false as const, error: "Upload a PDF, JPG, PNG, or WEBP file." };
-  }
-
-  const driverExists = await supabase.from("drivers").select("id").eq("id", driverId).maybeSingle();
-  if (driverExists.error || !driverExists.data?.id) {
+  const normalizedType = normalizeDriverDocumentType(documentType);
+  if (!(await verifyDriverExists(supabase, driverId))) {
     return { ok: false as const, error: "Driver account could not be verified." };
   }
 
-  const extension = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-  const path = `drivers/${driverId}/${normalizedType}/${Date.now()}.${safeSegment(extension || "bin")}`;
+  const path = createStoragePath(driverId, normalizedType, validated.extension);
   const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const { error: uploadError } = await supabase.storage.from("driver-docs").upload(path, bytes, {
-    contentType: file.type || "application/octet-stream",
+  const { error: uploadError } = await supabase.storage.from(DRIVER_DOCUMENTS_BUCKET).upload(path, bytes, {
+    contentType: validated.contentType,
     upsert: false,
   });
 
@@ -349,25 +576,18 @@ export async function uploadDriverDocument({
     return { ok: false as const, error: "We could not upload this document. Please try again." };
   }
 
-  const now = new Date().toISOString();
-  const metadata = metadataVariants({
+  const result = await saveDriverDocumentMetadata({
+    supabase,
     driverId,
     documentType: normalizedType,
     path,
-    uploadedBy,
+    file,
     required,
-    source,
     expiresOn,
-    now,
   });
 
-  const existingId = await findExistingDocument(supabase, driverId, normalizedType);
-  const result = existingId
-    ? await writeMetadata(supabase, "update", metadata, existingId)
-    : await writeMetadata(supabase, "insert", metadata);
-
   if (!result.ok) {
-    await supabase.storage.from("driver-docs").remove([path]).catch(() => {});
+    await supabase.storage.from(DRIVER_DOCUMENTS_BUCKET).remove([path]).catch(() => {});
     console.error("[driver-doc-upload] metadata save failed", {
       driverId,
       documentType: normalizedType,

@@ -1,9 +1,27 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { uploadDriverDocument } from "@/lib/driver-documents";
+import {
+  finalizeDriverDocumentUpload,
+  prepareDriverDocumentUpload,
+  uploadDriverDocument,
+  type DriverDocumentFileDescriptor,
+} from "@/lib/driver-documents";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
+}
+
+function resultStatus(error: string) {
+  if (/too large/i.test(error)) return 413;
+  if (/unsupported file type/i.test(error)) return 415;
+  if (/could not be verified/i.test(error)) return 404;
+  if (/choose|invalid|linked yet/i.test(error)) return 400;
+  if (/storage/i.test(error)) return 502;
+  return 500;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 export async function POST(req: Request) {
@@ -55,6 +73,68 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Driver account is not linked yet." }, { status: 400 });
     }
 
+    const driverId = String(mapping.driver_id);
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const body: unknown = await req.json();
+      if (!isRecord(body) || !isRecord(body.file)) {
+        return NextResponse.json({ ok: false, error: "Invalid upload request." }, { status: 400 });
+      }
+
+      const action = String(body.action ?? "");
+      const file = body.file as DriverDocumentFileDescriptor;
+      const documentType = body.documentType;
+      const required = body.required === true;
+
+      console.info("[driver-doc-upload] authorized request", {
+        actorRole: "driver",
+        targetDriverId: driverId,
+        documentType: String(documentType ?? ""),
+        action,
+        sessionPresent: true,
+        tokenPresent: true,
+      });
+
+      if (action === "prepare") {
+        const prepared = await prepareDriverDocumentUpload({
+          supabase: supabaseAdmin,
+          driverId,
+          documentType,
+          file,
+        });
+        if (!prepared.ok) {
+          return NextResponse.json({ ok: false, error: prepared.error }, { status: resultStatus(prepared.error) });
+        }
+        return NextResponse.json(prepared);
+      }
+
+      if (action === "finalize") {
+        const finalized = await finalizeDriverDocumentUpload({
+          supabase: supabaseAdmin,
+          driverId,
+          documentType,
+          path: body.path,
+          file,
+          uploadedBy: user.id,
+          required,
+          source: "driver",
+        });
+        if (!finalized.ok) {
+          return NextResponse.json({ ok: false, error: finalized.error }, { status: resultStatus(finalized.error) });
+        }
+        console.info("[driver-doc-upload] upload finalized", {
+          actorRole: "driver",
+          targetDriverId: driverId,
+          documentType: finalized.documentType,
+          path: finalized.path,
+        });
+        return NextResponse.json({ ...finalized, message: "Document uploaded for MOOVU review." });
+      }
+
+      return NextResponse.json({ ok: false, error: "Invalid upload action." }, { status: 400 });
+    }
+
     const form = await req.formData();
     const file = form.get("file") as File | null;
     const documentType = form.get("documentType") ?? form.get("docType");
@@ -66,7 +146,7 @@ export async function POST(req: Request) {
 
     const result = await uploadDriverDocument({
       supabase: supabaseAdmin,
-      driverId: String(mapping.driver_id),
+      driverId,
       documentType,
       file,
       uploadedBy: user.id,
@@ -75,7 +155,7 @@ export async function POST(req: Request) {
     });
 
     if (!result.ok) {
-      return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
+      return NextResponse.json({ ok: false, error: result.error }, { status: resultStatus(result.error) });
     }
 
     return NextResponse.json({

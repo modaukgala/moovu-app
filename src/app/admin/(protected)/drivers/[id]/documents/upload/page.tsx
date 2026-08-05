@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { DRIVER_DOCUMENT_LABELS, DRIVER_DOCUMENT_TYPES, type DriverDocumentType } from "@/lib/driver-documents";
+import { uploadDriverDocumentFromClient } from "@/lib/driver-document-upload-client";
 
 function isDocType(value: string): value is DriverDocumentType {
   return DRIVER_DOCUMENT_TYPES.includes(value as DriverDocumentType);
@@ -29,28 +30,26 @@ export default function UploadDriverDocPage() {
     }
 
     setBusy(true);
+    try {
+      const result = await uploadDriverDocumentFromClient({
+        endpoint: "/api/admin/driver-docs/upload",
+        driverId,
+        documentType: docType,
+        expiresOn,
+        file,
+        sessionExpiredMessage: "Your Admin session is unavailable. Please sign in again.",
+      });
 
-    const form = new FormData();
-    form.append("driverId", driverId);
-    form.append("documentType", docType);
-    form.append("expiresOn", expiresOn);
-    form.append("file", file);
+      if (!result.ok) {
+        setErr(result.error);
+        return;
+      }
 
-    const res = await fetch("/api/admin/driver-docs/upload", {
-      method: "POST",
-      body: form,
-    });
-
-    const json = await res.json();
-
-    setBusy(false);
-
-    if (!json.ok) {
-      setErr(json.error || "Upload failed");
-      return;
+      router.push(`/admin/drivers/${driverId}`);
+      router.refresh();
+    } finally {
+      setBusy(false);
     }
-
-    router.push(`/admin/drivers/${driverId}`);
   }
 
   return (
