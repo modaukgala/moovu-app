@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
+import { isDispatchExpired } from "@/lib/dispatch/config";
 
 export async function POST(req: Request) {
   try {
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
 
     const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
-      .select("id,status")
+      .select("id,status,driver_id,created_at,dispatch_cycle")
       .eq("id", tripId)
       .maybeSingle();
 
@@ -51,12 +52,30 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await dispatchTrip({ tripId });
+    if (trip.driver_id) {
+      return NextResponse.json(
+        { ok: false, error: "This trip already has an assigned driver." },
+        { status: 400 }
+      );
+    }
+
+    if (isDispatchExpired(trip.created_at)) {
+      return NextResponse.json(
+        { ok: false, error: "Dispatch window expired. Trips can only be re-offered within 30 minutes of the original request." },
+        { status: 410 }
+      );
+    }
+
+    const result = await dispatchTrip({
+      tripId,
+      cycle: Math.max(1, Number(trip.dispatch_cycle ?? 0) + 1),
+      allowAfterAutomaticExhaustion: true,
+    });
 
     if (!result.ok) {
       return NextResponse.json(
         { ok: false, error: result.error },
-        { status: 500 }
+        { status: result.exhausted ? 410 : 500 }
       );
     }
 

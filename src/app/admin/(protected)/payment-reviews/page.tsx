@@ -288,7 +288,7 @@ export default function AdminPaymentReviewsPage() {
                     <div>
                       <div className="text-sm text-gray-500">Driver</div>
                       <div className="font-medium">{row.driver_name}</div>
-                      <div className="text-xs text-gray-500 mt-1">{row.driver_phone || row.driver_id}</div>
+                      <div className="text-xs text-gray-500 mt-1">{row.driver_phone || "Phone unavailable"}</div>
                     </div>
 
                     <div>

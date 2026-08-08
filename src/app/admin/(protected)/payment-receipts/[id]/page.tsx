@@ -117,7 +117,7 @@ export default function AdminPaymentReceiptPage() {
             <div className="rounded-3xl bg-slate-50 p-4">
               <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Driver</div>
               <div className="mt-2 font-black">{payment.driver_name}</div>
-              <div className="text-sm text-slate-600">{payment.driver_phone ?? payment.driver_id}</div>
+              <div className="text-sm text-slate-600">{payment.driver_phone ?? "Phone unavailable"}</div>
             </div>
             <div className="rounded-3xl bg-slate-50 p-4">
               <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Payment type</div>

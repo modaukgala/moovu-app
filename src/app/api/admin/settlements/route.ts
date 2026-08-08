@@ -201,7 +201,7 @@ export async function GET(req: Request) {
 
     const decoratedSettlements = typedSettlements.map((row) => ({
       ...row,
-      driver_name: row.driver_id ? driverNameById.get(row.driver_id) ?? row.driver_id : null,
+      driver_name: row.driver_id ? driverNameById.get(row.driver_id) ?? "Driver profile unavailable" : null,
     }));
 
     return NextResponse.json({

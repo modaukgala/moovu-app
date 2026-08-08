@@ -173,7 +173,6 @@ export default function DriverEarningsReportPage() {
                         ) : null}
                       </div>
 
-                      <div className="text-xs opacity-60 mt-1">{r.driver_id}</div>
                     </div>
 
                     <div className="text-right">

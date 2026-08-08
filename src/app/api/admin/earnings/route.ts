@@ -131,7 +131,7 @@ export async function GET(req: Request) {
     const normalizedTrips = completedTrips.map((trip) => ({
       ...trip,
       completed_at: completedAtMap.get(trip.id) ?? trip.created_at,
-      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : null,
+      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? "Driver profile unavailable" : null,
     }));
 
     const todayStart = startOfToday().getTime();

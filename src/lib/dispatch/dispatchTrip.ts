@@ -90,6 +90,7 @@ export async function dispatchTrip(params: {
   cycle?: number;
   sequenceNumber?: number;
   preferredDriverId?: string | null;
+  allowAfterAutomaticExhaustion?: boolean;
 }): Promise<DispatchResult> {
   const cycle = Math.max(1, params.cycle ?? 1);
   const sequenceNumber = Math.max(1, params.sequenceNumber ?? 1);
@@ -149,7 +150,7 @@ export async function dispatchTrip(params: {
     await cancelExpiredDispatch(trip.id);
     return { ok: false, tripId: trip.id, exhausted: true, error: "Dispatch search exhausted." };
   }
-  if (cycle > DISPATCH_CONFIG.maxCycles) {
+  if (cycle > DISPATCH_CONFIG.maxCycles && !params.allowAfterAutomaticExhaustion) {
     const terminalJob = await scheduleFinalCancellationCheck({
       tripId: trip.id,
       requestedAt: trip.created_at,
@@ -161,7 +162,7 @@ export async function dispatchTrip(params: {
       exhausted: true,
       schedulerQueued: terminalJob.ok,
       error: terminalJob.ok
-        ? "All offer rounds are complete. The request remains searchable until the three-minute limit."
+        ? "All automatic offer rounds are complete. Admin can re-offer this trip within 30 minutes of the original request."
         : terminalJob.error,
     };
   }

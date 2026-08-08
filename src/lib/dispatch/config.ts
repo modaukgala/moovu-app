@@ -6,7 +6,7 @@ export const DISPATCH_CONFIG = {
   backgroundOfferEligibilitySeconds: 8 * 60 * 60,
   initialRadiusKm: 8,
   expandedRadiusKm: 20,
-  maxSearchSeconds: 3 * 60,
+  maxSearchSeconds: 30 * 60,
   maxCycles: 3,
   maxCandidatesPerStep: 25,
 } as const;

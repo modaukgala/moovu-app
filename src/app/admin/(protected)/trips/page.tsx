@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { RefreshCw } from "lucide-react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -20,6 +21,7 @@ type Trip = {
   status: string;
   created_at: string;
   driver_id: string | null;
+  driver_name?: string | null;
   stops?: unknown;
   original_fare?: number | null;
   final_add_stop_increase?: number | null;
@@ -93,6 +95,8 @@ export default function TripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
   const [pageError, setPageError] = useState<string | null>(null);
@@ -130,15 +134,16 @@ export default function TripsPage() {
     setDrivers(rows);
   }, [getAccessToken]);
 
-  const loadTrips = useCallback(async (currentStatus: string) => {
-    setLoading(true);
+  const loadTrips = useCallback(async (currentStatus: string, background = false) => {
+    if (background) setRefreshing(true);
+    else setLoading(true);
     setPageError(null);
 
     const token = await getAccessToken();
     if (!token) {
-      setTrips([]);
       setPageError("Please sign in as an admin to load trips.");
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
@@ -149,15 +154,17 @@ export default function TripsPage() {
     const json = await res.json().catch(() => null);
 
     if (!res.ok || !json?.ok) {
-      setTrips([]);
       setPageError(json?.error || "Could not load trips. Please refresh or contact admin support.");
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
     const rows = (json.trips ?? []) as Trip[];
     setTrips(currentStatus === "all" ? rows : rows.filter((trip) => trip.status === currentStatus));
+    setLastUpdatedAt(new Date());
     setLoading(false);
+    setRefreshing(false);
   }, [getAccessToken]);
 
   useEffect(() => {
@@ -172,6 +179,10 @@ export default function TripsPage() {
     });
     return map;
   }, [drivers]);
+
+  const refreshTrips = useCallback(async () => {
+    await loadTrips(status, true);
+  }, [loadTrips, status]);
 
   const tripStats = useMemo(
     () => ({
@@ -363,10 +374,27 @@ export default function TripsPage() {
             </p>
           </div>
 
-          <Link className="moovu-btn bg-white text-slate-950" href="/admin/trips/new">
-            New trip
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="moovu-btn bg-white/12 text-white ring-1 ring-white/30"
+              disabled={refreshing}
+              onClick={() => void refreshTrips()}
+              title="Refresh trips"
+            >
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing" : "Refresh"}
+            </button>
+            <Link className="moovu-btn bg-white text-slate-950" href="/admin/trips/new">
+              New trip
+            </Link>
+          </div>
         </div>
+        {lastUpdatedAt && (
+          <div className="mt-3 text-xs font-bold text-white/70" aria-live="polite">
+            Updated just now
+          </div>
+        )}
       </section>
 
       <section className="grid gap-3 md:grid-cols-4">
@@ -427,13 +455,13 @@ export default function TripsPage() {
                         <div className="mt-1 text-xs text-slate-500">{trip.dropoff_address}</div>
                       </td>
                       <td>
-                        <div className="font-bold text-slate-950">{trip.rider_name ?? "--"}</div>
+                        <div className="font-bold text-slate-950">{trip.rider_name ?? "Customer name unavailable"}</div>
                         <div className="mt-1 text-xs text-slate-500">{trip.rider_phone ?? "--"}</div>
                       </td>
                       <td>
                         {trip.driver_id ? (
                           <div className="font-bold text-slate-950">
-                            {driverNameById.get(trip.driver_id) ?? trip.driver_id}
+                            {trip.driver_name ?? driverNameById.get(trip.driver_id) ?? "Driver profile unavailable"}
                           </div>
                         ) : (
                           <select
@@ -506,12 +534,14 @@ export default function TripsPage() {
                 </div>
 
                 <div className="admin-trip-mobile-meta">
-                  <AdminTripMobileField label="Rider">{trip.rider_name ?? "--"}</AdminTripMobileField>
+                  <AdminTripMobileField label="Rider">{trip.rider_name ?? "Customer name unavailable"}</AdminTripMobileField>
                   <AdminTripMobileField label="Customer cellphone">
                     {trip.rider_phone ?? "--"}
                   </AdminTripMobileField>
                   <AdminTripMobileField label="Driver">
-                    {trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "Unassigned"}
+                    {trip.driver_id
+                      ? trip.driver_name ?? driverNameById.get(trip.driver_id) ?? "Driver profile unavailable"
+                      : "Unassigned"}
                   </AdminTripMobileField>
                   <AdminTripMobileField label="Payment" className="capitalize">
                     {trip.payment_method || "--"}

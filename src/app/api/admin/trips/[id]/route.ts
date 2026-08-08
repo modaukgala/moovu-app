@@ -43,7 +43,7 @@ export async function GET(req: Request, context: RouteContext) {
       return NextResponse.json({ ok: false, error: "Trip not found." }, { status: 404 });
     }
 
-    const [{ data: events, error: eventError }, { data: drivers, error: driverError }] = await Promise.all([
+    const [{ data: events, error: eventError }, { data: eligibleDrivers, error: driverError }, assignedDriverResult] = await Promise.all([
       supabaseAdmin
         .from("trip_events")
         .select("id,event_type,message,old_status,new_status,created_at,created_by")
@@ -54,6 +54,13 @@ export async function GET(req: Request, context: RouteContext) {
         .select("id,first_name,last_name,phone,status,online,busy")
         .in("status", ["approved", "active"])
         .order("created_at", { ascending: false }),
+      trip.driver_id
+        ? supabaseAdmin
+            .from("drivers")
+            .select("id,first_name,last_name,phone,status,online,busy")
+            .eq("id", trip.driver_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (eventError) {
@@ -64,11 +71,16 @@ export async function GET(req: Request, context: RouteContext) {
       console.error("[admin-trip-detail] failed to load drivers", { tripId, error: driverError });
     }
 
+    const drivers = [...(eligibleDrivers ?? [])];
+    if (assignedDriverResult.data && !drivers.some((driver) => driver.id === assignedDriverResult.data?.id)) {
+      drivers.push(assignedDriverResult.data);
+    }
+
     return NextResponse.json({
       ok: true,
       trip,
       events: events ?? [],
-      drivers: drivers ?? [],
+      drivers,
     });
   } catch (error: unknown) {
     console.error("[admin-trip-detail] unexpected error", errorMessage(error, "Unknown error"));

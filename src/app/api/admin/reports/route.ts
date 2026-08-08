@@ -155,12 +155,12 @@ export async function GET(req: Request) {
 
     const completedTrips = ((completed ?? []) as TripRow[]).map((trip) => ({
       ...trip,
-      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : null,
+      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? "Driver profile unavailable" : null,
     }));
 
     const inProgressTrips = ((inProgress ?? []) as TripRow[]).map((trip) => ({
       ...trip,
-      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : null,
+      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? "Driver profile unavailable" : null,
     }));
 
     const typedCancellationFees = (cancellationErr ? [] : (cancellationFees ?? [])) as CancellationFeeRow[];
@@ -204,7 +204,7 @@ export async function GET(req: Request) {
         byDriverMap.get(trip.driver_id) ??
         {
           driver_id: trip.driver_id,
-          driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? trip.driver_id : "—",
+          driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? "Driver profile unavailable" : "—",
           completed_trips: 0,
           completed_revenue: 0,
           completed_commission: 0,
@@ -228,7 +228,7 @@ export async function GET(req: Request) {
         byDriverMap.get(driverId) ??
         {
           driver_id: driverId,
-          driver_name: driverNameById.get(driverId) ?? driverId,
+          driver_name: driverNameById.get(driverId) ?? "Driver profile unavailable",
           completed_trips: 0,
           completed_revenue: 0,
           completed_commission: 0,

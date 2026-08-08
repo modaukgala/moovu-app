@@ -185,12 +185,12 @@ export async function GET(req: Request) {
         open_support_issues: openIssues.count ?? 0,
         low_rated_drivers: ((lowRatedDrivers.data ?? []) as DriverQualityRow[]).map((row) => ({
           ...row,
-          driver_name: driverNameById.get(row.driver_id) ?? row.driver_id,
+          driver_name: driverNameById.get(row.driver_id) ?? "Driver profile unavailable",
         })),
         recent_cancellations: cancellations.data ?? [],
         top_drivers: ((topDrivers.data ?? []) as DriverQualityRow[]).map((row) => ({
           ...row,
-          driver_name: driverNameById.get(row.driver_id) ?? row.driver_id,
+          driver_name: driverNameById.get(row.driver_id) ?? "Driver profile unavailable",
         })),
         generated_at: now,
       },

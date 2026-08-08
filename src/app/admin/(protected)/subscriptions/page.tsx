@@ -428,7 +428,7 @@ export default function AdminSubscriptionsPage() {
                   <div className="md:col-span-2">
                     <div className="text-sm text-slate-500">Driver</div>
                     <div className="font-black text-slate-950">{row.driver_name}</div>
-                    <div className="text-xs text-slate-500">{row.driver_phone || row.driver_id}</div>
+                    <div className="text-xs text-slate-500">{row.driver_phone || "Phone unavailable"}</div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-500">Plan</div>
@@ -561,7 +561,7 @@ export default function AdminSubscriptionsPage() {
             <div className="mt-4 space-y-5">
               <div className="rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 to-white p-4">
                 <div className="font-black text-slate-950">{selectedLabel}</div>
-                <div className="mt-2 text-sm text-slate-600">Driver ID: {selected.id}</div>
+                <div className="mt-2 text-sm text-slate-600">Subscription account selected</div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">

@@ -15,6 +15,7 @@ type ArchiveTrip = {
   status: string | null;
   created_at: string | null;
   driver_id: string | null;
+  driver_name: string | null;
 };
 
 function money(value: number | null | undefined) {
@@ -83,7 +84,7 @@ export default function AdminArchivePage() {
             <div className="moovu-section-title">MOOVU Admin</div>
             <h1 className="mt-2 text-3xl font-black text-slate-950">Trip archive</h1>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Search trips by trip ID, rider, phone, address, driver ID, status and date.
+              Search trips by trip reference, customer, phone, address, driver name, status and date.
             </p>
           </div>
 
@@ -109,7 +110,7 @@ export default function AdminArchivePage() {
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
             <input
               className="moovu-input"
-              placeholder="Search trip ID, rider, phone, address, driver ID"
+              placeholder="Search trip, customer, phone, address or driver"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -189,8 +190,8 @@ export default function AdminArchivePage() {
                       <div className="font-medium">{trip.status ?? "—"}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600">Driver ID</div>
-                      <div className="font-medium break-all">{trip.driver_id ?? "—"}</div>
+                      <div className="text-sm text-gray-600">Driver</div>
+                      <div className="font-medium">{trip.driver_name ?? "Unassigned"}</div>
                     </div>
                   </div>
 

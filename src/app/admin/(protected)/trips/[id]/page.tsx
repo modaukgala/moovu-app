@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import { isDispatchExpired } from "@/lib/dispatch/config";
 
 type Trip = {
   id: string;
@@ -162,7 +163,9 @@ export default function TripDetailPage() {
   const assignedDriver = driverId ? drivers.find((x) => x.id === driverId) : null;
   const driverLabel = assignedDriver
     ? `${assignedDriver.first_name} ${assignedDriver.last_name} (${assignedDriver.phone})`
-    : driverId ?? "Unassigned";
+    : driverId
+      ? "Driver profile unavailable"
+      : "Unassigned";
   const tripStops = parseTripStops(trip?.stops);
   const offerSecondsLeft = trip?.offer_expires_at
     ? Math.ceil((new Date(trip.offer_expires_at).getTime() - nowMs) / 1000)
@@ -297,6 +300,7 @@ export default function TripDetailPage() {
   }
 
   const isClosed = trip.status === "completed" || trip.status === "cancelled";
+  const dispatchWindowExpired = isDispatchExpired(trip.created_at, nowMs);
   const hasActiveOffer =
     trip.offer_status === "pending" &&
     offerSecondsLeft != null &&
@@ -305,7 +309,8 @@ export default function TripDetailPage() {
     !isClosed &&
     !trip.driver_id &&
     ["requested", "offered"].includes(trip.status) &&
-    !hasActiveOffer;
+    !hasActiveOffer &&
+    !dispatchWindowExpired;
 
   return (
     <main className="space-y-6 text-black">
@@ -561,6 +566,11 @@ export default function TripDetailPage() {
                   : "Offer nearest driver"}
             </button>
           )}
+          {!isClosed && !trip.driver_id && dispatchWindowExpired && (
+            <button className="moovu-btn moovu-btn-secondary" disabled>
+              Dispatch window expired
+            </button>
+          )}
 
           {!isClosed && (
             <button
@@ -588,7 +598,15 @@ export default function TripDetailPage() {
           {events.map((e) => (
             <div key={e.id} className="moovu-data-row">
               <div className="font-black capitalize text-slate-950">{e.event_type.replaceAll("_", " ")}</div>
-              {e.message && <div className="text-sm text-gray-700 mt-2">{e.message}</div>}
+              {e.message && (
+                <div className="text-sm text-gray-700 mt-2">
+                  {drivers.reduce(
+                    (message, driver) =>
+                      message.replaceAll(driver.id, `${driver.first_name} ${driver.last_name}`.trim() || "Driver"),
+                    e.message,
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

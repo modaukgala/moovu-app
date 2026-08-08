@@ -159,7 +159,7 @@ export async function GET(req: Request) {
       paymentRows.map(async (row) => ({
         ...row,
         pop_file_url: (await createPaymentProofSignedUrl(supabaseAdmin, row)) ?? row.pop_file_url,
-        driver_name: driverNameById.get(row.driver_id)?.name ?? row.driver_id,
+        driver_name: driverNameById.get(row.driver_id)?.name ?? "Driver profile unavailable",
         driver_phone: driverNameById.get(row.driver_id)?.phone ?? null,
       }))
     );

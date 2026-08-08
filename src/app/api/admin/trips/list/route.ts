@@ -16,6 +16,11 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
   );
 }
 
+function driverDisplayName(driver: { first_name?: string | null; last_name?: string | null } | null | undefined) {
+  const name = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim();
+  return name || "Driver profile unavailable";
+}
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
@@ -98,9 +103,35 @@ export async function GET(req: Request) {
       );
     }
 
+    const tripRows = (data ?? []) as Array<Record<string, unknown> & { driver_id?: string | null }>;
+    const driverIds = Array.from(
+      new Set(tripRows.map((trip) => String(trip.driver_id ?? "").trim()).filter(Boolean)),
+    );
+    const driverNameById = new Map<string, string>();
+
+    if (driverIds.length > 0) {
+      const { data: driverRows, error: driverError } = await supabaseAdmin
+        .from("drivers")
+        .select("id,first_name,last_name")
+        .in("id", driverIds);
+
+      if (driverError) {
+        console.error("[admin-trips-list] failed to resolve driver names", driverError);
+      } else {
+        for (const driver of driverRows ?? []) {
+          driverNameById.set(String(driver.id), driverDisplayName(driver));
+        }
+      }
+    }
+
     return NextResponse.json({
       ok: true,
-      trips: data ?? [],
+      trips: tripRows.map((trip) => ({
+        ...trip,
+        driver_name: trip.driver_id
+          ? driverNameById.get(String(trip.driver_id)) ?? "Driver profile unavailable"
+          : null,
+      })),
     });
   } catch (e: unknown) {
     return NextResponse.json(

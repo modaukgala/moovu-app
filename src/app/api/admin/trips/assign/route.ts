@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
+import { isDispatchExpired } from "@/lib/dispatch/config";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
 
     const { data: trip, error: tripError } = await supabaseAdmin
       .from("trips")
-      .select("id,status,driver_id")
+      .select("id,status,driver_id,created_at,dispatch_cycle")
       .eq("id", tripId)
       .maybeSingle();
 
@@ -49,16 +50,25 @@ export async function POST(req: Request) {
       );
     }
 
-    if (["completed", "cancelled"].includes(String(trip.status))) {
+    if (!["requested", "offered"].includes(String(trip.status)) || trip.driver_id) {
       return NextResponse.json(
-        { ok: false, error: `Trips in status "${trip.status}" cannot be assigned.` },
+        { ok: false, error: "Only unassigned requested trips can be offered to a driver." },
         { status: 400 }
+      );
+    }
+
+    if (isDispatchExpired(trip.created_at)) {
+      return NextResponse.json(
+        { ok: false, error: "Dispatch window expired. Trips can only be re-offered within 30 minutes of the original request." },
+        { status: 410 }
       );
     }
 
     const atomicResult = await dispatchTrip({
       tripId,
       preferredDriverId: driverId,
+      cycle: Math.max(1, Number(trip.dispatch_cycle ?? 0) + 1),
+      allowAfterAutomaticExhaustion: true,
     });
     if (atomicResult.ok) {
       return NextResponse.json({

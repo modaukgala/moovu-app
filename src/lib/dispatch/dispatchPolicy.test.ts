@@ -7,15 +7,15 @@ import { scoreDriverForTrip } from "./driverScoring.ts";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
 import { dispatchJobsQueued } from "./dispatchScheduler.ts";
 
-test("dispatch timing uses three twenty-five-second rounds and a three-minute maximum", () => {
+test("dispatch timing uses three automatic rounds and a thirty-minute admin recovery window", () => {
   assert.equal(DISPATCH_CONFIG.escalationSeconds, 25);
   assert.equal(DISPATCH_CONFIG.acceptWindowSeconds, 25);
-  assert.equal(DISPATCH_CONFIG.maxSearchSeconds, 3 * 60);
+  assert.equal(DISPATCH_CONFIG.maxSearchSeconds, 30 * 60);
   assert.equal(DISPATCH_CONFIG.maxCycles, 3);
 });
 
 test("dispatch expiry is measured from the original request time", () => {
-  const now = Date.parse("2026-07-24T10:03:00.000Z");
+  const now = Date.parse("2026-07-24T10:30:00.000Z");
   assert.equal(isDispatchExpired("2026-07-24T10:00:00.000Z", now), true);
   assert.equal(isDispatchExpired("2026-07-24T10:00:01.000Z", now), false);
 });

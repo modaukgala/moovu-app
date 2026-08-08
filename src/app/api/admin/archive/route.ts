@@ -16,6 +16,10 @@ type ArchivedTripRow = {
   driver_net_earnings: number | null;
 };
 
+type ArchivedTripWithDriver = ArchivedTripRow & {
+  driver_name: string | null;
+};
+
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -78,7 +82,34 @@ export async function GET(req: Request) {
       );
     }
 
-    let trips = (data ?? []) as ArchivedTripRow[];
+    const rawTrips = (data ?? []) as ArchivedTripRow[];
+    const driverIds = Array.from(
+      new Set(rawTrips.map((trip) => String(trip.driver_id ?? "").trim()).filter(Boolean)),
+    );
+    const driverNameById = new Map<string, string>();
+
+    if (driverIds.length > 0) {
+      const { data: driverRows, error: driverError } = await supabaseAdmin
+        .from("drivers")
+        .select("id,first_name,last_name")
+        .in("id", driverIds);
+
+      if (driverError) {
+        console.error("[admin-archive] failed to resolve driver names", driverError);
+      } else {
+        for (const driver of driverRows ?? []) {
+          const name = `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim();
+          driverNameById.set(String(driver.id), name || "Driver profile unavailable");
+        }
+      }
+    }
+
+    let trips: ArchivedTripWithDriver[] = rawTrips.map((trip) => ({
+      ...trip,
+      driver_name: trip.driver_id
+        ? driverNameById.get(trip.driver_id) ?? "Driver profile unavailable"
+        : null,
+    }));
 
     if (q) {
       const term = q.toLowerCase();
@@ -89,7 +120,7 @@ export async function GET(req: Request) {
           String(trip.rider_phone ?? "").toLowerCase().includes(term) ||
           String(trip.pickup_address ?? "").toLowerCase().includes(term) ||
           String(trip.dropoff_address ?? "").toLowerCase().includes(term) ||
-          String(trip.driver_id ?? "").toLowerCase().includes(term)
+          String(trip.driver_name ?? "").toLowerCase().includes(term)
         );
       });
     }
