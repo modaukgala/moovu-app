@@ -418,6 +418,7 @@ export default function DriverHomePage() {
   const [completedFareSummary, setCompletedFareSummary] = useState<CompletedFareSummary | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [subscriptionPromptOpen, setSubscriptionPromptOpen] = useState(false);
+  const completionRequestRef = useRef(false);
 
   const subscriptionReminder = subscriptionTone(driver);
   const subscriptionAllowsOnline = canReceiveTripOffers(driver);
@@ -878,48 +879,56 @@ export default function DriverHomePage() {
     setInfo(null);
     setDriverActionError(null);
 
-    const token = await getAccessToken();
-    if (!token) {
-      setBusy(false);
-      return null;
-    }
+    try {
+      const token = await getAccessToken();
+      if (!token) return null;
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    const json = await res.json().catch(() => null) as TripActionResponse | null;
-    setBusy(false);
+      const json = await res.json().catch(() => null) as TripActionResponse | null;
 
-    if (!json?.ok) {
-      showDriverActionError(json?.error || "Action failed");
+      if (!res.ok || !json?.ok) {
+        showDriverActionError(json?.error || "Action failed. Please try again.");
+        await loadCurrentTrip();
+        await loadDriverProfile(true);
+        return null;
+      }
+
+      const completedWithoutOtp =
+        endpoint.includes("/complete") && payload.completionMode === "bypass";
+      setInfo(successMsg);
+      notifyInApp({
+        title: successMsg,
+        body: endpoint.includes("/start")
+          ? "Start OTP verified. The trip is now active."
+          : completedWithoutOtp
+            ? "The trip was completed without the End OTP."
+            : endpoint.includes("/complete")
+              ? "End OTP verified. The trip has been completed."
+              : endpoint.includes("/cancel")
+                ? "MOOVU cancelled this trip and updated the customer."
+                : "MOOVU saved this trip update.",
+        tone: endpoint.includes("/complete") || endpoint.includes("/start") ? "success" : "info",
+        loud: endpoint.includes("/start") || endpoint.includes("/complete"),
+      });
       await loadCurrentTrip();
       await loadDriverProfile(true);
+      await loadEarningsSnapshot();
+      return json;
+    } catch (error: unknown) {
+      console.error("[driver-trip-action] request failed", { endpoint, error });
+      showDriverActionError("Could not update this trip. Check your connection and try again.");
       return null;
+    } finally {
+      setBusy(false);
     }
-
-    setInfo(successMsg);
-    notifyInApp({
-      title: successMsg,
-      body: endpoint.includes("/start")
-        ? "Start OTP verified. The trip is now active."
-        : endpoint.includes("/complete")
-          ? "End OTP verified. The trip has been completed."
-          : endpoint.includes("/cancel")
-            ? "MOOVU cancelled this trip and updated the customer."
-          : "MOOVU saved this trip update.",
-      tone: endpoint.includes("/complete") || endpoint.includes("/start") ? "success" : "info",
-      loud: endpoint.includes("/start") || endpoint.includes("/complete"),
-    });
-    await loadCurrentTrip();
-    await loadDriverProfile(true);
-    await loadEarningsSnapshot();
-    return json;
   }
 
   async function arriveTrip(tripId: string) {
@@ -934,24 +943,32 @@ export default function DriverHomePage() {
     tripId: string,
     options: { otp?: string; completionMode?: "otp" | "bypass"; bypassReason?: string; bypassNote?: string },
   ) {
-    const result = await tripAction(
-      "/api/driver/trips/complete",
-      { tripId, ...options },
-      "Trip completed",
-    );
-    if (result?.ok && result.fare?.finalFare != null) {
-      setCompletedFareSummary({
-        tripId,
-        finalFare: Number(result.fare.finalFare),
-        driverNet: Number(result.commission?.driverNet ?? 0),
-        commissionAmount: Number(result.commission?.commissionAmount ?? 0),
-      });
-      setShowEndOtp(false);
-      setShowEndOtpBypass(false);
-      setEndOtp("");
-      setEndOtpBypassNote("");
+    if (completionRequestRef.current) return null;
+    completionRequestRef.current = true;
+
+    try {
+      const result = await tripAction(
+        "/api/driver/trips/complete",
+        { tripId, ...options },
+        "Trip completed",
+      );
+      if (result?.ok && result.fare?.finalFare != null) {
+        setCompletedFareSummary({
+          tripId,
+          finalFare: Number(result.fare.finalFare),
+          driverNet: Number(result.commission?.driverNet ?? 0),
+          commissionAmount: Number(result.commission?.commissionAmount ?? 0),
+        });
+        setShowEndOtp(false);
+        setShowEndOtpBypass(false);
+        setEndOtp("");
+        setEndOtpBypassReason(END_OTP_BYPASS_REASONS[0]);
+        setEndOtpBypassNote("");
+      }
+      return result;
+    } finally {
+      completionRequestRef.current = false;
     }
-    return result;
   }
 
   async function confirmPaymentReceived() {
@@ -1443,6 +1460,102 @@ export default function DriverHomePage() {
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button type="button" className="moovu-btn moovu-btn-secondary" onClick={() => setSubscriptionPromptOpen(false)}>Not now</button>
               <button type="button" className="moovu-btn moovu-btn-primary" onClick={() => router.push("/driver/subscriptions")}>Choose a plan</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showEndOtpBypass && currentTrip?.status === "ongoing" && (
+        <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <section
+            className="w-full max-w-md rounded-[28px] border border-amber-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.3)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="end-trip-without-otp-title"
+          >
+            <div className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-amber-700">
+              Confirmation required
+            </div>
+            <h2 id="end-trip-without-otp-title" className="mt-4 text-2xl font-black text-slate-950">
+              End trip without OTP?
+            </h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+              You are confirming that the trip has ended and that you have received the fare from the customer.
+            </p>
+
+            <div className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+              <div className="flex items-start justify-between gap-4">
+                <span className="font-semibold text-slate-500">Final fare</span>
+                <strong className="text-xl text-slate-950">
+                  {money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}
+                </strong>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <span className="font-semibold text-slate-500">Customer</span>
+                <strong className="text-right text-slate-950">{currentTrip.rider_name ?? "Customer"}</strong>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <span className="font-semibold text-slate-500">Destination</span>
+                <strong className="max-w-[65%] text-right text-slate-950">{currentTrip.dropoff_address ?? "Destination"}</strong>
+              </div>
+            </div>
+
+            <label className="mt-5 block text-sm font-black text-slate-800" htmlFor="end-otp-bypass-reason">
+              Why is the End OTP unavailable?
+            </label>
+            <select
+              id="end-otp-bypass-reason"
+              className="moovu-input mt-2"
+              value={endOtpBypassReason}
+              onChange={(event) => setEndOtpBypassReason(event.target.value)}
+              disabled={busy}
+            >
+              {END_OTP_BYPASS_REASONS.map((reason) => (
+                <option key={reason} value={reason}>{reason}</option>
+              ))}
+            </select>
+            {endOtpBypassReason === "Other" && (
+              <textarea
+                className="moovu-input mt-3 min-h-24 resize-y"
+                value={endOtpBypassNote}
+                onChange={(event) => setEndOtpBypassNote(event.target.value)}
+                placeholder="Briefly explain what happened"
+                maxLength={240}
+                disabled={busy}
+              />
+            )}
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className="moovu-btn moovu-btn-secondary"
+                disabled={busy}
+                onClick={() => {
+                  setShowEndOtpBypass(false);
+                  setEndOtpBypassReason(END_OTP_BYPASS_REASONS[0]);
+                  setEndOtpBypassNote("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="moovu-btn bg-amber-600 text-white disabled:opacity-60"
+                disabled={
+                  busy ||
+                  (endOtpBypassReason === "Other" && endOtpBypassNote.trim().length < 3)
+                }
+                onClick={() => {
+                  if (!currentTrip?.id) return;
+                  void completeTrip(currentTrip.id, {
+                    completionMode: "bypass",
+                    bypassReason: endOtpBypassReason,
+                    bypassNote: endOtpBypassNote,
+                  });
+                }}
+              >
+                {busy ? "Completing..." : "Confirm & End Trip"}
+              </button>
             </div>
           </section>
         </div>
@@ -2334,64 +2447,6 @@ export default function DriverHomePage() {
                             <span className="mt-1 block">
                               {offerStops.map((stop, index) => `Stop ${index + 1}: ${stop.address}`).join(" | ")}
                             </span>
-                          </div>
-                        )}
-                        {showEndOtpBypass && (
-                          <div className="mt-4 max-w-lg space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                            <div className="font-black text-amber-950">Complete without customer End OTP?</div>
-                            <p className="text-sm font-semibold leading-6 text-amber-900">
-                              Use this only when the trip has ended and the customer cannot provide the code. MOOVU records this for admin review.
-                            </p>
-                            <select
-                              className="moovu-input"
-                              value={endOtpBypassReason}
-                              onChange={(event) => setEndOtpBypassReason(event.target.value)}
-                              disabled={busy}
-                            >
-                              {END_OTP_BYPASS_REASONS.map((reason) => (
-                                <option key={reason} value={reason}>{reason}</option>
-                              ))}
-                            </select>
-                            {endOtpBypassReason === "Other" && (
-                              <textarea
-                                className="moovu-input min-h-24 resize-y"
-                                value={endOtpBypassNote}
-                                onChange={(event) => setEndOtpBypassNote(event.target.value)}
-                                placeholder="Briefly explain what happened"
-                                maxLength={240}
-                              />
-                            )}
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <button
-                                type="button"
-                                className="moovu-btn bg-amber-600 text-white disabled:opacity-60"
-                                disabled={
-                                  busy ||
-                                  (endOtpBypassReason === "Other" && endOtpBypassNote.trim().length < 3)
-                                }
-                                onClick={() => {
-                                  if (!currentTrip?.id) return;
-                                  void completeTrip(currentTrip.id, {
-                                    completionMode: "bypass",
-                                    bypassReason: endOtpBypassReason,
-                                    bypassNote: endOtpBypassNote,
-                                  });
-                                }}
-                              >
-                                {busy ? "Completing..." : "Confirm completion"}
-                              </button>
-                              <button
-                                type="button"
-                                className="moovu-btn moovu-btn-secondary"
-                                disabled={busy}
-                                onClick={() => {
-                                  setShowEndOtpBypass(false);
-                                  setEndOtpBypassNote("");
-                                }}
-                              >
-                                Keep trip open
-                              </button>
-                            </div>
                           </div>
                         )}
                       </div>

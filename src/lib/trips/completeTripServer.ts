@@ -101,11 +101,11 @@ export async function completeTripServer(params: {
     }
     return { ok: false, status: 400, error: "Trip is not currently active." };
   }
-  if (params.mode === "admin" && !trip.start_otp_verified) {
+  if (!trip.start_otp_verified) {
     return {
       ok: false,
       status: 400,
-      error: "Start OTP has not been verified for this trip.",
+      error: "This trip has not been started correctly.",
     };
   }
 
@@ -305,7 +305,7 @@ export async function completeTripServer(params: {
     params.mode === "otp"
       ? "End OTP verified"
       : params.mode === "bypass"
-        ? `End OTP bypassed: ${params.reason}`
+        ? `Driver confirmed the trip ended and fare was received without End OTP: ${params.reason}`
         : `Completed by admin: ${String(params.note ?? "").trim()}`;
   await supabaseAdmin.from("trip_events").insert([
     {

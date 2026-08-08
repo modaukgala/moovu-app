@@ -499,8 +499,26 @@ export default function TripDetailPage() {
             </div>
           </div>
           <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Completion</div>
-            <div className="mt-1 font-black capitalize">{trip.completed_by ?? "--"}</div>
+            <div className="text-sm text-gray-600">Completion method</div>
+            <div className="mt-1 font-black">
+              {trip.completed_without_end_otp
+                ? "Driver - Without End OTP"
+                : trip.completed_by === "admin"
+                  ? "Admin completion"
+                  : trip.completed_by === "driver"
+                    ? "Driver - End OTP"
+                    : "--"}
+            </div>
+            {trip.completed_without_end_otp && (
+              <div className="mt-1 text-xs font-bold text-emerald-700">
+                Fare confirmation: Driver confirmed fare received
+              </div>
+            )}
+            {trip.completed_at && (
+              <div className="mt-1 text-xs text-slate-500">
+                Completed {new Date(trip.completed_at).toLocaleString("en-ZA")}
+              </div>
+            )}
             {trip.admin_completion_reason && <div className="mt-1 text-sm text-emerald-700">{trip.admin_completion_reason}</div>}
             {trip.admin_completion_note && <div className="mt-1 text-xs text-slate-600">{trip.admin_completion_note}</div>}
             {trip.end_otp_bypass_reason && <div className="mt-1 text-sm text-amber-700">{trip.end_otp_bypass_reason}</div>}
