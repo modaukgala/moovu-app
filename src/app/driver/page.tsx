@@ -38,6 +38,7 @@ import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type Offer = {
   id: string;
@@ -418,7 +419,9 @@ export default function DriverHomePage() {
   const [completedFareSummary, setCompletedFareSummary] = useState<CompletedFareSummary | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [subscriptionPromptOpen, setSubscriptionPromptOpen] = useState(false);
+  const [driverRealtimeConnected, setDriverRealtimeConnected] = useState(false);
   const completionRequestRef = useRef(false);
+  const isPageVisible = usePageVisibility();
 
   const subscriptionReminder = subscriptionTone(driver);
   const subscriptionAllowsOnline = canReceiveTripOffers(driver);
@@ -769,12 +772,22 @@ export default function DriverHomePage() {
 
           const activeTrip = currentTrip && ["assigned", "arrived", "ongoing"].includes(currentTrip.status);
           const previous = lastHeartbeatSentRef.current;
+          const now = Date.now();
           const movedEnough = !previous ||
             Math.abs(previous.lat - lat) + Math.abs(previous.lng - lng) >= 0.00005;
-          const heartbeatDue =
-            !previous || Date.now() - previous.at >= LIVE_LOCATION_CONFIG.idleHeartbeatMs;
+          const activeTripHeartbeatDue =
+            !previous || now - previous.at >= LIVE_LOCATION_CONFIG.driverActiveHeartbeatMs;
+          const movingHeartbeatDue =
+            !previous || now - previous.at >= LIVE_LOCATION_CONFIG.driverMovingHeartbeatMs;
+          const idleHeartbeatDue =
+            !previous || now - previous.at >= LIVE_LOCATION_CONFIG.idleHeartbeatMs;
           let ok = true;
-          if (activeTrip || movedEnough || heartbeatDue) {
+          const shouldSendHeartbeat = activeTrip
+            ? activeTripHeartbeatDue
+            : movedEnough
+              ? movingHeartbeatDue
+              : idleHeartbeatDue;
+          if (shouldSendHeartbeat) {
             ok = await sendHeartbeat(lat, lng, {
               heading: extendedCoords.heading,
               speedMps: extendedCoords.speed,
@@ -1201,32 +1214,38 @@ export default function DriverHomePage() {
   useEffect(() => {
     if (offersTimerRef.current) clearInterval(offersTimerRef.current);
     if (!driver?.online) return;
+    const pollMs = isPageVisible
+      ? LIVE_LOCATION_CONFIG.driverOfferPollMs
+      : LIVE_LOCATION_CONFIG.idleHeartbeatMs;
 
     offersTimerRef.current = setInterval(() => {
       loadCurrentOffer();
-    }, 3000);
+    }, driverRealtimeConnected ? pollMs : Math.max(5000, Math.floor(pollMs / 2)));
 
     return () => {
       if (offersTimerRef.current) clearInterval(offersTimerRef.current);
     };
     // Polling is keyed to online state; the loader reads the current auth session each tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.online]);
+  }, [driver?.online, driverRealtimeConnected, isPageVisible]);
 
   useEffect(() => {
     if (tripTimerRef.current) clearInterval(tripTimerRef.current);
     if (!driver?.online || otpEntryOpen) return;
+    const pollMs = isPageVisible
+      ? LIVE_LOCATION_CONFIG.driverTripPollMs
+      : LIVE_LOCATION_CONFIG.idleHeartbeatMs;
 
     tripTimerRef.current = setInterval(() => {
       loadCurrentTrip();
-    }, 3000);
+    }, driverRealtimeConnected ? pollMs : Math.max(5000, Math.floor(pollMs / 2)));
 
     return () => {
       if (tripTimerRef.current) clearInterval(tripTimerRef.current);
     };
     // Polling is keyed to online/OTP state so OTP entry is not disrupted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.online, otpEntryOpen]);
+  }, [driver?.online, driverRealtimeConnected, isPageVisible, otpEntryOpen]);
 
   useEffect(() => {
     if (searchParams.get("offerExpired") !== "1") return;
@@ -1272,17 +1291,65 @@ export default function DriverHomePage() {
 
     gpsPermissionBlockedRef.current = false;
     captureCurrentLocationAndSave(true);
+    const hasActiveTrip = ["assigned", "arrived", "ongoing"].includes(String(currentTrip?.status ?? ""));
+    const sampleMs = isPageVisible
+      ? LIVE_LOCATION_CONFIG.driverSampleMs
+      : hasActiveTrip
+        ? LIVE_LOCATION_CONFIG.driverMovingHeartbeatMs
+        : LIVE_LOCATION_CONFIG.idleHeartbeatMs;
 
     gpsTimerRef.current = setInterval(() => {
       captureCurrentLocationAndSave(true, false);
-    }, LIVE_LOCATION_CONFIG.driverSampleMs);
+    }, sampleMs);
 
     return () => {
       if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);
     };
     // GPS polling intentionally starts/stops only with online state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.online, currentTrip?.id, currentTrip?.status]);
+  }, [driver?.online, currentTrip?.id, currentTrip?.status, isPageVisible]);
+
+  useEffect(() => {
+    if (!driver?.id) return;
+
+    const channel = supabaseClient
+      .channel(`driver-live-${driver.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "driver_trip_offers",
+          filter: `driver_id=eq.${driver.id}`,
+        },
+        () => {
+          void loadCurrentOffer();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trips",
+          filter: `driver_id=eq.${driver.id}`,
+        },
+        () => {
+          void loadCurrentTrip();
+          void loadCurrentOffer();
+        },
+      )
+      .subscribe((status) => {
+        setDriverRealtimeConnected(status === "SUBSCRIBED");
+      });
+
+    return () => {
+      setDriverRealtimeConnected(false);
+      void supabaseClient.removeChannel(channel);
+    };
+    // The driver id is the stable channel key; callbacks read the latest auth state when invoked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver?.id]);
 
   useEffect(() => {
     let cancelled = false;

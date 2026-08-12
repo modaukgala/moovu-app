@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
 
 type DriverDirectoryRow = {
   id: string;
@@ -24,8 +23,6 @@ function errorMessage(error: unknown, fallback: string) {
 
 export async function GET(req: Request) {
   try {
-    await releaseDueScheduledTrips().catch(() => {});
-
     const auth = await requireAdminUser(req);
     if (!auth.ok) {
       return NextResponse.json(

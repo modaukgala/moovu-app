@@ -2,7 +2,9 @@
 
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { notifyInApp } from "@/lib/in-app-notifications";
+import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type TripChatRole = "customer" | "driver";
 
@@ -173,9 +175,11 @@ export default function TripChatPanel({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const lastUnreadCountRef = useRef(0);
   const mountedRef = useRef(false);
+  const isPageVisible = usePageVisibility();
 
   const remaining = MAX_MESSAGE_LENGTH - text.length;
 
@@ -281,17 +285,20 @@ export default function TripChatPanel({
           void loadMessages(false);
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
 
     const timer = window.setInterval(() => {
-      void loadMessages(false);
-    }, 5000);
+      if (!document.hidden) void loadMessages(false);
+    }, realtimeConnected ? LIVE_LOCATION_CONFIG.chatOpenFallbackMs : 15000);
 
     return () => {
       window.clearInterval(timer);
+      setRealtimeConnected(false);
       void supabaseClient.removeChannel(channel);
     };
-  }, [loadMessages, open, tripId]);
+  }, [loadMessages, open, realtimeConnected, tripId]);
 
   const loadUnreadCount = useCallback(async () => {
     if (open || disabled) return;
@@ -336,8 +343,8 @@ export default function TripChatPanel({
     }, 0);
 
     const interval = window.setInterval(() => {
-      void loadUnreadCount();
-    }, 7000);
+      if (!document.hidden) void loadUnreadCount();
+    }, realtimeConnected ? LIVE_LOCATION_CONFIG.chatClosedFallbackMs : 20000);
 
     const channel = supabaseClient
       .channel(`trip-chat-badge-${tripId}`)
@@ -353,14 +360,17 @@ export default function TripChatPanel({
           void loadUnreadCount();
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
 
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(interval);
+      setRealtimeConnected(false);
       void supabaseClient.removeChannel(channel);
     };
-  }, [disabled, loadUnreadCount, open, tripId]);
+  }, [disabled, isPageVisible, loadUnreadCount, open, realtimeConnected, tripId]);
 
   useEffect(() => {
     if (!open || !listRef.current) return;

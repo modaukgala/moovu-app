@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveCachedJson, takeRateLimit } from "@/lib/server/requestControl";
 
 type DistanceBody = {
   origin_place_id?: string;
@@ -88,6 +89,11 @@ async function fetchDistanceLeg(params: {
 
 export async function POST(req: Request) {
   try {
+    const rate = takeRateLimit(req, "maps:distance", { limit: 60, windowMs: 60_000 });
+    if (!rate.ok) {
+      return NextResponse.json({ ok: false, error: "Too many route calculations. Please try again shortly." }, { status: 429 });
+    }
+
     const body = (await req.json()) as DistanceBody;
 
     const origin = buildLocationParam({
@@ -136,46 +142,56 @@ export async function POST(req: Request) {
       )
       .filter(Boolean);
 
-    const directLeg = await fetchDistanceLeg({ apiKey, origin, destination });
-    let routeDistanceMeters = directLeg.distanceMeters;
-    let routeDurationSeconds = directLeg.durationSeconds;
+    const cacheKey = `maps:distance:${[origin, destination, ...waypointParams].join("|")}`;
+    const { value, cacheStatus } = await resolveCachedJson(cacheKey, 30_000, async () => {
+      const directLeg = await fetchDistanceLeg({ apiKey, origin, destination });
+      let routeDistanceMeters = directLeg.distanceMeters;
+      let routeDurationSeconds = directLeg.durationSeconds;
 
-    if (waypointParams.length > 0) {
-      routeDistanceMeters = 0;
-      routeDurationSeconds = 0;
-      const orderedPoints = [origin, ...waypointParams, destination];
+      if (waypointParams.length > 0) {
+        routeDistanceMeters = 0;
+        routeDurationSeconds = 0;
+        const orderedPoints = [origin, ...waypointParams, destination];
 
-      for (let i = 0; i < orderedPoints.length - 1; i += 1) {
-        const leg = await fetchDistanceLeg({
-          apiKey,
-          origin: orderedPoints[i],
-          destination: orderedPoints[i + 1],
-        });
-        routeDistanceMeters += leg.distanceMeters;
-        routeDurationSeconds += leg.durationSeconds;
+        for (let i = 0; i < orderedPoints.length - 1; i += 1) {
+          const leg = await fetchDistanceLeg({
+            apiKey,
+            origin: orderedPoints[i],
+            destination: orderedPoints[i + 1],
+          });
+          routeDistanceMeters += leg.distanceMeters;
+          routeDurationSeconds += leg.durationSeconds;
+        }
       }
-    }
 
-    const distanceKm = routeDistanceMeters / 1000;
-    const durationMin = routeDurationSeconds / 60;
-    const originalDistanceKm = directLeg.distanceMeters / 1000;
-    const originalDurationMin = directLeg.durationSeconds / 60;
+      const distanceKm = routeDistanceMeters / 1000;
+      const durationMin = routeDurationSeconds / 60;
+      const originalDistanceKm = directLeg.distanceMeters / 1000;
+      const originalDurationMin = directLeg.durationSeconds / 60;
 
-    return NextResponse.json({
-      ok: true,
-      distanceMeters: routeDistanceMeters,
-      durationSeconds: routeDurationSeconds,
-      distanceKm: Number(distanceKm.toFixed(2)),
-      durationMin: Math.ceil(durationMin),
-      originalDistanceMeters: directLeg.distanceMeters,
-      originalDurationSeconds: directLeg.durationSeconds,
-      originalDistanceKm: Number(originalDistanceKm.toFixed(2)),
-      originalDurationMin: Math.ceil(originalDurationMin),
-      extraDistanceKm: Number(Math.max(0, distanceKm - originalDistanceKm).toFixed(2)),
-      extraDurationMin: Math.max(0, Math.ceil(durationMin) - Math.ceil(originalDurationMin)),
-      stopCount: waypointParams.length,
-      originAddress: directLeg.originAddress,
-      destinationAddress: directLeg.destinationAddress,
+      return {
+        ok: true,
+        distanceMeters: routeDistanceMeters,
+        durationSeconds: routeDurationSeconds,
+        distanceKm: Number(distanceKm.toFixed(2)),
+        durationMin: Math.ceil(durationMin),
+        originalDistanceMeters: directLeg.distanceMeters,
+        originalDurationSeconds: directLeg.durationSeconds,
+        originalDistanceKm: Number(originalDistanceKm.toFixed(2)),
+        originalDurationMin: Math.ceil(originalDurationMin),
+        extraDistanceKm: Number(Math.max(0, distanceKm - originalDistanceKm).toFixed(2)),
+        extraDurationMin: Math.max(0, Math.ceil(durationMin) - Math.ceil(originalDurationMin)),
+        stopCount: waypointParams.length,
+        originAddress: directLeg.originAddress,
+        destinationAddress: directLeg.destinationAddress,
+      };
+    });
+
+    return NextResponse.json(value, {
+      headers: {
+        "Cache-Control": "private, max-age=30",
+        "X-MOOVU-Cache": cacheStatus,
+      },
     });
   } catch (error: unknown) {
     return NextResponse.json(

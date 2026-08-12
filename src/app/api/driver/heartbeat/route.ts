@@ -2,6 +2,37 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { recordTripTelemetry } from "@/lib/trips/recordTripTelemetry";
 
+type DriverReadinessCacheEntry = {
+  online: boolean;
+  subscriptionStatus: string | null;
+  checkedAt: number;
+};
+
+type DriverHeartbeatCache = {
+  driverIdByUserId: Map<string, string>;
+  subscriptionRefreshAt: Map<string, number>;
+  readinessByDriverId: Map<string, DriverReadinessCacheEntry>;
+};
+
+declare global {
+  var __moovuDriverHeartbeatCache: DriverHeartbeatCache | undefined;
+}
+
+function heartbeatCache() {
+  if (!globalThis.__moovuDriverHeartbeatCache) {
+    globalThis.__moovuDriverHeartbeatCache = {
+      driverIdByUserId: new Map(),
+      subscriptionRefreshAt: new Map(),
+      readinessByDriverId: new Map(),
+    };
+  }
+
+  return globalThis.__moovuDriverHeartbeatCache;
+}
+
+const SUBSCRIPTION_REFRESH_MS = 60_000;
+const READINESS_CACHE_MS = 15_000;
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error";
 }
@@ -44,38 +75,62 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid coordinates" }, { status: 400 });
     }
 
-    const { data: mapping, error: mErr } = await supabaseAdmin
-      .from("driver_accounts")
-      .select("driver_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const cache = heartbeatCache();
+    let driverId = cache.driverIdByUserId.get(user.id) ?? null;
+    if (!driverId) {
+      const { data: mapping, error: mErr } = await supabaseAdmin
+        .from("driver_accounts")
+        .select("driver_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (mErr) {
-      return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 });
+      if (mErr) {
+        return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 });
+      }
+
+      driverId = mapping?.driver_id ?? null;
+      if (driverId) {
+        cache.driverIdByUserId.set(user.id, driverId);
+      }
     }
 
-    const driverId = mapping?.driver_id ?? null;
     if (!driverId) {
       return NextResponse.json({ ok: false, code: "NOT_LINKED", error: "Not linked" }, { status: 403 });
     }
 
-    await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
-
-    const { data: driver, error: dErr } = await supabaseAdmin
-      .from("drivers")
-      .select("id,online,subscription_status")
-      .eq("id", driverId)
-      .maybeSingle();
-
-    if (dErr || !driver) {
-      return NextResponse.json({ ok: false, error: "Driver not found" }, { status: 404 });
+    const now = Date.now();
+    const lastSubscriptionRefresh = cache.subscriptionRefreshAt.get(driverId) ?? 0;
+    if (now - lastSubscriptionRefresh >= SUBSCRIPTION_REFRESH_MS) {
+      await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
+      cache.subscriptionRefreshAt.set(driverId, now);
+      cache.readinessByDriverId.delete(driverId);
     }
 
-    if (!driver.online) {
+    let readiness = cache.readinessByDriverId.get(driverId) ?? null;
+    if (!readiness || now - readiness.checkedAt >= READINESS_CACHE_MS) {
+      const { data: driver, error: dErr } = await supabaseAdmin
+        .from("drivers")
+        .select("id,online,subscription_status")
+        .eq("id", driverId)
+        .maybeSingle();
+
+      if (dErr || !driver) {
+        return NextResponse.json({ ok: false, error: "Driver not found" }, { status: 404 });
+      }
+
+      readiness = {
+        online: Boolean(driver.online),
+        subscriptionStatus: driver.subscription_status ?? null,
+        checkedAt: now,
+      };
+      cache.readinessByDriverId.set(driverId, readiness);
+    }
+
+    if (!readiness.online) {
       return NextResponse.json({ ok: false, error: "Driver is offline" }, { status: 400 });
     }
 
-    if (driver.subscription_status !== "active" && driver.subscription_status !== "grace") {
+    if (readiness.subscriptionStatus !== "active" && readiness.subscriptionStatus !== "grace") {
       return NextResponse.json({ ok: false, error: "Subscription inactive" }, { status: 402 });
     }
 

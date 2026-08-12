@@ -41,6 +41,7 @@ import {
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { getMoovuCurrentPosition, watchMoovuPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type CustomerMe = {
   ok: boolean;
@@ -207,6 +208,11 @@ export default function RiderBookingPage() {
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const stopMarkerRefs = useRef<google.maps.Marker[]>([]);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const currentLocationRef = useRef<SessionMapLocation | null>(null);
+  const lastRenderedRouteKeyRef = useRef("");
+  const nearbyDriversRequestInFlightRef = useRef(false);
+  const lastNearbyDriversQueryRef = useRef("");
+  const isPageVisible = usePageVisibility();
 
   const bothLocationsSet = pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null;
   const resolvedStops = useMemo(() => stops.filter(isResolvedStop), [stops]);
@@ -1350,6 +1356,7 @@ export default function RiderBookingPage() {
     if (dropoffMarkerRef.current) { dropoffMarkerRef.current.setMap(null); dropoffMarkerRef.current = null; }
     stopMarkerRefs.current.forEach((marker) => marker.setMap(null));
     stopMarkerRefs.current = [];
+    lastRenderedRouteKeyRef.current = "";
   }
 
   function ensureMap() {
@@ -1430,6 +1437,7 @@ export default function RiderBookingPage() {
         if (status === window.google.maps.DirectionsStatus.OK && result) {
           renderer.setDirections(result); setRouteVisible(true); return;
         }
+        lastRenderedRouteKeyRef.current = "";
         const bounds = new window.google.maps.LatLngBounds();
         bounds.extend({ lat: pickupLat, lng: pickupLng });
         resolvedStops.forEach((stop) => bounds.extend({ lat: stop.lat, lng: stop.lng }));
@@ -1520,7 +1528,13 @@ export default function RiderBookingPage() {
   useEffect(() => {
     if (!mapReady) return;
     if (!ensureMap()) return;
-    if (pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null) { renderRouteMap(); return; }
+    if (pickupLat != null && pickupLng != null && dropoffLat != null && dropoffLng != null) {
+      if (routeKey && (lastRenderedRouteKeyRef.current !== routeKey || !directionsRendererRef.current)) {
+        lastRenderedRouteKeyRef.current = routeKey;
+        renderRouteMap();
+      }
+      return;
+    }
     if (pickupLat != null && pickupLng != null) { renderPickupOnlyMap(); return; }
     clearMapVisuals(); setRouteVisible(false);
     if (mapInstanceRef.current) {
@@ -1529,7 +1543,7 @@ export default function RiderBookingPage() {
     }
     // Map render helpers read refs and latest coordinates; listing them recreates this effect unnecessarily.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng, resolvedStops, currentLocation]);
+  }, [mapReady, pickupLat, pickupLng, dropoffLat, dropoffLng, resolvedStops, routeKey]);
 
   useEffect(() => {
     if (!mapReady || autoLocationAttemptedRef.current) return;
@@ -1581,6 +1595,10 @@ export default function RiderBookingPage() {
   }, [mapReady]);
 
   useEffect(() => {
+    currentLocationRef.current = currentLocation;
+  }, [currentLocation]);
+
+  useEffect(() => {
     if (!mapReady || !currentLocation || !ensureMap()) return;
     const map = mapInstanceRef.current!;
     currentLocationMarkerRef.current = createOrMoveMarker({
@@ -1598,15 +1616,24 @@ export default function RiderBookingPage() {
   }, [currentLocation, mapReady]);
 
   useEffect(() => {
-    if (!customer || !currentLocation) return;
+    if (!customer) return;
     let cancelled = false;
 
-    async function loadNearbyDrivers() {
+    async function loadNearbyDrivers(force = false) {
+      const location = currentLocationRef.current;
+      if (!location) return;
+      const queryKey = `${location.lat.toFixed(4)}:${location.lng.toFixed(4)}:${selectedRideOption}`;
+      if (!force && nearbyDriversRequestInFlightRef.current && lastNearbyDriversQueryRef.current === queryKey) {
+        return;
+      }
+
       const { data: { session } } = await supabaseClient.auth.getSession();
       if (!session || cancelled) return;
+      nearbyDriversRequestInFlightRef.current = true;
+      lastNearbyDriversQueryRef.current = queryKey;
       const query = new URLSearchParams({
-        lat: String(currentLocation!.lat),
-        lng: String(currentLocation!.lng),
+        lat: String(location.lat),
+        lng: String(location.lng),
         rideOption: selectedRideOption,
       });
       const response = await fetch(`/api/customer/nearby-drivers?${query}`, {
@@ -1614,21 +1641,25 @@ export default function RiderBookingPage() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await response.json().catch(() => null);
+      nearbyDriversRequestInFlightRef.current = false;
       if (!cancelled && response.ok && json?.ok) {
         setNearbyDrivers(Array.isArray(json.drivers) ? json.drivers : []);
       }
     }
 
-    void loadNearbyDrivers();
+    void loadNearbyDrivers(true);
     const timer = window.setInterval(
       () => void loadNearbyDrivers(),
-      LIVE_LOCATION_CONFIG.customerRefreshMs,
+      isPageVisible
+        ? LIVE_LOCATION_CONFIG.customerNearbyRefreshMs
+        : LIVE_LOCATION_CONFIG.customerNearbyHiddenRefreshMs,
     );
     return () => {
       cancelled = true;
+      nearbyDriversRequestInFlightRef.current = false;
       window.clearInterval(timer);
     };
-  }, [customer, currentLocation, selectedRideOption]);
+  }, [customer, isPageVisible, selectedRideOption]);
 
   useEffect(() => {
     if (!mapReady || !ensureMap()) return;

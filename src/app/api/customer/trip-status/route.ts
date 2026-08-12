@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
-import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
 
 type CustomerTripStatusRow = {
   id: string;
@@ -144,8 +143,6 @@ function buildTrackingState(params: {
 
 export async function GET(req: Request) {
   try {
-    await releaseDueScheduledTrips().catch(() => {});
-
     const auth = await getAuthenticatedCustomer(req);
 
     if (!auth.ok) {

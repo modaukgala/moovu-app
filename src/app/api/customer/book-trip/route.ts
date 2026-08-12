@@ -12,7 +12,6 @@ import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 import { fullCustomerName } from "@/lib/customer/auth";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
-import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 
 function generateOtp() {
@@ -199,8 +198,6 @@ async function calculateServerRoute(params: {
 
 export async function POST(req: Request) {
   try {
-    await releaseDueScheduledTrips().catch(() => {});
-
     const auth = await getAuthenticatedCustomer(req);
 
     if (!auth.ok) {

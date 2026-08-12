@@ -23,7 +23,9 @@ import {
   calculateCustomerCancellationFee,
   isWithinFreeCancellationWindow,
 } from "@/lib/finance/cancellationFees";
+import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type RideTrip = {
   id: string;
@@ -305,6 +307,8 @@ export default function RideTrackingPage() {
   const [audioSavedMessage, setAudioSavedMessage] = useState<string | null>(null);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const isPageVisible = usePageVisibility();
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -766,23 +770,66 @@ export default function RideTrackingPage() {
     const firstLoadTimer = window.setTimeout(() => {
       void loadTrip();
     }, 0);
+    const fallbackMs = isPageVisible
+      ? LIVE_LOCATION_CONFIG.customerTripStatusFallbackMs
+      : LIVE_LOCATION_CONFIG.customerTripStatusHiddenFallbackMs;
     const pollTimer = window.setInterval(() => {
       void loadTrip();
-    }, 4000);
+    }, realtimeConnected ? fallbackMs : Math.max(6000, Math.floor(fallbackMs / 2)));
 
     return () => {
       window.clearTimeout(firstLoadTimer);
       window.clearInterval(pollTimer);
     };
-  }, [loadTrip]);
+  }, [isPageVisible, loadTrip, realtimeConnected]);
 
   useEffect(() => {
     if (!trip || !["assigned", "arrived", "ongoing"].includes(trip.status)) return;
+    void loadLiveLocation();
+    const fallbackMs = isPageVisible
+      ? LIVE_LOCATION_CONFIG.customerTripLocationFallbackMs
+      : LIVE_LOCATION_CONFIG.customerTripLocationHiddenFallbackMs;
     const timer = window.setInterval(() => {
       void loadLiveLocation();
-    }, 1000);
+    }, realtimeConnected ? fallbackMs : Math.max(5000, Math.floor(fallbackMs / 2)));
     return () => window.clearInterval(timer);
-  }, [loadLiveLocation, trip]);
+  }, [isPageVisible, loadLiveLocation, realtimeConnected, trip]);
+
+  useEffect(() => {
+    if (!tripId) return;
+
+    const channel = supabaseClient
+      .channel(`customer-trip-live-${tripId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trips", filter: `id=eq.${tripId}` },
+        () => {
+          void loadTrip();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trip_events", filter: `trip_id=eq.${tripId}` },
+        () => {
+          void loadTrip();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trip_live_locations", filter: `trip_id=eq.${tripId}` },
+        () => {
+          void loadLiveLocation();
+        },
+      )
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
+
+    return () => {
+      setRealtimeConnected(false);
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [loadLiveLocation, loadTrip, tripId]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {

@@ -9,7 +9,9 @@ import {
   makeRouteRenderer,
   stopMarkerIcon,
 } from "@/lib/maps/liveMapMarkers";
+import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type DriverMarker = {
   id: string;
@@ -69,6 +71,8 @@ export default function DispatchMapPage() {
   const [trips, setTrips] = useState<TripMarker[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const refreshDebounceRef = useRef<number | null>(null);
+  const isPageVisible = usePageVisibility();
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -301,11 +305,39 @@ export default function DispatchMapPage() {
 
   useEffect(() => {
     const t = setInterval(() => {
-      void loadBoardMap();
-    }, 1000);
+      if (!document.hidden) void loadBoardMap();
+    }, LIVE_LOCATION_CONFIG.adminDispatchMapRefreshMs);
 
     return () => clearInterval(t);
   }, [loadBoardMap]);
+
+  useEffect(() => {
+    const channel = supabaseClient
+      .channel("admin-dispatch-map-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, () => {
+        if (!isPageVisible || refreshDebounceRef.current != null) return;
+        refreshDebounceRef.current = window.setTimeout(() => {
+          refreshDebounceRef.current = null;
+          void loadBoardMap();
+        }, 1200);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trips" }, () => {
+        if (!isPageVisible || refreshDebounceRef.current != null) return;
+        refreshDebounceRef.current = window.setTimeout(() => {
+          refreshDebounceRef.current = null;
+          void loadBoardMap();
+        }, 1200);
+      })
+      .subscribe();
+
+    return () => {
+      if (refreshDebounceRef.current != null) {
+        window.clearTimeout(refreshDebounceRef.current);
+        refreshDebounceRef.current = null;
+      }
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [isPageVisible, loadBoardMap]);
 
   const stats = useMemo(() => {
     const onlineDrivers = drivers.length;

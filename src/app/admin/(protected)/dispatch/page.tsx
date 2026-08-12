@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { waLinkZA } from "@/lib/whatsapp";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type BoardTrip = {
   id: string;
@@ -53,6 +55,8 @@ export default function DispatchBoardPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const refreshDebounceRef = useRef<number | null>(null);
+  const isPageVisible = usePageVisibility();
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -98,10 +102,38 @@ export default function DispatchBoardPage() {
   useEffect(() => {
     const t = setInterval(() => {
       setNowMs(Date.now());
-      void loadBoard();
-    }, 3000);
+      if (!document.hidden) void loadBoard();
+    }, LIVE_LOCATION_CONFIG.adminDispatchBoardRefreshMs);
     return () => clearInterval(t);
   }, [loadBoard]);
+
+  useEffect(() => {
+    const channel = supabaseClient
+      .channel("admin-dispatch-board-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "trips" }, () => {
+        if (!isPageVisible || refreshDebounceRef.current != null) return;
+        refreshDebounceRef.current = window.setTimeout(() => {
+          refreshDebounceRef.current = null;
+          void loadBoard();
+        }, 1200);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, () => {
+        if (!isPageVisible || refreshDebounceRef.current != null) return;
+        refreshDebounceRef.current = window.setTimeout(() => {
+          refreshDebounceRef.current = null;
+          void loadBoard();
+        }, 1200);
+      })
+      .subscribe();
+
+    return () => {
+      if (refreshDebounceRef.current != null) {
+        window.clearTimeout(refreshDebounceRef.current);
+        refreshDebounceRef.current = null;
+      }
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [isPageVisible, loadBoard]);
 
   async function offerNext(tripId: string) {
     setBusyId(tripId);

@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import AdminTripNotifications from "@/components/AdminTripNotifications";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
+import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", group: "Operations" },
@@ -54,6 +56,9 @@ export default function AdminProtectedLayout({
     commission: 0,
   });
   const [pendingApplications, setPendingApplications] = useState(0);
+  const [adminAccessToken, setAdminAccessToken] = useState<string | null>(null);
+  const isPageVisible = usePageVisibility();
+  const lastPendingApplicationsRef = useRef(0);
 
   useEffect(() => {
     let mounted = true;
@@ -87,7 +92,17 @@ export default function AdminProtectedLayout({
         .then((res) => res.json())
         .then((json: { ok?: boolean; applications?: ApplicationFlagRow[] }) => {
           if (!mounted || !json?.ok) return;
-          setPendingApplications((json.applications ?? []).length);
+          const nextCount = (json.applications ?? []).length;
+          if (nextCount > lastPendingApplicationsRef.current) {
+            window.dispatchEvent(new CustomEvent("moovu-admin:new-applications", {
+              detail: {
+                count: nextCount - lastPendingApplicationsRef.current,
+                total: nextCount,
+              },
+            }));
+          }
+          lastPendingApplicationsRef.current = nextCount;
+          setPendingApplications(nextCount);
         })
         .catch(() => {
           if (mounted) setPendingApplications(0);
@@ -119,8 +134,14 @@ export default function AdminProtectedLayout({
         return;
       }
 
+      setAdminAccessToken(session.access_token);
       loadAdminFlags(session.access_token);
-      flagsTimer = window.setInterval(() => loadAdminFlags(session.access_token), 30000);
+      flagsTimer = window.setInterval(
+        () => {
+          if (!document.hidden) loadAdminFlags(session.access_token);
+        },
+        LIVE_LOCATION_CONFIG.adminFlagsRefreshMs,
+      );
 
       setChecking(false);
     }
@@ -132,6 +153,11 @@ export default function AdminProtectedLayout({
       if (flagsTimer) window.clearInterval(flagsTimer);
     };
   }, [pathname]);
+
+  useEffect(() => {
+    if (!isPageVisible) return;
+    lastPendingApplicationsRef.current = pendingApplications;
+  }, [isPageVisible, pendingApplications]);
 
   async function handleLogout() {
     await supabaseClient.auth.signOut();

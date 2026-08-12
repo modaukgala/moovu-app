@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { knownPlaceFromSyntheticId } from "@/lib/maps/moovuPlaces";
+import { resolveCachedJson, takeRateLimit } from "@/lib/server/requestControl";
 
 export async function POST(req: Request) {
   try {
+    const rate = takeRateLimit(req, "maps:place-details", { limit: 60, windowMs: 60_000 });
+    if (!rate.ok) {
+      return NextResponse.json({ ok: false, error: "Too many place lookups. Please slow down." }, { status: 429 });
+    }
+
     const { place_id } = await req.json();
 
     if (!place_id) {
@@ -32,37 +38,39 @@ export async function POST(req: Request) {
       );
     }
 
-    const url =
-      "https://maps.googleapis.com/maps/api/place/details/json" +
-      `?place_id=${encodeURIComponent(place_id)}` +
-      `&fields=formatted_address,name,place_id,geometry/location` +
-      `&language=en` +
-      `&key=${encodeURIComponent(key)}`;
+    const cacheKey = `maps:place-details:${String(place_id).trim()}`;
+    const { value, cacheStatus } = await resolveCachedJson(cacheKey, 300_000, async () => {
+      const url =
+        "https://maps.googleapis.com/maps/api/place/details/json" +
+        `?place_id=${encodeURIComponent(place_id)}` +
+        `&fields=formatted_address,name,place_id,geometry/location` +
+        `&language=en` +
+        `&key=${encodeURIComponent(key)}`;
 
-    const resp = await fetch(url, { cache: "no-store" });
-    const data = await resp.json();
+      const resp = await fetch(url, { cache: "no-store" });
+      const data = await resp.json();
 
-    if (data.status !== "OK") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Place details failed",
-          status: data.status,
-          message: data.error_message,
-        },
-        { status: 400 }
-      );
-    }
+      if (data.status !== "OK") {
+        throw new Error(data.error_message || data.status || "Place details failed");
+      }
 
-    const result = data.result;
+      const result = data.result;
 
-    return NextResponse.json({
-      ok: true,
-      place_id: result.place_id,
-      formatted_address: result.formatted_address ?? result.name,
-      name: result.name,
-      lat: result.geometry.location.lat,
-      lng: result.geometry.location.lng,
+      return {
+        ok: true,
+        place_id: result.place_id,
+        formatted_address: result.formatted_address ?? result.name,
+        name: result.name,
+        lat: result.geometry.location.lat,
+        lng: result.geometry.location.lng,
+      };
+    });
+
+    return NextResponse.json(value, {
+      headers: {
+        "Cache-Control": "private, max-age=300",
+        "X-MOOVU-Cache": cacheStatus,
+      },
     });
   } catch (error: unknown) {
     return NextResponse.json(

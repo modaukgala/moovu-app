@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveCachedJson, takeRateLimit } from "@/lib/server/requestControl";
 
 type AddressComponent = {
   long_name?: string;
@@ -53,6 +54,11 @@ function usefulLocationLabel(results: GeocodeResult[]) {
 
 export async function POST(req: Request) {
   try {
+    const rate = takeRateLimit(req, "maps:reverse-geocode", { limit: 60, windowMs: 60_000 });
+    if (!rate.ok) {
+      return NextResponse.json({ ok: false, error: "Too many location lookups. Please slow down." }, { status: 429 });
+    }
+
     const { lat, lng } = await req.json();
 
     if (typeof lat !== "number" || typeof lng !== "number") {
@@ -64,32 +70,44 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing Google Maps API key" }, { status: 500 });
     }
 
-    const url =
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(
-        `${lat},${lng}`
-      )}&key=${encodeURIComponent(key)}`;
+    const latKey = Number(lat).toFixed(5);
+    const lngKey = Number(lng).toFixed(5);
+    const cacheKey = `maps:reverse-geocode:${latKey}:${lngKey}`;
+    const { value, cacheStatus } = await resolveCachedJson(cacheKey, 60_000, async () => {
+      const url =
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(
+          `${lat},${lng}`
+        )}&key=${encodeURIComponent(key)}`;
 
-    const res = await fetch(url);
-    const data = await res.json();
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
 
-    if (data.status !== "OK" || !data.results?.length) {
-      return NextResponse.json({ ok: false, error: "Could not reverse geocode location" }, { status: 400 });
-    }
+      if (data.status !== "OK" || !data.results?.length) {
+        throw new Error("Could not reverse geocode location");
+      }
 
-    const results = data.results as GeocodeResult[];
-    const primaryResult = results[0];
-    const label = usefulLocationLabel(results);
+      const results = data.results as GeocodeResult[];
+      const primaryResult = results[0];
+      const label = usefulLocationLabel(results);
 
-    return NextResponse.json({
-      ok: true,
-      label,
-      address: label || primaryResult.formatted_address,
-      formattedAddress: label || primaryResult.formatted_address,
-      placeId: primaryResult.place_id,
-      globalPlusCode: data.plus_code?.global_code ?? primaryResult.plus_code?.global_code ?? null,
-      compoundPlusCode: data.plus_code?.compound_code ?? null,
-      lat,
-      lng,
+      return {
+        ok: true,
+        label,
+        address: label || primaryResult.formatted_address,
+        formattedAddress: label || primaryResult.formatted_address,
+        placeId: primaryResult.place_id,
+        globalPlusCode: data.plus_code?.global_code ?? primaryResult.plus_code?.global_code ?? null,
+        compoundPlusCode: data.plus_code?.compound_code ?? null,
+        lat,
+        lng,
+      };
+    });
+
+    return NextResponse.json(value, {
+      headers: {
+        "Cache-Control": "private, max-age=60",
+        "X-MOOVU-Cache": cacheStatus,
+      },
     });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error" }, { status: 500 });
