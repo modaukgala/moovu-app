@@ -1122,7 +1122,9 @@ export default function RideTrackingPage() {
       }
 
       setTrip(json.trip ?? null);
-      setMsg("Stop added. Your confirmed trip fare remains unchanged.");
+      const stopCharge = Number(json?.fare?.addedStopCharge ?? 0);
+      const nextFare = Number(json?.fare?.finalFare ?? json?.trip?.final_fare ?? 0);
+      setMsg(`Stop added. ${money(stopCharge)} was added. Your trip fare is now ${money(nextFare)}.`);
       setAddStopOpen(false);
       setAddStopInput("");
       setAddStopNote("");
@@ -1311,7 +1313,7 @@ export default function RideTrackingPage() {
 
   const routeAddition = useMemo(() => {
     if (!trip) return 0;
-    return Number(trip.final_add_stop_increase ?? 0) + Number(trip.stop_waiting_fee ?? 0);
+    return Number(trip.fare_adjustment_amount ?? 0);
   }, [trip]);
 
   const endOtpReadyAtMs = useMemo(() => {
@@ -1355,9 +1357,9 @@ export default function RideTrackingPage() {
   }, [activeOtpModal, dismissedOtpModal, endOtpAvailable]);
 
   const fareHelperText = useMemo(() => {
-    if (trip?.status === "completed") return "This is the fare confirmed when you booked.";
+    if (trip?.status === "completed") return "Final fare: initial booking fare plus any stop you added.";
     if (trip?.status === "cancelled") return "Shown for reference after cancellation.";
-    return "This fare was confirmed when you booked and will not change during the trip.";
+    return "GPS, traffic and trip duration do not change this fare. Only a stop you add is included.";
   }, [trip?.status]);
 
   const tripActionIcons = {
@@ -1401,7 +1403,7 @@ export default function RideTrackingPage() {
                   Add a stop to this ride
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Choose a place from the list. The route will update, but your confirmed trip fare will remain unchanged.
+                  Choose a place from the list. Only the stop charge will be added to your initial fare.
                 </p>
               </div>
               <button
@@ -1675,7 +1677,7 @@ export default function RideTrackingPage() {
                   <em>{fareHelperText}</em>
                 </div>
                 <div className="customer-detail-grid">
-                  <div><span>Estimated fare</span><strong>{money(trip.estimated_fare ?? trip.fare_amount)}</strong></div>
+                  <div><span>Initial fare</span><strong>{money(trip.estimated_fare ?? trip.fare_amount)}</strong></div>
                   <div><span>Stop additions</span><strong>{money(routeAddition)}</strong></div>
                   <div><span>Trip fare</span><strong>{money(displayTotal)}</strong></div>
                   <div><span>Payment</span><strong className="capitalize">{displayValue(trip.payment_method)}</strong></div>
@@ -2035,7 +2037,8 @@ export default function RideTrackingPage() {
                 <div className="customer-detail-grid">
                   <div><span>Payment method</span><strong className="capitalize">{displayValue(trip.payment_method)}</strong></div>
                   <div><span>Trip status</span><strong>{statusLabel(trip.status)}</strong></div>
-                  <div><span>Booked fare</span><strong>{money(trip.fare_amount)}</strong></div>
+                  <div><span>Initial fare</span><strong>{money(trip.estimated_fare ?? trip.fare_amount)}</strong></div>
+                  <div><span>Stop additions</span><strong>{money(routeAddition)}</strong></div>
                   <div><span>Final fare</span><strong>{money(displayTotal)}</strong></div>
                 </div>
               </div>
@@ -2236,7 +2239,7 @@ export default function RideTrackingPage() {
               <div className="rounded-[22px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
                 <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Trip fare</div>
                 <div className="mt-1 text-4xl font-black">{money(displayTotal)}</div>
-                <div className="mt-1 text-xs font-semibold text-blue-100">This is the fare confirmed when you booked and it will not change during the ride.</div>
+                <div className="mt-1 text-xs font-semibold text-blue-100">Initial fare plus any stop you add. GPS distance, traffic and trip time do not change it.</div>
               </div>
             )}
 

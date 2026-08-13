@@ -60,7 +60,10 @@ function isMissingOptionalPricingColumn(error: { code?: string; message?: string
     message.includes("add_stop_discount_percent") ||
     message.includes("final_add_stop_increase") ||
     message.includes("stop_waiting_fee") ||
-    message.includes("final_fare")
+    message.includes("final_fare") ||
+    message.includes("estimated_fare") ||
+    message.includes("fare_adjustment_amount") ||
+    message.includes("fare_adjustment_reason")
   );
 }
 
@@ -469,6 +472,9 @@ export async function POST(req: Request) {
       final_add_stop_increase: addStop.finalAddStopIncrease,
       stop_waiting_fee: stopWaiting.stopWaitingFee,
       final_fare: finalFare,
+      estimated_fare: finalFare,
+      fare_adjustment_amount: 0,
+      fare_adjustment_reason: "booking_confirmed",
     };
 
     let insertResult = await auth.supabaseAdmin
@@ -495,6 +501,9 @@ export async function POST(req: Request) {
       delete legacyPayload.final_add_stop_increase;
       delete legacyPayload.stop_waiting_fee;
       delete legacyPayload.final_fare;
+      delete legacyPayload.estimated_fare;
+      delete legacyPayload.fare_adjustment_amount;
+      delete legacyPayload.fare_adjustment_reason;
 
       insertResult = await auth.supabaseAdmin
         .from("trips")

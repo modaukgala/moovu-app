@@ -13,6 +13,11 @@ function validFare(value: unknown) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function nonNegativeMoney(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : 0;
+}
+
 /** Returns the immutable customer-confirmed fare without considering live telemetry. */
 export function resolveLockedTripFare(source: LockedFareSource) {
   const candidates = [
@@ -42,5 +47,29 @@ export function buildLockedFareBreakdown(source: LockedFareSource): FinalFareBre
     stopWaitingFee: 0,
     finalFare: lockedFare,
     adjustmentAmount: 0,
+  };
+}
+
+/** Adds only the newly introduced stop charge to the current locked trip fare. */
+export function addIncrementalStopCharge(params: {
+  currentFare: unknown;
+  previousStopIncrease: unknown;
+  nextStopIncrease: unknown;
+}) {
+  const currentFare = validFare(params.currentFare);
+  if (currentFare == null) return null;
+
+  const previousStopIncrease = nonNegativeMoney(params.previousStopIncrease);
+  const nextStopIncrease = nonNegativeMoney(params.nextStopIncrease);
+  const addedStopCharge = Math.round(
+    Math.max(0, nextStopIncrease - previousStopIncrease) * 100,
+  ) / 100;
+
+  return {
+    currentFare: Math.round(currentFare * 100) / 100,
+    previousStopIncrease,
+    nextStopIncrease,
+    addedStopCharge,
+    finalFare: Math.round((currentFare + addedStopCharge) * 100) / 100,
   };
 }

@@ -61,6 +61,8 @@ type Offer = {
   final_add_stop_increase?: number | null;
   final_fare?: number | null;
   stop_waiting_fee?: number | null;
+  estimated_fare?: number | null;
+  fare_adjustment_amount?: number | null;
   current_fare?: number | null;
   actual_distance_km?: number | null;
   actual_duration_min?: number | null;
@@ -89,6 +91,8 @@ type CurrentTrip = {
   final_add_stop_increase?: number | null;
   final_fare?: number | null;
   stop_waiting_fee?: number | null;
+  estimated_fare?: number | null;
+  fare_adjustment_amount?: number | null;
   current_fare?: number | null;
   actual_distance_km?: number | null;
   actual_duration_min?: number | null;
@@ -2042,7 +2046,12 @@ export default function DriverHomePage() {
                     <div className="mb-4 rounded-[24px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
                       <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Trip fare</div>
                       <div className="mt-1 text-4xl font-black">{money(currentTrip.final_fare ?? currentTrip.fare_amount)}</div>
-                      <div className="mt-1 text-xs font-semibold text-blue-100">Confirmed at booking and unchanged for this trip.</div>
+                      <div className="mt-1 text-xs font-semibold text-blue-100">Booking fare plus customer-added stops. GPS and trip time do not change it.</div>
+                      {Number(currentTrip.fare_adjustment_amount ?? 0) > 0 && (
+                        <div className="mt-3 text-sm font-black text-white">
+                          {money(currentTrip.estimated_fare ?? currentTrip.fare_amount)} initial + {money(currentTrip.fare_adjustment_amount)} stop
+                        </div>
+                      )}
                     </div>
                   )}
 

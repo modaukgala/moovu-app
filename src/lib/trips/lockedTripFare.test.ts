@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
-import { buildLockedFareBreakdown, resolveLockedTripFare } from "./lockedTripFare.ts";
+import { addIncrementalStopCharge, buildLockedFareBreakdown, resolveLockedTripFare } from "./lockedTripFare.ts";
 
 test("confirmed booking fares remain unchanged", () => {
   for (const fare of [40, 76, 120, 250, 95]) {
@@ -20,4 +20,51 @@ test("legacy trips use the safest stored fare fallback", () => {
   assert.equal(resolveLockedTripFare({ originalFare: 110 }), 110);
   assert.equal(resolveLockedTripFare({ legacyFallbackFare: 40 }), 40);
   assert.equal(resolveLockedTripFare({}), null);
+});
+
+test("a stop added after booking increases only the locked fare", () => {
+  assert.deepEqual(
+    addIncrementalStopCharge({
+      currentFare: 76,
+      previousStopIncrease: 0,
+      nextStopIncrease: 18,
+    }),
+    {
+      currentFare: 76,
+      previousStopIncrease: 0,
+      nextStopIncrease: 18,
+      addedStopCharge: 18,
+      finalFare: 94,
+    },
+  );
+});
+
+test("pre-booking and earlier active stops are not charged twice", () => {
+  assert.equal(
+    addIncrementalStopCharge({
+      currentFare: 95,
+      previousStopIncrease: 10,
+      nextStopIncrease: 25,
+    })?.finalFare,
+    110,
+  );
+  assert.equal(
+    addIncrementalStopCharge({
+      currentFare: 110,
+      previousStopIncrease: 25,
+      nextStopIncrease: 37,
+    })?.finalFare,
+    122,
+  );
+});
+
+test("route changes cannot reduce or otherwise recalculate the locked fare", () => {
+  assert.equal(
+    addIncrementalStopCharge({
+      currentFare: 94,
+      previousStopIncrease: 18,
+      nextStopIncrease: 16,
+    })?.finalFare,
+    94,
+  );
 });

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import {
+  calculateAddStopIncrease,
   MAX_TRIP_STOPS,
+  normalizeRideOptionId,
 } from "@/lib/domain/fare";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { notifyAdmins, notifyDriverForTrip } from "@/lib/push-notify";
-import { resolveLockedTripFare } from "@/lib/trips/lockedTripFare";
+import { addIncrementalStopCharge, resolveLockedTripFare } from "@/lib/trips/lockedTripFare";
 
 type StopPayload = {
   address?: string | null;
@@ -39,6 +41,8 @@ type TripRow = {
   final_add_stop_increase?: number | null;
   stop_waiting_fee?: number | null;
   final_fare?: number | null;
+  estimated_fare?: number | null;
+  fare_adjustment_amount?: number | null;
 };
 
 type StopRecord = {
@@ -300,11 +304,51 @@ export async function POST(req: Request) {
     const lockedFare = resolveLockedTripFare({
       finalFare: typedTrip.final_fare,
       fareAmount: typedTrip.fare_amount,
+      estimatedFare: typedTrip.estimated_fare,
       originalFare: typedTrip.original_fare,
     });
     if (lockedFare == null) {
       return NextResponse.json({ ok: false, error: "Trip fare is missing or invalid." }, { status: 400 });
     }
+
+    const rideOptionId = normalizeRideOptionId(typedTrip.ride_option);
+    const nextStopBreakdown = calculateAddStopIncrease({
+      rideOptionId,
+      originalDistanceKm: route.originalDistanceKm,
+      originalDurationMin: route.originalDurationMin,
+      routeDistanceKm: route.routeDistanceKm,
+      routeDurationMin: route.routeDurationMin,
+      stopCount: stops.length,
+    });
+    const storedPreviousStopIncrease = asNumber(typedTrip.final_add_stop_increase);
+    const previousStopBreakdown = calculateAddStopIncrease({
+      rideOptionId,
+      originalDistanceKm: typedTrip.original_distance_km ?? route.originalDistanceKm,
+      originalDurationMin: typedTrip.original_duration_min ?? route.originalDurationMin,
+      routeDistanceKm: typedTrip.route_distance_km ?? typedTrip.distance_km ?? route.originalDistanceKm,
+      routeDurationMin: typedTrip.route_duration_min ?? typedTrip.duration_min ?? route.originalDurationMin,
+      stopCount: existingStops.length,
+    });
+    const previousStopIncrease = storedPreviousStopIncrease ?? previousStopBreakdown.finalAddStopIncrease;
+    const cumulativeStopIncrease = Math.max(
+      previousStopIncrease,
+      nextStopBreakdown.finalAddStopIncrease,
+    );
+    const adjustedFare = addIncrementalStopCharge({
+      currentFare: lockedFare,
+      previousStopIncrease,
+      nextStopIncrease: cumulativeStopIncrease,
+    });
+    if (!adjustedFare) {
+      return NextResponse.json({ ok: false, error: "Trip fare is missing or invalid." }, { status: 400 });
+    }
+    const bookingFare = resolveLockedTripFare({
+      finalFare: typedTrip.estimated_fare,
+      fareAmount: lockedFare,
+    }) ?? lockedFare;
+    const totalActiveStopAdjustment = Math.round(
+      Math.max(0, adjustedFare.finalFare - bookingFare) * 100,
+    ) / 100;
 
     const updatePayload = {
       stops,
@@ -314,6 +358,16 @@ export async function POST(req: Request) {
       original_duration_min: route.originalDurationMin,
       route_distance_km: route.routeDistanceKm,
       route_duration_min: route.routeDurationMin,
+      extra_stop_distance_km: nextStopBreakdown.extraDistanceKm,
+      extra_stop_duration_min: nextStopBreakdown.extraDurationMin,
+      raw_add_stop_increase: nextStopBreakdown.rawAddStopIncrease,
+      add_stop_discount_percent: nextStopBreakdown.addStopDiscountPercent,
+      final_add_stop_increase: cumulativeStopIncrease,
+      fare_amount: adjustedFare.finalFare,
+      final_fare: adjustedFare.finalFare,
+      estimated_fare: bookingFare,
+      fare_adjustment_amount: totalActiveStopAdjustment,
+      fare_adjustment_reason: "active_stop_added",
       active_stop_added_at: new Date().toISOString(),
       active_stop_added_by: auth.user.id,
       active_stop_note: note || null,
@@ -349,7 +403,7 @@ export async function POST(req: Request) {
       const { error: eventError } = await auth.supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
         event_type: "active_stop_added",
-        message: `Customer added stop ${stops.length}: ${newStop.address}. Booked fare remains R${lockedFare.toFixed(2)}.`,
+        message: `Customer added stop ${stops.length}: ${newStop.address}. Stop charge R${adjustedFare.addedStopCharge.toFixed(2)}; trip fare R${adjustedFare.finalFare.toFixed(2)}.`,
         old_status: typedTrip.status,
         new_status: typedTrip.status,
       });
@@ -364,13 +418,18 @@ export async function POST(req: Request) {
       notifyDriverForTrip(
         tripId,
         "Stop added",
-        `Customer added stop ${stops.length}: ${newStop.address}.`,
+        `Customer added stop ${stops.length}: ${newStop.address}. R${adjustedFare.addedStopCharge.toFixed(2)} was added; trip fare R${adjustedFare.finalFare.toFixed(2)}.`,
         "/driver",
-        { tripId, type: "active_stop_added", finalFare: lockedFare }
+        {
+          tripId,
+          type: "active_stop_added",
+          addedStopCharge: adjustedFare.addedStopCharge,
+          finalFare: adjustedFare.finalFare,
+        }
       ).catch((error: unknown) => console.error("[customer-add-stop] driver notify failed", error)),
       notifyAdmins(
         "Trip stop added",
-        `Trip ${tripId} now has ${stops.length} stop(s). Booked fare remains R${lockedFare.toFixed(2)}.`,
+        `Trip ${tripId} now has ${stops.length} stop(s). Stop charge R${adjustedFare.addedStopCharge.toFixed(2)}; trip fare R${adjustedFare.finalFare.toFixed(2)}.`,
         `/admin/trips/${tripId}`
       ).catch((error: unknown) => console.error("[customer-add-stop] admin notify failed", error)),
     ]);
@@ -378,7 +437,12 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       trip: updatedTrip,
-      fare: { finalFare: lockedFare, adjustmentAmount: 0 },
+      fare: {
+        initialFare: bookingFare,
+        addedStopCharge: adjustedFare.addedStopCharge,
+        adjustmentAmount: totalActiveStopAdjustment,
+        finalFare: adjustedFare.finalFare,
+      },
     });
   } catch (error: unknown) {
     return NextResponse.json(

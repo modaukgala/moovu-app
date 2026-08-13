@@ -16,6 +16,8 @@ type Trip = {
   dropoff_address: string;
   payment_method: string;
   fare_amount: number | null;
+  estimated_fare?: number | null;
+  fare_adjustment_amount?: number | null;
   status: string;
   cancel_reason: string | null;
   created_at: string;
@@ -336,7 +338,9 @@ export default function TripDetailPage() {
               <div><strong>Current status:</strong> <span className="capitalize">{trip.status}</span></div>
               <div><strong>Started:</strong> {tripStartedAt ? new Date(tripStartedAt).toLocaleString() : "--"}</div>
               <div><strong>Tracked:</strong> {Number(trip.actual_distance_km ?? 0).toFixed(2)} km / {Number(trip.actual_duration_min ?? 0).toFixed(0)} min</div>
-              <div><strong>Booked fare:</strong> R{Number(trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
+              <div><strong>Initial fare:</strong> R{Number(trip.estimated_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
+              <div><strong>Stop additions:</strong> R{Number(trip.fare_adjustment_amount ?? 0).toFixed(2)}</div>
+              <div><strong>Trip fare:</strong> R{Number(trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
               <div><strong>Start OTP:</strong> {trip.start_otp_verified ? "Verified" : "Not verified"}</div>
               <div><strong>End OTP:</strong> {trip.end_otp_verified ? "Verified" : trip.end_otp ? "Available, not verified" : "Not available"}</div>
             </div>
@@ -529,8 +533,13 @@ export default function TripDetailPage() {
             {trip.end_otp_bypass_note && <div className="mt-1 text-xs text-slate-600">{trip.end_otp_bypass_note}</div>}
           </div>
           <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Booked fare</div>
+            <div className="text-sm text-gray-600">Trip fare</div>
             <div className="mt-1 text-xl font-black">R{Number(trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
+            {Number(trip.fare_adjustment_amount ?? 0) > 0 && (
+              <div className="mt-1 text-xs font-bold text-blue-700">
+                Initial R{Number(trip.estimated_fare ?? trip.fare_amount ?? 0).toFixed(2)} + stops R{Number(trip.fare_adjustment_amount ?? 0).toFixed(2)}
+              </div>
+            )}
             <div className="mt-1 text-xs text-slate-500">{Number(trip.actual_distance_km ?? 0).toFixed(2)} km / {Number(trip.actual_duration_min ?? 0).toFixed(0)} min</div>
             {Number(distanceFareBreakdown?.distanceDiscountPct ?? 0) > 0 && (
               <div className="mt-2 text-xs font-bold text-emerald-700">

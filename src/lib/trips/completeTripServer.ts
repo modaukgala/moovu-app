@@ -11,7 +11,7 @@ import {
   missingCompletionColumn,
   type CompletionMode,
 } from "@/lib/trips/completionContract";
-import { buildLockedFareBreakdown } from "@/lib/trips/lockedTripFare";
+import { buildLockedFareBreakdown, resolveLockedTripFare } from "@/lib/trips/lockedTripFare";
 
 export { END_OTP_BYPASS_REASONS } from "@/lib/trips/completionContract";
 
@@ -179,15 +179,26 @@ export async function completeTripServer(params: {
     };
   }
 
-  const fare = buildLockedFareBreakdown({
+  const lockedFare = buildLockedFareBreakdown({
     finalFare: trip.final_fare,
     fareAmount: trip.fare_amount,
     estimatedFare: trip.estimated_fare,
     originalFare: trip.original_fare,
   });
-  if (!fare) {
+  if (!lockedFare) {
     return { ok: false, status: 400, error: "Trip fare is missing or invalid." };
   }
+  const bookingFare = resolveLockedTripFare({
+    finalFare: trip.estimated_fare,
+    fareAmount: lockedFare.finalFare,
+  }) ?? lockedFare.finalFare;
+  const fare: FinalFareBreakdown = {
+    ...lockedFare,
+    estimatedFare: bookingFare,
+    originalFare: bookingFare,
+    addStopIncrease: Math.round(Math.max(0, lockedFare.finalFare - bookingFare) * 100) / 100,
+    adjustmentAmount: Math.round(Math.max(0, lockedFare.finalFare - bookingFare) * 100) / 100,
+  };
   const fareAmount = fare.finalFare;
 
   const { data: driver } = await supabaseAdmin
@@ -235,7 +246,7 @@ export async function completeTripServer(params: {
     final_fare: fare.finalFare,
     estimated_fare: fare.estimatedFare,
     fare_adjustment_amount: fare.adjustmentAmount,
-    fare_adjustment_reason: "finalized_without_adjustment",
+    fare_adjustment_reason: fare.adjustmentAmount > 0 ? "active_stop_added" : "finalized_without_adjustment",
     fare_finalized_at: now,
     actual_distance_km: trip.actual_distance_km ?? trip.route_distance_km ?? trip.distance_km ?? null,
     actual_duration_min: trip.actual_duration_min ?? trip.route_duration_min ?? trip.duration_min ?? null,
