@@ -1554,7 +1554,7 @@ export default function DriverHomePage() {
               <div className="flex items-start justify-between gap-4">
                 <span className="font-semibold text-slate-500">Final fare</span>
                 <strong className="text-xl text-slate-950">
-                  {money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}
+                  {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
                 </strong>
               </div>
               <div className="flex items-start justify-between gap-4">
@@ -2028,21 +2028,21 @@ export default function DriverHomePage() {
                         {tripStatusLabel(currentTrip.status)}
                       </div>
                       <p className="mt-2 text-sm font-semibold text-slate-600">
-                        {rideTypeLabel(currentTrip.ride_option)} - {money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}
+                        {rideTypeLabel(currentTrip.ride_option)} - {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
                       </p>
                     </div>
 
                     <div className="moovu-chip moovu-chip-primary">
                       <span className="moovu-chip-dot" />
-                      {currentTrip.status === "ongoing" ? "Current fare" : "Fare"}: {money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}
+                      Trip fare: {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
                     </div>
                   </div>
 
                   {currentTrip.status === "ongoing" && (
                     <div className="mb-4 rounded-[24px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
-                      <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Live trip fare</div>
-                      <div className="mt-1 text-4xl font-black">{money(currentTrip.current_fare ?? currentTrip.final_fare ?? currentTrip.fare_amount)}</div>
-                      <div className="mt-1 text-xs font-semibold text-blue-100">Updates while the trip is in progress. Final amount is confirmed with the end OTP.</div>
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Trip fare</div>
+                      <div className="mt-1 text-4xl font-black">{money(currentTrip.final_fare ?? currentTrip.fare_amount)}</div>
+                      <div className="mt-1 text-xs font-semibold text-blue-100">Confirmed at booking and unchanged for this trip.</div>
                     </div>
                   )}
 

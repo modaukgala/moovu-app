@@ -629,7 +629,7 @@ export default function RideTrackingPage() {
         current
           ? {
               ...current,
-              current_fare: json.fare.current_fare,
+              current_fare: json.fare.final_fare ?? json.fare.fare_amount,
               final_fare: json.fare.final_fare,
               fare_amount: json.fare.fare_amount,
               actual_distance_km: json.fare.actual_distance_km,
@@ -1122,7 +1122,7 @@ export default function RideTrackingPage() {
       }
 
       setTrip(json.trip ?? null);
-      setMsg("Stop added. Your pending trip total has been updated.");
+      setMsg("Stop added. Your confirmed trip fare remains unchanged.");
       setAddStopOpen(false);
       setAddStopInput("");
       setAddStopNote("");
@@ -1300,14 +1300,13 @@ export default function RideTrackingPage() {
   }, [trip?.status]);
 
   const tripTotalLabel = useMemo(() => {
-    if (trip?.status === "completed") return "Final total";
-    if (trip?.status === "cancelled") return "Trip total";
-    return "Pending total";
+    if (trip?.status === "completed") return "Final fare";
+    return "Trip fare";
   }, [trip?.status]);
 
   const displayTotal = useMemo(() => {
     if (!trip) return 0;
-    return Number(trip.current_fare ?? trip.final_fare ?? trip.fare_amount ?? 0);
+    return Number(trip.final_fare ?? trip.fare_amount ?? trip.estimated_fare ?? 0);
   }, [trip]);
 
   const routeAddition = useMemo(() => {
@@ -1356,9 +1355,9 @@ export default function RideTrackingPage() {
   }, [activeOtpModal, dismissedOtpModal, endOtpAvailable]);
 
   const fareHelperText = useMemo(() => {
-    if (trip?.status === "completed") return "Receipt-ready total after trip completion.";
+    if (trip?.status === "completed") return "This is the fare confirmed when you booked.";
     if (trip?.status === "cancelled") return "Shown for reference after cancellation.";
-    return "This total stays pending until the trip ends and the end OTP is verified.";
+    return "This fare was confirmed when you booked and will not change during the trip.";
   }, [trip?.status]);
 
   const tripActionIcons = {
@@ -1402,7 +1401,7 @@ export default function RideTrackingPage() {
                   Add a stop to this ride
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Choose a place from the list. MOOVU recalculates the route and applies the 40% add-stop discount before the trip is finalized.
+                  Choose a place from the list. The route will update, but your confirmed trip fare will remain unchanged.
                 </p>
               </div>
               <button
@@ -1678,7 +1677,7 @@ export default function RideTrackingPage() {
                 <div className="customer-detail-grid">
                   <div><span>Estimated fare</span><strong>{money(trip.estimated_fare ?? trip.fare_amount)}</strong></div>
                   <div><span>Stop additions</span><strong>{money(routeAddition)}</strong></div>
-                  <div><span>{trip.status === "ongoing" ? "Current fare" : "Final fare"}</span><strong>{money(displayTotal)}</strong></div>
+                  <div><span>Trip fare</span><strong>{money(displayTotal)}</strong></div>
                   <div><span>Payment</span><strong className="capitalize">{displayValue(trip.payment_method)}</strong></div>
                   <div><span>Route distance</span><strong>{displayDistance(trip.actual_distance_km ?? trip.distance_km)}</strong></div>
                   <div><span>Trip time</span><strong>{displayDuration(trip.actual_duration_min ?? trip.duration_min)}</strong></div>
@@ -2235,9 +2234,9 @@ export default function RideTrackingPage() {
 
             {trip.status === "ongoing" && (
               <div className="rounded-[22px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Live trip fare</div>
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Trip fare</div>
                 <div className="mt-1 text-4xl font-black">{money(displayTotal)}</div>
-                <div className="mt-1 text-xs font-semibold text-blue-100">This updates during your ride. The final amount is confirmed after the end OTP.</div>
+                <div className="mt-1 text-xs font-semibold text-blue-100">This is the fare confirmed when you booked and it will not change during the ride.</div>
               </div>
             )}
 

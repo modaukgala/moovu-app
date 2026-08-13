@@ -363,6 +363,7 @@ export async function GET(req: Request) {
       ok: true,
       trip: {
         ...trip,
+        current_fare: typedTrip.final_fare ?? typedTrip.fare_amount,
         completed_at: completedEvent?.created_at ?? null,
       },
       driver,

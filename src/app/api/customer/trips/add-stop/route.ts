@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   MAX_TRIP_STOPS,
-  calculateAddStopIncrease,
-  calculateFinalJourneyFare,
-  calculateFinalFare,
-  calculateStopWaitingFee,
-  normalizeRideOptionId,
 } from "@/lib/domain/fare";
-import { calculateFare } from "@/lib/fare/calculateFare";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { notifyAdmins, notifyDriverForTrip } from "@/lib/push-notify";
+import { resolveLockedTripFare } from "@/lib/trips/lockedTripFare";
 
 type StopPayload = {
   address?: string | null;
@@ -302,70 +297,23 @@ export async function POST(req: Request) {
       );
     }
 
-    const rideOptionId = normalizeRideOptionId(typedTrip.ride_option);
-    const baseFare = calculateFare({
-      distanceKm: route.originalDistanceKm,
-      distanceDiscountKm: route.originalDistanceKm,
-      durationMin: route.originalDurationMin,
-      rideOptionId,
-      surgeLabel: typedTrip.surge_label === "busy" || typedTrip.surge_label === "heavy_demand" || typedTrip.surge_label === "rain_event"
-        ? typedTrip.surge_label
-        : "normal",
-      surgeMultiplier: typedTrip.surge_multiplier,
+    const lockedFare = resolveLockedTripFare({
+      finalFare: typedTrip.final_fare,
+      fareAmount: typedTrip.fare_amount,
+      originalFare: typedTrip.original_fare,
     });
-    const journeyBaseFare = calculateFare({
-      distanceKm: route.originalDistanceKm,
-      distanceDiscountKm: 0,
-      durationMin: route.originalDurationMin,
-      rideOptionId,
-      surgeLabel: typedTrip.surge_label === "busy" || typedTrip.surge_label === "heavy_demand" || typedTrip.surge_label === "rain_event"
-        ? typedTrip.surge_label
-        : "normal",
-      surgeMultiplier: typedTrip.surge_multiplier,
-    });
-    const addStop = calculateAddStopIncrease({
-      rideOptionId,
-      originalDistanceKm: route.originalDistanceKm,
-      originalDurationMin: route.originalDurationMin,
-      routeDistanceKm: route.routeDistanceKm,
-      routeDurationMin: route.routeDurationMin,
-      stopCount: stops.length,
-    });
-    const stopWaiting = calculateStopWaitingFee({
-      rideOptionId,
-      stopWaitingMinutes: [],
-    });
-    const journeyFare = calculateFinalJourneyFare({
-      baseFare: journeyBaseFare,
-      routeDistanceKm: route.routeDistanceKm,
-      addStopIncrease: addStop.finalAddStopIncrease,
-      stopWaitingFee: stopWaiting.stopWaitingFee,
-    });
-    const finalFare = calculateFinalFare({
-      originalFare: journeyFare.totalFare,
-      fallbackFare: typedTrip.final_fare ?? typedTrip.fare_amount,
-    });
+    if (lockedFare == null) {
+      return NextResponse.json({ ok: false, error: "Trip fare is missing or invalid." }, { status: 400 });
+    }
 
     const updatePayload = {
       stops,
       distance_km: route.routeDistanceKm,
       duration_min: route.routeDurationMin,
-      fare_amount: finalFare.finalFare,
       original_distance_km: route.originalDistanceKm,
       original_duration_min: route.originalDurationMin,
-      original_fare: baseFare.totalFare,
       route_distance_km: route.routeDistanceKm,
       route_duration_min: route.routeDurationMin,
-      extra_stop_distance_km: addStop.extraDistanceKm,
-      extra_stop_duration_min: addStop.extraDurationMin,
-      raw_add_stop_increase: addStop.rawAddStopIncrease,
-      add_stop_discount_percent: addStop.addStopDiscountPercent,
-      final_add_stop_increase: addStop.finalAddStopIncrease,
-      stop_waiting_fee: stopWaiting.stopWaitingFee,
-      final_fare: finalFare.finalFare,
-      estimated_fare: Number(typedTrip.final_fare ?? typedTrip.fare_amount ?? journeyFare.totalFare),
-      fare_adjustment_amount: finalFare.adjustmentAmount,
-      fare_adjustment_reason: stops.length > 0 ? "active_stop_added" : null,
       active_stop_added_at: new Date().toISOString(),
       active_stop_added_by: auth.user.id,
       active_stop_note: note || null,
@@ -401,7 +349,7 @@ export async function POST(req: Request) {
       const { error: eventError } = await auth.supabaseAdmin.from("trip_events").insert({
         trip_id: tripId,
         event_type: "active_stop_added",
-        message: `Customer added stop ${stops.length}: ${newStop.address}. Pending total updated to R${finalFare.finalFare}.`,
+        message: `Customer added stop ${stops.length}: ${newStop.address}. Booked fare remains R${lockedFare.toFixed(2)}.`,
         old_status: typedTrip.status,
         new_status: typedTrip.status,
       });
@@ -418,11 +366,11 @@ export async function POST(req: Request) {
         "Stop added",
         `Customer added stop ${stops.length}: ${newStop.address}.`,
         "/driver",
-        { tripId, type: "active_stop_added", finalFare: finalFare.finalFare }
+        { tripId, type: "active_stop_added", finalFare: lockedFare }
       ).catch((error: unknown) => console.error("[customer-add-stop] driver notify failed", error)),
       notifyAdmins(
         "Trip stop added",
-        `Trip ${tripId} now has ${stops.length} stop(s). Pending total R${finalFare.finalFare}.`,
+        `Trip ${tripId} now has ${stops.length} stop(s). Booked fare remains R${lockedFare.toFixed(2)}.`,
         `/admin/trips/${tripId}`
       ).catch((error: unknown) => console.error("[customer-add-stop] admin notify failed", error)),
     ]);
@@ -430,9 +378,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       trip: updatedTrip,
-      fare: finalFare,
-      addStop,
-      stopWaiting,
+      fare: { finalFare: lockedFare, adjustmentAmount: 0 },
     });
   } catch (error: unknown) {
     return NextResponse.json(

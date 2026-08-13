@@ -4,7 +4,7 @@ import { getDriverIdForUser, getUserFromBearer } from "@/app/api/driver/utils";
 
 const ACTIVE = ["assigned", "arrived", "ongoing"];
 const TRIP_SELECT =
-  "id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,fare_amount,payment_method,created_at,offer_status,offer_expires_at,ride_option,stops,original_fare,final_add_stop_increase,final_fare,stop_waiting_fee,current_fare,actual_distance_km,actual_duration_min";
+  "id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,fare_amount,payment_method,created_at,offer_status,offer_expires_at,ride_option,stops,original_fare,final_add_stop_increase,final_fare,stop_waiting_fee,actual_distance_km,actual_duration_min";
 const LEGACY_TRIP_SELECT =
   "id,status,driver_id,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,fare_amount,payment_method,created_at,offer_status,offer_expires_at,ride_option";
 
@@ -16,7 +16,6 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
     message.includes("final_add_stop_increase") ||
     message.includes("final_fare") ||
     message.includes("stop_waiting_fee") ||
-    message.includes("current_fare") ||
     message.includes("actual_distance_km") ||
     message.includes("actual_duration_min")
   );
@@ -71,7 +70,12 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true, trip: trip ?? null });
+    return NextResponse.json({
+      ok: true,
+      trip: trip
+        ? { ...trip, current_fare: trip.final_fare ?? trip.fare_amount }
+        : null,
+    });
   } catch (error: unknown) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Server error" },

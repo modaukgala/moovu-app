@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { calculateFinalFare } from "@/lib/domain/fare";
+import type { FinalFareBreakdown } from "@/lib/domain/fare";
 import { applyTripCommissionServer } from "@/lib/finance/applyTripCommissionServer";
 import { haversineKm, isFreshHeartbeat, minimumRequiredTripSeconds } from "@/lib/geo/tripGuards";
 import { notifyAdmins, notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
@@ -11,6 +11,7 @@ import {
   missingCompletionColumn,
   type CompletionMode,
 } from "@/lib/trips/completionContract";
+import { buildLockedFareBreakdown } from "@/lib/trips/lockedTripFare";
 
 export { END_OTP_BYPASS_REASONS } from "@/lib/trips/completionContract";
 
@@ -35,7 +36,6 @@ type CompletionTrip = {
   route_distance_km?: number | null;
   route_duration_min?: number | null;
   estimated_fare?: number | null;
-  current_fare?: number | null;
   actual_distance_km?: number | null;
   actual_duration_min?: number | null;
 };
@@ -44,7 +44,7 @@ const COMPLETE_SELECT = `
   id,status,driver_id,fare_amount,duration_min,distance_km,dropoff_lat,dropoff_lng,
   start_otp_verified,end_otp,end_otp_verified,trip_started_at,ride_option,original_fare,final_add_stop_increase,
   stop_waiting_fee,final_fare,route_distance_km,route_duration_min,estimated_fare,
-  current_fare,actual_distance_km,actual_duration_min
+  actual_distance_km,actual_duration_min
 `;
 
 export type CompleteTripServerResult =
@@ -52,7 +52,7 @@ export type CompleteTripServerResult =
       ok: true;
       status: 200;
       message: string;
-      fare: ReturnType<typeof calculateFinalFare>;
+      fare: FinalFareBreakdown;
       commission: {
         skipped: boolean;
         fareAmount: number;
@@ -179,27 +179,16 @@ export async function completeTripServer(params: {
     };
   }
 
-  const calculated = calculateFinalFare({
+  const fare = buildLockedFareBreakdown({
+    finalFare: trip.final_fare,
+    fareAmount: trip.fare_amount,
+    estimatedFare: trip.estimated_fare,
     originalFare: trip.original_fare,
-    addStopIncrease: trip.final_add_stop_increase,
-    stopWaitingFee: trip.stop_waiting_fee,
-    fallbackFare: trip.final_fare ?? trip.fare_amount,
   });
-  const liveFare = Number(trip.current_fare ?? 0);
-  const storedFinalFare = Number(trip.final_fare ?? trip.fare_amount ?? 0);
-  const fareAmount = Number.isFinite(liveFare) && liveFare > 0
-    ? liveFare
-    : Number.isFinite(storedFinalFare) && storedFinalFare > 0
-      ? storedFinalFare
-      : calculated.finalFare;
-  if (!Number.isFinite(fareAmount) || fareAmount <= 0) {
+  if (!fare) {
     return { ok: false, status: 400, error: "Trip fare is missing or invalid." };
   }
-  const fare = {
-    ...calculated,
-    finalFare: Math.round(fareAmount),
-    adjustmentAmount: Math.round((fareAmount - calculated.estimatedFare) * 100) / 100,
-  };
+  const fareAmount = fare.finalFare;
 
   const { data: driver } = await supabaseAdmin
     .from("drivers")
@@ -246,8 +235,7 @@ export async function completeTripServer(params: {
     final_fare: fare.finalFare,
     estimated_fare: fare.estimatedFare,
     fare_adjustment_amount: fare.adjustmentAmount,
-    fare_adjustment_reason:
-      fare.adjustmentAmount !== 0 ? "finalized_from_live_trip" : "finalized_without_adjustment",
+    fare_adjustment_reason: "finalized_without_adjustment",
     fare_finalized_at: now,
     actual_distance_km: trip.actual_distance_km ?? trip.route_distance_km ?? trip.distance_km ?? null,
     actual_duration_min: trip.actual_duration_min ?? trip.route_duration_min ?? trip.duration_min ?? null,

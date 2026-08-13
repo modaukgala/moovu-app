@@ -1,19 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { calculateFinalJourneyFare, calculateTripFare } from "@/lib/domain/fare";
 import { haversineKm } from "@/lib/dispatch/driverScoring";
 
 type LiveTripRow = {
   id: string;
   status: string;
-  ride_option: "go" | "group" | null;
-  surge_label: "normal" | "busy" | "heavy_demand" | "rain_event" | null;
-  surge_multiplier: number | null;
   actual_distance_km: number | null;
   actual_duration_min: number | null;
   trip_started_at: string | null;
-  fare_last_recalculated_at: string | null;
-  final_add_stop_increase: number | null;
-  stop_waiting_fee: number | null;
 };
 
 function isMissingTelemetrySchema(error: { code?: string; message?: string } | null | undefined) {
@@ -34,7 +27,7 @@ export async function recordTripTelemetry(params: {
   const capturedAt = params.capturedAt ?? new Date().toISOString();
   const { data: trip, error: tripError } = await params.supabase
     .from("trips")
-    .select("id,status,ride_option,surge_label,surge_multiplier,actual_distance_km,actual_duration_min,trip_started_at,fare_last_recalculated_at,final_add_stop_increase,stop_waiting_fee")
+    .select("id,status,actual_distance_km,actual_duration_min,trip_started_at")
     .eq("driver_id", params.driverId)
     .in("status", ["assigned", "arrived", "ongoing"])
     .order("created_at", { ascending: false })
@@ -97,39 +90,12 @@ export async function recordTripTelemetry(params: {
 
   const currentDistance = Math.max(0, Number(typedTrip.actual_distance_km ?? 0) + acceptedSegmentKm);
   const durationMin = Math.max(0, (new Date(capturedAt).getTime() - new Date(typedTrip.trip_started_at).getTime()) / 60_000);
-  const lastFareAt = typedTrip.fare_last_recalculated_at ? new Date(typedTrip.fare_last_recalculated_at).getTime() : 0;
-  const shouldUpdateFare = Date.now() - lastFareAt >= 5_000;
   const update: Record<string, unknown> = {
     actual_distance_km: Math.round(currentDistance * 1000) / 1000,
     actual_duration_min: Math.round(durationMin * 100) / 100,
     actual_route_source: "gps_audit",
   };
 
-  if (shouldUpdateFare) {
-    const fare = calculateTripFare({
-      rideOptionId: typedTrip.ride_option,
-      distanceKm: currentDistance,
-      distanceDiscountKm: 0,
-      durationMin,
-      surgeLabel: typedTrip.surge_label,
-      surgeMultiplier: typedTrip.surge_multiplier,
-    });
-    const journeyFare = calculateFinalJourneyFare({
-      baseFare: fare,
-      routeDistanceKm: currentDistance,
-      addStopIncrease: typedTrip.final_add_stop_increase,
-      stopWaitingFee: typedTrip.stop_waiting_fee,
-    });
-    update.current_fare = journeyFare.totalFare;
-    update.fare_last_recalculated_at = capturedAt;
-    update.actual_fare_breakdown = {
-      ...fare,
-      ...journeyFare,
-      addStopIncrease: Number(typedTrip.final_add_stop_increase ?? 0),
-      stopWaitingFee: Number(typedTrip.stop_waiting_fee ?? 0),
-    };
-  }
-
   const { error: updateError } = await params.supabase.from("trips").update(update).eq("id", typedTrip.id).eq("status", "ongoing");
-  return updateError ? { ok: false as const, error: updateError.message } : { ok: true as const, tripId: typedTrip.id, fareUpdated: shouldUpdateFare };
+  return updateError ? { ok: false as const, error: updateError.message } : { ok: true as const, tripId: typedTrip.id, fareUpdated: false as const };
 }

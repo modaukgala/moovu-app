@@ -15,7 +15,7 @@ export async function GET(req: Request) {
 
     const { data: trip, error: tripError } = await auth.supabaseAdmin
       .from("trips")
-      .select("id,status,driver_id,current_fare,final_fare,fare_amount,actual_distance_km,actual_duration_min")
+      .select("id,status,driver_id,final_fare,fare_amount,actual_distance_km,actual_duration_min")
       .eq("id", tripId)
       .eq("customer_id", auth.customer.id)
       .maybeSingle();
@@ -60,7 +60,7 @@ export async function GET(req: Request) {
       status: trip.status,
       location,
       fare: {
-        current_fare: trip.current_fare,
+        current_fare: trip.final_fare ?? trip.fare_amount,
         final_fare: trip.final_fare,
         fare_amount: trip.fare_amount,
         actual_distance_km: trip.actual_distance_km,
