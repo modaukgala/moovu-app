@@ -1217,7 +1217,7 @@ export default function DriverHomePage() {
     if (!driver?.online) return;
     const pollMs = isPageVisible
       ? LIVE_LOCATION_CONFIG.driverOfferPollMs
-      : LIVE_LOCATION_CONFIG.idleHeartbeatMs;
+      : LIVE_LOCATION_CONFIG.driverHiddenPollMs;
 
     offersTimerRef.current = setInterval(() => {
       loadCurrentOffer();
@@ -1235,7 +1235,7 @@ export default function DriverHomePage() {
     if (!driver?.online || otpEntryOpen) return;
     const pollMs = isPageVisible
       ? LIVE_LOCATION_CONFIG.driverTripPollMs
-      : LIVE_LOCATION_CONFIG.idleHeartbeatMs;
+      : LIVE_LOCATION_CONFIG.driverHiddenPollMs;
 
     tripTimerRef.current = setInterval(() => {
       loadCurrentTrip();
