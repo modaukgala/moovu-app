@@ -1079,15 +1079,12 @@ export default function DriverHomePage() {
       routePreview?.dropoff_lat ?? "",
       routePreview?.dropoff_lng ?? "",
       routeStops.map((stop) => `${stop.lat}:${stop.lng}`).join("|"),
+      driver.lat != null && driver.lng != null ? "origin-ready" : "origin-missing",
     ].join(":");
-    const now = Date.now();
-    if (
-      lastRouteRenderRef.current.key === routeKey &&
-      now - lastRouteRenderRef.current.at < 5000
-    ) {
+    if (lastRouteRenderRef.current.key === routeKey) {
       return;
     }
-    lastRouteRenderRef.current = { key: routeKey, at: now };
+    lastRouteRenderRef.current = { key: routeKey, at: Date.now() };
     clearMapLayers(true);
 
     const points: google.maps.LatLngLiteral[] = [];
@@ -1359,7 +1356,9 @@ export default function DriverHomePage() {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY
+      || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      || "";
     if (!apiKey) {
       const timer = window.setTimeout(() => {
         setMapError("Google Maps API key is missing.");

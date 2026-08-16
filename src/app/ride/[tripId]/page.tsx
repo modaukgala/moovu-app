@@ -317,6 +317,7 @@ export default function RideTrackingPage() {
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
   const stopMarkerRefs = useRef<google.maps.Marker[]>([]);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const lastRouteRenderKeyRef = useRef("");
   const addStopTimerRef = useRef<number | null>(null);
   const previousTripSnapshotRef = useRef<{
     status: string | null;
@@ -672,6 +673,16 @@ export default function RideTrackingPage() {
     if (!trip || !initMapIfNeeded()) return;
 
     const map = mapInstanceRef.current!;
+    const routeRenderKey = [
+      trip.id,
+      trip.pickup_lat ?? "",
+      trip.pickup_lng ?? "",
+      trip.dropoff_lat ?? "",
+      trip.dropoff_lng ?? "",
+      tripStops.map((stop) => `${stop.lat}:${stop.lng}`).join("|"),
+    ].join(":");
+    if (lastRouteRenderKeyRef.current === routeRenderKey) return;
+    lastRouteRenderKeyRef.current = routeRenderKey;
     clearMapLayers();
 
     const points: google.maps.LatLngLiteral[] = [];
@@ -740,6 +751,8 @@ export default function RideTrackingPage() {
         (result, status) => {
           if (status === "OK" && result) {
             directionsRenderer.setDirections(result);
+          } else {
+            lastRouteRenderKeyRef.current = "";
           }
         }
       );
@@ -946,7 +959,9 @@ export default function RideTrackingPage() {
   }, [rating, trip]);
 
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY
+      || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      || "";
     if (!apiKey) {
       const timer = window.setTimeout(() => {
         setMapError("Google Maps API key is missing.");
@@ -1050,7 +1065,7 @@ export default function RideTrackingPage() {
     if (addStopTimerRef.current) window.clearTimeout(addStopTimerRef.current);
     addStopTimerRef.current = window.setTimeout(() => {
       void fetchAddStopPredictions(value);
-    }, 220);
+    }, 500);
   }
 
   async function chooseAddStopPlace(placeId: string | undefined, description: string | undefined) {

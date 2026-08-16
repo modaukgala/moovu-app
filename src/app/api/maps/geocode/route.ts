@@ -4,7 +4,13 @@ import {
   googleBoundsParam,
   localizedSearchQueries,
 } from "@/lib/maps/moovuPlaces";
-import { resolveCachedJson, takeRateLimit } from "@/lib/server/requestControl";
+import { takeRateLimit } from "@/lib/server/requestControl";
+import {
+  getGoogleMapsServerKey,
+  mapErrorResponse,
+  mapsRequestActor,
+  runControlledMapsRequest,
+} from "@/lib/server/mapsCostControl";
 
 export async function POST(req: Request) {
   try {
@@ -33,9 +39,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const key =
-      process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const key = getGoogleMapsServerKey();
 
     if (!key) {
       return NextResponse.json(
@@ -44,8 +48,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const cacheKey = `maps:geocode:${normalizedPlace.toLowerCase()}`;
-    const { value, cacheStatus } = await resolveCachedJson(cacheKey, 60_000, async () => {
+    const { value, cacheStatus } = await runControlledMapsRequest({
+      operation: "geocode",
+      requestKey: normalizedPlace.toLowerCase(),
+      actorKey: mapsRequestActor(req, "geocode"),
+      loader: async () => {
       let result = null;
       let lastStatus = "";
 
@@ -82,6 +89,7 @@ export async function POST(req: Request) {
         globalPlusCode: result.plus_code?.global_code ?? null,
         compoundPlusCode: result.plus_code?.compound_code ?? null,
       };
+      },
     });
 
     return NextResponse.json(value, {
@@ -91,9 +99,10 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: unknown) {
+    const mapped = mapErrorResponse(error);
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Server error" },
-      { status: 500 }
+      { ok: false, error: mapped.message },
+      { status: mapped.status }
     );
   }
 }

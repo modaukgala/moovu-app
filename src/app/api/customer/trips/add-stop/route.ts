@@ -6,6 +6,7 @@ import {
 } from "@/lib/domain/fare";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { notifyAdmins, notifyDriverForTrip } from "@/lib/push-notify";
+import { calculateDrivingRoute } from "@/lib/maps/routeService";
 import { addIncrementalStopCharge, resolveLockedTripFare } from "@/lib/trips/lockedTripFare";
 
 type StopPayload = {
@@ -98,73 +99,23 @@ function samePoint(a: { lat: number; lng: number }, b: { lat: number; lng: numbe
   return Math.abs(a.lat - b.lat) < 0.00008 && Math.abs(a.lng - b.lng) < 0.00008;
 }
 
-async function fetchDistanceLeg(params: {
-  apiKey: string;
-  origin: { lat: number; lng: number };
-  destination: { lat: number; lng: number };
-}) {
-  const origin = `${params.origin.lat},${params.origin.lng}`;
-  const destination = `${params.destination.lat},${params.destination.lng}`;
-  const url =
-    "https://maps.googleapis.com/maps/api/distancematrix/json" +
-    `?origins=${encodeURIComponent(origin)}` +
-    `&destinations=${encodeURIComponent(destination)}` +
-    "&mode=driving" +
-    "&language=en" +
-    "&region=za" +
-    `&key=${encodeURIComponent(params.apiKey)}`;
-
-  const response = await fetch(url, { method: "GET", cache: "no-store" });
-  const data = await response.json().catch(() => null);
-  const element = data?.rows?.[0]?.elements?.[0];
-
-  if (!response.ok || data?.status !== "OK" || !element || element.status !== "OK") {
-    throw new Error(
-      element?.status === "ZERO_RESULTS"
-        ? "No driving route found between the selected locations."
-        : data?.error_message || "Could not calculate route."
-    );
-  }
-
-  return {
-    distanceKm: Number(element.distance?.value ?? 0) / 1000,
-    durationMin: Number(element.duration?.value ?? 0) / 60,
-  };
-}
-
 async function calculateRoute(params: {
   pickup: { lat: number; lng: number };
   dropoff: { lat: number; lng: number };
   stops: Array<{ lat: number; lng: number }>;
+  actorKey: string;
 }) {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-  if (!apiKey) throw new Error("Google Maps API key is missing.");
-
-  const original = await fetchDistanceLeg({
-    apiKey,
+  const route = await calculateDrivingRoute({
     origin: params.pickup,
     destination: params.dropoff,
+    waypoints: params.stops,
+    actorKey: params.actorKey,
   });
-
-  const points = [params.pickup, ...params.stops, params.dropoff];
-  let routeDistanceKm = 0;
-  let routeDurationMin = 0;
-
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const leg = await fetchDistanceLeg({
-      apiKey,
-      origin: points[i],
-      destination: points[i + 1],
-    });
-    routeDistanceKm += leg.distanceKm;
-    routeDurationMin += leg.durationMin;
-  }
-
   return {
-    originalDistanceKm: Number(original.distanceKm.toFixed(2)),
-    originalDurationMin: Math.ceil(original.durationMin),
-    routeDistanceKm: Number(routeDistanceKm.toFixed(2)),
-    routeDurationMin: Math.ceil(routeDurationMin),
+    originalDistanceKm: route.originalDistanceKm,
+    originalDurationMin: route.originalDurationMin,
+    routeDistanceKm: route.distanceKm,
+    routeDurationMin: route.durationMin,
   };
 }
 
@@ -289,6 +240,7 @@ export async function POST(req: Request) {
       pickup: pickupPoint,
       dropoff: dropoffPoint,
       stops: stops.map((stop) => ({ lat: stop.lat, lng: stop.lng })),
+      actorKey: `customer-active-stop:${auth.customer.id}`,
     }).catch((error: unknown) => {
       console.error("[customer-add-stop] route calculation failed", error instanceof Error ? error.message : error);
       return null;

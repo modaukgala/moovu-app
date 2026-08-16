@@ -17,6 +17,7 @@
     "test:status-contracts": "node --test --experimental-strip-types src/lib/drivers/statusContract.test.ts",
     "test:notification-routing": "node --test --experimental-strip-types src/lib/notifications/deepLinkRouting.test.ts",
     "test:location": "node --test --experimental-strip-types src/lib/locationPaste.test.ts",
+    "test:maps-cost-control": "node --test --experimental-strip-types src/lib/maps/mapRequestPolicy.test.ts src/lib/maps/routeQuote.test.ts src/lib/server/requestControl.test.ts",
     "sync:customer": "node scripts/capacitor-ios-target.mjs customer sync",
     "sync:driver": "node scripts/capacitor-ios-target.mjs driver sync",
     "copy:customer": "node scripts/capacitor-ios-target.mjs customer copy",

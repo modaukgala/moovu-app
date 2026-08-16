@@ -134,7 +134,7 @@ export default function NewTripPage() {
       const preds = await fetchPredictions(value.trim());
       setPickupPred(preds);
       setPickupOpen(true);
-    }, 250);
+    }, 500);
   }
 
   function scheduleDropoffAutocomplete(value: string) {
@@ -147,7 +147,7 @@ export default function NewTripPage() {
       const preds = await fetchPredictions(value.trim());
       setDropoffPred(preds);
       setDropoffOpen(true);
-    }, 250);
+    }, 500);
   }
 
   async function calculateDistance() {

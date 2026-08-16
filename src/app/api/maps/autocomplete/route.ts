@@ -5,7 +5,13 @@ import {
   knownPlacePrediction,
   MOOVU_SEARCH_RADIUS_METERS,
 } from "@/lib/maps/moovuPlaces";
-import { resolveCachedJson, takeRateLimit } from "@/lib/server/requestControl";
+import { takeRateLimit } from "@/lib/server/requestControl";
+import {
+  getGoogleMapsServerKey,
+  mapErrorResponse,
+  mapsRequestActor,
+  runControlledMapsRequest,
+} from "@/lib/server/mapsCostControl";
 
 type PlacePrediction = {
   description?: string;
@@ -26,9 +32,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, predictions: [] });
     }
 
-    const key =
-      process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const key = getGoogleMapsServerKey();
 
     if (!key) {
       return NextResponse.json(
@@ -37,8 +41,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const cacheKey = `maps:autocomplete:${normalizedInput.toLowerCase()}`;
-    const { value, cacheStatus } = await resolveCachedJson(cacheKey, 15_000, async () => {
+    const { value, cacheStatus } = await runControlledMapsRequest({
+      operation: "autocomplete",
+      requestKey: normalizedInput.toLowerCase(),
+      actorKey: mapsRequestActor(req, "autocomplete"),
+      loader: async () => {
       const url =
         "https://maps.googleapis.com/maps/api/place/autocomplete/json" +
         `?input=${encodeURIComponent(normalizedInput)}` +
@@ -73,6 +80,7 @@ export async function POST(req: Request) {
       }
 
       return { ok: true, predictions };
+      },
     });
 
     return NextResponse.json(value, {
@@ -82,9 +90,10 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: unknown) {
+    const mapped = mapErrorResponse(error);
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Server error" },
-      { status: 500 }
+      { ok: false, error: mapped.message },
+      { status: mapped.status }
     );
   }
 }

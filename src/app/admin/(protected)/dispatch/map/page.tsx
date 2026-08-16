@@ -255,7 +255,9 @@ export default function DispatchMapPage() {
       if (!window.google) {
         const script = document.createElement("script");
         script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
-          process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
+          process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY
+            || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+            || ""
         )}`;
         script.async = true;
         script.defer = true;

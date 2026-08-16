@@ -163,6 +163,7 @@ export default function RiderBookingPage() {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [originalDistanceKm, setOriginalDistanceKm] = useState<number | null>(null);
+  const [routeQuote, setRouteQuote] = useState<string | null>(null);
   const [originalDurationMin, setOriginalDurationMin] = useState<number | null>(null);
   const [baseFare, setBaseFare] = useState<number | null>(null);
   const [addStopIncrease, setAddStopIncrease] = useState(0);
@@ -197,6 +198,9 @@ export default function RiderBookingPage() {
   const pickupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopTimerRefs = useRef<Array<ReturnType<typeof setTimeout> | null>>([]);
+  const pickupAutocompleteAbortRef = useRef<AbortController | null>(null);
+  const dropoffAutocompleteAbortRef = useRef<AbortController | null>(null);
+  const stopAutocompleteAbortRefs = useRef<Array<AbortController | null>>([]);
   const lastCalculatedKeyRef = useRef("");
   const calculatingKeyRef = useRef("");
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -452,7 +456,7 @@ export default function RiderBookingPage() {
 
   // ── Location helpers ─────────────────────────────────────────────
   function resetRouteState() {
-    setDistanceKm(null); setDurationMin(null); setOriginalDistanceKm(null); setOriginalDurationMin(null); setBaseFare(null); setAddStopIncrease(0); setRouteCalculationError(null);
+    setDistanceKm(null); setDurationMin(null); setOriginalDistanceKm(null); setOriginalDurationMin(null); setRouteQuote(null); setBaseFare(null); setAddStopIncrease(0); setRouteCalculationError(null);
     setRouteCalculating(false); setRouteVisible(false); lastCalculatedKeyRef.current = ""; calculatingKeyRef.current = "";
   }
 
@@ -632,8 +636,12 @@ export default function RiderBookingPage() {
     if (kind === "pickup") setPickupLoading(true);
     if (kind === "dropoff") setDropoffLoading(true);
 
+    const abortRef = kind === "pickup" ? pickupAutocompleteAbortRef : dropoffAutocompleteAbortRef;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const res = await fetch("/api/maps/autocomplete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }) });
+      const res = await fetch("/api/maps/autocomplete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }), signal: controller.signal });
       const json = await res.json().catch(() => null);
       if (!json?.ok) {
         if (kind === "pickup") { setPickupPredictions([]); setShowPickupDropdown(false); }
@@ -643,22 +651,27 @@ export default function RiderBookingPage() {
       const predictions = (json.predictions ?? []) as Prediction[];
       if (kind === "pickup") { setPickupPredictions(predictions); setShowPickupDropdown(predictions.length > 0); }
       else { setDropoffPredictions(predictions); setShowDropoffDropdown(predictions.length > 0); }
+    } catch (error: unknown) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) throw error;
     } finally {
-      if (kind === "pickup") setPickupLoading(false);
-      if (kind === "dropoff") setDropoffLoading(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        if (kind === "pickup") setPickupLoading(false);
+        if (kind === "dropoff") setDropoffLoading(false);
+      }
     }
   }
 
   function onPickupInputChange(value: string) {
     setPickupAddress(value); clearPickupSelection();
     if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
-    pickupTimerRef.current = setTimeout(() => { void fetchPredictions("pickup", value); }, 250);
+    pickupTimerRef.current = setTimeout(() => { void fetchPredictions("pickup", value); }, 500);
   }
 
   function onDropoffInputChange(value: string) {
     setDropoffAddress(value); clearDropoffSelection();
     if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
-    dropoffTimerRef.current = setTimeout(() => { void fetchPredictions("dropoff", value); }, 250);
+    dropoffTimerRef.current = setTimeout(() => { void fetchPredictions("dropoff", value); }, 500);
   }
 
   function addStopField() {
@@ -692,18 +705,27 @@ export default function RiderBookingPage() {
       return;
     }
 
+    stopAutocompleteAbortRefs.current[index]?.abort();
+    const controller = new AbortController();
+    stopAutocompleteAbortRefs.current[index] = controller;
     updateStop(index, { loading: true });
     try {
       const res = await fetch("/api/maps/autocomplete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input }),
+        signal: controller.signal,
       });
       const json = await res.json().catch(() => null);
       const predictions = json?.ok ? ((json.predictions ?? []) as Prediction[]) : [];
       updateStop(index, { predictions, open: predictions.length > 0 });
+    } catch (error: unknown) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) throw error;
     } finally {
-      updateStop(index, { loading: false });
+      if (stopAutocompleteAbortRefs.current[index] === controller) {
+        stopAutocompleteAbortRefs.current[index] = null;
+        updateStop(index, { loading: false });
+      }
     }
   }
 
@@ -720,7 +742,7 @@ export default function RiderBookingPage() {
     if (stopTimerRefs.current[index]) clearTimeout(stopTimerRefs.current[index]!);
     stopTimerRefs.current[index] = setTimeout(() => {
       void fetchStopPredictions(index, value);
-    }, 250);
+    }, 500);
   }
 
   function samePoint(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
@@ -1242,6 +1264,7 @@ export default function RiderBookingPage() {
       setDurationMin(roundedMins);
       setOriginalDistanceKm(roundedOriginalKm);
       setOriginalDurationMin(roundedOriginalMins);
+      setRouteQuote(typeof json.routeQuote === "string" ? json.routeQuote : null);
       setBaseFare(journeyEstimate.totalFare);
       setAddStopIncrease(0);
       setRouteCalculationError(null);
@@ -1252,6 +1275,7 @@ export default function RiderBookingPage() {
         originalDistanceKm: roundedOriginalKm,
         originalDurationMin: roundedOriginalMins,
         addStopIncrease: stopBreakdown.finalAddStopIncrease,
+        routeQuote: typeof json.routeQuote === "string" ? json.routeQuote : null,
       };
     } catch {
       const message = "We could not calculate this route. Please check your pickup and destination.";
@@ -1279,11 +1303,13 @@ export default function RiderBookingPage() {
     let bDurMin = durationMin;
     let bOriginalDistKm = originalDistanceKm;
     let bOriginalDurMin = originalDurationMin;
+    let bookingRouteQuote = routeQuote;
     if (distanceKm == null || durationMin == null || originalDistanceKm == null || originalDurationMin == null) {
       const calc = await calculateTrip({ silent: true });
       if (!calc) { setMsg("Your trip is being prepared. Please try again in a moment."); return; }
       bDistKm = calc.distanceKm; bDurMin = calc.durationMin;
       bOriginalDistKm = calc.originalDistanceKm; bOriginalDurMin = calc.originalDurationMin;
+      bookingRouteQuote = calc.routeQuote;
     }
 
     if (rideType === "scheduled" && !scheduledFor) { setMsg("Please choose the scheduled pickup date and time."); return; }
@@ -1331,6 +1357,7 @@ export default function RiderBookingPage() {
           paymentMethod, distanceKm: bDistKm, durationMin: bDurMin,
           originalDistanceKm: bOriginalDistKm,
           originalDurationMin: bOriginalDurMin,
+          routeQuote: bookingRouteQuote,
           rideType, rideOption: selectedRideOption,
           scheduledFor: rideType === "scheduled" ? scheduledFor : null,
           pickupInstruction: pickupInstruction.trim() || null,
@@ -1469,6 +1496,9 @@ export default function RiderBookingPage() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     const stopTimers = stopTimerRefs.current;
+    const pickupAbortRef = pickupAutocompleteAbortRef;
+    const dropoffAbortRef = dropoffAutocompleteAbortRef;
+    const stopAbortRefs = stopAutocompleteAbortRefs;
     return () => {
       window.clearInterval(surgeTimer);
       window.removeEventListener("focus", handleFocus);
@@ -1476,6 +1506,9 @@ export default function RiderBookingPage() {
       document.removeEventListener("mousedown", handleClickOutside);
       if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
       if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
+      pickupAbortRef.current?.abort();
+      dropoffAbortRef.current?.abort();
+      stopAbortRefs.current.forEach((controller) => controller?.abort());
       stopTimers.forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
@@ -1506,7 +1539,8 @@ export default function RiderBookingPage() {
   }, []);
 
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY
+      || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!apiKey) { setMapError("Google Maps API key is missing."); return; }
     if (window.google?.maps) { setMapReady(true); setMapError(null); return; }
 

@@ -13,6 +13,9 @@ import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 import { fullCustomerName } from "@/lib/customer/auth";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
+import { calculateDrivingRoute } from "@/lib/maps/routeService";
+import { createRouteSignature } from "@/lib/maps/mapRequestPolicy";
+import { verifyRouteQuote } from "@/lib/maps/routeQuote";
 
 function generateOtp() {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -110,6 +113,7 @@ type BookTripBody = {
   pickupInstruction?: string | null;
   pickup_instruction?: string | null;
   notes?: string | null;
+  routeQuote?: string | null;
 };
 
 function normalizeStops(value: unknown) {
@@ -129,73 +133,23 @@ function samePoint(a: { lat: number; lng: number }, b: { lat: number; lng: numbe
   return Math.abs(a.lat - b.lat) < 0.00008 && Math.abs(a.lng - b.lng) < 0.00008;
 }
 
-async function fetchDistanceLeg(params: {
-  apiKey: string;
-  origin: { lat: number; lng: number };
-  destination: { lat: number; lng: number };
-}) {
-  const origin = `${params.origin.lat},${params.origin.lng}`;
-  const destination = `${params.destination.lat},${params.destination.lng}`;
-  const url =
-    `https://maps.googleapis.com/maps/api/distancematrix/json` +
-    `?origins=${encodeURIComponent(origin)}` +
-    `&destinations=${encodeURIComponent(destination)}` +
-    `&mode=driving` +
-    `&language=en` +
-    `&region=za` +
-    `&key=${encodeURIComponent(params.apiKey)}`;
-
-  const response = await fetch(url, { method: "GET", cache: "no-store" });
-  const data = await response.json().catch(() => null);
-  const element = data?.rows?.[0]?.elements?.[0];
-
-  if (!response.ok || data?.status !== "OK" || !element || element.status !== "OK") {
-    throw new Error(
-      element?.status === "ZERO_RESULTS"
-        ? "No driving route found between the selected locations."
-        : data?.error_message || "Could not calculate route."
-    );
-  }
-
-  return {
-    distanceKm: Number(element.distance?.value ?? 0) / 1000,
-    durationMin: Number(element.duration?.value ?? 0) / 60,
-  };
-}
-
 async function calculateServerRoute(params: {
   pickup: { lat: number; lng: number };
   dropoff: { lat: number; lng: number };
   stops: Array<{ lat: number; lng: number }>;
+  actorKey: string;
 }) {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-  if (!apiKey) return null;
-
-  const original = await fetchDistanceLeg({
-    apiKey,
+  const route = await calculateDrivingRoute({
     origin: params.pickup,
     destination: params.dropoff,
+    waypoints: params.stops,
+    actorKey: params.actorKey,
   });
-
-  const points = [params.pickup, ...params.stops, params.dropoff];
-  let routeDistanceKm = 0;
-  let routeDurationMin = 0;
-
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const leg = await fetchDistanceLeg({
-      apiKey,
-      origin: points[i],
-      destination: points[i + 1],
-    });
-    routeDistanceKm += leg.distanceKm;
-    routeDurationMin += leg.durationMin;
-  }
-
   return {
-    originalDistanceKm: Number(original.distanceKm.toFixed(2)),
-    originalDurationMin: Math.ceil(original.durationMin),
-    distanceKm: Number(routeDistanceKm.toFixed(2)),
-    durationMin: Math.ceil(routeDurationMin),
+    originalDistanceKm: route.originalDistanceKm,
+    originalDurationMin: route.originalDurationMin,
+    distanceKm: route.distanceKm,
+    durationMin: route.durationMin,
   };
 }
 
@@ -318,10 +272,19 @@ export async function POST(req: Request) {
       );
     }
 
-    const serverRoute = await calculateServerRoute({
+    const stopPoints = stops.map((stop) => ({ lat: stop.lat!, lng: stop.lng! }));
+    const expectedRouteSignature = createRouteSignature({
+      origin: pickupPoint,
+      destination: dropoffPoint,
+      waypoints: stopPoints,
+      travelMode: "driving",
+    });
+    const quotedRoute = verifyRouteQuote(body.routeQuote, expectedRouteSignature);
+    const serverRoute = quotedRoute ?? await calculateServerRoute({
       pickup: pickupPoint,
       dropoff: dropoffPoint,
-      stops: stops.map((stop) => ({ lat: stop.lat!, lng: stop.lng! })),
+      stops: stopPoints,
+      actorKey: `customer-book-trip:${auth.customer.id}`,
     }).catch((error: unknown) => {
       console.error("[book-trip] server route calculation failed", error instanceof Error ? error.message : error);
       return null;

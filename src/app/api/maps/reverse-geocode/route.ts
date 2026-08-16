@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { resolveCachedJson, takeRateLimit } from "@/lib/server/requestControl";
+import { takeRateLimit } from "@/lib/server/requestControl";
+import {
+  getGoogleMapsServerKey,
+  mapErrorResponse,
+  mapsRequestActor,
+  runControlledMapsRequest,
+} from "@/lib/server/mapsCostControl";
+import { isValidLatitude, isValidLongitude, normalizeCoordinate } from "@/lib/maps/mapRequestPolicy";
 
 type AddressComponent = {
   long_name?: string;
@@ -61,22 +68,25 @@ export async function POST(req: Request) {
 
     const { lat, lng } = await req.json();
 
-    if (typeof lat !== "number" || typeof lng !== "number") {
+    if (!isValidLatitude(lat) || !isValidLongitude(lng)) {
       return NextResponse.json({ ok: false, error: "lat/lng must be numbers" }, { status: 400 });
     }
 
-    const key = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const key = getGoogleMapsServerKey();
     if (!key) {
       return NextResponse.json({ ok: false, error: "Missing Google Maps API key" }, { status: 500 });
     }
 
-    const latKey = Number(lat).toFixed(5);
-    const lngKey = Number(lng).toFixed(5);
-    const cacheKey = `maps:reverse-geocode:${latKey}:${lngKey}`;
-    const { value, cacheStatus } = await resolveCachedJson(cacheKey, 60_000, async () => {
+    const normalizedLat = normalizeCoordinate(lat);
+    const normalizedLng = normalizeCoordinate(lng);
+    const { value, cacheStatus } = await runControlledMapsRequest({
+      operation: "reverse_geocode",
+      requestKey: `${normalizedLat}:${normalizedLng}`,
+      actorKey: mapsRequestActor(req, "reverse-geocode"),
+      loader: async () => {
       const url =
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(
-          `${lat},${lng}`
+          `${normalizedLat},${normalizedLng}`
         )}&key=${encodeURIComponent(key)}`;
 
       const res = await fetch(url, { cache: "no-store" });
@@ -98,9 +108,10 @@ export async function POST(req: Request) {
         placeId: primaryResult.place_id,
         globalPlusCode: data.plus_code?.global_code ?? primaryResult.plus_code?.global_code ?? null,
         compoundPlusCode: data.plus_code?.compound_code ?? null,
-        lat,
-        lng,
+        lat: normalizedLat,
+        lng: normalizedLng,
       };
+      },
     });
 
     return NextResponse.json(value, {
@@ -110,6 +121,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: unknown) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error" }, { status: 500 });
+    const mapped = mapErrorResponse(error);
+    return NextResponse.json({ ok: false, error: mapped.message }, { status: mapped.status });
   }
 }
