@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
@@ -13,6 +13,40 @@ export default function CustomerPasswordResetPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [complete, setComplete] = useState(false);
+  const [recoveryState, setRecoveryState] = useState<"checking" | "ready" | "invalid">("checking");
+
+  useEffect(() => {
+    let active = true;
+
+    async function establishRecoverySession() {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+
+      if (code) {
+        const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error("[customer-password-reset] code exchange failed", error);
+        } else {
+          window.history.replaceState({}, "", url.pathname);
+        }
+      }
+
+      const { data } = await supabaseClient.auth.getSession();
+      if (active) setRecoveryState(data.session ? "ready" : "invalid");
+    }
+
+    const { data: authListener } = supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (event === "PASSWORD_RECOVERY" || session) setRecoveryState("ready");
+    });
+
+    void establishRecoverySession();
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   async function updatePassword() {
     if (password.length < 8) {
@@ -47,7 +81,21 @@ export default function CustomerPasswordResetPage() {
         <h1 className="mt-2 text-3xl font-black">
           {complete ? "Password updated" : "Create a new password"}
         </h1>
-        {complete ? (
+        {recoveryState === "checking" ? (
+          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-800">
+            Checking your secure recovery link...
+          </div>
+        ) : recoveryState === "invalid" ? (
+          <div className="mt-5">
+            <h2 className="text-xl font-black">Reset link expired</h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+              This password reset link is invalid, expired, or has already been used.
+            </p>
+            <Link className="moovu-btn moovu-btn-primary mt-5" href="/customer/auth?next=/book">
+              Request a new link
+            </Link>
+          </div>
+        ) : complete ? (
           <div className="mt-5">
             <p className="text-sm font-semibold leading-6 text-slate-600">
               Your old sessions have been signed out. Log in again with your new password.

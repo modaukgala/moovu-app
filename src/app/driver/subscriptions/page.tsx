@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
+import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
+import BankTransferDetails from "@/components/driver/payments/BankTransferDetails";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import EmptyState from "@/components/ui/EmptyState";
@@ -57,13 +59,6 @@ const PLAN_BENEFITS: Record<DriverSubscriptionPlan, string> = {
   day: "Best for occasional driving",
   week: "Best for regular driving",
   month: "Best value for active drivers",
-};
-
-const BANK_DETAILS = {
-  bankName: "NEDBANK",
-  accountName: "Current Account",
-  accountNumber: "2129562558",
-  branchCode: "198765",
 };
 
 function money(value: number | null | undefined) {
@@ -246,18 +241,8 @@ export default function DriverSubscriptionsPage() {
                   Keep your driver access active with a clean daily, weekly, or monthly subscription POP.
                 </p>
               </div>
-              <div className="moovu-driver-toolbar-actions">
-                <Link href="/driver/contact" className="moovu-btn moovu-btn-secondary">
-                  Help
-                </Link>
-                <Link href="/driver/earnings" className="moovu-btn moovu-btn-secondary">
-                  Earnings
-                </Link>
-                <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary">
-                  Commission
-                </Link>
-              </div>
             </div>
+            <DriverSectionTabs section="money" />
           </div>
 
           <div className="moovu-driver-metric-grid moovu-driver-metric-grid-4 border-t border-[var(--moovu-border)] p-4 sm:p-5">
@@ -328,15 +313,10 @@ export default function DriverSubscriptionsPage() {
                 <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Exact amount</div>
                 <div className="mt-1 text-lg font-black">{money(selectedPlanDetails.amount)}</div>
               </div>
-              <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
-                <div className="font-bold">Bank details</div>
-                <div className="mt-2 grid gap-2 text-slate-700">
-                  <div>{BANK_DETAILS.bankName}</div>
-                  <div>{BANK_DETAILS.accountName}</div>
-                  <div>{BANK_DETAILS.accountNumber}</div>
-                  <div>Branch {BANK_DETAILS.branchCode}</div>
-                </div>
-              </div>
+              <BankTransferDetails
+                purpose="subscription"
+                amount={money(selectedPlanDetails.amount)}
+              />
             </div>
           </div>
 

@@ -3,23 +3,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Bell,
   CarFront,
   ChartNoAxesColumnIncreasing,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Headphones,
-  Layers3,
-  LocateFixed,
-  Menu,
   ShieldCheck,
   SlidersHorizontal,
-  Star,
   WalletCards,
 } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
-import EnableNotificationsButton from "@/components/EnableNotificationsButton";
-import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import DriverDrawer from "@/components/driver/home/DriverDrawer";
+import DriverMapSurface from "@/components/driver/home/DriverMapSurface";
+import { EndOtpBypassDialog, SubscriptionRequiredDialog, TripCompletionOverlay } from "@/components/driver/home/DriverDialogs";
+import FloatingCustomerChat from "@/components/driver/home/FloatingCustomerChat";
+import NavigationChooser from "@/components/driver/home/NavigationChooser";
+import TripOfferPanel from "@/components/driver/home/TripOfferPanel";
 import { getNoShowFee } from "@/lib/finance/cancellationFees";
 import {
   DRIVER_COMMISSION_LOCK_LIMIT,
@@ -39,349 +40,25 @@ import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
+import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
+import {
+  canReceiveTripOffers,
+  DEFAULT_CENTER,
+  DRIVER_CANCEL_REASONS,
+  END_OTP_BYPASS_REASONS,
+  friendlyGeolocationError,
+  googleMapsLink,
+  gpsNoticeClass,
+  gpsNoticeMessage,
+  gpsNoticeTone,
+  money,
+  num,
+  parseTripStops,
+  rideTypeLabel,
+  tripStatusLabel,
+  wazeLink,
+} from "@/components/driver/home/utils";
 
-type Offer = {
-  id: string;
-  status: string;
-  offer_status: string;
-  offer_expires_at: string | null;
-  pickup_address: string | null;
-  dropoff_address: string | null;
-  pickup_lat?: number | null;
-  pickup_lng?: number | null;
-  dropoff_lat?: number | null;
-  dropoff_lng?: number | null;
-  distance_km?: number | null;
-  duration_min?: number | null;
-  fare_amount: number | null;
-  payment_method: string | null;
-  ride_option?: string | null;
-  stops?: unknown;
-  original_fare?: number | null;
-  final_add_stop_increase?: number | null;
-  final_fare?: number | null;
-  stop_waiting_fee?: number | null;
-  estimated_fare?: number | null;
-  fare_adjustment_amount?: number | null;
-  current_fare?: number | null;
-  actual_distance_km?: number | null;
-  actual_duration_min?: number | null;
-};
-
-type CurrentTrip = {
-  id: string;
-  status: string;
-  driver_id: string | null;
-  pickup_address: string | null;
-  dropoff_address: string | null;
-  pickup_lat?: number | null;
-  pickup_lng?: number | null;
-  dropoff_lat?: number | null;
-  dropoff_lng?: number | null;
-  fare_amount: number | null;
-  payment_method: string | null;
-  rider_name?: string | null;
-  rider_phone?: string | null;
-  created_at: string | null;
-  driver_arrived_at?: string | null;
-  no_show_eligible_at?: string | null;
-  ride_option?: string | null;
-  stops?: unknown;
-  original_fare?: number | null;
-  final_add_stop_increase?: number | null;
-  final_fare?: number | null;
-  stop_waiting_fee?: number | null;
-  estimated_fare?: number | null;
-  fare_adjustment_amount?: number | null;
-  current_fare?: number | null;
-  actual_distance_km?: number | null;
-  actual_duration_min?: number | null;
-  fare_breakdown?: { pickupInstruction?: unknown } | null;
-};
-
-type TripStop = {
-  address: string;
-  lat: number;
-  lng: number;
-};
-
-type Driver = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  status: string | null;
-  online: boolean | null;
-  busy: boolean | null;
-  profile_completed?: boolean | null;
-  verification_status?: string | null;
-  subscription_status?: string | null;
-  subscription_expires_at?: string | null;
-  subscription_plan?: string | null;
-  lat: number | null;
-  lng: number | null;
-  last_seen: string | null;
-  vehicle_make?: string | null;
-  vehicle_model?: string | null;
-  vehicle_registration?: string | null;
-};
-
-type GpsNotice = {
-  message: string;
-  tone: "success" | "warning" | "danger" | "info";
-};
-
-type DriverEarningsTrip = {
-  driver_net_earnings?: number | string | null;
-  fare_amount?: number | string | null;
-  commission_amount?: number | string | null;
-  completed_at?: string | null;
-  created_at?: string | null;
-};
-
-type DriverEarningsSnapshot = {
-  todayEarnings: number;
-  todayTrips: number;
-  weekEarnings: number;
-  amountOwed: number;
-  completedTrips: number;
-};
-
-type TripActionResponse = {
-  ok?: boolean;
-  error?: string;
-  fare?: { finalFare?: number };
-  commission?: { driverNet?: number; commissionAmount?: number };
-};
-
-type CompletedFareSummary = {
-  tripId: string;
-  finalFare: number;
-  driverNet: number;
-  commissionAmount: number;
-};
-
-declare global {
-  interface Window {
-    google: typeof google;
-  }
-}
-
-const DEFAULT_CENTER = { lat: -25.12, lng: 29.05 };
-const DRIVER_CANCEL_REASONS = [
-  "Customer asked to cancel",
-  "Could not reach pickup",
-  "Unsafe pickup situation",
-  "Vehicle issue",
-  "Emergency",
-  "Other",
-] as const;
-const END_OTP_BYPASS_REASONS = [
-  "Customer phone unavailable/dead",
-  "Customer unable to access OTP",
-  "Connectivity issue",
-  "Customer left vehicle",
-  "Other",
-] as const;
-
-function googleMapsLink(lat: number | null | undefined, lng: number | null | undefined) {
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}&travelmode=driving`;
-}
-
-function wazeLink(lat: number | null | undefined, lng: number | null | undefined) {
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
-  return `https://waze.com/ul?ll=${encodeURIComponent(`${lat},${lng}`)}&navigate=yes`;
-}
-
-function tripStatusLabel(status: string | null | undefined) {
-  switch (status) {
-    case "assigned":
-      return "Head to pickup";
-    case "arrived":
-      return "Waiting for OTP";
-    case "ongoing":
-      return "Drive to destination";
-    case "completed":
-      return "Completed";
-    default:
-      return status || "No trip";
-  }
-}
-
-function rideTypeLabel(value: string | null | undefined) {
-  const normalized = String(value ?? "").toLowerCase();
-  if (normalized === "group" || normalized === "xl" || normalized.includes("xl")) return "MOOVU Go XL";
-  if (normalized === "scheduled") return "Scheduled ride";
-  return "MOOVU Go";
-}
-
-function driverStageDetail(params: {
-  driver: Driver | null;
-  offer: Offer | null;
-  currentTrip: CurrentTrip | null;
-}) {
-  const { driver, offer, currentTrip } = params;
-  if (offer) {
-    return {
-      eyebrow: "New request",
-      title: "New trip nearby",
-      body: "Review pickup, destination, fare and timer before accepting.",
-      action: "Accept or decline",
-    };
-  }
-  if (currentTrip?.status === "assigned") {
-    return {
-      eyebrow: "Stage 1",
-      title: "Navigate to pickup",
-      body: "Drive to the pickup point, then mark arrived when you reach the customer.",
-      action: "Drive to pickup",
-    };
-  }
-  if (currentTrip?.status === "arrived") {
-    return {
-      eyebrow: "Stage 2",
-      title: "Verify pickup OTP",
-      body: "Ask the customer for the start OTP before the ride begins.",
-      action: "Start trip with OTP",
-    };
-  }
-  if (currentTrip?.status === "ongoing") {
-    return {
-      eyebrow: "Stage 4",
-      title: "Trip in progress",
-      body: "Drive to destination and complete the ride with the end OTP.",
-      action: "Complete trip",
-    };
-  }
-  return {
-    eyebrow: driver?.online ? "Online" : "Offline",
-    title: driver?.online ? "Ready for nearby requests" : "Go online to drive",
-    body: driver?.online
-      ? "Keep GPS active and stay ready for local MOOVU trip offers."
-      : "Go online when you are available, subscribed, and ready to accept rides.",
-    action: driver?.online ? "Waiting for request" : "Go online",
-  };
-}
-
-function gpsNoticeClass(tone: GpsNotice["tone"]) {
-  switch (tone) {
-    case "success":
-      return "border-emerald-100 bg-emerald-50 text-emerald-700";
-    case "warning":
-      return "border-amber-200 bg-amber-50 text-amber-800";
-    case "danger":
-      return "border-red-100 bg-red-50 text-red-700";
-    default:
-      return "border-blue-100 bg-blue-50 text-blue-700";
-  }
-}
-
-function friendlyGeolocationError(err: GeolocationPositionError): GpsNotice {
-  switch (err.code) {
-    case err.PERMISSION_DENIED:
-      return {
-        tone: "warning",
-        message:
-          "Location permission is blocked. Allow location access for MOOVU in your browser or app settings, then tap Save current GPS. You can use manual location meanwhile.",
-      };
-    case err.POSITION_UNAVAILABLE:
-      return {
-        tone: "danger",
-        message:
-          "MOOVU could not read your GPS position. Check that location services are on, then try again.",
-      };
-    case err.TIMEOUT:
-      return {
-        tone: "warning",
-        message:
-          "GPS took too long to respond. Move to an open area or check your signal, then try again.",
-      };
-    default:
-      return {
-        tone: "danger",
-        message: "MOOVU could not refresh GPS. Check location access and try again.",
-      };
-  }
-}
-
-function gpsNoticeMessage(notice: GpsNotice | string) {
-  return typeof notice === "string" ? notice : notice.message;
-}
-
-function gpsNoticeTone(notice: GpsNotice | string): GpsNotice["tone"] {
-  if (typeof notice !== "string") return notice.tone;
-  return notice.toLowerCase().includes("gps live") ? "success" : "info";
-}
-
-function parseTripStops(value: unknown): TripStop[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .slice(0, 2)
-    .map((stop) => {
-      const item = (stop ?? {}) as { address?: unknown; lat?: unknown; lng?: unknown };
-      return {
-        address: typeof item.address === "string" ? item.address : "",
-        lat: Number(item.lat),
-        lng: Number(item.lng),
-      };
-    })
-    .filter((stop) => stop.address.trim() && Number.isFinite(stop.lat) && Number.isFinite(stop.lng));
-}
-
-function money(value: number | null | undefined) {
-  return `R${Number(value ?? 0).toFixed(2)}`;
-}
-
-function num(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function subscriptionTone(driver: Driver | null) {
-  if (!driver) {
-    return {
-      label: "Inactive",
-      message: "Your subscription must be active to receive trips.",
-      className: "border-red-100 bg-red-50 text-red-700",
-    };
-  }
-
-  const status = String(driver.subscription_status ?? "").toLowerCase();
-  const expiryMs = driver.subscription_expires_at
-    ? new Date(driver.subscription_expires_at).getTime()
-    : NaN;
-  const daysLeft = Number.isFinite(expiryMs)
-    ? Math.ceil((expiryMs - Date.now()) / (24 * 60 * 60 * 1000))
-    : null;
-
-  if (status === "active" || status === "grace") {
-    if (daysLeft != null && daysLeft <= 3) {
-      return {
-        label: "Expiring soon",
-        message: "Your subscription is expiring soon. Renew to keep receiving trips.",
-        className: "border-amber-200 bg-amber-50 text-amber-800",
-      };
-    }
-    return {
-      label: "Active",
-      message: "Only active subscribed drivers receive trips.",
-      className: "border-emerald-100 bg-emerald-50 text-emerald-700",
-    };
-  }
-
-  return {
-    label: "Inactive",
-    message: "Your subscription must be active to receive trips.",
-    className: "border-red-100 bg-red-50 text-red-700",
-  };
-}
-
-function canReceiveTripOffers(driver: Driver | null) {
-  if (!driver) return false;
-  const status = String(driver.subscription_status ?? "").toLowerCase();
-  return status === "active" || status === "grace";
-}
 
 export default function DriverHomePage() {
   const router = useRouter();
@@ -418,6 +95,7 @@ export default function DriverHomePage() {
   const [endOtpBypassNote, setEndOtpBypassNote] = useState("");
   const [navigationTarget, setNavigationTarget] = useState<"pickup" | "dropoff" | null>(null);
   const [driverToolsOpen, setDriverToolsOpen] = useState(false);
+  const [tripSheetOpen, setTripSheetOpen] = useState(false);
   const [showCancelTripForm, setShowCancelTripForm] = useState(false);
   const [cancelTripReason, setCancelTripReason] = useState<string>(DRIVER_CANCEL_REASONS[0]);
   const [completedFareSummary, setCompletedFareSummary] = useState<CompletedFareSummary | null>(null);
@@ -427,7 +105,6 @@ export default function DriverHomePage() {
   const completionRequestRef = useRef(false);
   const isPageVisible = usePageVisibility();
 
-  const subscriptionReminder = subscriptionTone(driver);
   const subscriptionAllowsOnline = canReceiveTripOffers(driver);
   const driverLevel = getDriverLevel(earningsSnapshot.completedTrips);
   const otpEntryOpen = showStartOtp || showEndOtp || showEndOtpBypass;
@@ -438,6 +115,10 @@ export default function DriverHomePage() {
   const notificationTripId = searchParams.get("tripId") || searchParams.get("offerTripId") || "";
   const gpsTone = gpsInfo ? gpsNoticeTone(gpsInfo) : null;
   const gpsAttentionNotice = gpsInfo && gpsTone !== "success" ? gpsInfo : null;
+
+  useEffect(() => {
+    if (!currentTrip) setTripSheetOpen(false);
+  }, [currentTrip]);
 
   useEffect(() => {
     if (!driver || subscriptionAllowsOnline) return;
@@ -1465,35 +1146,6 @@ export default function DriverHomePage() {
     typeof currentTrip?.fare_breakdown?.pickupInstruction === "string"
       ? currentTrip.fare_breakdown.pickupInstruction.trim()
       : "";
-  const stageDetail = useMemo(
-    () => driverStageDetail({ driver, offer, currentTrip }),
-    [currentTrip, driver, offer]
-  );
-  const driverMode = currentTrip
-    ? "ACTIVE TRIP"
-    : offer
-      ? "NEW TRIP"
-      : driver?.online
-        ? "ONLINE"
-        : "OFFLINE";
-  const driverModeClass = currentTrip
-    ? "is-busy"
-    : offer
-      ? "is-offer"
-      : driver?.online
-        ? "is-online"
-        : "is-offline";
-  const driverModeCopy = currentTrip
-    ? stageDetail.action
-    : offer
-      ? "Accept or decline"
-      : !subscriptionAllowsOnline
-        ? "Activate your subscription to receive trip offers"
-      : driver?.online
-        ? "Waiting for trips nearby"
-        : "Ready to earn today?";
-  const primaryOnlineAction = driver?.online ? "GO OFFLINE" : "GO ONLINE";
-
   if (loadingDriver) {
     return (
       <main className="moovu-page text-black">
@@ -1521,259 +1173,72 @@ export default function DriverHomePage() {
         />
       )}
 
-      {subscriptionPromptOpen && (
-        <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <section className="w-full max-w-sm rounded-[28px] border border-blue-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.28)]" role="dialog" aria-modal="true" aria-labelledby="subscription-reminder-title">
-            <div className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-amber-700">Subscription required</div>
-            <h2 id="subscription-reminder-title" className="mt-4 text-2xl font-black text-slate-950">Your MOOVU subscription has expired.</h2>
-            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">You need an active subscription to continue receiving trip requests. Any active trip remains uninterrupted.</p>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <button type="button" className="moovu-btn moovu-btn-secondary" onClick={() => setSubscriptionPromptOpen(false)}>Not now</button>
-              <button type="button" className="moovu-btn moovu-btn-primary" onClick={() => router.push("/driver/subscriptions")}>Choose a plan</button>
-            </div>
-          </section>
-        </div>
-      )}
+      <SubscriptionRequiredDialog
+        open={subscriptionPromptOpen}
+        onClose={() => setSubscriptionPromptOpen(false)}
+        onChoosePlan={() => router.push("/driver/subscriptions")}
+      />
+      <EndOtpBypassDialog
+        open={showEndOtpBypass}
+        trip={currentTrip}
+        reason={endOtpBypassReason}
+        note={endOtpBypassNote}
+        busy={busy}
+        onReasonChange={setEndOtpBypassReason}
+        onNoteChange={setEndOtpBypassNote}
+        onCancel={() => {
+          setShowEndOtpBypass(false);
+          setEndOtpBypassReason(END_OTP_BYPASS_REASONS[0]);
+          setEndOtpBypassNote("");
+        }}
+        onConfirm={() => {
+          if (!currentTrip?.id) return;
+          void completeTrip(currentTrip.id, {
+            completionMode: "bypass",
+            bypassReason: endOtpBypassReason,
+            bypassNote: endOtpBypassNote,
+          });
+        }}
+      />
+      <TripCompletionOverlay
+        summary={completedFareSummary}
+        confirming={confirmingPayment}
+        onReceived={confirmPaymentReceived}
+        onHide={() => setCompletedFareSummary(null)}
+      />
+      <NavigationChooser
+        target={navigationTarget}
+        pickupGoogle={pickupGoogle}
+        pickupWaze={pickupWaze}
+        dropoffGoogle={dropoffGoogle}
+        dropoffWaze={dropoffWaze}
+        onClose={() => setNavigationTarget(null)}
+      />
 
-      {showEndOtpBypass && currentTrip?.status === "ongoing" && (
-        <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
-          <section
-            className="w-full max-w-md rounded-[28px] border border-amber-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.3)]"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="end-trip-without-otp-title"
-          >
-            <div className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-amber-700">
-              Confirmation required
-            </div>
-            <h2 id="end-trip-without-otp-title" className="mt-4 text-2xl font-black text-slate-950">
-              End trip without OTP?
-            </h2>
-            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
-              You are confirming that the trip has ended and that you have received the fare from the customer.
-            </p>
+      <TripOfferPanel
+        offer={offer}
+        stops={offerStops}
+        secondsLeft={secondsLeft}
+        responding={offerResponding}
+        onRespond={(action) => void respondToOffer(action)}
+      />
 
-            <div className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
-              <div className="flex items-start justify-between gap-4">
-                <span className="font-semibold text-slate-500">Final fare</span>
-                <strong className="text-xl text-slate-950">
-                  {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
-                </strong>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <span className="font-semibold text-slate-500">Customer</span>
-                <strong className="text-right text-slate-950">{currentTrip.rider_name ?? "Customer"}</strong>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <span className="font-semibold text-slate-500">Destination</span>
-                <strong className="max-w-[65%] text-right text-slate-950">{currentTrip.dropoff_address ?? "Destination"}</strong>
-              </div>
-            </div>
-
-            <label className="mt-5 block text-sm font-black text-slate-800" htmlFor="end-otp-bypass-reason">
-              Why is the End OTP unavailable?
-            </label>
-            <select
-              id="end-otp-bypass-reason"
-              className="moovu-input mt-2"
-              value={endOtpBypassReason}
-              onChange={(event) => setEndOtpBypassReason(event.target.value)}
-              disabled={busy}
-            >
-              {END_OTP_BYPASS_REASONS.map((reason) => (
-                <option key={reason} value={reason}>{reason}</option>
-              ))}
-            </select>
-            {endOtpBypassReason === "Other" && (
-              <textarea
-                className="moovu-input mt-3 min-h-24 resize-y"
-                value={endOtpBypassNote}
-                onChange={(event) => setEndOtpBypassNote(event.target.value)}
-                placeholder="Briefly explain what happened"
-                maxLength={240}
-                disabled={busy}
-              />
-            )}
-
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                className="moovu-btn moovu-btn-secondary"
-                disabled={busy}
-                onClick={() => {
-                  setShowEndOtpBypass(false);
-                  setEndOtpBypassReason(END_OTP_BYPASS_REASONS[0]);
-                  setEndOtpBypassNote("");
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="moovu-btn bg-amber-600 text-white disabled:opacity-60"
-                disabled={
-                  busy ||
-                  (endOtpBypassReason === "Other" && endOtpBypassNote.trim().length < 3)
-                }
-                onClick={() => {
-                  if (!currentTrip?.id) return;
-                  void completeTrip(currentTrip.id, {
-                    completionMode: "bypass",
-                    bypassReason: endOtpBypassReason,
-                    bypassNote: endOtpBypassNote,
-                  });
-                }}
-              >
-                {busy ? "Completing..." : "Confirm & End Trip"}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {completedFareSummary && (
-        <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
-          <section className="w-full max-w-sm rounded-[28px] border border-emerald-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.3)]" role="dialog" aria-modal="true" aria-labelledby="driver-final-fare-title">
-            <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
-              Trip completed
-            </div>
-            <h2 id="driver-final-fare-title" className="mt-4 text-2xl font-black text-slate-950">Collect final fare</h2>
-            <div className="mt-5 rounded-3xl bg-slate-950 px-5 py-6 text-center text-white">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-300">Customer pays</div>
-              <div className="mt-2 text-5xl font-black">{money(completedFareSummary.finalFare)}</div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-2xl bg-emerald-50 p-3"><span className="block text-xs font-bold text-emerald-700">Your earnings</span><strong className="mt-1 block text-lg text-emerald-950">{money(completedFareSummary.driverNet)}</strong></div>
-              <div className="rounded-2xl bg-blue-50 p-3"><span className="block text-xs font-bold text-blue-700">MOOVU commission</span><strong className="mt-1 block text-lg text-blue-950">{money(completedFareSummary.commissionAmount)}</strong></div>
-            </div>
-            <p className="mt-4 text-sm font-semibold leading-6 text-slate-600">The trip is complete and you can receive new offers. Confirm only after the customer has paid.</p>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <button type="button" className="moovu-btn moovu-btn-primary" disabled={confirmingPayment} onClick={confirmPaymentReceived}>
-                {confirmingPayment ? "Saving..." : "Received"}
-              </button>
-              <button type="button" className="moovu-btn moovu-btn-secondary" disabled={confirmingPayment} onClick={() => setCompletedFareSummary(null)}>
-                Hide
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {navigationTarget && (
-        <div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <section className="moovu-driver-nav-sheet w-full max-w-sm">
-            <div className="moovu-section-title">Open navigation</div>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
-              {navigationTarget === "pickup" ? "Drive to pickup" : "Drive to destination"}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Choose your preferred map app for this trip leg.
-            </p>
-
-            <div className="mt-5 grid gap-3">
-              {(navigationTarget === "pickup" ? pickupGoogle : dropoffGoogle) && (
-                <a
-                  className="moovu-nav-choice"
-                  href={navigationTarget === "pickup" ? pickupGoogle ?? "#" : dropoffGoogle ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setNavigationTarget(null)}
-                >
-                  <span className="moovu-nav-choice-icon">G</span>
-                  <span>
-                    <span className="block text-sm font-black text-slate-950">Google Maps</span>
-                    <span className="block text-xs font-semibold text-slate-500">Open turn-by-turn directions</span>
-                  </span>
-                </a>
-              )}
-
-              {(navigationTarget === "pickup" ? pickupWaze : dropoffWaze) && (
-                <a
-                  className="moovu-nav-choice"
-                  href={navigationTarget === "pickup" ? pickupWaze ?? "#" : dropoffWaze ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setNavigationTarget(null)}
-                >
-                  <span className="moovu-nav-choice-icon">W</span>
-                  <span>
-                    <span className="block text-sm font-black text-slate-950">Waze</span>
-                    <span className="block text-xs font-semibold text-slate-500">Use Waze traffic guidance</span>
-                  </span>
-                </a>
-              )}
-
-              <button
-                type="button"
-                className="moovu-btn moovu-btn-secondary w-full"
-                onClick={() => setNavigationTarget(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {offer && (
-        <section className="moovu-driver-offer-drop" aria-live="assertive">
-          <div className="moovu-driver-offer-drop-inner">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="moovu-driver-offer-alert-dot" />
-                <span className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">
-                  NEW TRIP NEARBY
-                </span>
-                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-800">
-                  {secondsLeft != null ? `${secondsLeft}s left` : "Respond now"}
-                </span>
-              </div>
-              <div className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-                {money(offer.final_fare ?? offer.fare_amount)}
-              </div>
-              <div className="mt-1 text-sm font-black uppercase tracking-[0.12em] text-slate-500">
-                {rideTypeLabel(offer.ride_option)} - {offer.distance_km == null ? "Distance pending" : `${Number(offer.distance_km).toFixed(1)} km`} - {offer.duration_min == null ? "Time pending" : `${Math.round(Number(offer.duration_min))} min`}
-              </div>
-              <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700 sm:grid-cols-2">
-                <div className="truncate">
-                  <span className="text-slate-400">Pickup:</span> {offer.pickup_address ?? "-"}
-                </div>
-                <div className="truncate">
-                  <span className="text-slate-400">Dropoff:</span> {offer.dropoff_address ?? "-"}
-                </div>
-              </div>
-              {offerStops.length > 0 && (
-                <div className="mt-2 rounded-2xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-800">
-                  Stops: {offerStops.map((stop, index) => `Stop ${index + 1}: ${stop.address}`).join(" | ")}
-                </div>
-              )}
-            </div>
-
-            <div className="grid min-w-full grid-cols-2 gap-2 sm:min-w-[230px]">
-              <button
-                type="button"
-                className="moovu-driver-accept"
-                disabled={offerResponding !== null}
-                onClick={() => void respondToOffer("accept")}
-              >
-                {offerResponding === "accept" ? "ACCEPTING..." : "ACCEPT"}
-              </button>
-              <button
-                type="button"
-                className="moovu-driver-decline"
-                disabled={offerResponding !== null}
-                onClick={() => void respondToOffer("reject")}
-              >
-                {offerResponding === "reject" ? "DECLINING..." : "DECLINE"}
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
+      <DriverDrawer
+        open={driverToolsOpen}
+        driver={driver}
+        levelLabel={driverLevel.label}
+        completedTrips={earningsSnapshot.completedTrips}
+        onClose={() => setDriverToolsOpen(false)}
+        onNavigate={(path) => router.push(path)}
+        onLogout={() => {
+          setDriverToolsOpen(false);
+          void supabaseClient.auth.signOut({ scope: "local" }).finally(() => router.replace("/driver/login"));
+        }}
+      />
 
       <div className="moovu-shell">
         {(info || gpsAttentionNotice) && (
-          <div className="mb-4 grid gap-3 md:grid-cols-2">
+          <div className="driver-map-notices grid gap-3 md:grid-cols-2">
             {info && (
               <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
                 {info}
@@ -1823,98 +1288,8 @@ export default function DriverHomePage() {
               </button>
             </section>
           )}
-          <div className="grid gap-6 xl:grid-cols-[1.28fr_0.72fr]">
+          <div className="driver-map-first-layout">
             <section className="moovu-driver-home-stack">
-              <div className={`moovu-driver-cockpit p-5 ${driver.online ? "is-online" : ""} ${driverToolsOpen ? "" : "hidden"}`}>
-                <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                  <div className="moovu-section-title">Driver status</div>
-                  <div className="mt-1 text-xl font-black tracking-tight text-slate-950">
-                    {driverMode}
-                  </div>
-                  <div className="mt-1 text-sm font-bold text-blue-800">
-                    {driverModeCopy}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-start justify-between gap-5">
-                  <div>
-                    <div className="moovu-section-title">Today Earnings</div>
-                    <div className="moovu-driver-big-money">
-                      {money(earningsSnapshot.todayEarnings)}
-                    </div>
-                    <div className="mt-2 text-sm font-bold text-slate-600">
-                      {driver.online ? "You are online and ready for trips." : "Ready to earn today?"}
-                    </div>
-                  </div>
-
-                  <div className={driver.online ? "moovu-chip moovu-chip-success" : "moovu-chip moovu-chip-warning"}>
-                    <span className="moovu-chip-dot" />
-                    {driver.online ? "ONLINE" : "OFFLINE"}
-                  </div>
-                </div>
-
-                <div className="mt-6 grid gap-3 sm:grid-cols-4">
-                  <div className="moovu-driver-soft-stat">
-                    <span>Trips</span>
-                    <strong>{earningsSnapshot.todayTrips}</strong>
-                  </div>
-                  <div className="moovu-driver-soft-stat">
-                    <span>Week</span>
-                    <strong>{money(earningsSnapshot.weekEarnings)}</strong>
-                  </div>
-                  <button
-                    type="button"
-                    className="moovu-driver-soft-stat is-action"
-                    onClick={() => router.push("/driver/earnings")}
-                  >
-                    <span>Owed</span>
-                    <strong>{money(earningsSnapshot.amountOwed)}</strong>
-                  </button>
-                  <button
-                    type="button"
-                    className="moovu-driver-soft-stat is-action"
-                    onClick={() => router.push("/driver/subscriptions")}
-                  >
-                    <span>Subscription</span>
-                    <strong>{subscriptionReminder.label}</strong>
-                  </button>
-                </div>
-
-                <div className={`mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-sm font-bold ${subscriptionReminder.className}`}>
-                  <span>{subscriptionReminder.message}</span>
-                  <span className={`rounded-full border px-3 py-1 text-xs font-black ${driverLevel.className}`}>
-                    {driverLevel.label} driver
-                  </span>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  {subscriptionAllowsOnline ? (
-                    <button
-                      className={driver.online ? "moovu-driver-toggle-off" : "moovu-driver-toggle-on"}
-                      disabled={busy}
-                      onClick={() => setOnlineServer(!driver.online)}
-                    >
-                      {primaryOnlineAction}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="moovu-btn moovu-btn-primary"
-                      onClick={() => router.push("/driver/subscriptions")}
-                    >
-                      Activate subscription
-                    </button>
-                  )}
-
-                  <button
-                    className="moovu-btn moovu-btn-secondary"
-                    onClick={() => router.push("/driver/complete-profile")}
-                  >
-                    Account
-                  </button>
-                </div>
-              </div>
-
               {!subscriptionAllowsOnline && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
                   <span>Activate a plan to go online and receive trip offers.</span>
@@ -1922,108 +1297,39 @@ export default function DriverHomePage() {
                 </div>
               )}
 
-              <div className="moovu-driver-map-card">
-                <div className="driver-map-top-controls">
-                  <button
-                    type="button"
-                    className="driver-map-round-button"
-                    onClick={() => setDriverToolsOpen((value) => !value)}
-                    aria-label={driverToolsOpen ? "Close driver menu" : "Open driver menu"}
-                  >
-                    <Menu aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className={`driver-map-online-pill ${driver.online ? "is-online" : ""}`}
-                    disabled={busy || !subscriptionAllowsOnline}
-                    onClick={() => {
-                      if (subscriptionAllowsOnline) void setOnlineServer(!driver.online);
-                      else router.push("/driver/subscriptions");
-                    }}
-                  >
-                    <span />
-                    {driver.online ? "Online" : "Offline"}
-                  </button>
-                  <div className="driver-map-notification-button">
-                    <Bell aria-hidden="true" />
-                    <EnableNotificationsButton role="driver" variant="chip" />
-                  </div>
-                </div>
-                <div className={`moovu-driver-map-status ${driverModeClass}`}>
-                  <span>{driverMode}</span>
-                  <strong>{driverModeCopy}</strong>
-                </div>
-                <div className="driver-map-side-controls">
-                  <button type="button" onClick={() => void retryCurrentGps()} aria-label="Center current location">
-                    <LocateFixed aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !satelliteMap;
-                      setSatelliteMap(next);
-                      mapInstanceRef.current?.setMapTypeId(next ? "hybrid" : "roadmap");
-                    }}
-                    aria-label={satelliteMap ? "Show road map" : "Show satellite map"}
-                  >
-                    <Layers3 aria-hidden="true" />
-                  </button>
-                </div>
-
-                {mapError ? (
-                  <div className="flex h-[58vh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">
-                    {mapError}
-                  </div>
-                ) : (
-                  <div ref={mapRef} className="h-[58vh] w-full bg-slate-100" />
-                )}
-
-                <div className="moovu-driver-map-sheet">
-                  <div className="driver-map-sheet-handle" />
-                  <div className="driver-map-status-card">
-                    <div>
-                      <span className={driver.online ? "is-online" : ""} />
-                      <div>
-                        <strong>{driver.online ? "You're online" : "Ready to earn today?"}</strong>
-                        <p>{driver.online ? "Waiting for trips nearby" : "Go online to receive nearby requests"}</p>
-                      </div>
-                    </div>
-                    {subscriptionAllowsOnline ? (
-                      <button type="button" disabled={busy} onClick={() => setOnlineServer(!driver.online)}>
-                        {busy ? "Working..." : driver.online ? "Go Offline" : "Go Online"}
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => router.push("/driver/subscriptions")}>Subscribe</button>
-                    )}
-                  </div>
-                  <div className="driver-map-snapshot">
-                    <button type="button" onClick={() => router.push("/driver/earnings")}>
-                      <span className="driver-map-snapshot-icon is-blue"><WalletCards aria-hidden="true" /></span>
-                      <span>
-                        <small>Today&apos;s earnings</small>
-                        <strong>{money(earningsSnapshot.todayEarnings)}</strong>
-                      </span>
-                    </button>
-                    <button type="button" onClick={() => router.push("/driver/history")}>
-                      <span className="driver-map-snapshot-icon is-green"><ChartNoAxesColumnIncreasing aria-hidden="true" /></span>
-                      <span>
-                        <small>Trips today</small>
-                        <strong>{earningsSnapshot.todayTrips}</strong>
-                      </span>
-                    </button>
-                    <button type="button" onClick={() => setDriverToolsOpen(true)}>
-                      <span className="driver-map-snapshot-icon is-violet"><Star aria-hidden="true" /></span>
-                      <span>
-                        <small>Rating</small>
-                        <strong>{driverLevel.label}</strong>
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <DriverMapSurface
+                mapRef={mapRef}
+                mapError={mapError}
+                menuOpen={driverToolsOpen}
+                todayEarnings={earningsSnapshot.todayEarnings}
+                online={Boolean(driver.online)}
+                busy={busy}
+                subscriptionAllowsOnline={subscriptionAllowsOnline}
+                satelliteMap={satelliteMap}
+                onToggleMenu={() => setDriverToolsOpen((value) => !value)}
+                onOpenEarnings={() => router.push("/driver/earnings")}
+                onRetryGps={() => void retryCurrentGps()}
+                onToggleMapType={() => {
+                  const next = !satelliteMap;
+                  setSatelliteMap(next);
+                  mapInstanceRef.current?.setMapTypeId(next ? "hybrid" : "roadmap");
+                }}
+                onToggleOnline={() => void setOnlineServer(!driver.online)}
+                onChoosePlan={() => router.push("/driver/subscriptions")}
+              />
 
               {currentTrip && (
-                <div className="moovu-driver-active-trip p-5">
+                <div className={tripSheetOpen ? "moovu-driver-active-trip is-open p-5" : "moovu-driver-active-trip p-5"}>
+                  <button
+                    type="button"
+                    className="driver-trip-sheet-toggle"
+                    onClick={() => setTripSheetOpen((open) => !open)}
+                    aria-expanded={tripSheetOpen}
+                  >
+                    {tripSheetOpen ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
+                    <span>{tripSheetOpen ? "Hide trip status" : `${tripStatusLabel(currentTrip.status)} · ${money(currentTrip.final_fare ?? currentTrip.fare_amount)}`}</span>
+                  </button>
+                  <div className="driver-trip-sheet-content">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="moovu-section-title">Active trip</div>
@@ -2376,11 +1682,12 @@ export default function DriverHomePage() {
                         </div>
                       )}
                   </div>
+                  </div>
                 </div>
               )}
             </section>
 
-            <aside className="space-y-4">
+            <aside className="hidden">
               {driverToolsOpen && (
                 <>
               <section className="moovu-card-interactive p-5">
@@ -2586,19 +1893,14 @@ export default function DriverHomePage() {
         )}
       </div>
 
-      {currentTrip && canOpenTripChat && (
-        <div className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-4 z-[8000]">
-          <TripChatPanel
-            tripId={currentTrip.id}
-            label="Chat with customer"
-            buttonClassName="moovu-floating-chat-button"
-            initialOpen={
-              shouldOpenChatFromNotification &&
-              (!notificationTripId || notificationTripId === currentTrip.id)
-            }
-          />
-        </div>
-      )}
+      <FloatingCustomerChat
+        tripId={currentTrip && canOpenTripChat ? currentTrip.id : null}
+        initialOpen={
+          Boolean(currentTrip) &&
+          shouldOpenChatFromNotification &&
+          (!notificationTripId || notificationTripId === currentTrip?.id)
+        }
+      />
 
       <DriverBottomNav />
     </main>

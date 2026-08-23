@@ -61,9 +61,9 @@ export default function CustomerAuthPage() {
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [failedLoginAttempts, setFailedLoginAttempts] = useState(0);
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoverySent, setRecoverySent] = useState(false);
 
   const canCheck = useMemo(() => {
     const normalized = normalizePhoneZA(phone);
@@ -145,7 +145,6 @@ export default function CustomerAuthPage() {
       });
 
       if (error) {
-        setFailedLoginAttempts((value) => value + 1);
         setMsg("The password was not accepted. Check it and try again.");
         setBusy(false);
         return;
@@ -252,8 +251,7 @@ export default function CustomerAuthPage() {
           email: recoveryEmail.trim().toLowerCase(),
         }),
       });
-      setShowRecovery(false);
-      setMsg("If an account matches these details, we’ll send recovery instructions.");
+      setRecoverySent(true);
     } catch {
       setMsg("If an account matches these details, we’ll send recovery instructions.");
     } finally {
@@ -344,8 +342,7 @@ export default function CustomerAuthPage() {
                   Back
                 </button>
               </div>
-              {failedLoginAttempts > 0 && (
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
                   {!showRecovery ? (
                     <button
                       type="button"
@@ -354,6 +351,32 @@ export default function CustomerAuthPage() {
                     >
                       Forgot password?
                     </button>
+                  ) : recoverySent ? (
+                    <div className="grid gap-3">
+                      <h3 className="text-base font-black text-slate-950">Check your email</h3>
+                      <p className="text-sm font-semibold leading-6 text-slate-700">
+                        If an account exists for this email address, we sent password reset instructions. Check your inbox and spam folder.
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          className="moovu-btn moovu-btn-secondary"
+                          onClick={() => setRecoverySent(false)}
+                        >
+                          Resend link
+                        </button>
+                        <button
+                          type="button"
+                          className="moovu-btn moovu-btn-secondary"
+                          onClick={() => {
+                            setShowRecovery(false);
+                            setRecoverySent(false);
+                          }}
+                        >
+                          Back to login
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <div className="grid gap-3">
                       <p className="text-sm font-semibold leading-6 text-slate-700">
@@ -383,7 +406,6 @@ export default function CustomerAuthPage() {
                     </div>
                   )}
                 </div>
-              )}
             </>
           )}
 

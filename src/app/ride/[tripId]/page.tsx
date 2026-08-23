@@ -2637,7 +2637,7 @@ export default function RideTrackingPage() {
       {["arrived", "ongoing"].includes(trip.status) && (
         <button
           type="button"
-          className="fixed bottom-[calc(146px+env(safe-area-inset-bottom))] right-4 z-[7999] min-h-11 rounded-full border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 shadow-lg"
+          className="customer-floating-otp min-h-11 rounded-full border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 shadow-lg"
           onClick={() => {
             if (startOtpAvailable) setActiveOtpModal("start");
             else if (endOtpAvailable) setActiveOtpModal("end");
@@ -2649,7 +2649,7 @@ export default function RideTrackingPage() {
       )}
 
       {canOpenChat && (
-        <div className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-4 z-[8000]">
+        <div className="customer-floating-chat">
           <TripChatPanel
             tripId={trip.id}
             label="Chat with driver"

@@ -8,13 +8,13 @@ import {
   CarFront,
   CheckCircle2,
   ChevronRight,
-  LayoutGrid,
   RefreshCw,
   SlidersHorizontal,
   WalletCards,
   XCircle,
 } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
+import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -205,18 +205,7 @@ export default function DriverHistoryPage() {
           </button>
         </header>
 
-        <nav className="driver-top-actions" aria-label="Trip history shortcuts">
-          <Link href="/driver/trip-offers">
-            <CarFront aria-hidden="true" />
-            <strong>Trip offers</strong>
-            <ChevronRight aria-hidden="true" />
-          </Link>
-          <Link href="/driver">
-            <LayoutGrid aria-hidden="true" />
-            <strong>Driver dashboard</strong>
-            <ChevronRight aria-hidden="true" />
-          </Link>
-        </nav>
+        <DriverSectionTabs section="trips" />
 
         <button type="button" onClick={loadTrips} className="driver-refresh-button">
           <RefreshCw aria-hidden="true" />
@@ -295,20 +284,17 @@ export default function DriverHistoryPage() {
 
         <section className="driver-history-stats" aria-label="Trip totals">
           <article>
-            <CalendarDays aria-hidden="true" />
-            <span>Total trips</span>
+            <div><span>Total trips</span><CalendarDays aria-hidden="true" /></div>
             <strong>{trips.length}</strong>
             <small>All recorded trips</small>
           </article>
           <article className="is-success">
-            <CheckCircle2 aria-hidden="true" />
-            <span>Completed</span>
+            <div><span>Completed</span><CheckCircle2 aria-hidden="true" /></div>
             <strong>{completedTrips.length}</strong>
             <small>Finished trips</small>
           </article>
           <article>
-            <WalletCards aria-hidden="true" />
-            <span>Completed fare</span>
+            <div><span>Completed fare</span><WalletCards aria-hidden="true" /></div>
             <strong>{money(completedFare)}</strong>
             <small>Gross fare value</small>
           </article>
@@ -343,30 +329,44 @@ export default function DriverHistoryPage() {
           ) : (
             filteredTrips.map((trip) => (
               <article key={trip.id} className={`driver-trip-row is-${trip.status ?? "unknown"}`}>
-                <span className="driver-trip-row-icon">
-                  {trip.status === "completed"
-                    ? <CheckCircle2 aria-hidden="true" />
-                    : trip.status === "cancelled"
-                      ? <XCircle aria-hidden="true" />
-                      : <CarFront aria-hidden="true" />}
-                </span>
-                <div className="driver-trip-route">
+                <div className="driver-trip-row-heading">
                   <time>{displayDate(trip.created_at)}</time>
-                  <span><i className="pickup" />{trip.pickup_address ?? "--"}</span>
-                  <span><i className="dropoff" />{trip.dropoff_address ?? "--"}</span>
-                </div>
-                <div className="driver-trip-money">
-                  <StatusBadge status={trip.status} />
                   <strong>{money(trip.fare_amount)}</strong>
-                  <small>{trip.payment_method ?? "Cash"}</small>
                 </div>
+
+                <div className="driver-trip-route">
+                  <span><i className="pickup" /><span><b>Pickup</b><strong>{trip.pickup_address ?? "--"}</strong></span></span>
+                  <span><i className="dropoff" /><span><b>Destination</b><strong>{trip.dropoff_address ?? "--"}</strong></span></span>
+                </div>
+
+                <div className="driver-trip-row-meta">
+                  <span className="driver-trip-status-icon">
+                    {trip.status === "completed"
+                      ? <CheckCircle2 aria-hidden="true" />
+                      : trip.status === "cancelled"
+                        ? <XCircle aria-hidden="true" />
+                        : <CarFront aria-hidden="true" />}
+                  </span>
+                  <StatusBadge status={trip.status} />
+                  <span>{trip.payment_method ?? "Cash"}</span>
+                  <span>{rideTypeLabel(trip.ride_option)}</span>
+                </div>
+
                 <details className="driver-trip-details">
-                  <summary aria-label="Open trip details"><ChevronRight aria-hidden="true" /></summary>
-                  <div>
-                    <span>{rideTypeLabel(trip.ride_option)}</span>
-                    <span>Commission {money(trip.commission_amount)}</span>
-                    <span>Driver earnings {money(trip.driver_net_earnings ?? trip.fare_amount)}</span>
-                    <span>{trip.rider_name ?? "Rider"}</span>
+                  <summary><span>Trip and customer details</span><ChevronRight aria-hidden="true" /></summary>
+                  <div className="driver-trip-details-grid">
+                    <div>
+                      <small>Customer</small>
+                      <strong>{trip.rider_name ?? "Customer details unavailable"}</strong>
+                    </div>
+                    <div>
+                      <small>Commission</small>
+                      <strong>{money(trip.commission_amount)}</strong>
+                    </div>
+                    <div>
+                      <small>Driver earnings</small>
+                      <strong>{money(trip.driver_net_earnings ?? trip.fare_amount)}</strong>
+                    </div>
                     {trip.status === "completed" && (
                       <button
                         type="button"

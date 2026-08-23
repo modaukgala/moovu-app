@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { normalizePhoneZA } from "@/lib/customer/auth";
 import { createServiceSupabase } from "@/lib/customer/server";
+import { getSiteUrl } from "@/lib/config/env";
+import { takeRateLimit } from "@/lib/server/requestControl";
 
 const NEUTRAL_RESPONSE =
   "If an account matches these details, we’ll send recovery instructions.";
@@ -14,6 +16,12 @@ export async function POST(req: Request) {
     NextResponse.json({ ok: true, message: NEUTRAL_RESPONSE }, { status: 202 });
 
   try {
+    const rateLimit = takeRateLimit(req, "customer-password-recovery", {
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!rateLimit.ok) return response();
+
     const body = await req.json().catch(() => null);
     const identifier = String(body?.identifier ?? "").trim().toLowerCase();
     const registeredEmail = String(body?.email ?? "").trim().toLowerCase();
@@ -52,7 +60,7 @@ export async function POST(req: Request) {
       return response();
     }
 
-    const origin = new URL(req.url).origin;
+    const origin = getSiteUrl().replace(/\/$/, "");
     const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
       redirectTo: `${origin}/customer/auth/reset`,
     });

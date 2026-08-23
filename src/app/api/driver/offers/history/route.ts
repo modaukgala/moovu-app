@@ -21,6 +21,7 @@ const OFFER_SELECT = `
 
 const TRIP_SELECT = `
   id,
+  driver_id,
   pickup_address,
   dropoff_address,
   fare_amount,
@@ -51,6 +52,7 @@ type OfferRow = {
 
 type TripRow = {
   id: string;
+  driver_id: string | null;
   pickup_address: string | null;
   dropoff_address: string | null;
   fare_amount: number | string | null;
@@ -63,8 +65,49 @@ type TripRow = {
   created_at: string | null;
 };
 
+type OfferOutcome =
+  | "accepted_by_you"
+  | "accepted_by_another"
+  | "missed"
+  | "declined"
+  | "cancelled"
+  | "pending";
+
+function offerOutcome(offer: OfferRow, trip: TripRow | null, driverId: string): OfferOutcome {
+  const status = String(offer.status ?? "").toLowerCase();
+  const tripStatus = String(trip?.status ?? "").toLowerCase();
+
+  if (status === "accepted") return "accepted_by_you";
+  if (["declined", "rejected"].includes(status)) return "declined";
+  if (status === "expired") return "missed";
+  if (["pending", "shown"].includes(status)) return "pending";
+
+  if (
+    status === "cancelled" &&
+    trip?.driver_id &&
+    trip.driver_id !== driverId &&
+    (tripStatus !== "cancelled" || trip.offer_status === "accepted")
+  ) {
+    return "accepted_by_another";
+  }
+
+  return "cancelled";
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
+}
+
+async function countOffers(driverId: string, status?: string) {
+  let query = supabaseAdmin
+    .from("driver_trip_offers")
+    .select("id", { count: "exact", head: true })
+    .eq("driver_id", driverId);
+
+  if (status) query = query.eq("status", status);
+
+  const { count, error } = await query;
+  return { count: count ?? 0, error };
 }
 
 export async function GET(req: Request) {
@@ -93,15 +136,40 @@ export async function GET(req: Request) {
     }
 
     const url = new URL(req.url);
-    const limitParam = Number(url.searchParams.get("limit") ?? 80);
-    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 150) : 80;
+    const pageParam = Number(url.searchParams.get("page") ?? 1);
+    const limitParam = Number(url.searchParams.get("limit") ?? 20);
+    const page = Number.isFinite(pageParam) ? Math.max(Math.floor(pageParam), 1) : 1;
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.floor(limitParam), 1), 50) : 20;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const [receivedCount, acceptedCount, declinedCount, missedCount, cancelledCount] =
+      await Promise.all([
+        countOffers(driverId),
+        countOffers(driverId, "accepted"),
+        countOffers(driverId, "declined"),
+        countOffers(driverId, "expired"),
+        countOffers(driverId, "cancelled"),
+      ]);
+
+    const countError = [
+      receivedCount,
+      acceptedCount,
+      declinedCount,
+      missedCount,
+      cancelledCount,
+    ].find((result) => result.error)?.error;
+
+    if (countError && !isMissingOfferTableError(countError)) {
+      return NextResponse.json({ ok: false, error: countError.message }, { status: 500 });
+    }
 
     const { data: offerRows, error: offerError } = await supabaseAdmin
       .from("driver_trip_offers")
       .select(OFFER_SELECT)
       .eq("driver_id", driverId)
       .order("offered_at", { ascending: false })
-      .limit(limit);
+      .range(from, to);
 
     if (offerError) {
       if (isMissingOfferTableError(offerError)) {
@@ -152,6 +220,7 @@ export async function GET(req: Request) {
         responded_at: offer.responded_at,
         distance_to_pickup_km: offer.distance_km,
         dispatch_score: offer.dispatch_score,
+        outcome: offerOutcome(offer, trip, driverId),
         trip: trip
           ? {
               id: trip.id,
@@ -170,22 +239,24 @@ export async function GET(req: Request) {
       };
     });
 
-    const summary = normalizedOffers.reduce(
-      (totals, offer) => {
-        totals.received += 1;
-        if (offer.status === "accepted") totals.accepted += 1;
-        else if (offer.status === "declined") totals.declined += 1;
-        else if (offer.status === "expired") totals.missed += 1;
-        else if (offer.status === "cancelled") totals.cancelled += 1;
-        return totals;
-      },
-      { received: 0, accepted: 0, declined: 0, missed: 0, cancelled: 0 },
-    );
+    const summary = {
+      received: receivedCount.count,
+      accepted: acceptedCount.count,
+      declined: declinedCount.count,
+      missed: missedCount.count,
+      cancelled: cancelledCount.count,
+    };
 
     return NextResponse.json({
       ok: true,
       offers: normalizedOffers,
       summary,
+      pagination: {
+        page,
+        limit,
+        total: summary.received,
+        hasMore: to + 1 < summary.received,
+      },
     });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 500 });

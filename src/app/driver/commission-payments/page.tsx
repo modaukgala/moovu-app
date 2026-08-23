@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
+import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
+import BankTransferDetails from "@/components/driver/payments/BankTransferDetails";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import EmptyState from "@/components/ui/EmptyState";
@@ -238,10 +240,8 @@ export default function DriverCommissionPaymentsPage() {
                   Pay only your MOOVU trip commission here. Subscription payments stay under Subscriptions.
                 </p>
               </div>
-              <Link href="/driver/earnings" className="moovu-btn moovu-btn-secondary">
-                Back to earnings
-              </Link>
             </div>
+            <DriverSectionTabs section="money" />
           </div>
 
           <div className="grid gap-3 border-t border-[var(--moovu-border)] p-4 sm:grid-cols-3 sm:p-5">
@@ -343,7 +343,12 @@ export default function DriverCommissionPaymentsPage() {
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-5 shadow-[0_16px_34px_rgba(31,116,201,0.07)]">
+            <div className="space-y-4">
+              <BankTransferDetails
+                purpose="commission"
+                amount={balanceDue > 0 ? money(balanceDue) : undefined}
+              />
+              <div className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-5 shadow-[0_16px_34px_rgba(31,116,201,0.07)]">
               <h2 className="text-xl font-black text-slate-950">Pay MOOVU commission</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Upload your proof of payment after paying the expected amount. Admin review keeps commission clearing controlled and traceable.
@@ -379,6 +384,7 @@ export default function DriverCommissionPaymentsPage() {
               >
                 {busy ? "Submitting..." : "Pay MOOVU commission"}
               </button>
+              </div>
               </div>
             </div>
           </div>

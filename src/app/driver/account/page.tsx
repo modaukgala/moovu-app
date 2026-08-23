@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CarFront, ChevronRight, CircleUserRound, FileCheck2, Headphones, LogOut, ShieldCheck, WalletCards } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
+import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { ProfileSectionCard, QuickActionGrid } from "@/components/ui/MoovuPrimitives";
@@ -160,6 +161,8 @@ export default function DriverAccountPage() {
             <p>{driver?.phone || "Manage your driver profile and access"}</p>
           </div>
         </header>
+
+        <DriverSectionTabs section="account" />
 
         <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="moovu-card driver-account-subscription p-5 sm:p-6">

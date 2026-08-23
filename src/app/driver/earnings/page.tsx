@@ -5,12 +5,10 @@ import Link from "next/link";
 import {
   CalendarDays,
   ChevronRight,
-  CircleDollarSign,
-  LayoutDashboard,
-  ReceiptText,
   WalletCards,
 } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
+import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
@@ -263,32 +261,7 @@ export default function DriverEarningsPage() {
           <p>Track your trip earnings, subscription status, and MOOVU commission balance from one clean wallet view.</p>
         </header>
 
-        <nav className="driver-money-nav" aria-label="Driver money sections">
-          {[
-            { href: "/driver", label: "Dashboard", icon: LayoutDashboard, tone: "is-blue" },
-            {
-              href: "/driver/commission-payments",
-              label: "Commission",
-              icon: CircleDollarSign,
-              tone: "is-green",
-            },
-            {
-              href: "/driver/subscriptions",
-              label: "Subscriptions",
-              icon: ReceiptText,
-              tone: "is-violet",
-            },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.href} href={item.href} className={item.tone}>
-                <Icon aria-hidden="true" />
-                <strong>{item.label}</strong>
-                <ChevronRight aria-hidden="true" />
-              </Link>
-            );
-          })}
-        </nav>
+        <DriverSectionTabs section="money" />
 
         <section className="driver-money-grid" aria-label="Earnings summary">
           <article className="is-blue">
