@@ -44,6 +44,7 @@ type TripRow = {
   final_fare?: number | null;
   estimated_fare?: number | null;
   fare_adjustment_amount?: number | null;
+  fare_breakdown?: unknown;
 };
 
 type StopRecord = {
@@ -59,6 +60,12 @@ function asNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function pickFirstString(...values: Array<unknown>) {
@@ -264,6 +271,7 @@ export async function POST(req: Request) {
     }
 
     const rideOptionId = normalizeRideOptionId(typedTrip.ride_option);
+    const lockedSurgeMultiplier = asNumber(typedTrip.surge_multiplier) ?? 1;
     const nextStopBreakdown = calculateAddStopIncrease({
       rideOptionId,
       originalDistanceKm: route.originalDistanceKm,
@@ -271,6 +279,7 @@ export async function POST(req: Request) {
       routeDistanceKm: route.routeDistanceKm,
       routeDurationMin: route.routeDurationMin,
       stopCount: stops.length,
+      surgeMultiplier: lockedSurgeMultiplier,
     });
     const storedPreviousStopIncrease = asNumber(typedTrip.final_add_stop_increase);
     const previousStopBreakdown = calculateAddStopIncrease({
@@ -280,6 +289,7 @@ export async function POST(req: Request) {
       routeDistanceKm: typedTrip.route_distance_km ?? typedTrip.distance_km ?? route.originalDistanceKm,
       routeDurationMin: typedTrip.route_duration_min ?? typedTrip.duration_min ?? route.originalDurationMin,
       stopCount: existingStops.length,
+      surgeMultiplier: lockedSurgeMultiplier,
     });
     const previousStopIncrease = storedPreviousStopIncrease ?? previousStopBreakdown.finalAddStopIncrease;
     const cumulativeStopIncrease = Math.max(
@@ -323,6 +333,18 @@ export async function POST(req: Request) {
       active_stop_added_at: new Date().toISOString(),
       active_stop_added_by: auth.user.id,
       active_stop_note: note || null,
+      fare_breakdown: {
+        ...asRecord(typedTrip.fare_breakdown),
+        surgeLabel: typedTrip.surge_label || "normal",
+        surgeMultiplier: lockedSurgeMultiplier,
+        activeStop: {
+          ...nextStopBreakdown,
+          addedStopCharge: adjustedFare.addedStopCharge,
+          cumulativeStopIncrease,
+          bookingFare,
+          finalFare: adjustedFare.finalFare,
+        },
+      },
     };
 
     const { data: updatedTrip, error: updateError } = await auth.supabaseAdmin
@@ -394,6 +416,9 @@ export async function POST(req: Request) {
         addedStopCharge: adjustedFare.addedStopCharge,
         adjustmentAmount: totalActiveStopAdjustment,
         finalFare: adjustedFare.finalFare,
+        surgeLabel: typedTrip.surge_label || "normal",
+        surgeMultiplier: lockedSurgeMultiplier,
+        breakdown: nextStopBreakdown,
       },
     });
   } catch (error: unknown) {

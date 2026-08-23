@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { calculateFare } from "@/lib/fare/calculateFare";
-import { normalizeRideOptionId } from "@/lib/domain/fare";
+import { normalizeRideOptionId, resolveAdminTripFare } from "@/lib/domain/fare";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 
 const PAYMENT_METHODS = new Set(["cash", "online", "other"]);
@@ -40,6 +40,8 @@ export async function POST(req: Request) {
     const dropoffLng = Number(body?.dropoffLng);
     const durationMin = body?.durationMin === "" || body?.durationMin == null ? null : Number(body.durationMin);
     const requestedFare = body?.fare == null || body?.fare === "" ? null : Number(body.fare);
+    const fareOverrideRequested = body?.fareOverride === true;
+    const fareOverrideReason = cleanText(body?.fareOverrideReason).slice(0, 500);
 
     if (!pickup || !dropoff) {
       return NextResponse.json({ ok: false, error: "Pickup and dropoff are required." }, { status: 400 });
@@ -61,16 +63,29 @@ export async function POST(req: Request) {
     }
 
     const activeSurge = await getActiveManualSurge();
-    const fareAmount =
-      requestedFare != null && Number.isFinite(requestedFare) && requestedFare > 0
-        ? requestedFare
-        : calculateFare({
-            distanceKm,
-            durationMin,
-            rideOptionId,
-            surgeLabel: activeSurge.mode,
-            surgeMultiplier: activeSurge.multiplier,
-          }).totalFare;
+    const calculatedFare = calculateFare({
+      distanceKm,
+      durationMin,
+      rideOptionId,
+      surgeLabel: activeSurge.mode,
+      surgeMultiplier: activeSurge.multiplier,
+    });
+
+    let fareDecision;
+    try {
+      fareDecision = resolveAdminTripFare({
+        calculatedFare: calculatedFare.totalFare,
+        overrideRequested: fareOverrideRequested,
+        overrideFare: requestedFare,
+        overrideReason: fareOverrideReason,
+      });
+    } catch (error: unknown) {
+      return NextResponse.json(
+        { ok: false, error: errorMessage(error, "Invalid fare selection.") },
+        { status: 400 },
+      );
+    }
+    const fareAmount = fareDecision.amount;
 
     const startOtp = generateOtp();
     const endOtp = generateOtp();
@@ -121,6 +136,28 @@ export async function POST(req: Request) {
         start_otp_verified: false,
         end_otp_verified: false,
         otp_verified: false,
+        surge_label: activeSurge.mode,
+        surge_multiplier: activeSurge.multiplier,
+        fare_breakdown: {
+          ...calculatedFare,
+          serverCalculatedFare: calculatedFare.totalFare,
+          finalFare: fareAmount,
+          adminOverride: fareOverrideRequested
+            ? {
+                amount: fareAmount,
+                reason: fareDecision.reason,
+                adminUserId: user.id,
+                overriddenAt: new Date().toISOString(),
+              }
+            : null,
+        },
+        estimated_fare: calculatedFare.totalFare,
+        final_fare: fareAmount,
+        original_fare: calculatedFare.totalFare,
+        fare_adjustment_amount: fareOverrideRequested
+          ? Math.round((fareAmount - calculatedFare.totalFare) * 100) / 100
+          : 0,
+        fare_adjustment_reason: fareOverrideRequested ? "admin_fare_override" : "admin_booking_confirmed",
       })
       .select("id,status")
       .single();
@@ -141,6 +178,17 @@ export async function POST(req: Request) {
       new_status: trip.status,
       created_by: user.id,
     });
+
+    if (fareOverrideRequested) {
+      await supabaseAdmin.from("trip_events").insert({
+        trip_id: trip.id,
+        event_type: "fare_override",
+        message: `Admin overrode server fare R${calculatedFare.totalFare.toFixed(2)} with R${fareAmount.toFixed(2)}. Reason: ${fareDecision.reason}`,
+        old_status: trip.status,
+        new_status: trip.status,
+        created_by: user.id,
+      });
+    }
 
     if (driverId) {
       await supabaseAdmin.from("trip_events").insert({

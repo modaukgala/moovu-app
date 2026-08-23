@@ -355,6 +355,7 @@ export async function POST(req: Request) {
       routeDistanceKm: distanceKm,
       routeDurationMin: durationMin,
       stopCount: stops.length,
+      surgeMultiplier: activeSurge.multiplier,
     });
     const stopWaiting = calculateStopWaitingFee({
       rideOptionId,

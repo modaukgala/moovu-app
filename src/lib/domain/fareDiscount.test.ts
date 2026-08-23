@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
-import { calculateFinalJourneyFare, calculateTripFare, getDistanceTierDiscountPct } from "./fare.ts";
+import { calculateAddStopIncrease, calculateFinalJourneyFare, calculateTripFare, getDistanceTierDiscountPct, resolveAdminTripFare } from "./fare.ts";
 
 test("distance-tier discount boundaries match the approved model", () => {
   const cases = [
@@ -65,4 +65,74 @@ test("total route distance selects the tier for add-stop journeys", () => {
     journey.distanceDiscountAmount,
     Number(((fare.fareBeforeDistanceDiscount + 30) * 0.15).toFixed(2)),
   );
+});
+
+test("minimum fares rise with every approved surge mode", () => {
+  const cases = [
+    ["go", "normal", 40],
+    ["go", "busy", 44],
+    ["go", "heavy_demand", 48],
+    ["go", "rain_event", 56],
+    ["group", "normal", 70],
+    ["group", "busy", 77],
+    ["group", "heavy_demand", 84],
+    ["group", "rain_event", 98],
+  ] as const;
+
+  for (const [rideOptionId, surgeLabel, expectedFare] of cases) {
+    const fare = calculateTripFare({
+      distanceKm: 0.1,
+      durationMin: 0.1,
+      rideOptionId,
+      surgeLabel,
+    });
+    assert.equal(fare.effectiveMinimumFare, expectedFare);
+    assert.equal(fare.totalFare, expectedFare);
+  }
+});
+
+test("Admin fare defaults to server calculation and overrides require a reason", () => {
+  assert.deepEqual(resolveAdminTripFare({ calculatedFare: 56, overrideFare: 10 }), {
+    amount: 56,
+    overridden: false,
+    reason: null,
+  });
+  assert.throws(
+    () => resolveAdminTripFare({ calculatedFare: 56, overrideRequested: true, overrideFare: 60 }),
+    /reason is required/i,
+  );
+  assert.deepEqual(
+    resolveAdminTripFare({
+      calculatedFare: 56,
+      overrideRequested: true,
+      overrideFare: 60,
+      overrideReason: "Operator confirmed a negotiated fare",
+    }),
+    { amount: 60, overridden: true, reason: "Operator confirmed a negotiated fare" },
+  );
+});
+
+test("add-stop variable charges use the trip's locked surge and legacy defaults to normal", () => {
+  const legacy = calculateAddStopIncrease({
+    rideOptionId: "go",
+    originalDistanceKm: 2,
+    originalDurationMin: 5,
+    routeDistanceKm: 4,
+    routeDurationMin: 10,
+    stopCount: 1,
+  });
+  const lockedBusy = calculateAddStopIncrease({
+    rideOptionId: "go",
+    originalDistanceKm: 2,
+    originalDurationMin: 5,
+    routeDistanceKm: 4,
+    routeDurationMin: 10,
+    stopCount: 1,
+    surgeMultiplier: 1.1,
+  });
+
+  assert.equal(legacy.surgeMultiplier, 1);
+  assert.equal(legacy.variableSurgeAmount, 0);
+  assert.equal(lockedBusy.surgeMultiplier, 1.1);
+  assert.ok(lockedBusy.finalAddStopIncrease > legacy.finalAddStopIncrease);
 });

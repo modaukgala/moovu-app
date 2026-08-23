@@ -827,10 +827,14 @@ tr:last-child td {
 }
 
 .moovu-floating-chat-button {
-  min-height: 52px;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  place-items: center;
   border: 0;
   border-radius: 999px;
-  padding: 0 18px;
+  padding: 0;
   background: linear-gradient(135deg, #1f74c9, #2bb5a0);
   color: #fff;
   font-weight: 900;
@@ -2040,6 +2044,11 @@ tr:last-child td {
   font-size: 27px;
   font-weight: 900;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.moovu-floating-chat-button svg {
+  width: 21px;
+  height: 21px;
 }
 .mbk-map-error {
   display: grid;
@@ -10028,7 +10037,18 @@ body {
 
 /* Driver 2.0 map-first shell. Existing trip controls remain inside the collapsible sheet. */
 .driver-floating-chat,.customer-floating-chat,.customer-floating-otp { position: fixed; right: 16px; }
-.driver-floating-chat,.customer-floating-chat { z-index: 8000; bottom: calc(84px + env(safe-area-inset-bottom)); }
+.driver-floating-chat,.customer-floating-chat { z-index: 8000; }
+.moovu-driver-shell .driver-floating-chat {
+  position: fixed !important;
+  top: calc(224px + env(safe-area-inset-top)) !important;
+  right: 16px !important;
+  bottom: auto !important;
+}
+.moovu-driver-shell .driver-floating-chat.is-sheet-open {
+  top: calc(34dvh - 82px - env(safe-area-inset-bottom)) !important;
+  right: 16px !important;
+}
+.customer-floating-chat { bottom: calc(92px + env(safe-area-inset-bottom)); }
 .customer-floating-otp { z-index: 7999; bottom: calc(146px + env(safe-area-inset-bottom)); }
 .moovu-driver-shell { padding: 0 !important; overflow: hidden; }
 .moovu-driver-shell > .moovu-shell { width: 100%; max-width: none; margin: 0; padding: 0; }
@@ -10078,6 +10098,7 @@ body {
   display: flex; width: 100%; min-height: 38px; align-items: center; justify-content: center; gap: 8px;
   color: #0f172a; font-size: 12px; font-weight: 900;
 }
+.moovu-driver-active-trip.is-open .driver-trip-sheet-toggle { width: calc(100% - 58px); }
 .driver-trip-sheet-toggle svg { width: 18px; height: 18px; color: #0867d8; }
 .driver-drawer-backdrop { position: fixed; z-index: 11000; inset: 0; background: rgb(15 23 42 / .45); backdrop-filter: blur(5px); }
 .driver-drawer {
@@ -10103,6 +10124,8 @@ body {
   .driver-map-first-layout .moovu-driver-map-card,.driver-map-first-layout .driver-map-canvas,
   .driver-map-first-layout .moovu-driver-map-card > .flex.h-\[58vh\] { min-height: calc(100dvh - 86px); height: calc(100dvh - 86px); }
   .moovu-driver-active-trip { right: 24px; left: auto; width: min(430px,calc(100vw - 48px)); }
+  .moovu-driver-shell .driver-floating-chat { top: calc(224px + env(safe-area-inset-top)) !important; right: 24px !important; }
+  .moovu-driver-shell .driver-floating-chat.is-sheet-open { top: calc(34dvh - 82px - env(safe-area-inset-bottom)) !important; }
 }
 
 /* Driver offer history and trip history: compact native-style lists. */

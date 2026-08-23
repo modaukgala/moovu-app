@@ -57,6 +57,8 @@ export default function NewTripPage() {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [fare, setFare] = useState<string>("");
+  const [fareOverride, setFareOverride] = useState(false);
+  const [fareOverrideReason, setFareOverrideReason] = useState("");
   const [rideOptionId, setRideOptionId] = useState<RideOptionId>(DEFAULT_RIDE_OPTION_ID);
   const [activeSurge, setActiveSurge] = useState<SurgeModeConfig>(SURGE_MODES.normal);
 
@@ -204,6 +206,7 @@ export default function NewTripPage() {
         surgeMultiplier: activeSurge.multiplier,
       }).totalFare;
       setAutoFare(calc);
+      if (!fareOverride) setFare(String(calc));
     }
   }
 
@@ -233,6 +236,11 @@ export default function NewTripPage() {
         }).totalFare;
     if (!Number.isFinite(finalFare) || finalFare <= 0) {
       setErr("Fare is invalid. Please auto-calc or enter a valid fare.");
+      return;
+    }
+
+    if (fareOverride && !fareOverrideReason.trim()) {
+      setErr("Enter a reason for the Admin fare override.");
       return;
     }
 
@@ -291,7 +299,9 @@ export default function NewTripPage() {
         dropoffLat: Number(dropoffDetails.lat),
         dropoffLng: Number(dropoffDetails.lng),
         paymentMethod,
-        fare: finalFare,
+        fare: fareOverride ? finalFare : undefined,
+        fareOverride,
+        fareOverrideReason: fareOverride ? fareOverrideReason.trim() : undefined,
         distanceKm: km,
         durationMin,
         driverId,
@@ -432,7 +442,7 @@ export default function NewTripPage() {
 
           <ProfileSectionCard
             title="Smart Kasi Pricing"
-            description="Uses the same MOOVU launch pricing engine as customer booking. Manual fare overrides remain intentional."
+            description="The server calculates the active-surge fare. Manual overrides require an explicit reason and are audit logged."
           >
             <div className="rounded-2xl bg-blue-50 px-4 py-3 text-xs font-black text-blue-800">
               Active manual surge: {activeSurge.label} x{activeSurge.multiplier.toFixed(1)}
@@ -562,9 +572,10 @@ export default function NewTripPage() {
                 Fare
                 <input
                   className="moovu-input"
-                  placeholder="Auto or manual"
+                  placeholder="Server calculated"
                   value={fare}
                   onChange={(e) => setFare(e.target.value)}
+                  readOnly={!fareOverride}
                 />
               </label>
 
@@ -583,6 +594,37 @@ export default function NewTripPage() {
                   ))}
                 </select>
               </label>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <label className="flex min-h-11 items-center gap-3 text-sm font-black text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={fareOverride}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setFareOverride(checked);
+                    if (!checked) {
+                      setFareOverrideReason("");
+                      if (autoFare != null) setFare(String(autoFare));
+                    }
+                  }}
+                  className="h-5 w-5 accent-blue-600"
+                />
+                Override the server-calculated fare
+              </label>
+              {fareOverride ? (
+                <label className="moovu-field-label mt-3">
+                  Override reason
+                  <textarea
+                    className="moovu-input min-h-24 resize-y"
+                    value={fareOverrideReason}
+                    onChange={(event) => setFareOverrideReason(event.target.value.slice(0, 500))}
+                    placeholder="Explain why this fare must differ from the calculated amount"
+                    required
+                  />
+                </label>
+              ) : null}
             </div>
           </ProfileSectionCard>
         </div>

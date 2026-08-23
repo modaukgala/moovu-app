@@ -2654,6 +2654,7 @@ export default function RideTrackingPage() {
             tripId={trip.id}
             label="Chat with driver"
             buttonClassName="moovu-floating-chat-button"
+            compactButton
             initialOpen={searchParams.get("chat") === "1"}
           />
         </div>

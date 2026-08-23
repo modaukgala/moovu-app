@@ -13,6 +13,7 @@
     "test:driver-eligibility": "node --test --experimental-strip-types src/lib/drivers/rideEligibility.test.ts",
     "test:fare-tiers": "node --test --experimental-strip-types src/lib/domain/fareDiscount.test.ts",
     "test:fare-lock": "node --test --experimental-strip-types src/lib/trips/lockedTripFare.test.ts",
+    "test:chat-composer": "node --test --experimental-strip-types src/components/trip-chat/composerPolicy.test.ts",
     "test:cancellation": "node --test --experimental-strip-types src/lib/finance/cancellationFees.test.ts",
     "test:status-contracts": "node --test --experimental-strip-types src/lib/drivers/statusContract.test.ts",
     "test:notification-routing": "node --test --experimental-strip-types src/lib/notifications/deepLinkRouting.test.ts",

@@ -239,8 +239,9 @@ export default function RiderBookingPage() {
       routeDistanceKm: distanceKm,
       routeDurationMin: durationMin,
       stopCount,
+      surgeMultiplier: activeSurge.multiplier,
     });
-  }, [distanceKm, durationMin, originalDistanceKm, originalDurationMin, selectedRideOption, stopCount]);
+  }, [activeSurge.multiplier, distanceKm, durationMin, originalDistanceKm, originalDurationMin, selectedRideOption, stopCount]);
 
   const originalFareBreakdown = useMemo(() => {
     if (originalDistanceKm == null || originalDurationMin == null) return null;
@@ -1250,6 +1251,7 @@ export default function RiderBookingPage() {
         routeDistanceKm: km,
         routeDurationMin: mins,
         stopCount: route.stops.length,
+        surgeMultiplier: activeSurge.multiplier,
       });
       const journeyEstimate = calculateFinalJourneyFare({
         baseFare: est,
@@ -1320,13 +1322,14 @@ export default function RiderBookingPage() {
       if (!accessToken) { router.replace("/customer/auth?next=/book"); return; }
 
       const stopBreakdown = bDistKm != null && bDurMin != null && bOriginalDistKm != null && bOriginalDurMin != null
-        ? calculateAddStopIncrease({
+          ? calculateAddStopIncrease({
             rideOptionId: selectedRideOption,
             originalDistanceKm: bOriginalDistKm,
             originalDurationMin: bOriginalDurMin,
             routeDistanceKm: bDistKm,
             routeDurationMin: bDurMin,
             stopCount: route.stops.length,
+            surgeMultiplier: activeSurge.multiplier,
           })
         : null;
       const finalFare = bOriginalDistKm != null && bOriginalDurMin != null && bDistKm != null
@@ -1845,6 +1848,7 @@ export default function RiderBookingPage() {
                     routeDistanceKm: distanceKm,
                     routeDurationMin: durationMin,
                     stopCount,
+                    surgeMultiplier: activeSurge.multiplier,
                   }).finalAddStopIncrease
                 : 0;
               const optionFare = calculateFinalJourneyFare({

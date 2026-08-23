@@ -27,6 +27,7 @@ export type AddStopInput = {
   routeDistanceKm: number;
   routeDurationMin: number;
   stopCount: number;
+  surgeMultiplier?: number | null;
 };
 
 export type AddStopBreakdown = {
@@ -36,6 +37,9 @@ export type AddStopBreakdown = {
   perKm: number;
   perMinute: number;
   stopFee: number;
+  surgeMultiplier: number;
+  variableChargeBeforeSurge: number;
+  variableSurgeAmount: number;
   rawAddStopIncrease: number;
   addStopDiscountPercent: number;
   finalAddStopIncrease: number;
@@ -71,12 +75,19 @@ export type FinalFareBreakdown = {
   adjustmentAmount: number;
 };
 
+export type AdminFareDecision = {
+  amount: number;
+  overridden: boolean;
+  reason: string | null;
+};
+
 export type JourneyFareBreakdown = {
   fareBeforeDistanceDiscount: number;
   distanceDiscountKm: number;
   distanceDiscountPct: number;
   distanceDiscountAmount: number;
   fareBeforeMinimum: number;
+  effectiveMinimumFare: number;
   totalFare: number;
 };
 
@@ -128,6 +139,7 @@ export type FareBreakdown = FareRules & {
   fareBeforeUplift: number;
   fareBeforeSurge: number;
   fareBeforeMinimum: number;
+  effectiveMinimumFare: number;
   fareBeforeRounding: number;
   totalFare: number;
   platformCommission: number;
@@ -345,7 +357,8 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
   const fareBeforeMinimum = roundMoney(
     Math.max(0, fareBeforeDistanceDiscount - distanceDiscountAmount)
   );
-  const fareBeforeRounding = Math.max(rules.minFare, fareBeforeMinimum);
+  const effectiveMinimumFare = roundMoney(rules.minFare * surge.multiplier);
+  const fareBeforeRounding = Math.max(effectiveMinimumFare, fareBeforeMinimum);
   const totalFare = Math.round(fareBeforeRounding);
   const platformCommission = roundMoney(totalFare * (rules.platformCommissionPct / 100));
   const driverNetEstimate = roundMoney(totalFare - platformCommission);
@@ -372,6 +385,7 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
     fareBeforeUplift,
     fareBeforeSurge,
     fareBeforeMinimum,
+    effectiveMinimumFare,
     fareBeforeRounding: roundMoney(fareBeforeRounding),
     totalFare,
     platformCommission,
@@ -398,7 +412,10 @@ export function calculateFinalJourneyFare(params: {
   const fareBeforeMinimum = roundMoney(
     Math.max(0, fareBeforeDistanceDiscount - distanceDiscountAmount),
   );
-  const totalFare = Math.round(Math.max(params.baseFare.minFare, fareBeforeMinimum));
+  const effectiveMinimumFare = roundMoney(
+    params.baseFare.minFare * params.baseFare.surgeMultiplier,
+  );
+  const totalFare = Math.round(Math.max(effectiveMinimumFare, fareBeforeMinimum));
 
   return {
     fareBeforeDistanceDiscount,
@@ -406,6 +423,7 @@ export function calculateFinalJourneyFare(params: {
     distanceDiscountPct,
     distanceDiscountAmount,
     fareBeforeMinimum,
+    effectiveMinimumFare,
     totalFare,
   } satisfies JourneyFareBreakdown;
 }
@@ -421,9 +439,15 @@ export function calculateAddStopIncrease(input: AddStopInput): AddStopBreakdown 
   const extraDistanceKm = roundMoney(Math.max(0, routeDistanceKm - originalDistanceKm));
   const extraDurationMin = roundMoney(Math.max(0, routeDurationMin - originalDurationMin));
   const stopFee = ADD_STOP_FEES[rideOptionId];
+  const surgeMultiplier = normalizeSurge({ multiplier: input.surgeMultiplier }).multiplier;
+  const variableChargeBeforeSurge = roundMoney(
+    extraDistanceKm * rules.perKm + extraDurationMin * rules.perMinute,
+  );
+  const variableSurgeAmount = roundMoney(
+    variableChargeBeforeSurge * (surgeMultiplier - 1),
+  );
   const rawAddStopIncrease = roundMoney(
-    extraDistanceKm * rules.perKm +
-      extraDurationMin * rules.perMinute +
+    variableChargeBeforeSurge * surgeMultiplier +
       stopCount * stopFee
   );
   const finalAddStopIncrease = Math.round(rawAddStopIncrease * ADD_STOP_CUSTOMER_PAY_MULTIPLIER);
@@ -435,6 +459,9 @@ export function calculateAddStopIncrease(input: AddStopInput): AddStopBreakdown 
     perKm: rules.perKm,
     perMinute: rules.perMinute,
     stopFee,
+    surgeMultiplier,
+    variableChargeBeforeSurge,
+    variableSurgeAmount,
     rawAddStopIncrease,
     addStopDiscountPercent: ADD_STOP_DISCOUNT_PERCENT,
     finalAddStopIncrease,
@@ -486,4 +513,24 @@ export function calculateFinalFare(input: FinalFareInput): FinalFareBreakdown {
     finalFare,
     adjustmentAmount: roundMoney(finalFare - estimatedFare),
   };
+}
+
+export function resolveAdminTripFare(params: {
+  calculatedFare: number;
+  overrideRequested?: boolean;
+  overrideFare?: unknown;
+  overrideReason?: unknown;
+}): AdminFareDecision {
+  const calculatedFare = safePositiveNumber(params.calculatedFare);
+  if (!calculatedFare) throw new Error("Server-calculated fare is invalid.");
+  if (!params.overrideRequested) {
+    return { amount: calculatedFare, overridden: false, reason: null };
+  }
+
+  const overrideFare = safePositiveNumber(params.overrideFare);
+  const reason = typeof params.overrideReason === "string" ? params.overrideReason.trim() : "";
+  if (!overrideFare) throw new Error("Enter a valid amount for the Admin fare override.");
+  if (!reason) throw new Error("A reason is required for an Admin fare override.");
+
+  return { amount: overrideFare, overridden: true, reason };
 }

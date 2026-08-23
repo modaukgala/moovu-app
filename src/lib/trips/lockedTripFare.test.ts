@@ -68,3 +68,20 @@ test("route changes cannot reduce or otherwise recalculate the locked fare", () 
     94,
   );
 });
+
+test("repeating the same cumulative stop increase adds no duplicate charge", () => {
+  assert.deepEqual(
+    addIncrementalStopCharge({
+      currentFare: 110,
+      previousStopIncrease: 25,
+      nextStopIncrease: 25,
+    }),
+    {
+      currentFare: 110,
+      previousStopIncrease: 25,
+      nextStopIncrease: 25,
+      addedStopCharge: 0,
+      finalFare: 110,
+    },
+  );
+});

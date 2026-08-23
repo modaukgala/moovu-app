@@ -1895,6 +1895,7 @@ export default function DriverHomePage() {
 
       <FloatingCustomerChat
         tripId={currentTrip && canOpenTripChat ? currentTrip.id : null}
+        tripSheetOpen={tripSheetOpen}
         initialOpen={
           Boolean(currentTrip) &&
           shouldOpenChatFromNotification &&

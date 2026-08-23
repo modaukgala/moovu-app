@@ -1,6 +1,8 @@
 "use client";
 
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { MessageCircle } from "lucide-react";
+import { canSendChatDraft, shouldSendChatFromKeyboard } from "./composerPolicy";
 import { notifyInApp } from "@/lib/in-app-notifications";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -41,6 +43,7 @@ type Props = {
   disabledReason?: string;
   buttonClassName?: string;
   initialOpen?: boolean;
+  compactButton?: boolean;
 };
 
 const MAX_MESSAGE_LENGTH = 1000;
@@ -165,6 +168,7 @@ export default function TripChatPanel({
   disabledReason = "Chat is available after the driver accepts the trip.",
   buttonClassName,
   initialOpen = false,
+  compactButton = false,
 }: Props) {
   const [open, setOpen] = useState(initialOpen && !disabled);
   const [messages, setMessages] = useState<TripMessage[]>([]);
@@ -177,6 +181,7 @@ export default function TripChatPanel({
   const [unreadCount, setUnreadCount] = useState(0);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const lastUnreadCountRef = useRef(0);
   const mountedRef = useRef(false);
   const isPageVisible = usePageVisibility();
@@ -377,6 +382,13 @@ export default function TripChatPanel({
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [open, sortedMessages.length]);
 
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    composer.style.height = "auto";
+    composer.style.height = `${Math.min(composer.scrollHeight, 144)}px`;
+  }, [open, text]);
+
   async function sendMessage() {
     const body = text.trim();
     if (!body || !canSend || sending) return;
@@ -438,13 +450,14 @@ export default function TripChatPanel({
         type="button"
         className={buttonClassName ?? "moovu-btn moovu-btn-secondary"}
         disabled={disabled}
-        title={disabled ? disabledReason : undefined}
+        title={disabled ? disabledReason : label}
+        aria-label={label}
         onClick={() => setOpen(true)}
       >
         <span className="relative inline-flex items-center gap-2">
-          <span>{label}</span>
+          {compactButton ? <MessageCircle aria-hidden="true" /> : <span>{label}</span>}
           {unreadCount > 0 && (
-            <span className="grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1.5 text-[11px] font-black leading-none text-white">
+            <span className={`grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1.5 text-[11px] font-black leading-none text-white${compactButton ? " absolute -right-3 -top-3" : ""}`}>
               {unreadCount}
             </span>
           )}
@@ -537,24 +550,22 @@ export default function TripChatPanel({
 
                 <div className="flex gap-2">
                   <textarea
+                    ref={composerRef}
                     value={text}
                     onChange={(event) => setText(event.target.value.slice(0, MAX_MESSAGE_LENGTH))}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        void sendMessage();
-                      }
-                    }}
                     disabled={!canSend || sending}
                     rows={1}
                     placeholder={canSend ? "Type a message..." : "Chat is read-only"}
-                    className="moovu-input min-h-12 resize-none"
+                    className="moovu-input max-h-36 min-h-12 resize-none overflow-y-auto"
                     aria-label="Trip chat message"
+                    onKeyDown={(event) => {
+                      if (shouldSendChatFromKeyboard(event)) void sendMessage();
+                    }}
                   />
                   <button
                     type="button"
                     className="moovu-btn moovu-btn-primary min-w-20"
-                    disabled={!canSend || sending || !text.trim()}
+                    disabled={!canSendChatDraft(text, canSend, sending)}
                     onClick={() => void sendMessage()}
                   >
                     {sending ? "..." : "Send"}
