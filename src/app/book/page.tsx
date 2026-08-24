@@ -4,9 +4,8 @@ import { type ClipboardEvent, useEffect, useMemo, useRef, useState } from "react
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CircleHelp, Home, LogOut, ReceiptText } from "lucide-react";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
-import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
+import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import ExactLocationIcon from "@/components/booking/ExactLocationIcon";
 import LocationMapPicker, {
   type ConfirmedMapLocation,
@@ -186,7 +185,8 @@ export default function RiderBookingPage() {
 
   // ── Bottom sheet drag state ──────────────────────────────────────
   const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">("expanded");
-  const [headerCompact, setHeaderCompact] = useState(false);
+  const [showBookingNav, setShowBookingNav] = useState(false);
+  const lastSheetScrollTopRef = useRef(0);
   const [dragY, setDragY] = useState<number | null>(null); // live drag offset in px
   const dragStartYRef = useRef<number>(0);
   const dragStartSnapRef = useRef<"collapsed" | "expanded">("collapsed");
@@ -448,11 +448,6 @@ export default function RiderBookingPage() {
     } finally {
       setLegalAccepting(false);
     }
-  }
-
-  async function logout() {
-    await supabaseClient.auth.signOut();
-    router.push("/customer/auth");
   }
 
   // ── Location helpers ─────────────────────────────────────────────
@@ -2078,38 +2073,11 @@ export default function RiderBookingPage() {
         ) : null}
       </div>
 
-      {/* Floating top header */}
-      <header className={`mbk-header${headerCompact ? " is-compact" : ""}`}>
-        <div className="moovu-brand-lockup">
-          <Image src="/logo.png" alt="MOOVU Kasi Rides" width={72} height={72} priority />
-          <div>
-            <div className="moovu-kicker">Kasi Rides</div>
-            <div className="text-sm font-bold text-slate-950">Book a ride</div>
-          </div>
-        </div>
-        <nav className="mbk-header-actions" aria-label="Booking shortcuts">
-          <Link href="/" className="moovu-icon-link">
-            <Home aria-hidden="true" />
-            <span>Home</span>
-          </Link>
-          <Link href="/ride/history" className="moovu-icon-link">
-            <ReceiptText aria-hidden="true" />
-            <span>Trips</span>
-          </Link>
-          <Link href="/contact" className="moovu-icon-link">
-            <CircleHelp aria-hidden="true" />
-            <span>Help</span>
-          </Link>
-          <button type="button" className="moovu-icon-link" onClick={logout}>
-            <LogOut aria-hidden="true" />
-            <span>Logout</span>
-          </button>
-        </nav>
+      {/* Keep the map header quiet so the booking task remains primary. */}
+      <header className="mbk-header mbk-customer-question">
+        <span>MOOVU Rider</span>
+        <strong>Where to, {customer?.first_name?.trim() || "Rider"}?</strong>
       </header>
-
-      <div className="mbk-map-back">
-        <CustomerBackHomeNav fallbackHref="/" homeHref="/" homeLabel="Home" compact />
-      </div>
 
       {/* ── Bottom sheet ── */}
       <div
@@ -2134,7 +2102,16 @@ export default function RiderBookingPage() {
         {/* Scrollable inner content */}
         <div
           className="mbk-sheet-scroll"
-          onScroll={(event) => setHeaderCompact(event.currentTarget.scrollTop > 24)}
+          onScroll={(event) => {
+            const nextScrollTop = event.currentTarget.scrollTop;
+            const delta = nextScrollTop - lastSheetScrollTopRef.current;
+
+            if (nextScrollTop <= 4) setShowBookingNav(false);
+            else if (delta > 5) setShowBookingNav(true);
+            else if (delta < -5) setShowBookingNav(false);
+
+            lastSheetScrollTopRef.current = nextScrollTop;
+          }}
         >
           {/* Title row */}
           <div className="flex items-center justify-between gap-3 px-4 pb-2">
@@ -2154,9 +2131,9 @@ export default function RiderBookingPage() {
           </div>
 
           {/* Route inputs box */}
-          <div className="customer-floating-route-card mx-4 rounded-[24px] border border-[var(--moovu-border)] bg-white p-3 shadow-sm">
+          <div className="customer-floating-route-card customer-ehail-route-card mx-4">
             {/* PICKUP */}
-            <div className="moovu-route-field" ref={pickupBoxRef}>
+            <div className="moovu-route-field customer-ehail-route-row is-pickup" ref={pickupBoxRef}>
               <div className="moovu-route-marker-wrap">
                 <span className="moovu-route-dot moovu-route-dot-pickup" />
                 <span className="moovu-route-line" />
@@ -2169,18 +2146,18 @@ export default function RiderBookingPage() {
                   onBlur={() => void onPickupBlur()}
                   onFocus={() => { if (pickupPredictions.length > 0) setShowPickupDropdown(true); }}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onPickupBlur(); } }} />
-                <div className="moovu-location-chip-row">
+                <div className="moovu-location-chip-row customer-ehail-location-actions">
                   <button type="button" className="moovu-loc-inline-btn" onClick={useCurrentLocation}
                     disabled={busy || locationLoading} title="Use current location">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                       <circle cx="8" cy="8" r="3" fill="currentColor" />
                       <path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                     </svg>
-                    <span>{locationLoading ? "Locating..." : "Use current location"}</span>
+                    <span>{locationLoading ? "Locating..." : "Current location"}</span>
                   </button>
                   <button type="button" className="moovu-loc-inline-btn" onClick={() => openMapPicker("pickup")}>
                     <ExactLocationIcon className="moovu-exact-location-icon" />
-                    <span>{pickupLat != null && pickupLng != null ? "Adjust pin" : "Select from map"}</span>
+                    <span>{pickupLat != null && pickupLng != null ? "Adjust pin" : "Choose on map"}</span>
                   </button>
                 </div>
                 {pickupPinned && (
@@ -2219,25 +2196,23 @@ export default function RiderBookingPage() {
               </div>
             </div>
 
-            <div className="border-y border-[#eef2f6] px-1 py-2">
+            <div className="customer-ehail-add-stop-row">
               <button
                 type="button"
-                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl bg-[#f6fafc] px-3 text-left text-sm font-black text-[var(--moovu-primary)] disabled:text-slate-400"
                 disabled={stops.length >= MAX_TRIP_STOPS && !stopsOpen}
                 onClick={() => {
                   if (stops.length === 0) addStopField();
                   else setStopsOpen((value) => !value);
                 }}
               >
-                <span>{stops.length > 0 ? `${stops.length} stop${stops.length > 1 ? "s" : ""} added` : "+ Add stop"}</span>
-                <span className="text-xs font-semibold text-slate-500">
-                  {stops.length >= MAX_TRIP_STOPS ? "Max 2" : "40% off extra route"}
-                </span>
+                <span className="customer-ehail-add-stop-icon" aria-hidden="true">+</span>
+                <span>{stops.length > 0 ? `${stops.length} stop${stops.length > 1 ? "s" : ""}` : "Add stop"}</span>
+                <small>{stops.length >= MAX_TRIP_STOPS ? "Maximum reached" : "Optional"}</small>
               </button>
             </div>
 
             {stopsOpen && stops.map((stop, index) => (
-              <div className="moovu-route-field" key={`stop-${index}`}>
+              <div className="moovu-route-field customer-ehail-route-row is-stop" key={`stop-${index}`}>
                 <div className="moovu-route-marker-wrap">
                   <span className="moovu-route-dot bg-[var(--moovu-primary)] text-white">
                     {index + 1}
@@ -2308,7 +2283,7 @@ export default function RiderBookingPage() {
             ))}
 
             {/* DESTINATION */}
-            <div className="moovu-route-field" ref={dropoffBoxRef}>
+            <div className="moovu-route-field customer-ehail-route-row is-destination" ref={dropoffBoxRef}>
               <div className="moovu-route-marker-wrap">
                 <span className="moovu-route-dot moovu-route-dot-dropoff" />
               </div>
@@ -2317,7 +2292,7 @@ export default function RiderBookingPage() {
                   <label className="moovu-field-label" htmlFor="dropoff-input">Destination</label>
                   <button type="button" className="moovu-loc-inline-btn" onClick={() => openMapPicker("dropoff")}>
                     <ExactLocationIcon className="moovu-exact-location-icon" />
-                    <span>{dropoffLat != null && dropoffLng != null ? "Adjust pin" : "Select from map"}</span>
+                    <span>{dropoffLat != null && dropoffLng != null ? "Adjust pin" : "Choose on map"}</span>
                   </button>
                 </div>
                 <input id="dropoff-input" className="moovu-route-input" placeholder="Where are you going?"
@@ -2330,8 +2305,7 @@ export default function RiderBookingPage() {
                 {dropoffResolving && <div className="moovu-field-hint">Resolving…</div>}
                 {dropoffError && <div className="moovu-field-error">{dropoffError}</div>}
                 <div className="customer-destination-help">
-                  If you cannot find the exact destination, enter a nearby school, tavern,
-                  clinic, shop, or landmark close to where you are going.
+                  Can&apos;t find the exact place? Use a nearby landmark.
                 </div>
                 {showDropoffDropdown && dropoffPredictions.length > 0 && (
                   <div className="moovu-place-menu">
@@ -2415,6 +2389,11 @@ export default function RiderBookingPage() {
           </div>
         </div>
       </div>
+      <CustomerBottomNav
+        className="booking-scroll-nav"
+        visibilityMode="controlled"
+        visible={showBookingNav}
+      />
     </main>
   );
 }

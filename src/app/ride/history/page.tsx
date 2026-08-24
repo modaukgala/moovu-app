@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import CustomerAppHeader from "@/components/app-shell/CustomerAppHeader";
+import { ChevronRight, Flag, MapPin, ReceiptText } from "lucide-react";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -45,7 +45,8 @@ type TripsResponse = {
   error?: string;
 };
 
-const filters = ["all", "completed", "cancelled", "ongoing", "assigned", "requested"] as const;
+type TripFilter = "all" | "completed" | "cancelled" | "ongoing" | "assigned" | "requested";
+const primaryFilters: TripFilter[] = ["all", "completed", "cancelled"];
 
 function money(value: number | null | undefined) {
   const n = Number(value ?? 0);
@@ -107,7 +108,8 @@ export default function RiderHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [trips, setTrips] = useState<RiderTrip[]>([]);
-  const [filter, setFilter] = useState<(typeof filters)[number]>("all");
+  const [filter, setFilter] = useState<TripFilter>("all");
+  const [roleMismatch, setRoleMismatch] = useState(false);
 
   const loadTrips = useCallback(async () => {
     setLoading(true);
@@ -119,6 +121,13 @@ export default function RiderHistoryPage() {
 
     if (!session) {
       router.replace("/customer/auth?next=/ride/history");
+      return;
+    }
+
+    const role = String(session.user.user_metadata?.role || session.user.app_metadata?.role || "").toLowerCase();
+    if (role === "driver") {
+      setRoleMismatch(true);
+      setLoading(false);
       return;
     }
 
@@ -154,13 +163,35 @@ export default function RiderHistoryPage() {
     return trips.filter((trip) => trip.status === filter);
   }, [trips, filter]);
 
-  const completedCount = useMemo(
-    () => trips.filter((trip) => trip.status === "completed").length,
-    [trips]
-  );
+  const tripSummary = useMemo(() => {
+    const completed = trips.filter((trip) => trip.status === "completed");
+    return {
+      all: trips.length,
+      completed: completed.length,
+      cancelled: trips.filter((trip) => trip.status === "cancelled").length,
+      completedFare: completed.reduce(
+        (total, trip) => total + Number(trip.final_fare ?? trip.fare_amount ?? 0),
+        0,
+      ),
+    };
+  }, [trips]);
 
   if (loading) {
     return <LoadingState title="Loading your trips" description="Building your MOOVU ride history." />;
+  }
+
+  async function signInAsCustomer() {
+    await supabaseClient.auth.signOut();
+    window.location.href = "/customer/auth?next=/ride/history";
+  }
+
+  if (roleMismatch) {
+    return (
+      <main className="moovu-app-screen">
+        <div className="moovu-app-container"><CustomerBackHomeNav fallbackHref="/" /><section className="customer-role-page"><span>Driver account detected</span><h1>This trip history is for MOOVU customers</h1><p>Your Driver account remains unchanged. Open Driver trips or explicitly sign in with a Customer account.</p><div><Link href="https://driver.moovurides.co.za/driver/history" className="moovu-btn moovu-btn-primary">Open Driver trips</Link><button type="button" className="moovu-btn moovu-btn-secondary" onClick={signInAsCustomer}>Sign in as Customer</button></div></section></div>
+        <CustomerBottomNav />
+      </main>
+    );
   }
 
   return (
@@ -169,65 +200,65 @@ export default function RiderHistoryPage() {
 
       <div className="moovu-app-container">
         <CustomerBackHomeNav fallbackHref="/book" />
-        <CustomerAppHeader
-          title="My trips"
-          subtitle="Track past rides, open active trips, and view receipts."
-          actionHref="/book"
-          actionLabel="Book"
-        />
-
-        <section className="customer-history-hero">
+        <header className="customer-history-header customer-history-v4-header">
           <div>
-            <div className="moovu-kicker">MOOVU local ride log</div>
-            <h1>Every trip, receipt and status in one place.</h1>
-            <p>
-              MOOVU keeps your local township trips easy to review, with receipts,
-              cancellation notes, stops and live trip access kept together.
-            </p>
+            <div className="moovu-kicker">MOOVU Customer</div>
+            <h1>Trip history</h1>
+            <p>Every ride, fare and receipt in one place.</p>
           </div>
-          <Link href="/book" className="moovu-btn moovu-btn-primary">
-            Book another ride
-          </Link>
-        </section>
+        </header>
 
-        <section className="grid gap-3 sm:grid-cols-3">
-          <div className="moovu-app-metric moovu-app-metric-primary">
-            <div className="moovu-app-metric-label">Total trips</div>
-            <div className="moovu-app-metric-value">{trips.length}</div>
-          </div>
-          <div className="moovu-app-metric moovu-app-metric-success">
-            <div className="moovu-app-metric-label">Completed</div>
-            <div className="moovu-app-metric-value">{completedCount}</div>
-          </div>
-          <div className="moovu-app-metric">
-            <div className="moovu-app-metric-label">Current filter</div>
-            <div className="moovu-app-metric-value">{filterLabel(filter)}</div>
-          </div>
-        </section>
+        <section className="customer-history-v4">
+          <div className="customer-history-summary-tabs" role="tablist" aria-label="Trip summary">
+            {primaryFilters.map((value) => {
+              const count = value === "all"
+                ? tripSummary.all
+                : value === "completed"
+                  ? tripSummary.completed
+                  : tripSummary.cancelled;
+              const detail = value === "completed" && tripSummary.completedFare > 0
+                ? money(tripSummary.completedFare)
+                : `${count} ${count === 1 ? "trip" : "trips"}`;
 
-        <section className="moovu-app-card mt-4 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="moovu-kicker">Ride history</div>
-              <h2 className="mt-1 text-xl font-black text-slate-950">Trips under your account</h2>
-            </div>
-
-            <div className="moovu-filter-row" aria-label="Trip status filters">
-              {filters.map((value) => (
+              return (
                 <button
                   key={value}
                   type="button"
-                  className={filter === value ? "moovu-filter-chip active" : "moovu-filter-chip"}
+                  role="tab"
+                  aria-selected={filter === value}
+                  className={filter === value ? "is-active" : ""}
                   onClick={() => setFilter(value)}
                 >
-                  {filterLabel(value)}
+                  <span>{filterLabel(value)}</span>
+                  <strong>{detail}</strong>
                 </button>
-              ))}
+              );
+            })}
+          </div>
+
+          <div className="customer-history-toolbar">
+            <div>
+              <span>{filterLabel(filter)}</span>
+              <strong>{filteredTrips.length} {filteredTrips.length === 1 ? "ride" : "rides"}</strong>
             </div>
+            <label className="customer-history-more-filter">
+              <span className="sr-only">Filter by another trip status</span>
+              <select
+                value={primaryFilters.includes(filter) ? "more" : filter}
+                onChange={(event) => {
+                  if (event.target.value !== "more") setFilter(event.target.value as TripFilter);
+                }}
+              >
+                <option value="more">Other statuses</option>
+                <option value="ongoing">Ongoing</option>
+                <option value="assigned">Assigned</option>
+                <option value="requested">Requested</option>
+              </select>
+            </label>
           </div>
 
           {filteredTrips.length === 0 ? (
-            <div className="mt-5">
+            <div className="customer-history-empty">
               <EmptyState
                 title="No MOOVU trips yet"
                 description="Your completed, cancelled and active rides will appear here after your first booking."
@@ -239,83 +270,54 @@ export default function RiderHistoryPage() {
               />
             </div>
           ) : (
-            <div className="mt-5 grid gap-3">
+            <div className="customer-trip-list">
               {filteredTrips.map((trip) => (
-                <article key={trip.id} className="moovu-trip-card">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge status={trip.status} />
-                        <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-                          {formatDate(trip.created_at)}
-                        </span>
-                      </div>
+                <article key={trip.id} className="customer-trip-list-row">
+                  <div className="customer-trip-row-topline">
+                    <time dateTime={trip.created_at ?? undefined}>{formatDate(trip.created_at)}</time>
+                    <StatusBadge status={trip.status} />
+                    <strong>{money(trip.final_fare ?? trip.fare_amount)}</strong>
+                  </div>
 
-                      <div className="moovu-route-mini mt-4">
-                        <div className="moovu-route-mini-row">
-                          <span className="moovu-route-mini-dot" />
-                          <div className="min-w-0">
-                            <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                              Pickup
-                            </div>
-                            <div className="mt-1 truncate text-sm font-black text-slate-950">
-                              {dash(trip.pickup_address)}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="moovu-route-mini-row">
-                          <span className="moovu-route-mini-dot dropoff" />
-                          <div className="min-w-0">
-                            <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                              Destination
-                            </div>
-                            <div className="mt-1 truncate text-sm font-black text-slate-950">
-                              {dash(trip.dropoff_address)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="customer-history-meta mt-4">
-                        <span>{rideTypeLabel(trip.ride_type)}</span>
-                        <span>{displayDistance(trip.distance_km)}</span>
-                        <span>{displayDuration(trip.duration_min)}</span>
-                        {stopsCount(trip.stops) > 0 ? <span>{stopsCount(trip.stops)} stop(s)</span> : null}
-                      </div>
+                  <div className="customer-trip-compact-route">
+                    <div>
+                      <MapPin aria-hidden="true" />
+                      <span><small>Pickup</small><strong>{dash(trip.pickup_address)}</strong></span>
                     </div>
+                    <div>
+                      <Flag aria-hidden="true" />
+                      <span><small>Destination</small><strong>{dash(trip.dropoff_address)}</strong></span>
+                    </div>
+                  </div>
 
-                    <div className="grid gap-2 sm:min-w-48 sm:text-right">
-                      <div className="text-2xl font-black text-slate-950">
-                        {money(trip.final_fare ?? trip.fare_amount)}
-                      </div>
-                      <div className="text-sm font-bold text-slate-600">{dash(trip.payment_method)}</div>
-                      {Number(trip.final_add_stop_increase ?? 0) + Number(trip.stop_waiting_fee ?? 0) > 0 ? (
-                        <div className="text-xs font-black text-emerald-700">
-                          Stops included
-                        </div>
-                      ) : null}
+                  <div className="customer-trip-row-footer">
+                    <div>
+                      <span>{rideTypeLabel(trip.ride_type)}</span>
+                      <span>{displayDistance(trip.distance_km)}</span>
+                      <span>{displayDuration(trip.duration_min)}</span>
+                      <span>{dash(trip.payment_method)}</span>
+                      {stopsCount(trip.stops) > 0 ? <span>{stopsCount(trip.stops)} stop(s)</span> : null}
+                    </div>
+                    <div className="customer-trip-row-actions">
+                      <Link href={`/ride/${trip.id}/receipt`} aria-label={`Open receipt for ${formatDate(trip.created_at)}`}>
+                        <ReceiptText aria-hidden="true" />
+                      </Link>
+                      <Link href={`/ride/${trip.id}`} aria-label={`Open trip from ${formatDate(trip.created_at)}`}>
+                        <ChevronRight aria-hidden="true" />
+                      </Link>
                     </div>
                   </div>
 
                   {trip.status === "cancelled" || trip.cancel_reason || trip.cancellation_reason ? (
-                    <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                    <div className="customer-trip-cancellation">
                       {cancellationLabel(trip)}
                       {trip.cancelled_at ? (
-                        <span className="mt-1 block text-xs text-red-600">
+                        <span>
                           Recorded {formatDate(trip.cancelled_at)}
                         </span>
                       ) : null}
                     </div>
                   ) : null}
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Link href={`/ride/${trip.id}`} className="moovu-btn moovu-btn-primary">
-                      Open trip
-                    </Link>
-                    <Link href={`/ride/${trip.id}/receipt`} className="moovu-btn moovu-btn-secondary">
-                      Receipt
-                    </Link>
-                  </div>
                 </article>
               ))}
             </div>

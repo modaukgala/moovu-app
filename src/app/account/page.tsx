@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Bell, CreditCard, FileText, Headphones, LogOut, Pencil, ShieldCheck, Trash2 } from "lucide-react";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
+import CustomerProfileHeader from "@/components/customer/CustomerProfileHeader";
+import CustomerSettingsRow from "@/components/customer/CustomerSettingsRow";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -35,6 +38,7 @@ export default function CustomerAccountPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [roleMismatch, setRoleMismatch] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +50,12 @@ export default function CustomerAccountPage() {
 
       if (!session) {
         window.location.href = "/customer/auth?next=/account";
+        return;
+      }
+
+      const role = String(session.user.user_metadata?.role || session.user.app_metadata?.role || "").toLowerCase();
+      if (role === "driver") {
+        if (!cancelled) { setRoleMismatch(true); setLoading(false); }
         return;
       }
 
@@ -124,42 +134,55 @@ export default function CustomerAccountPage() {
     window.location.href = "/";
   }
 
+  async function signInAsCustomer() {
+    await supabaseClient.auth.signOut();
+    window.location.href = "/customer/auth?next=/account";
+  }
+
+  if (roleMismatch) {
+    return (
+      <main className="moovu-page min-h-screen pb-32 text-slate-950">
+        <div className="moovu-shell max-w-4xl py-6">
+          <CustomerBackHomeNav fallbackHref="/" />
+          <section className="customer-role-page">
+            <span>Driver account detected</span>
+            <h1>This page is for MOOVU customers</h1>
+            <p>Your Driver account remains unchanged. Continue to the Driver portal or explicitly sign in with a Customer account.</p>
+            <div><Link href="https://driver.moovurides.co.za/driver" className="moovu-btn moovu-btn-primary">Open Driver portal</Link><button type="button" className="moovu-btn moovu-btn-secondary" onClick={signInAsCustomer}>Sign in as Customer</button></div>
+          </section>
+        </div>
+        <CustomerBottomNav />
+      </main>
+    );
+  }
+
   return (
     <main className="moovu-page min-h-screen pb-32 text-slate-950">
       {message && <CenteredMessageBox message={message} onClose={() => setMessage(null)} />}
 
       <div className="moovu-shell max-w-4xl space-y-5 py-6">
         <CustomerBackHomeNav fallbackHref="/book" />
-        <section className="moovu-card p-5 sm:p-7">
-          <div className="moovu-section-title">Customer account</div>
-          <h1 className="mt-2 text-3xl font-black">Account and privacy</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            Manage your MOOVU customer account, legal links, and account deletion.
-          </p>
+        <CustomerProfileHeader
+          name={`${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim() || "Customer"}
+          email={customer?.email}
+          phone={customer?.phone}
+        />
+
+        <section className="customer-settings-section">
+          <div className="customer-settings-title"><span>Account</span><strong>Profile and security</strong></div>
+          <CustomerSettingsRow icon={Pencil} label={editing ? "Close personal details" : "Personal details"} detail={loading ? "Loading your profile" : "Name and verified contact details"} onClick={() => setEditing((value) => !value)} />
+          <CustomerSettingsRow href="/account/security" icon={ShieldCheck} label="Security" detail="Email and cellphone verification" />
+          <CustomerSettingsRow href="/account/payment-methods" icon={CreditCard} label="Payment methods" detail="Cash/Transfer is currently available" />
+          <CustomerSettingsRow href="/book" icon={Bell} label="Notifications" detail="Manage trip updates on this device" />
         </section>
 
-        <section className="moovu-card p-5 sm:p-7">
-          {loading ? (
-            <p className="text-sm font-semibold text-slate-600">Loading account...</p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Info label="Name" value={`${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim() || "Customer"} />
-              <Info label="Cellphone" value={customer?.phone || "Not captured"} />
-              <Info label="Email" value={customer?.email || "Not captured"} />
-              <Info label="Status" value={customer?.status || "active"} />
-              <Info label="Support" value="admin@moovurides.co.za" />
-            </div>
-          )}
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button className="moovu-btn moovu-btn-primary" onClick={() => setEditing((value) => !value)}>
-              {editing ? "Close edit" : "Edit Account Details"}
-            </button>
-            <Link className="moovu-btn moovu-btn-secondary" href="/privacy-policy">Privacy Policy</Link>
-            <Link className="moovu-btn moovu-btn-secondary" href="/terms">Terms</Link>
-            <Link className="moovu-btn moovu-btn-secondary" href="/contact">Contact</Link>
-            <button className="moovu-btn moovu-btn-secondary" onClick={signOut}>Logout</button>
-          </div>
+        <section className="customer-settings-section">
+          <div className="customer-settings-title"><span>Safety and support</span><strong>Help and legal</strong></div>
+          <CustomerSettingsRow href="/contact" icon={ShieldCheck} label="Safety" detail="Ride safety and assistance" />
+          <CustomerSettingsRow href="/contact" icon={Headphones} label="Contact MOOVU" detail="Support and ride assistance" />
+          <CustomerSettingsRow href="/privacy-policy" icon={FileText} label="Privacy and terms" detail="How MOOVU protects your information" />
+          <CustomerSettingsRow icon={LogOut} label="Log out" onClick={signOut} />
+          <CustomerSettingsRow href="/account/delete" icon={Trash2} label="Delete account" detail="Permanently remove your account" danger />
         </section>
 
         {editing && (
@@ -238,40 +261,9 @@ export default function CustomerAccountPage() {
           </section>
         )}
 
-        <section className="moovu-card p-5 sm:p-7">
-          <div className="moovu-section-title">Account security</div>
-          <h2 className="mt-2 text-2xl font-black">Verified contact details</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            Email and cellphone changes require verification before MOOVU replaces your current contact details.
-          </p>
-          <Link href="/account/security" className="moovu-btn moovu-btn-secondary mt-5">
-            Open security settings
-          </Link>
-        </section>
-
-        <section className="moovu-card border border-red-100 bg-red-50/50 p-5 sm:p-7">
-          <div className="moovu-section-title text-red-700">Delete account</div>
-          <h2 className="mt-2 text-2xl font-black">Delete Account</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-700">
-            Permanently delete your customer account from inside the app. MOOVU removes profile data and anonymizes retained
-            trip, receipt, tax, fraud-prevention, and safety records where legally required.
-          </p>
-          <Link href="/account/delete" className="moovu-btn mt-5 bg-red-600 text-white">
-            Delete Account
-          </Link>
-        </section>
       </div>
 
       <CustomerBottomNav />
     </main>
-  );
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-3xl bg-slate-50 p-4">
-      <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">{label}</div>
-      <div className="mt-1 text-sm font-black text-slate-950">{value}</div>
-    </div>
   );
 }
