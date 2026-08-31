@@ -1,4 +1,6 @@
 "use client";
+import { useReliableRead, useReadLoop } from "@/hooks/useReliableRead";
+import { READ_POLICIES, readFailure } from "@/lib/reliability/readPolling";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,9 +25,7 @@ import {
   calculateCustomerCancellationFee,
   isWithinFreeCancellationWindow,
 } from "@/lib/finance/cancellationFees";
-import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
-import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type RideTrip = {
   id: string;
@@ -308,7 +308,6 @@ export default function RideTrackingPage() {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const isPageVisible = usePageVisibility();
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -563,15 +562,18 @@ export default function RideTrackingPage() {
     }
   }, [getAccessToken]);
 
-  const loadTrip = useCallback(async () => {
+  const tripRead = useReliableRead(READ_POLICIES.customerTrip, "customer-trip", realtimeConnected, tripId);
+  const locationRead = useReliableRead(READ_POLICIES.location, "customer-location", realtimeConnected, tripId);
+  const loadTrip = useCallback(() => tripRead.run(async (signal) => {
     const accessToken = await getAccessToken();
 
     if (!accessToken) {
       router.replace(`/customer/auth?next=/ride/${tripId}`);
-      return;
+      return readFailure(401);
     }
 
     const res = await fetch(`/api/customer/trip-status?tripId=${encodeURIComponent(tripId)}`, {
+      signal,
       cache: "no-store",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -580,10 +582,11 @@ export default function RideTrackingPage() {
 
     const json = await res.json().catch(() => null);
 
-    if (!json?.ok) {
+    signal.throwIfAborted();
+    if (!res.ok || !json?.ok) {
       setMsg(friendlyTripError(json?.error));
       setLoading(false);
-      return;
+      return readFailure(res.status);
     }
 
     setTrip(json.trip ?? null);
@@ -591,17 +594,19 @@ export default function RideTrackingPage() {
     setRating(json.rating ?? null);
     setTracking(json.tracking ?? null);
     setLoading(false);
-  }, [getAccessToken, router, tripId]);
+  }), [getAccessToken, router, tripId, tripRead]);
 
-  const loadLiveLocation = useCallback(async () => {
+  const loadLiveLocation = useCallback(() => locationRead.run(async (signal) => {
     const accessToken = await getAccessToken();
-    if (!accessToken) return;
+    if (!accessToken) return readFailure(401);
     const response = await fetch(`/api/customer/trip-location?tripId=${encodeURIComponent(tripId)}`, {
+      signal,
       cache: "no-store",
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json = await response.json().catch(() => null);
-    if (!response.ok || !json?.ok) return;
+    signal.throwIfAborted();
+    if (!response.ok || !json?.ok) return readFailure(response.status);
 
     if (json.location) {
       setDriver((current) =>
@@ -639,7 +644,7 @@ export default function RideTrackingPage() {
           : current,
       );
     }
-  }, [getAccessToken, tripId]);
+  }), [getAccessToken, tripId, locationRead]);
 
   const clearMapLayers = useCallback(() => {
     if (pickupMarkerRef.current) pickupMarkerRef.current.setMap(null);
@@ -779,34 +784,8 @@ export default function RideTrackingPage() {
     });
   }, [driver?.lat, driver?.lng, initMapIfNeeded]);
 
-  useEffect(() => {
-    const firstLoadTimer = window.setTimeout(() => {
-      void loadTrip();
-    }, 0);
-    const fallbackMs = isPageVisible
-      ? LIVE_LOCATION_CONFIG.customerTripStatusFallbackMs
-      : LIVE_LOCATION_CONFIG.customerTripStatusHiddenFallbackMs;
-    const pollTimer = window.setInterval(() => {
-      void loadTrip();
-    }, realtimeConnected ? fallbackMs : Math.max(6000, Math.floor(fallbackMs / 2)));
-
-    return () => {
-      window.clearTimeout(firstLoadTimer);
-      window.clearInterval(pollTimer);
-    };
-  }, [isPageVisible, loadTrip, realtimeConnected]);
-
-  useEffect(() => {
-    if (!trip || !["assigned", "arrived", "ongoing"].includes(trip.status)) return;
-    void loadLiveLocation();
-    const fallbackMs = isPageVisible
-      ? LIVE_LOCATION_CONFIG.customerTripLocationFallbackMs
-      : LIVE_LOCATION_CONFIG.customerTripLocationHiddenFallbackMs;
-    const timer = window.setInterval(() => {
-      void loadLiveLocation();
-    }, realtimeConnected ? fallbackMs : Math.max(5000, Math.floor(fallbackMs / 2)));
-    return () => window.clearInterval(timer);
-  }, [isPageVisible, loadLiveLocation, realtimeConnected, trip]);
+  useReadLoop(tripRead, loadTrip);
+  useReadLoop(locationRead, loadLiveLocation, ["assigned", "arrived", "ongoing"].includes(trip?.status ?? ""));
 
   useEffect(() => {
     if (!tripId) return;

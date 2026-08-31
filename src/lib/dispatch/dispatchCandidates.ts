@@ -123,6 +123,11 @@ export async function getDispatchCandidates(params: {
     return haversineKm(pickupLat, pickupLng, Number(driver.lat), Number(driver.lng)) <= radiusKm;
   });
 
+  console.info("[dispatch] candidate discovery", {
+    operation: "candidate-discovery", tripId,
+    discoveredCandidateCount: drivers?.length ?? 0,
+    preliminaryCandidateCount: prelim.length,
+  });
   if (prelim.length === 0) return [] as DispatchCandidate[];
   const driverIds = prelim.map((driver) => driver.id);
 

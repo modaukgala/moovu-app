@@ -4,9 +4,9 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState, type Reac
 import { MessageCircle } from "lucide-react";
 import { canSendChatDraft, shouldSendChatFromKeyboard } from "./composerPolicy";
 import { notifyInApp } from "@/lib/in-app-notifications";
-import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
+import { READ_POLICIES, ReadRequestError, readFailure } from "@/lib/reliability/readPolling";
+import { useReliableRead, useReadLoop } from "@/hooks/useReliableRead";
 import { supabaseClient } from "@/lib/supabase/client";
-import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type TripChatRole = "customer" | "driver";
 
@@ -184,7 +184,8 @@ export default function TripChatPanel({
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const lastUnreadCountRef = useRef(0);
   const mountedRef = useRef(false);
-  const isPageVisible = usePageVisibility();
+  const messageRead = useReliableRead(READ_POLICIES.chat, "chat-messages", realtimeConnected, tripId);
+  const unreadRead = useReliableRead(READ_POLICIES.unread, "chat-unread", realtimeConnected, tripId);
 
   const remaining = MAX_MESSAGE_LENGTH - text.length;
 
@@ -211,7 +212,7 @@ export default function TripChatPanel({
   }, []);
 
   const loadMessages = useCallback(
-    async (showLoading = true) => {
+    (showLoading = true) => messageRead.run(async (signal) => {
       if (!open) return;
 
       if (!tripId) {
@@ -229,10 +230,11 @@ export default function TripChatPanel({
             setError("Please log in again to use chat.");
             setLoading(false);
           }
-          return;
+          return readFailure(401);
         }
 
         const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages?markRead=1`, {
+          signal,
           cache: "no-store",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -240,13 +242,14 @@ export default function TripChatPanel({
         });
 
         const json = (await res.json().catch(() => null)) as MessagesResponse | null;
+        signal.throwIfAborted();
 
         if (!res.ok || !json?.ok) {
           if (mountedRef.current) {
             setError(json?.error || "Unable to load messages. Try again.");
             setLoading(false);
           }
-          return;
+          return readFailure(res.status);
         }
 
         if (!mountedRef.current) return;
@@ -254,22 +257,21 @@ export default function TripChatPanel({
         setRole(json.role ?? null);
         setCanSend(Boolean(json.canSend));
         setUnreadCount(0);
-      } catch (loadError: unknown) {
-        console.error("[trip-chat] load failed", loadError);
-        if (mountedRef.current) setError("Unable to load messages. Try again.");
+      } catch (error) {
+        if (mountedRef.current && !(error instanceof ReadRequestError)) setError("Unable to load messages. Try again.");
+        throw error;
       } finally {
         if (mountedRef.current) setLoading(false);
       }
-    },
-    [getAccessToken, open, tripId],
+    }),
+    [getAccessToken, open, tripId, messageRead],
   );
 
+  const refreshMessages = useCallback(() => loadMessages(false), [loadMessages]);
+  useReadLoop(messageRead, refreshMessages, open, false);
   useEffect(() => {
     if (!open) return;
-    const timer = window.setTimeout(() => {
-      void loadMessages();
-    }, 0);
-
+    const timer = window.setTimeout(() => { void loadMessages(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadMessages, open]);
 
@@ -294,62 +296,45 @@ export default function TripChatPanel({
         setRealtimeConnected(status === "SUBSCRIBED");
       });
 
-    const timer = window.setInterval(() => {
-      if (!document.hidden) void loadMessages(false);
-    }, realtimeConnected ? LIVE_LOCATION_CONFIG.chatOpenFallbackMs : 15000);
-
     return () => {
-      window.clearInterval(timer);
       setRealtimeConnected(false);
       void supabaseClient.removeChannel(channel);
     };
-  }, [loadMessages, open, realtimeConnected, tripId]);
+  }, [loadMessages, open, tripId]);
 
-  const loadUnreadCount = useCallback(async () => {
+  const loadUnreadCount = useCallback(() => unreadRead.run(async (signal) => {
     if (open || disabled) return;
 
-    try {
-      const token = await getAccessToken();
-      if (!token) return;
+    const token = await getAccessToken();
+    if (!token) return readFailure(401);
 
-      const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages`, {
-        cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+    const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/messages`, {
+      signal,
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json().catch(() => null)) as MessagesResponse | null;
+    signal.throwIfAborted();
+    if (!res.ok || !json?.ok) return readFailure(res.status);
+
+    const nextUnreadCount = Number(json.unreadCount ?? 0);
+    if (Number.isFinite(nextUnreadCount) && nextUnreadCount > lastUnreadCountRef.current) {
+      const otherParticipant = label.toLowerCase().includes("customer") ? "customer" : "driver";
+      notifyInApp({
+        title: `New message from ${otherParticipant}`,
+        body: "Open trip chat to reply.",
+        tone: "message",
+        loud: true,
       });
-
-      const json = (await res.json().catch(() => null)) as MessagesResponse | null;
-      if (!res.ok || !json?.ok) return;
-
-      const nextUnreadCount = Number(json.unreadCount ?? 0);
-      if (Number.isFinite(nextUnreadCount) && nextUnreadCount > lastUnreadCountRef.current) {
-        const otherParticipant = label.toLowerCase().includes("customer") ? "customer" : "driver";
-        notifyInApp({
-          title: `New message from ${otherParticipant}`,
-          body: "Open trip chat to reply.",
-          tone: "message",
-          loud: true,
-        });
-      }
-
-      lastUnreadCountRef.current = Number.isFinite(nextUnreadCount) ? nextUnreadCount : 0;
-      setUnreadCount(Number.isFinite(nextUnreadCount) ? nextUnreadCount : 0);
-    } catch (unreadError: unknown) {
-      console.warn("[trip-chat] unread count failed", unreadError);
     }
-  }, [disabled, getAccessToken, label, open, tripId]);
+    lastUnreadCountRef.current = Number.isFinite(nextUnreadCount) ? nextUnreadCount : 0;
+    setUnreadCount(Number.isFinite(nextUnreadCount) ? nextUnreadCount : 0);
+  }), [disabled, getAccessToken, label, open, tripId, unreadRead]);
+
+  useReadLoop(unreadRead, loadUnreadCount, !open && !disabled);
 
   useEffect(() => {
     if (open || disabled) return;
-
-    const timer = window.setTimeout(() => {
-      void loadUnreadCount();
-    }, 0);
-
-    const interval = window.setInterval(() => {
-      if (!document.hidden) void loadUnreadCount();
-    }, realtimeConnected ? LIVE_LOCATION_CONFIG.chatClosedFallbackMs : 20000);
 
     const channel = supabaseClient
       .channel(`trip-chat-badge-${tripId}`)
@@ -370,12 +355,10 @@ export default function TripChatPanel({
       });
 
     return () => {
-      window.clearTimeout(timer);
-      window.clearInterval(interval);
       setRealtimeConnected(false);
       void supabaseClient.removeChannel(channel);
     };
-  }, [disabled, isPageVisible, loadUnreadCount, open, realtimeConnected, tripId]);
+  }, [disabled, loadUnreadCount, open, tripId]);
 
   useEffect(() => {
     if (!open || !listRef.current) return;

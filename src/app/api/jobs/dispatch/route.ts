@@ -5,6 +5,7 @@ import { isDispatchExpired } from "@/lib/dispatch/config";
 import { cancelExpiredDispatch } from "@/lib/dispatch/cancelExpiredDispatch";
 import { isDispatchWorkerAuthorized } from "@/lib/dispatch/dispatchScheduler";
 import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
+import { MAX_DISPATCH_ATTEMPTS, retryDelayMs } from "@/lib/dispatch/reliability";
 
 type ClaimedJob = {
   id: string;
@@ -13,6 +14,7 @@ type ClaimedJob = {
   job_type: "escalate" | "expire" | "recover" | "release_scheduled";
   dispatch_cycle: number;
   sequence_number: number;
+  attempts: number;
 };
 
 export async function POST(req: Request) {
@@ -31,14 +33,21 @@ export async function POST(req: Request) {
   const results: Array<{ id: string; ok: boolean; error?: string }> = [];
 
   for (const job of jobs) {
+    const jobStarted = Date.now();
     try {
+      if (!Number.isInteger(job.attempts) || job.attempts < 1 || job.attempts > MAX_DISPATCH_ATTEMPTS) {
+        throw new Error("Dispatch attempt limit reached or claim contract invalid.");
+      }
       console.log("[dispatch-worker] processing job", {
+        operation: "dispatch-job", correlationId: `${job.id}:${job.attempts}`,
         id: job.id,
         tripId: job.trip_id,
         offerId: job.offer_id,
         jobType: job.job_type,
         cycle: job.dispatch_cycle,
         sequenceNumber: job.sequence_number,
+        attempt: job.attempts,
+        maxAttempts: MAX_DISPATCH_ATTEMPTS,
       });
       if (job.job_type === "release_scheduled") {
         await releaseDueScheduledTrips();
@@ -118,27 +127,41 @@ export async function POST(req: Request) {
         }
       }
 
-      await supabaseAdmin.from("dispatch_jobs").update({
+      const { data: completed, error: completionError } = await supabaseAdmin.from("dispatch_jobs").update({
         status: "completed",
+        locked_at: null,
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }).eq("id", job.id);
-      console.log("[dispatch-worker] completed job", { id: job.id, tripId: job.trip_id, jobType: job.job_type });
+      }).eq("id", job.id).eq("status", "processing").eq("attempts", job.attempts).select("id");
+      if (completionError) throw new Error("Could not acknowledge dispatch job completion.");
+      console.log("[dispatch-worker] job settled", {
+        id: job.id, tripId: job.trip_id, jobType: job.job_type,
+        completed: Boolean(completed?.length), superseded: !completed?.length,
+        durationMs: Date.now() - jobStarted, attempt: job.attempts,
+      });
       results.push({ id: job.id, ok: true });
     } catch (jobError: unknown) {
       const message = jobError instanceof Error ? jobError.message : "Dispatch job failed.";
+      const delayMs = retryDelayMs(job.attempts);
       console.error("[dispatch-worker] job failed", {
         id: job.id,
         tripId: job.trip_id,
         jobType: job.job_type,
         reason: message,
+        attempt: job.attempts,
+        retryDelayMs: delayMs,
+        terminal: delayMs === null,
+        maxAttempts: MAX_DISPATCH_ATTEMPTS,
+        durationMs: Date.now() - jobStarted,
       });
-      await supabaseAdmin.from("dispatch_jobs").update({
-        status: "pending",
+      const { error: retryError } = await supabaseAdmin.from("dispatch_jobs").update({
+        status: delayMs === null ? "failed" : "pending",
+        locked_at: null,
         last_error: message,
-        run_at: new Date(Date.now() + 10_000).toISOString(),
+        ...(delayMs === null ? {} : { run_at: new Date(Date.now() + delayMs).toISOString() }),
         updated_at: new Date().toISOString(),
-      }).eq("id", job.id);
+      }).eq("id", job.id).eq("status", "processing").eq("attempts", job.attempts);
+      if (retryError) console.error("[dispatch-worker] retry acknowledgement failed", { id: job.id, code: retryError.code });
       results.push({ id: job.id, ok: false, error: message });
     }
   }

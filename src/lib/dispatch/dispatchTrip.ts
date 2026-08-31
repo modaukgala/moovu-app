@@ -6,6 +6,8 @@ import { getDispatchCandidates, getPreferredDispatchCandidate } from "@/lib/disp
 import { enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
 import { cancelExpiredDispatch } from "@/lib/dispatch/cancelExpiredDispatch";
 import type { DispatchResult } from "@/lib/dispatch/types";
+import { cappedCandidates, settledPool } from "@/lib/dispatch/reliability";
+import { expireTripOffers } from "@/lib/dispatch/expireTripOffers";
 
 type AtomicOfferRow = {
   offer_id: string;
@@ -60,7 +62,7 @@ async function notifyDriverOffer(params: {
       tripId: params.tripId,
       driverId: params.driverId,
     });
-    return;
+    throw new Error("Driver offer notification target missing.");
   }
   const result = await sendPushSafe({
     userIds: [account.user_id],
@@ -77,12 +79,12 @@ async function notifyDriverOffer(params: {
   console.info("[dispatch] driver offer notification result", {
     tripId: params.tripId,
     driverId: params.driverId,
-    userId: account.user_id,
     delivered: result.delivered,
     failed: result.failed,
     removed: result.removed,
     ok: result.ok,
   });
+  if (!result.ok) throw new Error("Driver offer notification delivery failed.");
 }
 
 export async function dispatchTrip(params: {
@@ -92,9 +94,13 @@ export async function dispatchTrip(params: {
   preferredDriverId?: string | null;
   allowAfterAutomaticExhaustion?: boolean;
 }): Promise<DispatchResult> {
+  const operationStarted = Date.now();
+  const correlationId = crypto.randomUUID();
   const cycle = Math.max(1, params.cycle ?? 1);
   const sequenceNumber = Math.max(1, params.sequenceNumber ?? 1);
   console.log("[dispatch] trip dispatch requested", {
+    operation: "dispatch-trip",
+    correlationId,
     tripId: params.tripId,
     cycle,
     sequenceNumber,
@@ -120,14 +126,7 @@ export async function dispatchTrip(params: {
   }
 
   const expiryNow = new Date().toISOString();
-  const { error: staleOfferError } = await supabaseAdmin
-    .from("driver_trip_offers")
-    .update({
-      status: "expired",
-      updated_at: expiryNow,
-    })
-    .in("status", ["pending", "shown"])
-    .or(`accept_deadline_at.lte.${expiryNow},accept_deadline_at.is.null`);
+  const { error: staleOfferError } = await expireTripOffers(supabaseAdmin, trip.id, expiryNow);
 
   if (staleOfferError) {
     console.error("[dispatch] stale offer cleanup failed", {
@@ -208,17 +207,20 @@ export async function dispatchTrip(params: {
     return { ok: false, tripId: trip.id, error: error instanceof Error ? error.message : "Candidate lookup failed." };
   }
 
-  const candidatesToTry = params.preferredDriverId
-    ? candidates.filter((row) => row.driverId === params.preferredDriverId)
-    : candidates;
+  const candidatesToTry = cappedCandidates(candidates, DISPATCH_CONFIG.maxCandidatesPerStep, params.preferredDriverId);
 
   console.log("[dispatch] candidates prepared", {
+    operation: "dispatch-candidates",
+    correlationId,
     tripId: trip.id,
     cycle,
     sequenceNumber,
     radiusKm,
     candidateCount: candidates.length,
+    eligibleCandidateCount: candidates.length,
+    processedCandidateCount: candidatesToTry.length,
     targetedCount: candidatesToTry.length,
+    configuredCandidateCap: DISPATCH_CONFIG.maxCandidatesPerStep,
   });
 
   if (candidatesToTry.length === 0) {
@@ -365,16 +367,23 @@ export async function dispatchTrip(params: {
     expiresAt: firstRow.accept_deadline_at,
   });
 
-  await Promise.allSettled(
-    rows.map((row) =>
+  const notificationStarted = Date.now();
+  const notificationResult = await settledPool(
+    rows, DISPATCH_CONFIG.notificationConcurrency, (row) =>
       notifyDriverOffer({
         tripId: trip.id,
         driverId: row.driver_id,
         pickup: trip.pickup_address,
         destination: trip.dropoff_address,
       }),
-    ),
   );
+  console.info("[dispatch] notification batch settled", {
+    operation: "offer-notifications", correlationId,
+    tripId: trip.id, concurrency: DISPATCH_CONFIG.notificationConcurrency,
+    durationMs: Date.now() - notificationStarted, ...notificationResult,
+    dispatchDurationMs: Date.now() - operationStarted,
+    offerDeadlineExceeded: Date.now() >= new Date(firstRow.accept_deadline_at).getTime(),
+  });
 
   return {
     ok: true,

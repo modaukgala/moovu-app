@@ -1,6 +1,8 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useReliableRead, useReadLoop } from "@/hooks/useReliableRead";
+import { READ_POLICIES, readFailure, pollDelay } from "@/lib/reliability/readPolling";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CarFront,
@@ -104,6 +106,8 @@ export default function DriverHomePage() {
   const [driverRealtimeConnected, setDriverRealtimeConnected] = useState(false);
   const completionRequestRef = useRef(false);
   const isPageVisible = usePageVisibility();
+  const offerRead = useReliableRead(READ_POLICIES.driverOffers, "driver-offers", driverRealtimeConnected);
+  const tripRead = useReliableRead(READ_POLICIES.driverTrip, "driver-trip", driverRealtimeConnected);
 
   const subscriptionAllowsOnline = canReceiveTripOffers(driver);
   const driverLevel = getDriverLevel(earningsSnapshot.completedTrips);
@@ -131,9 +135,10 @@ export default function DriverHomePage() {
     setSubscriptionPromptOpen(true);
   }, [currentTrip, driver, subscriptionAllowsOnline]);
 
-  const offersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const tripTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gpsCaptureRef = useRef<Promise<boolean> | null>(null);
+  const heartbeatRef = useRef<Promise<boolean> | null>(null);
+  const heartbeatFailureRef = useRef({ failures: 0, retryAt: 0 });
   const gpsPermissionBlockedRef = useRef(false);
   const lastNotifiedOfferIdRef = useRef<string | null>(null);
   const lastHeartbeatSentRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
@@ -160,7 +165,7 @@ export default function DriverHomePage() {
     return () => clearInterval(t);
   }, []);
 
-  async function safeGetSession() {
+  const safeGetSession = useCallback(async () => {
     try {
       const { data, error } = await supabaseClient.auth.getSession();
       if (error || !data.session) {
@@ -172,12 +177,12 @@ export default function DriverHomePage() {
       window.location.href = "/driver/login";
       return null;
     }
-  }
+  }, []);
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const session = await safeGetSession();
     return session?.access_token ?? null;
-  }
+  }, [safeGetSession]);
 
   async function loadDriverProfile(silent = false) {
     if (!silent) {
@@ -213,37 +218,41 @@ export default function DriverHomePage() {
     return json.driver as Driver;
   }
 
-  async function loadCurrentOffer() {
+  const loadCurrentOffer = useCallback(() => offerRead.run(async (signal) => {
     const token = await getAccessToken();
-    if (!token) return;
+    if (!token) return readFailure(401);
 
     const res = await fetch("/api/driver/offers/current", {
+      signal,
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
 
     const json = await res.json().catch(() => null);
-    if (!json?.ok) return;
+    signal.throwIfAborted();
+    if (!res.ok || !json?.ok) return readFailure(res.status);
 
     setOffer(json.offer ?? null);
-  }
+  }), [getAccessToken, offerRead]);
 
-  async function loadCurrentTrip() {
+  const loadCurrentTrip = useCallback(() => tripRead.run(async (signal) => {
     const token = await getAccessToken();
-    if (!token) return;
+    if (!token) return readFailure(401);
 
     const res = await fetch("/api/driver/current-trip", {
+      signal,
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
 
     const json = await res.json().catch(() => null);
-    if (!json?.ok) return;
+    signal.throwIfAborted();
+    if (!res.ok || !json?.ok) return readFailure(res.status);
 
     setCurrentTrip(json.trip ?? null);
-  }
+  }), [getAccessToken, tripRead]);
 
   async function loadEarningsSnapshot() {
     const token = await getAccessToken();
@@ -395,6 +404,10 @@ export default function DriverHomePage() {
     lng: number,
     telemetry?: { heading?: number | null; speedMps?: number | null; accuracyM?: number | null },
   ) {
+    if (heartbeatRef.current) return heartbeatRef.current;
+    if (Date.now() < heartbeatFailureRef.current.retryAt) return false;
+    const started = Date.now();
+    heartbeatRef.current = (async () => {
     const token = await getAccessToken();
     if (!token) return false;
 
@@ -429,10 +442,23 @@ export default function DriverHomePage() {
       message: `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
     });
     return true;
+    })().catch(() => false).then((ok) => {
+      const previousFailures = heartbeatFailureRef.current.failures;
+      const failures = ok ? 0 : previousFailures + 1;
+      const delayMs = ok ? 0 : pollDelay(READ_POLICIES.location, failures, true);
+      heartbeatFailureRef.current = { failures, retryAt: Date.now() + delayMs };
+      if (!ok || previousFailures > 0) console.info("[heartbeat-reliability]", {
+        operation: "driver-heartbeat", failures, recovered: ok && previousFailures > 0,
+        durationMs: Date.now() - started, backoffMs: delayMs,
+      });
+      return ok;
+    }).finally(() => { heartbeatRef.current = null; });
+    return heartbeatRef.current;
   }
 
   async function captureCurrentLocationAndSave(silent = false, refreshProfile = true) {
-    return new Promise<boolean>((resolve) => {
+    if (gpsCaptureRef.current) return gpsCaptureRef.current;
+    gpsCaptureRef.current = new Promise<boolean>((resolve) => {
       if (silent && gpsPermissionBlockedRef.current) {
         resolve(false);
         return;
@@ -500,8 +526,9 @@ export default function DriverHomePage() {
 
           resolve(false);
         }
-      );
-    });
+      ).catch(() => resolve(false));
+    }).finally(() => { gpsCaptureRef.current = null; });
+    return gpsCaptureRef.current;
   }
 
   async function retryCurrentGps() {
@@ -893,41 +920,8 @@ export default function DriverHomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (offersTimerRef.current) clearInterval(offersTimerRef.current);
-    if (!driver?.online) return;
-    const pollMs = isPageVisible
-      ? LIVE_LOCATION_CONFIG.driverOfferPollMs
-      : LIVE_LOCATION_CONFIG.driverHiddenPollMs;
-
-    offersTimerRef.current = setInterval(() => {
-      loadCurrentOffer();
-    }, driverRealtimeConnected ? pollMs : Math.max(5000, Math.floor(pollMs / 2)));
-
-    return () => {
-      if (offersTimerRef.current) clearInterval(offersTimerRef.current);
-    };
-    // Polling is keyed to online state; the loader reads the current auth session each tick.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.online, driverRealtimeConnected, isPageVisible]);
-
-  useEffect(() => {
-    if (tripTimerRef.current) clearInterval(tripTimerRef.current);
-    if (!driver?.online || otpEntryOpen) return;
-    const pollMs = isPageVisible
-      ? LIVE_LOCATION_CONFIG.driverTripPollMs
-      : LIVE_LOCATION_CONFIG.driverHiddenPollMs;
-
-    tripTimerRef.current = setInterval(() => {
-      loadCurrentTrip();
-    }, driverRealtimeConnected ? pollMs : Math.max(5000, Math.floor(pollMs / 2)));
-
-    return () => {
-      if (tripTimerRef.current) clearInterval(tripTimerRef.current);
-    };
-    // Polling is keyed to online/OTP state so OTP entry is not disrupted.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.online, driverRealtimeConnected, isPageVisible, otpEntryOpen]);
+  useReadLoop(offerRead, loadCurrentOffer, Boolean(driver?.online), false);
+  useReadLoop(tripRead, loadCurrentTrip, Boolean(driver?.online) && !otpEntryOpen, false);
 
   useEffect(() => {
     if (searchParams.get("offerExpired") !== "1") return;

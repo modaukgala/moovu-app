@@ -8,6 +8,8 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
+import { useReliableRead, useReadLoop } from "@/hooks/useReliableRead";
+import { READ_POLICIES, readFailure } from "@/lib/reliability/readPolling";
 
 type BoardTrip = {
   id: string;
@@ -57,6 +59,8 @@ export default function DispatchBoardPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const refreshDebounceRef = useRef<number | null>(null);
   const isPageVisible = usePageVisibility();
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const boardRead = useReliableRead(READ_POLICIES.adminBoard, "admin-board", realtimeConnected);
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -66,43 +70,39 @@ export default function DispatchBoardPage() {
     return session?.access_token ?? null;
   }, []);
 
-  const loadBoard = useCallback(async () => {
+  const loadBoard = useCallback(() => boardRead.run(async (signal) => {
     const token = await getAccessToken();
 
     if (!token) {
       setMsg("Missing access token.");
       setRows([]);
-      return;
+      return readFailure(401);
     }
 
     const res = await fetch("/api/admin/dispatch/board", {
+      signal,
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
     const json = await res.json();
+    signal.throwIfAborted();
 
-    if (!json.ok) {
+    if (!res.ok || !json.ok) {
       setMsg(json.error || "Failed to load dispatch board");
       setRows([]);
-      return;
+      return readFailure(res.status);
     }
 
     setMsg(null);
     setRows(json.rows ?? []);
-  }, [getAccessToken]);
+  }), [getAccessToken, boardRead]);
 
-  useEffect(() => {
-    const initialLoad = window.setTimeout(() => {
-      void loadBoard();
-    }, 0);
-    return () => window.clearTimeout(initialLoad);
-  }, [loadBoard]);
+  useReadLoop(boardRead, loadBoard);
 
   useEffect(() => {
     const t = setInterval(() => {
       setNowMs(Date.now());
-      if (!document.hidden) void loadBoard();
     }, LIVE_LOCATION_CONFIG.adminDispatchBoardRefreshMs);
     return () => clearInterval(t);
   }, [loadBoard]);
@@ -124,7 +124,7 @@ export default function DispatchBoardPage() {
           void loadBoard();
         }, 1200);
       })
-      .subscribe();
+      .subscribe((status) => setRealtimeConnected(status === "SUBSCRIBED"));
 
     return () => {
       if (refreshDebounceRef.current != null) {

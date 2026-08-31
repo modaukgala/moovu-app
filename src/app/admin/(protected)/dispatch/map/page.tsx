@@ -1,4 +1,6 @@
 "use client";
+import { useReliableRead, useReadLoop } from "@/hooks/useReliableRead";
+import { READ_POLICIES, readFailure } from "@/lib/reliability/readPolling";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -9,7 +11,6 @@ import {
   makeRouteRenderer,
   stopMarkerIcon,
 } from "@/lib/maps/liveMapMarkers";
-import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 
@@ -82,34 +83,38 @@ export default function DispatchMapPage() {
     return session?.access_token ?? null;
   }, []);
 
-  const loadBoardMap = useCallback(async () => {
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const mapRead = useReliableRead(READ_POLICIES.adminMap, "admin-map", realtimeConnected);
+  const loadBoardMap = useCallback(() => mapRead.run(async (signal) => {
     const token = await getAccessToken();
 
     if (!token) {
       setMsg("Missing access token.");
       setDrivers([]);
       setTrips([]);
-      return;
+      return readFailure(401);
     }
 
     const res = await fetch("/api/admin/dispatch/map", {
+      signal,
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
     const json = await res.json();
+    signal.throwIfAborted();
 
-    if (!json.ok) {
+    if (!res.ok || !json.ok) {
       setMsg(json.error || "Failed to load map data");
       setDrivers([]);
       setTrips([]);
-      return;
+      return readFailure(res.status);
     }
 
     setMsg(null);
     setDrivers(json.drivers ?? []);
     setTrips(json.trips ?? []);
-  }, [getAccessToken]);
+  }), [getAccessToken, mapRead]);
 
   function clearMarkers(arr: google.maps.Marker[]) {
     for (const m of arr) m.setMap(null);
@@ -305,13 +310,7 @@ export default function DispatchMapPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, drivers, trips]);
 
-  useEffect(() => {
-    const t = setInterval(() => {
-      if (!document.hidden) void loadBoardMap();
-    }, LIVE_LOCATION_CONFIG.adminDispatchMapRefreshMs);
-
-    return () => clearInterval(t);
-  }, [loadBoardMap]);
+  useReadLoop(mapRead, loadBoardMap, true, false);
 
   useEffect(() => {
     const channel = supabaseClient
@@ -330,7 +329,7 @@ export default function DispatchMapPage() {
           void loadBoardMap();
         }, 1200);
       })
-      .subscribe();
+      .subscribe((status) => setRealtimeConnected(status === "SUBSCRIBED"));
 
     return () => {
       if (refreshDebounceRef.current != null) {

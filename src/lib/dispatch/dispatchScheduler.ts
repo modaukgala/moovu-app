@@ -38,7 +38,7 @@ export async function enqueueDispatchJob(params: {
       status: "pending",
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "trip_id,job_type,dispatch_cycle,sequence_number" },
+    { onConflict: "trip_id,job_type,dispatch_cycle,sequence_number", ignoreDuplicates: true },
   );
 
   if (error) {

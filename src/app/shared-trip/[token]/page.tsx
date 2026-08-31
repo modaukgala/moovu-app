@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useReliableRead, useReadLoop } from "@/hooks/useReliableRead";
+import { READ_POLICIES } from "@/lib/reliability/readPolling";
 import { useParams } from "next/navigation";
 
 type SharedTrip = {
@@ -30,45 +32,41 @@ export default function SharedTripPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const loadSharedTrip = useCallback(async () => {
-    setLoading(true);
+  const sharedRead = useReliableRead(READ_POLICIES.customerTrip, "shared-trip", true, params.token);
+  const loadSharedTrip = useCallback(() => sharedRead.run(async (signal) => {
     setMsg(null);
 
     try {
       const res = await fetch(
         `/api/customer/shared-trip?token=${encodeURIComponent(params.token)}`,
-        { cache: "no-store" }
+        { cache: "no-store", signal }
       );
 
       const json = await res.json().catch(() => null);
+      signal.throwIfAborted();
 
-      if (!json?.ok) {
+      if (!res.ok || !json?.ok) {
         setTrip(null);
         setDriver(null);
         setMsg(json?.error || "Could not load shared trip.");
-        return;
+        if ([403, 404, 410].includes(res.status)) sharedRead.setTerminal(true);
+        return false;
       }
 
       setTrip((json.trip ?? null) as SharedTrip | null);
       setDriver((json.driver ?? null) as SharedDriver | null);
+      if (["completed", "cancelled"].includes(json.trip?.status)) sharedRead.setTerminal(true);
     } catch {
       setTrip(null);
       setDriver(null);
       setMsg("Could not load shared trip.");
+      return false;
     } finally {
       setLoading(false);
     }
-  }, [params.token]);
+  }), [params.token, sharedRead]);
 
-  useEffect(() => {
-    void loadSharedTrip();
-
-    const timer = setInterval(() => {
-      void loadSharedTrip();
-    }, 4000);
-
-    return () => clearInterval(timer);
-  }, [loadSharedTrip]);
+  useReadLoop(sharedRead, loadSharedTrip);
 
   if (loading) {
     return <main className="p-6 text-black">Loading shared trip...</main>;

@@ -9,6 +9,7 @@ export const DISPATCH_CONFIG = {
   maxSearchSeconds: 30 * 60,
   maxCycles: 3,
   maxCandidatesPerStep: 25,
+  notificationConcurrency: 5,
 } as const;
 
 export function isDispatchExpired(requestedAt: string | null | undefined, nowMs = Date.now()) {
