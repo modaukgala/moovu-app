@@ -20,11 +20,6 @@ import {
 } from "@/lib/maps/liveMapMarkers";
 import { minimumRequiredTripSeconds } from "@/lib/geo/tripGuards";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
-import {
-  FREE_CANCELLATION_WINDOW_MS,
-  calculateCustomerCancellationFee,
-  isWithinFreeCancellationWindow,
-} from "@/lib/finance/cancellationFees";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type RideTrip = {
@@ -138,6 +133,8 @@ type DetailModal =
   | "otp"
   | null;
 type OtpModal = "start" | "end" | null;
+type CancellationQuote = { quote_id: string; expires_at: string;
+  terms: { kind: string; fee_cents: number; policy_version: string } };
 
 declare global {
   interface Window {
@@ -282,6 +279,8 @@ export default function RideTrackingPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [authoritativeCancelQuote, setAuthoritativeCancelQuote] = useState<CancellationQuote | null>(null);
+  const [legacyCancelReviewed, setLegacyCancelReviewed] = useState(false);
   const [cancelReason, setCancelReason] =
     useState<(typeof CANCEL_REASONS)[number]>("Booked by mistake");
   const [cancelReasonDetails, setCancelReasonDetails] = useState("");
@@ -991,6 +990,35 @@ export default function RideTrackingPage() {
         return;
       }
 
+      let quote = authoritativeCancelQuote;
+      if (!quote || Date.parse(quote.expires_at) <= Date.now()) {
+        const quoteResponse = await fetch("/api/customer/cancellation-quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ tripId: trip.id }),
+        });
+        const quoted = await quoteResponse.json().catch(() => null);
+        if (!quoted?.ok) {
+          setMsg(quoted?.error || "Cancellation terms are unavailable.");
+          setCancelBusy(false);
+          return;
+        }
+        if (quoted.authority === "PHASE4") {
+          quote = quoted.quote as CancellationQuote;
+          setAuthoritativeCancelQuote(quote);
+          setMsg(`Review and confirm: ${quote.terms.fee_cents > 0
+            ? `R${(quote.terms.fee_cents / 100).toFixed(2)} cancellation fee` : "free cancellation"}.`);
+          setCancelBusy(false);
+          return;
+        }
+        if (!legacyCancelReviewed) {
+          setLegacyCancelReviewed(true);
+          setMsg("This trip uses the existing cancellation policy. Confirm cancellation to continue.");
+          setCancelBusy(false);
+          return;
+        }
+      }
+
       const res = await fetch("/api/customer/cancel-trip", {
         method: "POST",
         headers: {
@@ -1001,18 +1029,25 @@ export default function RideTrackingPage() {
           tripId: trip.id,
           reason: cancelReason,
           reasonDetails: cancelReason === "Other" ? cancelReasonDetails : "",
+          quoteId: quote?.quote_id,
         }),
       });
 
       const json = await res.json().catch(() => null);
 
       if (!json?.ok) {
+        if (json?.requiresReconfirmation) {
+          setAuthoritativeCancelQuote(null);
+          setLegacyCancelReviewed(false);
+        }
         setMsg(json?.error || "Failed to cancel trip.");
         setCancelBusy(false);
         return;
       }
 
       setMsg(json.message || "Trip cancelled successfully.");
+      setAuthoritativeCancelQuote(null);
+      setLegacyCancelReviewed(false);
       await loadTrip();
     } catch (error: unknown) {
       setMsg(error instanceof Error ? error.message : "Failed to cancel trip.");
@@ -1140,34 +1175,6 @@ export default function RideTrackingPage() {
     return ["assigned", "arrived", "ongoing"].includes(trip.status) && tripStops.length < 2;
   }, [trip, tripStops.length]);
 
-  const cancellationPreview = useMemo(() => {
-    if (!trip) return { fee: 0, label: "Cancel ride for free", insideFreeWindow: false };
-    const result = calculateCustomerCancellationFee({
-      status: trip.status,
-      createdAt: trip.created_at,
-      rideOptionId: trip.ride_type,
-      nowMs,
-    });
-    const insideFreeWindow = isWithinFreeCancellationWindow(trip.created_at, nowMs);
-    return {
-      fee: result.feeAmount,
-      label: result.feeAmount > 0
-        ? `Confirm cancellation fee R${result.feeAmount}`
-        : "Cancel trip",
-      insideFreeWindow,
-    };
-  }, [nowMs, trip]);
-
-  const freeCancellationCountdown = useMemo(() => {
-    const createdMs = trip?.created_at ? new Date(trip.created_at).getTime() : NaN;
-    if (!Number.isFinite(createdMs)) return "";
-    const seconds = Math.max(
-      0,
-      Math.ceil((createdMs + FREE_CANCELLATION_WINDOW_MS - nowMs) / 1000),
-    );
-    if (seconds <= 0) return "";
-    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  }, [nowMs, trip?.created_at]);
 
   const cancellationReasonValid = cancelReason !== "Other" || cancelReasonDetails.trim().length >= 3;
 
@@ -1891,7 +1898,10 @@ export default function RideTrackingPage() {
                         onClick={cancelTrip}
                         className="moovu-btn bg-red-600 text-white disabled:opacity-60"
                       >
-                        {cancelBusy ? "Cancelling..." : cancellationPreview.label}
+                        {cancelBusy ? "Checking..." : legacyCancelReviewed ? "Confirm cancellation" : authoritativeCancelQuote
+                          ? `Confirm cancellation — ${authoritativeCancelQuote.terms.fee_cents > 0
+                            ? `R${(authoritativeCancelQuote.terms.fee_cents / 100).toFixed(2)}` : "free"}`
+                          : "Review cancellation terms"}
                       </button>
                       <button
                         type="button"
@@ -1903,9 +1913,9 @@ export default function RideTrackingPage() {
                       </button>
                     </div>
                     <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
-                      {cancellationPreview.fee > 0
-                        ? "The free cancellation window has ended. The fee shown above applies only if you confirm."
-                        : "Cancellation is currently free under the MOOVU cancellation policy."}
+                      {authoritativeCancelQuote
+                        ? `Authoritative quote expires ${new Date(authoritativeCancelQuote.expires_at).toLocaleTimeString()}. Changes require fresh confirmation.`
+                        : "Review current server terms before you confirm cancellation."}
                     </p>
                   </div>
                 )}
@@ -2209,14 +2219,14 @@ export default function RideTrackingPage() {
               </div>
             </div>
 
-            {canCancel && cancellationPreview.insideFreeWindow && (
+            {canCancel && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-blue-100 bg-blue-50 px-4 py-3">
                 <div>
                   <div className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">
-                    Booking correction window
+                    Cancellation terms
                   </div>
                   <p className="mt-1 text-sm font-semibold text-slate-700">
-                    Free cancellation available for {freeCancellationCountdown || "00:00"}
+                    Review the current fee with MOOVU before confirming.
                   </p>
                 </div>
                 <button
@@ -2585,13 +2595,16 @@ export default function RideTrackingPage() {
                   onClick={cancelTrip}
                   className="moovu-btn bg-red-600 text-white disabled:opacity-60"
                 >
-                  {cancelBusy ? "Cancelling..." : cancellationPreview.label}
+                  {cancelBusy ? "Checking..." : legacyCancelReviewed ? "Confirm cancellation" : authoritativeCancelQuote
+                    ? `Confirm cancellation — ${authoritativeCancelQuote.terms.fee_cents > 0
+                      ? `R${(authoritativeCancelQuote.terms.fee_cents / 100).toFixed(2)}` : "free"}`
+                    : "Review cancellation terms"}
                 </button>
 
                 <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-                  {cancellationPreview.fee > 0
-                    ? "The free cancellation window has ended. The fee shown above applies only if you confirm."
-                    : "Cancellation is currently free under the MOOVU cancellation policy."}
+                  {authoritativeCancelQuote
+                    ? `Authoritative quote expires ${new Date(authoritativeCancelQuote.expires_at).toLocaleTimeString()}. Changes require fresh confirmation.`
+                    : "Review current server terms before you confirm cancellation."}
                 </div>
               </div>
             )}

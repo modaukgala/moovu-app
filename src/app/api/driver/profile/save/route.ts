@@ -1,3 +1,4 @@
+import { phase6LegacyMutation } from "@/lib/drivers/phase6LegacyRoutes";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -54,6 +55,8 @@ function cleanNumber(value: unknown) {
 }
 
 export async function POST(req: Request) {
+  const retirement = phase6LegacyMutation(req);
+  if (retirement) return retirement;
   try {
     const authHeader = req.headers.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;

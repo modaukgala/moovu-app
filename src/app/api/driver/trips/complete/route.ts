@@ -54,7 +54,10 @@ export async function POST(req: Request) {
     });
 
     if (!result.ok) {
-      return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+      return NextResponse.json(
+        { ok: false, error: result.error, code: result.code, referenceId: result.referenceId },
+        { status: result.status },
+      );
     }
     return NextResponse.json(result);
   } catch (error: unknown) {

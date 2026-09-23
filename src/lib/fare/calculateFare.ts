@@ -10,6 +10,7 @@ type CalculateFareParams = {
   surgeMultiplier?: number | null;
   waitingMinutes?: number | null;
   remotePickupFee?: number | null;
+  includeEmbeddedBookingFee?: boolean;
 };
 
 export function calculateFare(params: CalculateFareParams) {
@@ -22,5 +23,6 @@ export function calculateFare(params: CalculateFareParams) {
     surgeMultiplier: params.surgeMultiplier,
     waitingMinutes: params.waitingMinutes,
     remotePickupFee: params.remotePickupFee,
+    includeEmbeddedBookingFee: params.includeEmbeddedBookingFee,
   });
 }

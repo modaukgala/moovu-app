@@ -72,10 +72,10 @@ from updated_trips;
 -- 3. Requeue overdue dispatch jobs that were left processing.
 update public.dispatch_jobs
 set
-  status = 'pending',
+  status = case when attempts >= 5 then 'failed' else 'pending' end,
   locked_at = null,
   last_error = coalesce(last_error, 'Recovered stale processing job'),
-  run_at = now(),
+  run_at = now() + make_interval(secs => case attempts when 1 then 10 when 2 then 30 when 3 then 60 when 4 then 120 else 0 end),
   updated_at = now()
 where status = 'processing'
   and locked_at <= now() - interval '2 minutes';

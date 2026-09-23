@@ -112,6 +112,26 @@ export async function GET(req: Request) {
       );
     }
 
+    const attemptsByTrip = new Map<string, Set<string>>();
+    const tripIds = (trips ?? []).map(trip => trip.id);
+    if (tripIds.length) {
+      // Page canonical rows instead of trusting the unused legacy array or the
+      // Data API's default row limit. This count is informational, not authority.
+      for (let offset = 0; ; offset += 1000) {
+        const attemptResult = await supabaseAdmin.from("driver_trip_offers")
+          .select("id,trip_id,driver_id").in("trip_id", tripIds).order("id").range(offset, offset + 999);
+        if (attemptResult.error) {
+          console.error("[dispatch-board] attempt history unavailable", attemptResult.error);
+          return NextResponse.json({ ok: false, error: "Dispatch offer history is unavailable." }, { status: 503 });
+        }
+        for (const attempt of attemptResult.data ?? []) {
+          const ids = attemptsByTrip.get(attempt.trip_id) ?? new Set<string>();
+          ids.add(attempt.driver_id);
+          attemptsByTrip.set(attempt.trip_id, ids);
+        }
+        if ((attemptResult.data ?? []).length < 1000) break;
+      }
+    }
     const rows = ((trips ?? []) as DispatchTripRow[]).map((trip) => {
       const driver = trip.driver_id ? driversById[trip.driver_id] : null;
       return {
@@ -126,9 +146,7 @@ export async function GET(req: Request) {
               subscription_status: driver.subscription_status ?? null,
             }
           : null,
-        attempted_count: Array.isArray(trip.offer_attempted_driver_ids)
-          ? trip.offer_attempted_driver_ids.length
-          : 0,
+        attempted_count: attemptsByTrip.get(trip.id)?.size ?? 0,
       };
     });
 

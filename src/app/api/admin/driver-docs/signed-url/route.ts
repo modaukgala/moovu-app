@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { requireAdminUser, isFinancialAdminRole } from "@/lib/auth/admin";
 import {
   createDriverDocumentSignedUrl,
   normalizeDriverDocumentStoragePath,
@@ -17,6 +17,7 @@ export async function POST(req: Request) {
     }
 
     const { supabaseAdmin } = auth;
+    if (!isFinancialAdminRole(auth.profile.role)) return NextResponse.json({ error: "Authorized document reviewer required." }, { status: 403 });
     const body = await req.json();
     const path = String(body?.path ?? "").trim();
     const normalizedPath = normalizeDriverDocumentStoragePath(path);

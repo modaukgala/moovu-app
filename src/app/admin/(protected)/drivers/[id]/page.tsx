@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -208,6 +208,7 @@ export default function AdminDriverProfilePage() {
   const [paymentMethod, setPaymentMethod] = useState("eft");
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
+  const subscriptionOperationKeyRef = useRef("");
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -318,6 +319,7 @@ export default function AdminDriverProfilePage() {
       return;
     }
 
+    if (!subscriptionOperationKeyRef.current) subscriptionOperationKeyRef.current = crypto.randomUUID();
     const res = await fetch("/api/admin/driver-subscription-activate", {
       method: "POST",
       headers: {
@@ -332,6 +334,7 @@ export default function AdminDriverProfilePage() {
         reference,
         note,
         requestId,
+        operationKey: subscriptionOperationKeyRef.current,
       }),
     });
 
@@ -344,6 +347,7 @@ export default function AdminDriverProfilePage() {
     }
 
     setMsg(json?.message || "Subscription activated.");
+    subscriptionOperationKeyRef.current = "";
     setReference("");
     setNote("");
     await loadAll();

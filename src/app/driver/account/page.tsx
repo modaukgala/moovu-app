@@ -230,7 +230,7 @@ export default function DriverAccountPage() {
             { href: "/driver/subscriptions", label: "Subscription", description: "Plan and payment history", icon: WalletCards },
             { href: "/driver/earnings", label: "Earnings", description: "Trips and totals", icon: WalletCards },
             { href: "/driver/trip-offers", label: "Trip offers", description: "Received requests", icon: CarFront },
-            { href: "/driver/commission-payments", label: "Commission", description: "Balance and POP", icon: WalletCards },
+            { href: "/driver/commission-payments", label: "Commission", description: "Balance and secure online payment", icon: WalletCards },
             { href: "/driver/complete-profile", label: "Documents", description: "Profile and vehicle", icon: FileCheck2 },
             { href: "/driver", label: "Notifications", description: "Enable alerts on Home", icon: ShieldCheck },
             { href: "/driver/contact", label: "Support", description: "Contact MOOVU", icon: Headphones },

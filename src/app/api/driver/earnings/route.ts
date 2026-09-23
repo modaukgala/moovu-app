@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { recalculateDriverWalletServer } from "@/lib/finance/driverWalletLedger";
+import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 
 type CompletedTripRow = {
   id: string;
@@ -29,6 +30,8 @@ type CancellationFeeRow = {
   moovu_amount: number | string | null;
   reason: string | null;
   created_at: string | null;
+  phase4_assessment_id?: string | null;
+  compensation_status?: string | null;
 };
 
 type CompletedTripWithTimestamp = CompletedTripRow & {
@@ -213,6 +216,15 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: walletResult.error }, { status: 500 });
     }
     const normalizedWallet = walletResult.wallet ?? wallet;
+    const financeResult = await resolveDriverFinanceAuthority(supabaseAdmin, {
+      driverId,
+      subscriptionStatus: driver?.subscription_status,
+      subscriptionExpiresAt: driver?.subscription_expires_at,
+      legacyBalanceDue: num(normalizedWallet?.balance_due),
+    });
+    if (!financeResult.ok) {
+      return NextResponse.json({ ok: false, error: financeResult.error }, { status: 503 });
+    }
 
     const tripIds = typedCompletedTrips.map((trip) => trip.id);
     const completedAtMap = new Map<string, string>();
@@ -245,12 +257,24 @@ export async function GET(req: Request) {
 
     const { data: cancellationFees } = await supabaseAdmin
       .from("trip_cancellation_fees")
-      .select("id,trip_id,fee_type,fee_amount,driver_amount,moovu_amount,reason,created_at")
+      .select("id,trip_id,fee_type,fee_amount,driver_amount,moovu_amount,reason,created_at,phase4_assessment_id")
       .eq("driver_id", driverId)
       .order("created_at", { ascending: false })
       .limit(50);
 
     const typedCancellationFees = (cancellationFees ?? []) as CancellationFeeRow[];
+    const phase4Ids = typedCancellationFees.map((row) => row.phase4_assessment_id).filter((id): id is string => !!id);
+    let compensationStatus = new Map<string, string>();
+    if (phase4Ids.length) {
+      const { data: compensations, error: compensationError } = await supabaseAdmin
+        .from("phase4_driver_compensations").select("assessment_id,status")
+        .in("assessment_id", phase4Ids).eq("driver_id", driverId);
+      if (compensationError) return NextResponse.json({ ok: false, error: "Driver compensation state unavailable." }, { status: 503 });
+      compensationStatus = new Map((compensations ?? []).map((row) => [row.assessment_id, row.status]));
+    }
+    const cancellationRows = typedCancellationFees.map((row) => ({ ...row,
+      compensation_status: row.phase4_assessment_id ? compensationStatus.get(row.phase4_assessment_id) ?? "UNKNOWN" : null,
+    }));
     const cancellationDriverEarnings = typedCancellationFees.reduce(
       (sum, row) => sum + num(row.driver_amount),
       0
@@ -266,6 +290,7 @@ export async function GET(req: Request) {
       ok: true,
       earnings: {
         wallet: normalizedWallet ?? null,
+        finance_authority: financeResult.authority,
         driver: driver ?? null,
         settlements: settlements ?? [],
         subscription_payments: subscriptionPayments ?? [],
@@ -273,7 +298,7 @@ export async function GET(req: Request) {
         commission_breakdown: walletTransactions ?? [],
         commission_totals: walletResult.totals,
         recent_completed_trips: normalizedTrips,
-        cancellation_fees: typedCancellationFees,
+        cancellation_fees: cancellationRows,
         cancellation_driver_earnings: cancellationDriverEarnings,
         late_cancellation_driver_earnings: lateCancellationDriverEarnings,
         no_show_driver_earnings: noShowDriverEarnings,

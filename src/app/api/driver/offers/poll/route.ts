@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getUserFromBearer } from "@/app/api/driver/utils";
+import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 
 const TRIP_SELECT =
   "id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount";
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     // Check eligibility
     const { data: driver, error: dErr } = await supabaseAdmin
       .from("drivers")
-      .select("id,online,status,subscription_status")
+      .select("id,online,status,subscription_status,subscription_expires_at")
       .eq("id", driverId)
       .single();
 
@@ -37,9 +38,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, offers: [], info: "You are offline" });
     }
 
-    if (driver.subscription_status !== "active" && driver.subscription_status !== "grace") {
-      return NextResponse.json({ ok: true, offers: [], info: "Subscription inactive" });
-    }
+    const { data: wallet } = await supabaseAdmin.from("driver_wallets").select("balance_due").eq("driver_id", driverId).maybeSingle();
+    const finance = await resolveDriverFinanceAuthority(supabaseAdmin, { driverId,
+      subscriptionStatus: driver.subscription_status, subscriptionExpiresAt: driver.subscription_expires_at,
+      legacyBalanceDue: Number(wallet?.balance_due ?? 0) });
+    if (!finance.ok) return NextResponse.json({ ok: false, error: finance.error, code: finance.code }, { status: 503 });
+    if (!finance.authority.financiallyEligible) return NextResponse.json({ ok: true, offers: [], info: "Financial eligibility inactive" });
 
     const { error } = await supabaseAdmin
       .from("driver_trip_offers")

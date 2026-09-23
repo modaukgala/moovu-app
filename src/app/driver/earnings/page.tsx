@@ -94,6 +94,8 @@ type CancellationFee = {
   moovu_amount: number | null;
   reason: string | null;
   created_at: string | null;
+  phase4_assessment_id?: string | null;
+  compensation_status?: string | null;
 };
 
 type CommissionTransaction = {
@@ -314,21 +316,21 @@ export default function DriverEarningsPage() {
 
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <MetricCard
-            label="Cancellation payouts"
+            label="Cancellation amounts"
             value={money(lateCancellationDriverEarnings)}
-            helper="R10 driver payout per late cancellation"
+            helper="Recorded Driver amounts; check status below"
             tone={lateCancellationDriverEarnings > 0 ? "warning" : "default"}
           />
           <MetricCard
-            label="No-show payouts"
+            label="No-show amounts"
             value={money(noShowDriverEarnings)}
-            helper="R22 driver payout per no-show"
+            helper="Recorded Driver amounts; check status below"
             tone={noShowDriverEarnings > 0 ? "primary" : "default"}
           />
           <MetricCard
-            label="Fee payouts total"
+            label="Fee amounts total"
             value={money(cancellationDriverEarnings)}
-            helper="Credits reduce MOOVU commission owed"
+            helper="Legacy credits and Phase 4 earned obligations differ"
             tone="success"
           />
         </section>
@@ -432,7 +434,7 @@ export default function DriverEarningsPage() {
           {paymentRequests.length === 0 ? (
             <EmptyState
               title="No payment requests yet"
-              description="Submitted subscription and commission proof of payment requests will appear here."
+              description="Historical manual subscription and commission requests will appear here."
             />
           ) : (
             <div className="space-y-3">
@@ -473,7 +475,7 @@ export default function DriverEarningsPage() {
                         rel="noreferrer"
                         className="moovu-btn moovu-btn-secondary"
                       >
-                        View POP
+                        View historical proof
                       </a>
                     </div>
                   )}
@@ -538,12 +540,12 @@ export default function DriverEarningsPage() {
         </section>
 
         <section className="moovu-card p-5 sm:p-6 space-y-4">
-          <h2 className="text-xl font-black text-slate-950">Cancellation and no-show payouts</h2>
+          <h2 className="text-xl font-black text-slate-950">Cancellation and no-show compensation</h2>
 
           {cancellationFees.length === 0 ? (
             <EmptyState
-              title="No cancellation payouts"
-              description="Late cancellation and no-show driver payouts will appear here."
+              title="No cancellation compensation"
+              description="Late cancellation and no-show amounts will appear here."
             />
           ) : (
             <div className="space-y-3">
@@ -559,8 +561,10 @@ export default function DriverEarningsPage() {
                       <div className="font-medium">{money(row.fee_amount)}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Your payout</div>
+                      <div className="text-sm text-gray-500">Driver amount</div>
                       <div className="font-medium">{money(row.driver_amount)}</div>
+                      <div className="text-xs text-slate-600">{row.phase4_assessment_id
+                        ? `Phase 4: ${row.compensation_status ?? "status unavailable"}` : "Legacy credit"}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Reason</div>

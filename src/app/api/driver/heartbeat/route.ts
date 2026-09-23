@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { recordTripTelemetry } from "@/lib/trips/recordTripTelemetry";
+import { phase2Mode } from "@/lib/finance/phase2Policy";
 
 type DriverReadinessCacheEntry = {
   online: boolean;
   subscriptionStatus: string | null;
+  subscriptionRequired: boolean;
   checkedAt: number;
 };
 
@@ -118,9 +120,19 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "Driver not found" }, { status: 404 });
       }
 
+      const policyResult = await supabaseAdmin.rpc("phase2_current_policy");
+      const policy = Array.isArray(policyResult.data) ? policyResult.data[0] : policyResult.data;
+      if (policyResult.error || !policy || policy.mode !== phase2Mode()) {
+        console.error("[driver-heartbeat] finance mode unavailable", policyResult.error);
+        return NextResponse.json({ ok: false, error: "Driver account status is temporarily unavailable." }, { status: 503 });
+      }
+      const authoritative = policy.mode === "AUTHORITATIVE" && policy.authoritative_effective_from &&
+        new Date(policy.authoritative_effective_from).getTime() <= now;
+
       readiness = {
         online: Boolean(driver.online),
         subscriptionStatus: driver.subscription_status ?? null,
+        subscriptionRequired: !authoritative,
         checkedAt: now,
       };
       cache.readinessByDriverId.set(driverId, readiness);
@@ -130,7 +142,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Driver is offline" }, { status: 400 });
     }
 
-    if (readiness.subscriptionStatus !== "active" && readiness.subscriptionStatus !== "grace") {
+    // GPS telemetry is not a new-work reservation: an active trip may finish
+    // above the debt limit. Keep the legacy subscription guard only in legacy mode.
+    if (readiness.subscriptionRequired && readiness.subscriptionStatus !== "active" && readiness.subscriptionStatus !== "grace") {
       return NextResponse.json({ ok: false, error: "Subscription inactive" }, { status: 402 });
     }
 

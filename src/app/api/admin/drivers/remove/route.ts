@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { phase6LegacyMutation } from "@/lib/drivers/phase6LegacyRoutes";
 
 type RemoveMode = "deactivate" | "permanent";
 
@@ -8,6 +9,8 @@ type DriverAccountRow = {
 };
 
 export async function POST(req: Request) {
+  const retirement = phase6LegacyMutation(req);
+  if (retirement) return retirement;
   try {
     const auth = await requireAdminUser(req);
     if (!auth.ok) {
@@ -199,15 +202,13 @@ export async function POST(req: Request) {
       })
       .eq("driver_id", driverId);
 
-    // remove wallet current balances/transactions if you want "everything except trips"
-    await supabaseAdmin.from("driver_wallet_transactions").delete().eq("driver_id", driverId);
-    await supabaseAdmin.from("driver_wallets").delete().eq("driver_id", driverId);
+    // Financial records and their driver/wallet references survive account removal.
 
     return NextResponse.json({
       ok: true,
       mode,
       message:
-        "Driver permanently deleted from active account data. Trip records were preserved.",
+        "Driver removed from active account data. Trip and financial records were preserved.",
     });
   } catch (error: unknown) {
     return NextResponse.json(

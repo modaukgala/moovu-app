@@ -1,0 +1,167 @@
+{
+  "status": "NOT_READY",
+  "production_execution_authorized": false,
+  "algorithm": "SHA-256",
+  "artifacts": [
+    {
+      "file": "p0-production-recovery.sql",
+      "hash": "6E2F014427EE5AC279E37E6DBBF2818E3D2EA4E8719A322D6D221D3A591C22B7"
+    },
+    {
+      "file": "p0-production-readonly-preflight.sql",
+      "hash": "6FAE1548368CDB8AB81526E8A44422A6FBB9A26C2475379A9A2F8FBEACAA5F63"
+    },
+    {
+      "file": "p0-customer-identity-recovery.sql",
+      "hash": "50FC2D8622D97DE79208842A2BB21164372C3CAE509DD016323FE4A1F16D7B20"
+    },
+    {
+      "file": "p0-booking-defaults-recovery.sql",
+      "hash": "1F2BE16B29CC801937DA1A9A90D1CE4DCE803B1652FAB17A32AAF4DB1A599E2D"
+    },
+    {
+      "file": "p0-dispatch-authority-recovery.sql",
+      "hash": "CB92D9C82A40DD88F68273C6AEB08C55C418DCCAF59FC0C93D096B304BF2E795"
+    },
+    {
+      "file": "p0-customer-identity-rollback.sql",
+      "hash": "9ECCC9976C24A596C5B67FBA7403E7B0F30F285520DC935B66B1A84D5EA95AEC"
+    },
+    {
+      "file": "p0-booking-defaults-rollback.sql",
+      "hash": "88AEB8D4AC5A21821B37ED24FCDF911A0F0C7B97A30C86937941E9048B55805C"
+    },
+    {
+      "file": "p0-dispatch-authority-rollback.sql",
+      "hash": "5898F8C140E90608536BF46DE18CFA1886A30EE2736571AC9DF1A5D1358941B8"
+    }
+  ],
+  "production_readonly_snapshot": [
+    {
+      "evidence": {
+        "identity": {
+          "active": 1214,
+          "customers": 1214,
+          "orphan_auth": 0,
+          "missing_profiles": 1214
+        },
+        "checked_at": "2026-09-16T19:08:47.446379+00:00",
+        "finance_policy": {
+          "id": "ba073662-13b9-46f9-a46c-e2afd0f93842",
+          "mode": "AUTHORITATIVE",
+          "created_at": "2026-09-11T04:54:10.780236+00:00",
+          "policy_key": "phase2-driver-finance",
+          "updated_at": "2026-09-15T18:52:46.83888+00:00",
+          "warning_cents": 4000,
+          "effective_from": "2026-09-11T18:04:00+00:00",
+          "go_basis_points": 1500,
+          "debt_limit_cents": 5000,
+          "go_xl_basis_points": 1500,
+          "subscription_required": false,
+          "authoritative_effective_from": "2026-09-15T19:04:38+00:00"
+        },
+        "rpc_definitions": [
+          {
+            "acl": [
+              "postgres=X/postgres",
+              "service_role=X/postgres"
+            ],
+            "name": "accept_trip_offer",
+            "search_path": [
+              "search_path=public, pg_temp"
+            ],
+            "normalized_hash": "91021bb7e8c89b9476ae09a2752cd554"
+          },
+          {
+            "acl": [
+              "postgres=X/postgres",
+              "service_role=X/postgres"
+            ],
+            "name": "expire_due_trip_offers",
+            "search_path": [
+              "search_path=public, pg_temp"
+            ],
+            "normalized_hash": "f5a3d489170f5babd55e870c36c5fa56"
+          },
+          {
+            "acl": [
+              "postgres=X/postgres",
+              "service_role=X/postgres"
+            ],
+            "name": "phase05b_complete_trip",
+            "search_path": [
+              "search_path=public, pg_temp"
+            ],
+            "normalized_hash": "fa994ef7cb57329ee70cfba1813e0497"
+          },
+          {
+            "acl": [
+              "postgres=X/postgres",
+              "service_role=X/postgres"
+            ],
+            "name": "phase2_finance_eligibility",
+            "search_path": [
+              "search_path=public, pg_temp"
+            ],
+            "normalized_hash": "7f0f326c49b2f714bf16aa1f41e82306"
+          },
+          {
+            "acl": [
+              "postgres=X/postgres",
+              "service_role=X/postgres"
+            ],
+            "name": "phase5_create_trip",
+            "search_path": [
+              "search_path=public, extensions, pg_temp"
+            ],
+            "normalized_hash": "34d6dd39fac1d8cb1575a14b95eb3f74"
+          },
+          {
+            "acl": [
+              "postgres=X/postgres",
+              "service_role=X/postgres"
+            ],
+            "name": "reserve_trip_offer",
+            "search_path": [
+              "search_path=public, pg_temp"
+            ],
+            "normalized_hash": "052109bd24d19fe0bb46aa67c73366a6"
+          }
+        ],
+        "offer_history_columns": [
+          {
+            "udt": "uuid",
+            "name": "id",
+            "nullable": "NO"
+          },
+          {
+            "udt": "uuid",
+            "name": "trip_id",
+            "nullable": "NO"
+          },
+          {
+            "udt": "uuid",
+            "name": "driver_id",
+            "nullable": "NO"
+          },
+          {
+            "udt": "text",
+            "name": "status",
+            "nullable": "NO"
+          },
+          {
+            "udt": "timestamptz",
+            "name": "accept_deadline_at",
+            "nullable": "NO"
+          },
+          {
+            "udt": "int4",
+            "name": "dispatch_cycle",
+            "nullable": "NO"
+          }
+        ],
+        "duplicate_auth_mappings": 0
+      }
+    }
+  ]
+}

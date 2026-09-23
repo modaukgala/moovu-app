@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { calculateCommission, resolveCommissionPct } from "@/lib/finance/commission";
+import { readCommissionSnapshot } from "@/lib/finance/commissionSnapshot";
 import {
   ensureDriverWallet,
   recalculateDriverWalletServer,
@@ -51,25 +52,30 @@ export async function applyTripCommissionServer(params: {
     rideOptionId = null,
   } = params;
 
-  const calc = calculateCommission(
-    fareAmount,
-    resolveCommissionPct({ rideOptionId, commissionPct })
-  );
-
-  if (!calc.fareAmount || calc.fareAmount <= 0) {
-    return { ok: false, error: "Invalid fare amount." };
-  }
-
   const { data: existingTx, error: existingTxError } = await supabaseAdmin
     .from("driver_wallet_transactions")
-    .select("id")
+    .select("id,driver_id,amount,direction,meta")
     .eq("trip_id", tripId)
     .eq("tx_type", "commission")
-    .limit(1);
+    .limit(2);
 
   if (existingTxError) {
     return { ok: false, error: existingTxError.message };
   }
+
+  if (existingTx?.length) {
+    if (existingTx.length !== 1) return { ok: false, error: "Duplicate commission history requires reconciliation." };
+    const stored = await supabaseAdmin.from("trips")
+      .select("commission_pct,commission_amount,driver_net_earnings")
+      .eq("id", tripId).eq("driver_id", driverId).single();
+    if (stored.error || !stored.data) return { ok: false, error: "Could not verify existing commission history." };
+    const snapshot = readCommissionSnapshot(driverId, stored.data, existingTx[0]);
+    if (!snapshot.ok) return snapshot;
+    return { ok: true, skipped: true, calc: snapshot.calc };
+  }
+
+  const calc = calculateCommission(fareAmount, resolveCommissionPct({ rideOptionId, commissionPct }));
+  if (!calc.fareAmount || calc.fareAmount <= 0) return { ok: false, error: "Invalid fare amount." };
 
   const walletResult = await ensureDriverWallet(driverId);
   if (walletResult.error || !walletResult.wallet) {
@@ -89,14 +95,6 @@ export async function applyTripCommissionServer(params: {
 
   if (tripUpdateError) {
     return { ok: false, error: tripUpdateError.message };
-  }
-
-  if (existingTx && existingTx.length > 0) {
-    const recalcResult = await recalculateDriverWalletServer(driverId);
-    if (!recalcResult.ok) {
-      return { ok: false, error: recalcResult.error };
-    }
-    return { ok: true, skipped: true, calc };
   }
 
   const safeCreatedBy = await resolveSafeCreatedBy(createdBy);

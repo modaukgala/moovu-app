@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/jobs/phase2-shadow-recovery",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/jobs/online-payment-dispatch",
+      "schedule": "* * * * *"
+    }
+  ]
+}

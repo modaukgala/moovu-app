@@ -1,0 +1,41 @@
+{
+  "status": "NOT_READY",
+  "production_mutated": false,
+  "disposable": "tangtlmdpnvmoviwrgvd",
+  "invariants": [
+    {
+      "evidence": {
+        "completed": [
+          {
+            "id": "73e9d210-58e8-4328-b863-979754957a84",
+            "option": "group",
+            "status": "completed",
+            "fare_amount": 79,
+            "commission_pct": 15,
+            "commission_amount": 11.1,
+            "driver_basis_cents": 7400
+          },
+          {
+            "id": "836a0dc8-8590-4da2-abdb-b2bfbd798297",
+            "option": "go",
+            "status": "completed",
+            "fare_amount": 55,
+            "commission_pct": 15,
+            "commission_amount": 7.8,
+            "driver_basis_cents": 5200
+          }
+        ],
+        "not_null_violations": 0,
+        "duplicate_commission_keys": 0,
+        "missing_customer_profiles": 0,
+        "unbalanced_posted_transactions": 0
+      }
+    }
+  ],
+  "production_onboarding_dependency": [
+    {
+      "onboarding_rpc": null,
+      "onboarding_policy": null
+    }
+  ]
+}

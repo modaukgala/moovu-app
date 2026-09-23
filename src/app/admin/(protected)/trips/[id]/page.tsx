@@ -6,6 +6,7 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 import { isDispatchExpired } from "@/lib/dispatch/config";
+import Phase4FinancePanel from "@/components/admin/Phase4FinancePanel";
 
 type Trip = {
   id: string;
@@ -599,6 +600,7 @@ export default function TripDetailPage() {
         </div>
       </section>
 
+      <Phase4FinancePanel tripId={tripId} />
       <section className="moovu-card p-5 sm:p-6">
         <div className="moovu-section-title">Activity</div>
         <h2 className="mt-2 text-xl font-black text-slate-950">Trip timeline</h2>

@@ -10,6 +10,11 @@ function isMissingEmailColumn(error: { message?: string } | null | undefined) {
   return !!error?.message?.toLowerCase().includes("email");
 }
 
+function accountCreationFailure(error: unknown) {
+  console.error("[customer-register] account persistence failed", error);
+  return NextResponse.json({ ok: false, error: "We couldn't create your account. Please try again or contact MOOVU support." }, { status: 500 });
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -85,10 +90,7 @@ export async function POST(req: Request) {
       await supabase.auth.admin.listUsers();
 
     if (listError) {
-      return NextResponse.json(
-        { ok: false, error: listError.message },
-        { status: 500 }
-      );
+      return accountCreationFailure(listError);
     }
 
     const existingCustomerEmailUser = existingUsers.users.find((u) => {
@@ -130,10 +132,7 @@ export async function POST(req: Request) {
       );
 
       if (updateError) {
-        return NextResponse.json(
-          { ok: false, error: updateError.message },
-          { status: 500 }
-        );
+        return accountCreationFailure(updateError);
       }
     } else {
       const { data: createdAuth, error: authError } =
@@ -152,10 +151,7 @@ export async function POST(req: Request) {
         });
 
       if (authError || !createdAuth?.user) {
-        return NextResponse.json(
-          { ok: false, error: authError?.message || "Failed to create auth account." },
-          { status: 500 }
-        );
+        return accountCreationFailure(authError);
       }
 
       authUserId = createdAuth.user.id;
@@ -199,31 +195,21 @@ export async function POST(req: Request) {
       );
 
       if (legacyCustomerError) {
-        return NextResponse.json(
-          { ok: false, error: legacyCustomerError.message },
-          { status: 500 }
-        );
+        return accountCreationFailure(legacyCustomerError);
       }
 
       return NextResponse.json({
         ok: true,
         login_email: email,
-        warning: "Customer created. Run the customer email SQL migration to persist customers.email.",
       });
     }
 
     if (customerError) {
-      return NextResponse.json(
-        { ok: false, error: customerError.message },
-        { status: 500 }
-      );
+      return accountCreationFailure(customerError);
     }
 
     return NextResponse.json({ ok: true, login_email: email });
   } catch (e: unknown) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Server error." },
-      { status: 500 }
-    );
+    return accountCreationFailure(e);
   }
 }

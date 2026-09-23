@@ -32,7 +32,7 @@ const sections = [
   {
     title: "3. How We Collect Information",
     items: [
-      "Directly from you when you register, book a ride, apply as a driver, go online, upload proof of payment, contact support, accept terms, enable notifications, or use chat.",
+      "Directly from you when you register, book a ride, apply as a driver, go online, make a payment, contact support, accept terms, enable notifications, or use chat.",
       "Automatically through the app when you use maps, location tools, push notifications, trip workflow actions, realtime chat, OTP trip controls, or app diagnostics.",
       "From drivers, customers, administrators, and support staff when they create operational records, update trip status, review payments, handle disputes, or report safety concerns.",
       "From service providers such as Supabase, Vercel, Firebase, Google Maps, and other infrastructure providers that help operate MOOVU.",

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { ActionCard, PageHeader, ProfileSectionCard } from "@/components/ui/MoovuPrimitives";
+import { isAdminTripPaymentMethod, type AdminTripPaymentMethod } from "@/lib/trips/adminTripPaymentMethod";
 import {
   DEFAULT_RIDE_OPTION_ID,
   RIDE_OPTIONS,
@@ -26,12 +27,6 @@ type Prediction = {
   description: string;
   place_id: string;
 };
-
-type PaymentMethod = "cash" | "online" | "other";
-
-function isPaymentMethod(value: string): value is PaymentMethod {
-  return value === "cash" || value === "online" || value === "other";
-}
 
 export default function NewTripPage() {
   const router = useRouter();
@@ -55,7 +50,7 @@ export default function NewTripPage() {
   const [durationMin, setDurationMin] = useState("");
   const [autoFare, setAutoFare] = useState<number | null>(null);
 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [paymentMethod, setPaymentMethod] = useState<AdminTripPaymentMethod>("cash");
   const [fare, setFare] = useState<string>("");
   const [fareOverride, setFareOverride] = useState(false);
   const [fareOverrideReason, setFareOverrideReason] = useState("");
@@ -557,13 +552,12 @@ export default function NewTripPage() {
                   className="moovu-input bg-transparent"
                   value={paymentMethod}
                   onChange={(e) => {
-                    if (isPaymentMethod(e.target.value)) {
+                    if (isAdminTripPaymentMethod(e.target.value)) {
                       setPaymentMethod(e.target.value);
                     }
                   }}
                 >
                   <option value="cash">Cash</option>
-                  <option value="online">Online</option>
                   <option value="other">Other</option>
                 </select>
               </label>

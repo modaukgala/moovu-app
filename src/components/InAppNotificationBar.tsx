@@ -263,8 +263,17 @@ export default function InAppNotificationBar() {
         ).toUpperCase();
         const requestUrl = input instanceof Request ? input.url : String(input);
         const url = new URL(requestUrl, window.location.origin);
+        const requestHeaders = new Headers(
+          input instanceof Request ? input.headers : init?.headers,
+        );
+        const feedbackHandledLocally = requestHeaders.get("x-moovu-feedback-mode") === "local";
 
-        if (method !== "GET" && url.origin === window.location.origin && url.pathname.startsWith("/api/")) {
+        if (
+          !feedbackHandledLocally &&
+          method !== "GET" &&
+          url.origin === window.location.origin &&
+          url.pathname.startsWith("/api/")
+        ) {
           const json = await response.clone().json().catch(() => null) as {
             ok?: boolean;
             message?: unknown;

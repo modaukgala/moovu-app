@@ -1,134 +1,30 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { notifyAdmins, notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
+import { callPhase4Rpc } from "@/lib/server/phase4Rpc";
+import { isOutboxDeliveryEnabled } from "@/lib/notifications/outboxDelivery";
 
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
+type Result = { trip_id: string; driver_id: string | null; replayed: boolean };
 
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
-    if (!auth.ok) {
-      return NextResponse.json(
-        { ok: false, error: auth.error },
-        { status: auth.status }
-      );
-    }
-
-    const { user, supabaseAdmin } = auth;
-    const body = await req.json();
-
+    if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    const body = await req.json().catch(() => null);
     const tripId = String(body?.tripId ?? "").trim();
     const reason = String(body?.reason ?? "Cancelled by admin").trim();
-
-    if (!tripId) {
-      return NextResponse.json(
-        { ok: false, error: "Trip ID is required." },
-        { status: 400 }
-      );
-    }
-
-    const { data: trip, error: tripError } = await supabaseAdmin
-      .from("trips")
-      .select("id,status,driver_id")
-      .eq("id", tripId)
-      .maybeSingle();
-
-    if (tripError) {
-      return NextResponse.json(
-        { ok: false, error: tripError.message },
-        { status: 500 }
-      );
-    }
-
-    if (!trip) {
-      return NextResponse.json(
-        { ok: false, error: "Trip not found." },
-        { status: 404 }
-      );
-    }
-
-    if (trip.status === "completed") {
-      return NextResponse.json(
-        { ok: false, error: "Completed trip cannot be cancelled." },
-        { status: 400 }
-      );
-    }
-
-    if (trip.status === "cancelled") {
-      return NextResponse.json(
-        { ok: false, error: "Trip is already cancelled." },
-        { status: 400 }
-      );
-    }
-
-    const { error: updateTripError } = await supabaseAdmin
-      .from("trips")
-      .update({
-        status: "cancelled",
-        cancel_reason: reason,
-        cancelled_by: "admin",
-        cancellation_fee_amount: 0,
-        cancellation_policy_code: "admin_cancelled",
-        offer_status: null,
-        offer_expires_at: null,
-      })
-      .eq("id", tripId);
-
-    if (updateTripError) {
-      return NextResponse.json(
-        { ok: false, error: updateTripError.message },
-        { status: 500 }
-      );
-    }
-
-    if (trip.driver_id) {
-      await supabaseAdmin
-        .from("drivers")
-        .update({ busy: false })
-        .eq("id", trip.driver_id);
-    }
-
-    try {
-      await supabaseAdmin.from("trip_events").insert({
-        trip_id: tripId,
-        event_type: "trip_cancelled_admin",
-        message: `Trip cancelled by admin. Reason: ${reason}`,
-        old_status: trip.status,
-        new_status: "cancelled",
-        created_by: user.id,
-      });
-    } catch {}
-
-    await notifyCustomerForTrip(
-      tripId,
-      "Trip cancelled",
-      `MOOVU cancelled your trip. Reason: ${reason}`,
-      `/ride/${tripId}`
-    );
-
-    await notifyDriverForTrip(
-      tripId,
-      "Trip cancelled",
-      `MOOVU cancelled trip ${tripId}.`,
-      "/driver"
-    );
-
-    await notifyAdmins(
-      "Trip cancelled by admin",
-      `Trip ${tripId} was cancelled. Reason: ${reason}`,
-      "/admin/trips"
-    );
-
-    return NextResponse.json({
-      ok: true,
-      message: "Trip cancelled successfully.",
-    });
-  } catch (e: unknown) {
-    return NextResponse.json(
-      { ok: false, error: errorMessage(e, "Server error.") },
-      { status: 500 }
-    );
+    if (!tripId) return NextResponse.json({ ok: false, error: "Trip ID is required." }, { status: 400 });
+    const result = await callPhase4Rpc<Result>(auth.supabaseAdmin, "phase4b_cancel_trip_operational", {
+      p_trip_id: tripId, p_actor_id: auth.user.id, p_actor_kind: "admin", p_reason: reason,
+    }, (value) => typeof value.replayed === "boolean");
+    if (!result.ok) return NextResponse.json({ ok: false, error: result.error, code: result.code }, { status: result.status });
+    if (!result.result.replayed && !isOutboxDeliveryEnabled()) await Promise.allSettled([
+      notifyCustomerForTrip(tripId, "Trip cancelled", `MOOVU cancelled your trip. Reason: ${reason}`, `/ride/${tripId}`),
+      notifyDriverForTrip(tripId, "Trip cancelled", `MOOVU cancelled trip ${tripId}.`, "/driver"),
+      notifyAdmins("Trip cancelled by admin", `Trip ${tripId} was cancelled. Reason: ${reason}`, "/admin/trips"),
+    ]);
+    return NextResponse.json({ ok: true, replayed: result.result.replayed, message: "Trip cancelled successfully." });
+  } catch (error: unknown) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error." }, { status: 500 });
   }
 }

@@ -18,6 +18,8 @@ export type FareInput = {
   surgeMultiplier?: number | null;
   waitingMinutes?: number | null;
   remotePickupFee?: number | null;
+  /** Legacy trips include the booking fee before surge, discount and rounding. */
+  includeEmbeddedBookingFee?: boolean;
 };
 
 export type AddStopInput = {
@@ -324,6 +326,7 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
   const rideOptionId = normalizeRideOptionId(input.rideOptionId);
   const rideOption = getRideOption(rideOptionId);
   const rules = getFareRules(rideOptionId);
+  const embeddedBookingFee = input.includeEmbeddedBookingFee === false ? 0 : rules.bookingFee;
   const distanceKm = safePositiveNumber(input.distanceKm);
   const distanceDiscountKm = safePositiveNumber(input.distanceDiscountKm ?? distanceKm);
   const durationMin = safePositiveNumber(input.durationMin);
@@ -340,7 +343,7 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
     rules.baseFare +
       distanceKm * rules.perKm +
       durationMin * rules.perMinute +
-      rules.bookingFee +
+      embeddedBookingFee +
       waitingFee +
       remotePickupFee
   );
@@ -365,6 +368,7 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
 
   return {
     ...rules,
+    bookingFee: embeddedBookingFee,
     rideOptionId,
     rideOptionName: rideOption.name,
     distanceKm,

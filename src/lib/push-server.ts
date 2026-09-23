@@ -24,6 +24,7 @@ type SendPushParams = {
   body: string;
   url?: string;
   data?: PushData;
+  notificationEventKey?: string;
 };
 
 type PushFailure = {
@@ -466,6 +467,7 @@ async function recordNotificationHistory(params: {
   data?: PushData;
   deliveryStatus: "queued" | "sent" | "failed" | "no_tokens";
   errorMessage?: string | null;
+  eventKey?: string;
 }) {
   const uniqueUserIds = Array.from(new Set(params.userIds.filter(Boolean)));
   if (uniqueUserIds.length === 0) return;
@@ -482,9 +484,13 @@ async function recordNotificationHistory(params: {
     error_message: params.errorMessage ?? null,
     created_at: now,
     updated_at: now,
+    event_key: params.eventKey ?? null,
   }));
 
-  const { error } = await params.supabase.from("app_notifications").insert(rows);
+  const query = params.eventKey
+    ? params.supabase.from("app_notifications").upsert(rows, { onConflict: "user_id,event_key" })
+    : params.supabase.from("app_notifications").insert(rows);
+  const { error } = await query;
   if (error) {
     const reason = error.message;
     if (isMissingTableError(error)) {
@@ -570,6 +576,7 @@ async function sendFcmToTargets(params: SendPushParams) {
         data: params.data,
         deliveryStatus: "no_tokens",
         errorMessage: "No active FCM tokens found for target.",
+        eventKey: params.notificationEventKey,
       });
     }
 
@@ -759,6 +766,7 @@ async function sendFcmToTargets(params: SendPushParams) {
     data: params.data,
     deliveryStatus: delivered > 0 ? "sent" : "failed",
     errorMessage: failures[0]?.reason ?? null,
+    eventKey: params.notificationEventKey,
   });
 
   return { delivered, removed, failed, failures };

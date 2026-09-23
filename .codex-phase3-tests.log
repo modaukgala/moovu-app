@@ -1,0 +1,441 @@
+
+> moovu-kasi@0.1.0 test
+> node scripts/run-tests.mjs
+
+(node:27160) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/components/trip-chat/composerPolicy.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Enter variants insert line breaks instead of sending (3.7206ms)
+✔ only a non-empty enabled draft can be sent from the visible button (0.7032ms)
+(node:25376) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/auth/adminRoles.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ only owner and admin pass the financial HTTP role gate (9.8996ms)
+(node:18736) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/dispatch/attemptHistory.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ canonical history prioritizes untried drivers despite an empty legacy array (6.3771ms)
+✔ only a later explicit round retries exhausted expired candidates (0.3146ms)
+✔ declined, accepted, cancelled, active and unknown-cycle offers are not retried (0.3443ms)
+✔ large candidate batches retain rank while advancing past previous attempts (3.32ms)
+✔ attempt history includes declines beyond the first database page (30.0199ms)
+✔ attempt history fails closed when a later database page fails (4.3368ms)
+(node:12972) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/dispatch/dispatchPolicy.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ dispatch timing uses three automatic rounds and a thirty-minute admin recovery window (1.4227ms)
+✔ dispatch expiry is measured from the original request time (0.3348ms)
+✔ an online driver remains offer-eligible while the native app is backgrounded (0.3128ms)
+✔ dispatch radius expands by cycle and remains capped (1.5466ms)
+✔ an ineligible or busy driver cannot receive a valid score (2.5445ms)
+✔ new drivers receive neutral rather than perfect quality defaults (0.623ms)
+✔ dispatch reports incomplete scheduler enqueue results (0.4939ms)
+(node:9232) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/dispatch/reliability.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 100 ranked candidates are capped without changing order; preferred remains selectable (3.297ms)
+✔ trip A expiry leaves trip B, accepted, declined, null and future deadlines unchanged (4.2552ms)
+✔ retry failures back off and attempt five is terminal (0.3836ms)
+✔ notification pool stays bounded and settles remaining tasks after errors (71.8863ms)
+✔ READ-ONLY SQL test fixture retains atomic claim, cap, grants and final-attempt success path (12.6985ms)
+(node:25980) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/domain/fareDiscount.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ distance-tier discount boundaries match the approved model (1.7756ms)
+✔ discount applies after surge and before minimum fare and rounding (1.6348ms)
+✔ total route distance selects the tier for add-stop journeys (0.5606ms)
+✔ minimum fares rise with every approved surge mode (2.0153ms)
+✔ Admin fare defaults to server calculation and overrides require a reason (2.2978ms)
+✔ add-stop variable charges use the trip's locked surge and legacy defaults to normal (0.4852ms)
+(node:26656) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/drivers/applicationIdentity.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ anonymous application cannot supply an identity (1.5285ms)
+✔ another user ID or email cannot be adopted (0.2739ms)
+✔ verified identity works without trusting body ID or metadata (1.2716ms)
+✔ returning authenticated applicant reuses session (1.6386ms)
+✔ returning signed-out applicant signs in rather than signing up again (0.5074ms)
+✔ initial signup with immediate session can submit (0.4055ms)
+✔ initial email-confirmation signup does not submit without a session (0.8811ms)
+✔ unconfirmed returning user does not repeat signup (0.2956ms)
+✔ different signed-in account fails without signup or account switching (0.3188ms)
+(node:8520) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/drivers/phase6Image.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ image validation rejects disguised text, corrupt content and excessive input (106.8711ms)
+✔ image pipeline decodes content, bounds output and removes embedded metadata (412.9414ms)
+✔ thumbnail-sized content cannot satisfy evidence requirements (13.4046ms)
+(node:23692) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/drivers/phase6Policy.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ draft input cannot claim verification or review authority (1.6239ms)
+✔ evidence accepts only declared requirements and UUID references (0.5447ms)
+✔ submitted, approved and rejected records cannot reopen through Driver edits (0.2996ms)
+✔ requested correction opens only authorized sections (0.21ms)
+✔ manual checklist retains six views and three identification captures (1.5568ms)
+✔ PDP evidence does not imply legal permission or verification (0.5723ms)
+✔ identity check rejects missing values, malformed dates and corrupt checksum (2.3437ms)
+(node:27392) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/drivers/rideEligibility.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ driver ride eligibility follows approved seating rules (3.255ms)
+✔ MOOVU Go Plus never reaches a Go-only driver (0.3668ms)
+(node:25944) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/drivers/statusContract.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ more-information requests persist as pending review (1.4195ms)
+✔ canonical approval and rejection states remain unchanged (0.2419ms)
+✔ unsupported database verification labels are rejected (0.2427ms)
+(node:24508) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/cancellationFees.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ customer cancellation is free at one minute (3.8845ms)
+✔ customer cancellation is free at two minutes fifty-nine seconds (0.3549ms)
+✔ customer cancellation uses the service fee after three minutes (0.2972ms)
+✔ assigned-driver cancellation splits the fee after three minutes (0.3073ms)
+(node:24496) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/cancellationWindow.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ the customer correction window lasts three minutes (1.6299ms)
+(node:22116) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/commissionSnapshot.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ existing historical rate is returned unchanged without current configuration (2.7933ms)
+✔ trip and ledger disagreement requires reconciliation (0.3101ms)
+✔ missing legacy snapshot is not silently repriced (7.8173ms)
+✔ ownership and debit direction must match (0.3949ms)
+✔ invalid and negative financial snapshot values fail closed (0.3483ms)
+(node:21420) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/ledgerFoundation.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ the Phase 1 ledger cannot become a live source during Stage A (1.3416ms)
+✔ balanced cent entries are accepted and unbalanced entries fail (2.3161ms)
+✔ payload hashing is deterministic and conflicting input changes the hash (33.3655ms)
+✔ idempotency keys are stable and reject missing identity (0.4213ms)
+(node:25816) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/ledgerMigrationContract.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Stage A remains disabled and the migration defines immutable double-entry contracts (2.4399ms)
+✔ reconciliation is read-only and documents authoritative source precedence (0.5637ms)
+✔ validation is disposable-only, checks privileges and always rolls back (0.3028ms)
+(node:8780) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/money.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ decimal money converts to integer cents with explicit half-up rounding (11.8258ms)
+✔ invalid or non-positive ledger amounts fail (0.5918ms)
+✔ rand formatting occurs from cents without floating point (0.3943ms)
+(node:13464) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/phase2Ledger.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ cash trip recognizes commission only, not gross passenger cash (3.7038ms)
+✔ payment allocates debt first and preserves excess as credit (0.5314ms)
+✔ partial payment never invents unapplied credit (0.2842ms)
+(node:19464) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/phase2Policy.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ mode fails safely to OFF (1.4972ms)
+✔ commission is calculated in integer cents with half-up rounding (0.293ms)
+✔ R50 is the exact hard boundary (1.0154ms)
+✔ subscription is removed only after authority cutover (0.4826ms)
+(node:27460) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/phase4Foundation.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ policy has exact ZAR integer-cent amounts and balanced splits (6.0955ms)
+✔ before, at, and after three minutes; unassigned always free (0.517ms)
+✔ no-show needs assigned Driver, qualified arrival, and exact five-minute boundary (0.3026ms)
+✔ policy selection respects effective time and rejects ambiguous cutover (0.5304ms)
+✔ snapshot is immutable, compensation is earned without collection, journal has no cash (0.6288ms)
+✔ liability states, disputes, reversals and allocation invariants (0.4459ms)
+✔ two completed grace rides, third booking block, dispute pause and no reset from added debt (0.9034ms)
+✔ migration is additive and neither historical nor Phase 2 authority is touched (1.5919ms)
+✔ source keys are stable and separated by economic action (0.6256ms)
+(node:21196) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/phase5Fare.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ legacy fare retains embedded R4 while Phase 5 calculates a separate R3 (1.9531ms)
+✔ member waiver and promotional credit never reduce Driver basis (1.6113ms)
+✔ Go XL fee, minimum fare and surge remain deterministic (3.6481ms)
+✔ credit is capped at Customer charges and rejects invalid balances (0.7674ms)
+(node:8608) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/finance/phase5MigrationContract.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Phase 5 policy is immutable, versioned and installed dormant (2.2876ms)
+✔ Atomic booking locks Customer economics and fails on quote drift (0.4708ms)
+✔ Completion uses Driver snapshot and qualifies referrals in the same transaction (0.4626ms)
+✔ Referral rewards and promotional postings are idempotent and non-cash (0.3574ms)
+✔ Phase 5 snapshot separates customer total from Driver fare basis (0.6014ms)
+✔ Customer monetary tables use RLS and narrow RPC grants (1.0465ms)
+✔ Membership proof and approval remain separate and approval is replay safe (0.4468ms)
+✔ Referral contract rejects self-referral and waits for completion (0.4029ms)
+✔ Cash service fee is separate, balanced and never recorded as MOOVU cash (0.6539ms)
+✔ Phase 5 referral data does not alter legacy referral scaffolding (0.4809ms)
+(node:18908) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/locationPaste.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ parses pasted coordinates as an exact location (3.1243ms)
+✔ parses coordinates from a Google Maps link (5.1925ms)
+✔ keeps Plus Codes available as a supported location input (1.2629ms)
+✔ prefers a useful nearby-place label over address and Plus Code metadata (0.7811ms)
+✔ uses a clean fallback when reverse geocoding has no metadata (0.2778ms)
+(node:12052) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/location/bookingMapLocation.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ pickup selection prefers its confirmed coordinates (5.1782ms)
+✔ destination selection prefers destination then pickup (7.1451ms)
+✔ fresh GPS is used but a stale cross-session location is rejected (0.6247ms)
+✔ only pickup can reuse an older location from the current booking session (0.8378ms)
+(node:26916) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/location/liveLocationConfig.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ network location publication uses a thirty-second cadence (2.2141ms)
+✔ local GPS stays responsive without increasing backend writes (0.5178ms)
+✔ offer and trip polling remain independent from location publication (0.5169ms)
+✔ freshness windows tolerate the thirty-second publish interval (0.3144ms)
+(node:19036) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/maps/mapRequestPolicy.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ route signatures ignore sub-meter coordinate noise (1.8708ms)
+✔ route signatures change when the destination materially changes (0.7004ms)
+✔ normalization retains roughly meter-level route identity (0.2771ms)
+✔ route circuit opens at the configured provider threshold (0.2418ms)
+(node:5236) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/maps/routeQuote.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a signed route quote can be reused for its matching route (3.3639ms)
+✔ route quotes reject route changes and expiry (0.7463ms)
+(node:22572) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/notifications/deepLinkRouting.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ customer status notifications open the active trip (2.0341ms)
+✔ customer completion opens the receipt (0.2872ms)
+✔ chat routes to the correct participant screen (0.2601ms)
+✔ driver offers open the offer surface (0.2377ms)
+✔ subscription and document notifications open driver tools (0.2972ms)
+✔ server routing data includes stable aliases (0.8665ms)
+✔ external notification URLs are rejected (1.9846ms)
+(node:26904) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/notifications/outboxDelivery.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ outbox worker fails closed when its dedicated secret is absent (56.5602ms)
+✔ outbox worker accepts only the configured bearer or explicit secret (3.0027ms)
+✔ a retry reuses the same per-user application notification identity (2.807ms)
+✔ Phase 4 notification failure retries delivery without rerunning the financial writer (1.0768ms)
+✔ invalid or exhausted claims are failed without sending (0.367ms)
+✔ event identity is stable per business event and recipient (0.6091ms)
+(node:22940) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/payments/onlinePayment.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ browser success redirect remains pending until trusted state succeeds (1.4678ms)
+✔ only paid immediate unassigned trips enter dispatch (0.3751ms)
+✔ Yoco signature accepts a valid v1 among rotations and rejects tampering and expiry (2.5207ms)
+(node:12996) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/payments/phase3YocoContracts.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ driver processor is service-only, exact-obligation, balanced and replay-keyed (1.7441ms)
+✔ checkout amounts come from server authority and redirect cannot post success (0.3583ms)
+(node:25844) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/p0BookingRecovery.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ P0 forward bundle is atomic and contains only the reviewed forward repairs (2.452ms)
+✔ P0 actor repair uses canonical Auth identities and explicit customer privilege (0.4516ms)
+✔ P0 reservation reuses finance authority and preserves established XL class (0.3467ms)
+✔ P0 booking replay uses persisted OTPs and hides failed dispatch details (0.334ms)
+(node:24868) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase05Guards.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ admin booking derives fare metrics from the controlled server route (2.6246ms)
+✔ arrival uses the hardened database contract with no direct status write (0.6392ms)
+✔ admin removal does not explicitly delete wallet history (0.4723ms)
+(node:21252) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase05bContracts.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ hardened routes invoke an authoritative RPC without legacy write fallback (3.6758ms)
+✔ migration package denies direct client mutation and execution (2.7366ms)
+✔ complete-dataset debt model remains correct beyond an API row limit (1.9664ms)
+✔ outbox event identity and worker claim are idempotent contracts (0.8412ms)
+✔ disposable database test fixture refuses accidental execution (0.5477ms)
+✔ production compatibility avoids nonexistent relationship and timestamp columns (1.0872ms)
+✔ trip migration installs production cancellation prerequisites before RPCs (3.6011ms)
+✔ phase 0.5D preserves server-only mutation and reconciliation gates (2.08ms)
+(node:27312) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase05fHttpOutbox.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ sensitive HTTP paths use one authoritative hardened RPC boundary (7.7948ms)
+✔ hardened route notifications defer to outbox only under explicit activation (8.5364ms)
+✔ financial HTTP mutations reject dispatcher and support before RPC invocation (3.3973ms)
+✔ legacy trip-status mutation remains disabled (0.5399ms)
+✔ outbox SQL recovers stale claims, bounds retries, and enforces notification identity (1.5928ms)
+✔ outbox worker is secret protected, activation gated, and acknowledges through RPC (0.4908ms)
+✔ push history uses per-user event-key upsert instead of duplicate inserts (0.4894ms)
+(node:22740) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase05hProductionDefects.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ audit actor constraints use the Supabase Auth identity domain (7.4008ms)
+✔ customer live location reads the production timestamp column (2.3821ms)
+✔ driver trip actions handle their feedback without a duplicate global banner (5.2983ms)
+✔ unexpected hardened RPC failures include a support reference and remain fail closed (16.3874ms)
+(node:24372) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase2DurableRecovery.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ durable migration atomically enqueues OTP, bypass and Admin completions (2.1735ms)
+✔ queue and RPCs remain service-role-only with bounded terminal state (0.653ms)
+✔ runtime claims durable work before posting and cron is secret protected (2.2678ms)
+✔ 502, timeout and temporary RPC failures remain retryable (320.1046ms)
+✔ deterministic contract and authorization failures become terminal (75.9878ms)
+✔ successful and already-posted recovery acknowledge one durable job (33.2613ms)
+(node:21420) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase2FinanceContracts.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Approved payment replay must allow recovery of failed shadow posting (31.8929ms)
+✔ Payment RPC rejects missing identity and role before financial work (8.1366ms)
+✔ Phase 2 migration defaults OFF and preserves historical trips (2.1632ms)
+✔ Phase 2 financial surfaces remain server-only (2.6945ms)
+✔ Phase 2 reuses compatible Phase 1 account identities through the protected validator (1.8644ms)
+✔ Phase 2 hashing works with the locked function search path (2.7158ms)
+✔ SHADOW and AUTHORITATIVE completion share durable recovery while payment selects mode authority (7.7538ms)
+✔ Every Phase 2 function explicitly revokes default client execution (16.1972ms)
+(node:21112) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase2PaymentRecovery.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Actual payment route recovers R60 shadow payment against R40 debt (341.0394ms)
+✔ Actual payment route recovers R10 shadow payment against R59 debt (138.6682ms)
+✔ Concurrent route replays retry the same shadow source with simulated idempotent RPC (42.3306ms)
+✔ Retry after a crash between legacy commit and shadow call recovers posting (34.4893ms)
+✔ Thrown shadow transport error preserves successful approval and permits recovery (39.0006ms)
+✔ OFF stays legacy, AUTHORITATIVE selects its atomic review, and unauthorized cases do not post (294.8518ms)
+(node:2568) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase2ShadowPaymentCorrection.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ post-cutoff allocation covers debt first and preserves excess as unapplied credit (2.3909ms)
+✔ correction uses immutable approval time and records deterministic historical skips (59.5304ms)
+✔ replay returns persisted allocation before recalculating current debt (3.0398ms)
+✔ database enforces the debt floor and server-only execution (2.0654ms)
+✔ route treats historical skip as resolved while preserving replay recovery (1.5312ms)
+(node:26144) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase2TripRecovery.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Completed trip replay heals a failed shadow effect without repeating notifications (280.7282ms)
+✔ Concurrent completed-trip recovery requests use the same simulated idempotent RPC (75.2088ms)
+✔ Completion recovery requires ownership and an authorized legacy replay (127.4856ms)
+✔ Completed-trip recovery is disabled only when Phase 2 is OFF (87.0919ms)
+(node:19796) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/phase5BookingDefaults.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Booking repair is narrowly scoped, guarded and preserves constraints (4.1736ms)
+✔ Repaired INSERT names supplied columns and binds JSON instead of interpolating values (0.5572ms)
+✔ New attempted-driver arrays are empty and explicit JSON null is normalized (0.2816ms)
+✔ Customer booking errors are safe while internal diagnostics remain server-side (0.7297ms)
+(node:25236) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/reliability/readPolling.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ jitter is deterministic, positive, and bounded by operational caps (3.9398ms)
+✔ timer and realtime share one in-flight request; failures cool down and recover (1.4243ms)
+✔ hidden and terminal reads never start (0.4646ms)
+✔ Realtime reconnect does not erase API failure backoff; auth and server errors are distinguished (1.2919ms)
+✔ resume after an expired cooldown still has bounded jitter, not a tight loop (0.4722ms)
+✔ component cleanup abort is not classified as an API outage (0.6981ms)
+✔ hidden tabs suspend scheduled work and remove the visibility listener on cleanup (3.3134ms)
+✔ timeout aborts the read and releases the in-flight guard after settlement (8.5181ms)
+✔ recursive loop schedules after settlement, cleans up, and stops at terminal (0.869ms)
+(node:5904) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/server/hardenedRpc.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ missing RPC fails closed (5.1167ms)
+✔ unsupported contract fails closed (0.3746ms)
+✔ versioned result is accepted (2.3544ms)
+✔ business rejection never requests a fallback (0.383ms)
+✔ permission denial fails closed as an operation failure (1.1019ms)
+✔ unexpected database failure never invokes a second mutation (6.4066ms)
+(node:24164) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/server/phase2Rpc.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ missing Phase 2 RPC fails closed with one call (5.4447ms)
+✔ unsupported contract never becomes success (0.3898ms)
+✔ authorization failures are deterministic operation rejections (1.2925ms)
+✔ versioned contract is accepted (0.3121ms)
+(node:12236) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/server/requestControl.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ concurrent identical requests share one loader (23.3185ms)
+✔ fresh cache entries avoid repeated provider work (0.4388ms)
+✔ different route signatures do not collide (0.3814ms)
+✔ endpoint bursts are blocked before provider work (49.3864ms)
+(node:18736) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/trips/adminTripPaymentMethod.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ new Admin trips accept only cash and the legacy other method (4.1243ms)
+✔ Admin create-trip API rejects online before any route or database work (208.7116ms)
+✔ customer booking accepts cash and online while rejecting unknown payment methods (85.0371ms)
+(node:24932) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/trips/completionContract.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ admin completion uses admin audit fields without requiring driver bypass columns (4.9788ms)
+✔ driver End OTP bypass keeps its dedicated audit contract (0.386ms)
+✔ completion schema detection recognizes PostgREST missing-column errors (0.3161ms)
+(node:336) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/Users/KN%20Mudau/Desktop/Websites/moovu-kasi-rides-redesign/src/lib/trips/lockedTripFare.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\Users\KN Mudau\Desktop\Websites\moovu-kasi-rides-redesign\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ confirmed booking fares remain unchanged (2.2558ms)
+✔ live telemetry is not an input to the locked fare (0.5033ms)
+✔ legacy trips use the safest stored fare fallback (0.5549ms)
+✔ a stop added after booking increases only the locked fare (1.9034ms)
+✔ pre-booking and earlier active stops are not charged twice (0.4483ms)
+✔ route changes cannot reduce or otherwise recalculate the locked fare (0.2182ms)
+✔ repeating the same cumulative stop increase adds no duplicate charge (0.2626ms)
+ℹ tests 233
+ℹ suites 0
+ℹ pass 233
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5272.9468

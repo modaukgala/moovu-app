@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
-import BankTransferDetails from "@/components/driver/payments/BankTransferDetails";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import EmptyState from "@/components/ui/EmptyState";
@@ -12,7 +11,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
-import { requestNativeCameraPermissions } from "@/lib/native-permissions";
+import { openHostedPaymentCheckout } from "@/lib/payments/checkoutNavigation";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Wallet = {
@@ -26,6 +25,13 @@ type DriverInfo = {
   id: string;
   first_name: string | null;
   last_name: string | null;
+};
+
+type FinanceAuthority = {
+  mode: string;
+  netOwedCents: number;
+  thresholdCents: number;
+  subscriptionRequired: boolean;
 };
 
 type PaymentRequest = {
@@ -67,9 +73,9 @@ function displayDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "--";
 }
 
-function paymentStatus(balanceDue: number) {
-  if (balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT) return "Payment required";
-  if (balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT * 0.85) return "Warning";
+function paymentStatus(balanceDue: number, limit = DRIVER_COMMISSION_LOCK_LIMIT) {
+  if (balanceDue >= limit) return "Payment required";
+  if (balanceDue >= limit * 0.85) return "Warning";
   return "Good standing";
 }
 
@@ -80,12 +86,10 @@ export default function DriverCommissionPaymentsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [driver, setDriver] = useState<DriverInfo | null>(null);
+  const [finance, setFinance] = useState<FinanceAuthority | null>(null);
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [trips, setTrips] = useState<CompletedTrip[]>([]);
-  const [amountSubmitted, setAmountSubmitted] = useState("");
-  const [note, setNote] = useState("");
-  const [popFile, setPopFile] = useState<File | null>(null);
 
   const getToken = useCallback(async () => {
     const {
@@ -120,9 +124,10 @@ export default function DriverCommissionPaymentsPage() {
       return;
     }
 
-    const balanceDue = Number(json.earnings?.wallet?.balance_due ?? 0);
+    const authority = json.earnings?.finance_authority as FinanceAuthority | undefined;
     setWallet(json.earnings?.wallet ?? null);
     setDriver(json.earnings?.driver ?? null);
+    setFinance(authority ?? null);
     setPaymentRequests(
       (json.earnings?.payment_requests ?? []).filter(
         (row: PaymentRequest) => row.payment_type === "commission"
@@ -130,7 +135,6 @@ export default function DriverCommissionPaymentsPage() {
     );
     setSettlements(json.earnings?.settlements ?? []);
     setTrips(json.earnings?.recent_completed_trips ?? []);
-    setAmountSubmitted(balanceDue > 0 ? balanceDue.toFixed(2) : "");
     setLoading(false);
   }, [getToken]);
 
@@ -142,11 +146,12 @@ export default function DriverCommissionPaymentsPage() {
     return () => window.clearTimeout(timer);
   }, [loadData]);
 
-  const balanceDue = Number(wallet?.balance_due ?? 0);
-  const remainingBeforeLock = Math.max(0, DRIVER_COMMISSION_LOCK_LIMIT - balanceDue);
+  const balanceDue = finance ? Number(finance.netOwedCents ?? 0) / 100 : Number(wallet?.balance_due ?? 0);
+  const debtLimit = finance ? Number(finance.thresholdCents ?? 0) / 100 : DRIVER_COMMISSION_LOCK_LIMIT;
+  const remainingBeforeLock = Math.max(0, debtLimit - balanceDue);
   const lockProgress = Math.min(
     100,
-    Math.max(0, (balanceDue / DRIVER_COMMISSION_LOCK_LIMIT) * 100)
+    Math.max(0, (balanceDue / Math.max(debtLimit, 0.01)) * 100)
   );
   const pendingCommission = useMemo(
     () =>
@@ -158,56 +163,27 @@ export default function DriverCommissionPaymentsPage() {
   const lastApprovedPayment = settlements[0] ?? null;
   const driverName = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
 
-  async function submitCommissionPayment() {
-    if (balanceDue <= 0) {
-      setMsg("You do not currently owe MOOVU commission.");
-      return;
-    }
-
-    if (pendingCommission) {
-      setMsg("You already have a pending commission payment waiting for admin review.");
-      return;
-    }
-
-    if (!popFile) {
-      setMsg("Please upload proof of payment before submitting.");
-      return;
-    }
-
+  async function payOnline() {
     setBusy(true);
     setMsg(null);
-
     const token = await getToken();
-    if (!token) {
-      setBusy(false);
-      setMsg("You are not logged in.");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("paymentType", "commission");
-    formData.append("amountSubmitted", amountSubmitted || balanceDue.toFixed(2));
-    formData.append("note", note);
-    formData.append("pop", popFile);
-
-    const res = await fetch("/api/driver/payment-request", {
+    if (!token) { setBusy(false); setMsg("You are not logged in."); return; }
+    const response = await fetch("/api/payments/yoco/driver/checkout", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
-      body: formData,
     });
-
-    const json = await res.json().catch(() => null);
-    setBusy(false);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to submit commission payment.");
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body?.redirectUrl) {
+      setBusy(false);
+      setMsg(body?.error ?? "Online payment is currently unavailable.");
       return;
     }
-
-    setMsg(`${json.message} Reference: ${json.paymentReference}`);
-    setNote("");
-    setPopFile(null);
-    await loadData();
+    try {
+      await openHostedPaymentCheckout(body.redirectUrl);
+    } catch (error) {
+      setBusy(false);
+      setMsg(error instanceof Error ? error.message : "Unable to open secure checkout.");
+    }
   }
 
   if (loading) {
@@ -252,7 +228,7 @@ export default function DriverCommissionPaymentsPage() {
               <div className="mt-2">
                 <StatusBadge
                   status={
-                    balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT
+                    balanceDue >= debtLimit
                       ? "payment_required"
                       : balanceDue > 0
                         ? "warning"
@@ -263,13 +239,13 @@ export default function DriverCommissionPaymentsPage() {
             </div>
             <div className="sm:col-span-2">
               <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-bold text-slate-700">R100 online lock limit</span>
+                <span className="font-bold text-slate-700">{money(debtLimit)} online lock limit</span>
                 <span className="font-black text-slate-950">{money(balanceDue)}</span>
               </div>
               <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">
                 <div
                   className={`h-full rounded-full ${
-                    balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT
+                    balanceDue >= debtLimit
                       ? "bg-red-500"
                       : balanceDue > 0
                         ? "bg-amber-500"
@@ -279,7 +255,7 @@ export default function DriverCommissionPaymentsPage() {
                 />
               </div>
               <p className="mt-2 text-xs font-semibold text-slate-500">
-                {balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT
+                {balanceDue >= debtLimit
                   ? "Payment is required before you can go online again."
                   : `${money(remainingBeforeLock)} remaining before the online lock.`}
               </p>
@@ -289,18 +265,18 @@ export default function DriverCommissionPaymentsPage() {
 
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-4">
           <MetricCard label="Commission owed" value={money(balanceDue)} helper="Payable to MOOVU" tone={balanceDue > 0 ? "warning" : "success"} />
-          <MetricCard label="Debt limit" value={money(DRIVER_COMMISSION_LOCK_LIMIT)} helper="Online lock threshold" tone="primary" />
+          <MetricCard label="Debt limit" value={money(debtLimit)} helper="Online lock threshold" tone="primary" />
           <MetricCard label="Before lock" value={money(remainingBeforeLock)} helper="Remaining available balance" />
-          <MetricCard label="Status" value={paymentStatus(balanceDue)} helper={driverName} tone={balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT ? "danger" : balanceDue > 0 ? "warning" : "success"} />
+          <MetricCard label="Status" value={paymentStatus(balanceDue, debtLimit)} helper={driverName} tone={balanceDue >= debtLimit ? "danger" : balanceDue > 0 ? "warning" : "success"} />
         </section>
 
-        {balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT ? (
+        {balanceDue >= debtLimit ? (
           <section className="rounded-[28px] border border-red-200 bg-red-50 p-5 text-red-900 shadow-[0_16px_34px_rgba(220,38,38,0.08)]">
             <div className="text-sm font-black uppercase tracking-[0.12em] text-red-700">
               Online access locked
             </div>
             <p className="mt-2 text-sm leading-6">
-              Your MOOVU commission balance is {money(balanceDue)}. Submit a commission POP for admin review to restore online access after approval.
+              Your MOOVU commission balance is {money(balanceDue)}. Pay the exact authoritative balance online to restore access after verified provider confirmation.
             </p>
           </section>
         ) : balanceDue > 0 ? (
@@ -309,7 +285,7 @@ export default function DriverCommissionPaymentsPage() {
               Commission balance active
             </div>
             <p className="mt-2 text-sm leading-6">
-              You can keep driving while your balance stays below {money(DRIVER_COMMISSION_LOCK_LIMIT)}. Paying early keeps your account in good standing.
+              You can keep driving while your balance stays below {money(debtLimit)}. Paying early keeps your account in good standing.
             </p>
           </section>
         ) : null}
@@ -344,46 +320,18 @@ export default function DriverCommissionPaymentsPage() {
             </div>
 
             <div className="space-y-4">
-              <BankTransferDetails
-                purpose="commission"
-                amount={balanceDue > 0 ? money(balanceDue) : undefined}
-              />
               <div className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-5 shadow-[0_16px_34px_rgba(31,116,201,0.07)]">
               <h2 className="text-xl font-black text-slate-950">Pay MOOVU commission</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Upload your proof of payment after paying the expected amount. Admin review keeps commission clearing controlled and traceable.
+                The payable amount comes from MOOVU&apos;s authoritative ledger and cannot be edited. Settlement happens only after Yoco&apos;s verified webhook.
               </p>
               <div className="mt-4 space-y-4">
-              <input
-                className="moovu-input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={amountSubmitted}
-                onChange={(event) => setAmountSubmitted(event.target.value)}
-                placeholder="Amount paid"
-              />
-              <input
-                className="moovu-input"
-                type="file"
-                accept="image/*,.pdf"
-                onClick={() => void requestNativeCameraPermissions()}
-                onChange={(event) => setPopFile(event.target.files?.[0] ?? null)}
-              />
-              <textarea
-                className="moovu-input min-h-24 resize-none"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="Optional note for admin"
-              />
-              <button
-                type="button"
-                className="moovu-btn moovu-btn-primary w-full"
-                disabled={busy || balanceDue <= 0 || !!pendingCommission}
-                onClick={() => void submitCommissionPayment()}
-              >
-                {busy ? "Submitting..." : "Pay MOOVU commission"}
-              </button>
+              {finance?.mode === "AUTHORITATIVE" && !finance.subscriptionRequired && balanceDue > 0 && (
+                <button type="button" className="moovu-btn moovu-btn-primary w-full" disabled={busy} onClick={() => void payOnline()}>
+                  {busy ? "Preparing secure checkout..." : `Pay ${money(balanceDue)} online with Yoco`}
+                </button>
+              )}
+              {balanceDue <= 0 && <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">No commission is currently payable.</div>}
               </div>
               </div>
             </div>
@@ -392,10 +340,10 @@ export default function DriverCommissionPaymentsPage() {
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="moovu-card p-5 sm:p-6">
-            <h2 className="text-xl font-black text-slate-950">Commission payment requests</h2>
+            <h2 className="text-xl font-black text-slate-950">Historical manual requests</h2>
             <div className="mt-4 space-y-3">
               {paymentRequests.length === 0 ? (
-                <EmptyState title="No commission requests" description="Submitted commission POP requests will appear here." />
+                <EmptyState title="No historical requests" description="No previous manual commission requests were found." />
               ) : (
                 paymentRequests.map((row) => (
                   <div key={row.id} className="moovu-card-interactive p-4">

@@ -3,6 +3,8 @@ import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 import { sendPushSafe } from "@/lib/push-server";
 import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 import type { OfferAction } from "@/lib/dispatch/types";
+import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
+import { phase6NewWork } from "@/lib/drivers/phase6NewWork";
 
 type ResponseRow = {
   ok: boolean;
@@ -54,6 +56,20 @@ export async function respondToOffer(params: {
   action: OfferAction;
   source: "driver_app" | "native_notification";
 }): Promise<OfferResponseResult> {
+  if (params.action === "accept") {
+    const onboarding = await phase6NewWork(supabaseAdmin, params.driverId);
+    if (!onboarding.ok || !onboarding.eligible) return { ok: false, status: onboarding.ok ? 409 : 503, tripId: params.tripId, error: onboarding.error ?? "Onboarding unavailable." };
+    const [{ data: driver, error: driverError }, { data: wallet, error: walletError }] = await Promise.all([
+      supabaseAdmin.from("drivers").select("subscription_status,subscription_expires_at").eq("id", params.driverId).maybeSingle(),
+      supabaseAdmin.from("driver_wallets").select("balance_due").eq("driver_id", params.driverId).maybeSingle(),
+    ]);
+    if (driverError || walletError || !driver) return { ok: false, status: 503, tripId: params.tripId, error: "Driver finance authority is unavailable." };
+    const finance = await resolveDriverFinanceAuthority(supabaseAdmin, { driverId: params.driverId,
+      subscriptionStatus: driver.subscription_status, subscriptionExpiresAt: driver.subscription_expires_at,
+      legacyBalanceDue: Number(wallet?.balance_due ?? 0) });
+    if (!finance.ok) return { ok: false, status: 503, tripId: params.tripId, error: finance.error };
+    if (!finance.authority.financiallyEligible) return { ok: false, status: 409, tripId: params.tripId, state: "ineligible", error: "Driver is no longer financially eligible for new work." };
+  }
   const rpcName = params.action === "accept" ? "accept_trip_offer" : "decline_trip_offer";
   const { data, error } = await supabaseAdmin.rpc(rpcName, {
     p_trip_id: params.tripId,

@@ -1,87 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
-import BankTransferDetails from "@/components/driver/payments/BankTransferDetails";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
-import {
-  DRIVER_SUBSCRIPTION_PLANS,
-  type DriverSubscriptionPlan,
-} from "@/lib/finance/driverPayments";
-import { requestNativeCameraPermissions } from "@/lib/native-permissions";
+import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
+import { openHostedPaymentCheckout } from "@/lib/payments/checkoutNavigation";
 import { supabaseClient } from "@/lib/supabase/client";
 
-type DriverInfo = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  subscription_status: string | null;
-  subscription_plan: string | null;
-  subscription_expires_at: string | null;
-  subscription_amount_due: number | null;
-};
-
-type PaymentRequest = {
-  id: string;
-  payment_type: "subscription" | "commission" | "combined";
-  subscription_plan: DriverSubscriptionPlan | null;
-  amount_expected: number;
-  amount_submitted: number;
-  payment_reference: string;
-  status: string;
-  review_note: string | null;
-  submitted_at: string;
-  reviewed_at: string | null;
-};
-
-type SubscriptionPayment = {
-  id: string;
-  amount_paid: number;
-  payment_method: string;
-  reference: string | null;
-  note: string | null;
-  created_at: string;
-};
-
-type DriverWallet = {
-  balance_due?: number | null;
-  account_status?: string | null;
-};
-
-const PLAN_BENEFITS: Record<DriverSubscriptionPlan, string> = {
-  day: "Best for occasional driving",
-  week: "Best for regular driving",
-  month: "Best value for active drivers",
-};
-
-function money(value: number | null | undefined) {
-  return `R${Number(value ?? 0).toFixed(2)}`;
-}
-
-function displayDate(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleString() : "--";
-}
-
-function daysRemaining(value: string | null | undefined) {
-  if (!value) return 0;
-  const diff = new Date(value).getTime() - Date.now();
-  return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)));
-}
-
-function planLabel(plan: DriverSubscriptionPlan | string | null | undefined) {
-  if (plan === "day" || plan === "week" || plan === "month") {
-    const item = DRIVER_SUBSCRIPTION_PLANS[plan];
-    return `${item.label} ${money(item.amount)}`;
-  }
-  return "No active plan";
-}
+type DriverInfo = { subscription_status: string | null; subscription_plan: string | null; subscription_expires_at: string | null };
+type SubscriptionPayment = { id: string; amount_paid: number; payment_method: string; reference: string | null; created_at: string };
+type PaymentRequest = { id: string; payment_type: string; payment_reference: string; status: string; amount_submitted: number; submitted_at: string };
+const BENEFITS: Record<DriverSubscriptionPlan, string> = { day: "Best for occasional driving", week: "Best for regular driving", month: "Best value for active drivers" };
+const money = (value: number | null | undefined) => `R${Number(value ?? 0).toFixed(2)}`;
+const displayDate = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : "--";
 
 export default function DriverSubscriptionsPage() {
   const [loading, setLoading] = useState(true);
@@ -89,360 +26,87 @@ export default function DriverSubscriptionsPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [driver, setDriver] = useState<DriverInfo | null>(null);
-  const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
-  const [wallet, setWallet] = useState<DriverWallet | null>(null);
+  const [legacyRequests, setLegacyRequests] = useState<PaymentRequest[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<DriverSubscriptionPlan>("week");
-  const [amountSubmitted, setAmountSubmitted] = useState(String(DRIVER_SUBSCRIPTION_PLANS.week.amount));
-  const [note, setNote] = useState("");
-  const [popFile, setPopFile] = useState<File | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
 
-  const selectedPlanDetails = DRIVER_SUBSCRIPTION_PLANS[selectedPlan];
-  const pendingRequest = useMemo(
-    () =>
-      requests.find((row) =>
-        ["pending_payment_review", "waiting_confirmation"].includes(row.status)
-      ) ?? null,
-    [requests],
-  );
-  const approvedRequests = requests.filter((row) => row.status === "approved");
-  const rejectedRequests = requests.filter((row) => row.status === "rejected");
-
-  const getToken = useCallback(async () => {
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-    return session?.access_token || "";
-  }, []);
-
-  const loadData = useCallback(async () => {
+  const token = useCallback(async () => (await supabaseClient.auth.getSession()).data.session?.access_token ?? "", []);
+  const load = useCallback(async () => {
     setLoading(true);
-    setMsg(null);
-
-    const token = await getToken();
-    if (!token) {
-      setAuthRequired(true);
-      setLoading(false);
-      return;
+    const accessToken = await token();
+    if (!accessToken) { setAuthRequired(true); setLoading(false); return; }
+    const response = await fetch("/api/driver/earnings", { cache: "no-store", headers: { Authorization: `Bearer ${accessToken}` } });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body?.ok) setMsg(body?.error ?? "Failed to load subscriptions.");
+    else {
+      setDriver(body.earnings?.driver ?? null);
+      setPayments(body.earnings?.subscription_payments ?? []);
+      setLegacyRequests((body.earnings?.payment_requests ?? []).filter((row: PaymentRequest) => row.payment_type === "subscription"));
     }
-
-    setAuthRequired(false);
-
-    const res = await fetch("/api/driver/earnings", {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to load subscription payments.");
-      setLoading(false);
-      return;
-    }
-
-    setDriver(json.earnings?.driver ?? null);
-    setWallet(json.earnings?.wallet ?? null);
-    setRequests(
-      ((json.earnings?.payment_requests ?? []) as PaymentRequest[]).filter(
-        (row) => row.payment_type === "subscription",
-      ),
-    );
-    setPayments(json.earnings?.subscription_payments ?? []);
     setLoading(false);
-  }, [getToken]);
+  }, [token]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
+  useEffect(() => { void load(); }, [load]);
 
-    return () => window.clearTimeout(timer);
-  }, [loadData]);
-
-  async function submitSubscriptionPayment() {
-    if (pendingRequest) {
-      setMsg("You already have a subscription payment waiting for admin review.");
-      return;
-    }
-    if (!popFile) {
-      setMsg("Please upload proof of payment before submitting.");
-      return;
-    }
-    if (!confirmed) {
-      setMsg("Please confirm that the payment amount and reference are correct.");
-      return;
-    }
-
-    setBusy(true);
-    setMsg(null);
-
-    const token = await getToken();
-    if (!token) {
-      setBusy(false);
-      setMsg("You are not logged in.");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("paymentType", "subscription");
-    formData.append("subscriptionPlan", selectedPlan);
-    formData.append("amountSubmitted", amountSubmitted || String(selectedPlanDetails.amount));
-    formData.append("note", note);
-    formData.append("pop", popFile);
-
-    const res = await fetch("/api/driver/payment-request", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-    const json = await res.json().catch(() => null);
-    setBusy(false);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to submit subscription payment.");
-      return;
-    }
-
-    setMsg(`${json.message} Reference: ${json.paymentReference}`);
-    setNote("");
-    setPopFile(null);
-    setConfirmed(false);
-    await loadData();
+  async function payOnline() {
+    setBusy(true); setMsg(null);
+    try {
+      const accessToken = await token();
+      if (!accessToken) throw new Error("Sign in to pay for a subscription.");
+      const response = await fetch("/api/payments/yoco/driver/subscription/checkout", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ plan: selectedPlan }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.ok || !body.redirectUrl) throw new Error(body?.error ?? "Checkout is unavailable.");
+      await openHostedPaymentCheckout(body.redirectUrl);
+    } catch (error) { setMsg(error instanceof Error ? error.message : "Checkout is unavailable."); setBusy(false); }
   }
 
-  if (loading) {
-    return (
-      <LoadingState
-        title="Loading subscriptions"
-        description="Checking your plan, expiry, and payment history."
-      />
-    );
-  }
+  if (loading) return <LoadingState title="Loading subscriptions" description="Checking your plan, expiry, and payment history." />;
+  if (authRequired) return <DriverAuthRequired description="Sign in to manage your MOOVU driver subscription." />;
+  const selected = DRIVER_SUBSCRIPTION_PLANS[selectedPlan];
 
-  if (authRequired) {
-    return <DriverAuthRequired description="Sign in to manage your MOOVU driver subscription." />;
-  }
+  return <main className="moovu-page moovu-driver-shell pb-28 text-slate-950">
+    {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+    <div className="moovu-shell space-y-6">
+      <section className="moovu-card overflow-hidden p-0">
+        <div className="bg-[linear-gradient(135deg,#f8fbff_0%,#eef8ff_46%,#f0fffa_100%)] p-5 sm:p-7">
+          <div className="moovu-section-title">MOOVU Driver</div><h1 className="mt-2 text-2xl font-black sm:text-3xl">Subscriptions</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Choose a plan and pay securely online with Yoco. MOOVU confirms access only after the verified payment webhook.</p>
+          <DriverSectionTabs section="money" />
+        </div>
+        <div className="moovu-driver-metric-grid moovu-driver-metric-grid-3 border-t border-[var(--moovu-border)] p-4 sm:p-5">
+          <MetricCard label="Status" value={driver?.subscription_status ?? "inactive"} helper="Current access" tone={driver?.subscription_status === "active" ? "success" : "warning"} />
+          <MetricCard label="Plan" value={driver?.subscription_plan ?? "No active plan"} helper="Current plan" />
+          <MetricCard label="Expires" value={displayDate(driver?.subscription_expires_at)} helper="Verified subscription expiry" />
+        </div>
+      </section>
 
-  return (
-    <main className="moovu-page moovu-driver-shell pb-28 text-slate-950">
-      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
+        {(Object.entries(DRIVER_SUBSCRIPTION_PLANS) as Array<[DriverSubscriptionPlan, typeof DRIVER_SUBSCRIPTION_PLANS[DriverSubscriptionPlan]]>).map(([key, item]) => <button key={key} type="button" onClick={() => setSelectedPlan(key)} className={`rounded-[20px] border p-5 text-left transition ${selectedPlan === key ? "border-sky-300 bg-sky-50 shadow-[0_16px_38px_rgba(31,116,201,0.14)]" : "border-[var(--moovu-border)] bg-white shadow-sm"}`}>
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">{item.label}</div><div className="mt-3 text-4xl font-black">{money(item.amount)}</div>
+          <p className="mt-2 text-sm text-slate-600">{item.days} day{item.days === 1 ? "" : "s"} driver access.</p><p className="mt-1 text-xs font-semibold text-slate-500">{BENEFITS[key]}</p>
+          {selectedPlan === key && <div className="mt-4"><StatusBadge status="selected" /></div>}
+        </button>)}
+      </section>
 
-      <div className="moovu-shell space-y-6">
-        <section className="moovu-card overflow-hidden p-0">
-          <div className="bg-[linear-gradient(135deg,#f8fbff_0%,#eef8ff_46%,#f0fffa_100%)] p-5 sm:p-7">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="moovu-section-title">MOOVU Driver</div>
-                <h1 className="mt-2 text-2xl font-black sm:text-3xl">
-                  Subscriptions
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Keep your driver access active with a clean daily, weekly, or monthly subscription POP.
-                </p>
-              </div>
-            </div>
-            <DriverSectionTabs section="money" />
-          </div>
+      <section className="moovu-card p-5 sm:p-6">
+        <h2 className="text-xl font-black">Pay subscription online</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">The {selected.label.toLowerCase()} plan price is fixed by MOOVU at {money(selected.amount)}. The amount cannot be edited.</p>
+        <button type="button" className="moovu-btn moovu-btn-primary mt-5 w-full sm:w-auto" disabled={busy} onClick={() => void payOnline()}>
+          {busy ? "Preparing secure checkout..." : `Pay ${money(selected.amount)} online with Yoco`}
+        </button>
+      </section>
 
-          <div className="moovu-driver-metric-grid moovu-driver-metric-grid-4 border-t border-[var(--moovu-border)] p-4 sm:p-5">
-            <MetricCard label="Status" value={driver?.subscription_status ?? "inactive"} helper="Current access" tone={driver?.subscription_status === "active" ? "success" : "warning"} />
-            <MetricCard label="Plan" value={planLabel(driver?.subscription_plan)} helper="Current plan" />
-            <MetricCard label="Expires" value={displayDate(driver?.subscription_expires_at)} helper={`${daysRemaining(driver?.subscription_expires_at)} day(s) remaining`} />
-            <MetricCard label="Pending POP" value={pendingRequest ? "Yes" : "No"} helper={pendingRequest?.payment_reference ?? "No active review"} tone={pendingRequest ? "warning" : "success"} />
-          </div>
-        </section>
-
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-100 bg-amber-50 px-4 py-3">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">Commission owed</div>
-            <div className="mt-1 text-2xl font-black text-slate-950">{money(wallet?.balance_due)}</div>
-          </div>
-          <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-secondary">
-            Pay commission
-          </Link>
-        </section>
-
-        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
-          {(Object.entries(DRIVER_SUBSCRIPTION_PLANS) as Array<[DriverSubscriptionPlan, typeof DRIVER_SUBSCRIPTION_PLANS[DriverSubscriptionPlan]]>).map(([key, item]) => {
-            const active = selectedPlan === key;
-            const current = driver?.subscription_plan === key && ["active", "grace"].includes(String(driver.subscription_status ?? "").toLowerCase());
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => {
-                  setSelectedPlan(key);
-                  setAmountSubmitted(String(item.amount));
-                }}
-                className={`rounded-[20px] border p-5 text-left transition ${
-                  active
-                    ? "border-sky-300 bg-sky-50 shadow-[0_16px_38px_rgba(31,116,201,0.14)]"
-                    : "border-[var(--moovu-border)] bg-white shadow-sm hover:border-sky-200"
-                }`}
-              >
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
-                  {item.label}
-                </div>
-                <div className="mt-3 text-4xl font-black">{money(item.amount)}</div>
-                <p className="mt-2 text-sm text-slate-600">
-                  {item.days} day{item.days === 1 ? "" : "s"} driver access.
-                </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">{PLAN_BENEFITS[key]}</p>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  {current ? <StatusBadge status="current plan" /> : null}
-                  {active ? <StatusBadge status="selected" /> : null}
-                  <span className="text-xs font-black text-blue-700">
-                    {current ? "Renew" : active ? "Ready to pay" : "Select plan"}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="moovu-card p-5 sm:p-6">
-            <h2 className="text-xl font-black">Payment details</h2>
-            <div className="mt-4 space-y-3 text-sm">
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Selected plan</div>
-                <div className="mt-1 text-lg font-black">{selectedPlanDetails.label}</div>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Exact amount</div>
-                <div className="mt-1 text-lg font-black">{money(selectedPlanDetails.amount)}</div>
-              </div>
-              <BankTransferDetails
-                purpose="subscription"
-                amount={money(selectedPlanDetails.amount)}
-              />
-            </div>
-          </div>
-
-          <div className="moovu-card p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-black">Submit subscription POP</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Upload proof after paying. Admin approval activates or extends your subscription.
-                </p>
-              </div>
-              <StatusBadge status={pendingRequest ? pendingRequest.status : "ready"} />
-            </div>
-
-            {pendingRequest ? (
-              <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-                <div className="font-black">Review in progress</div>
-                <p className="mt-2">
-                  Reference {pendingRequest.payment_reference} is waiting for MOOVU admin review.
-                </p>
-              </div>
-            ) : (
-              <div className="mt-5 space-y-4">
-                <input
-                  className="moovu-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={amountSubmitted}
-                  onChange={(event) => setAmountSubmitted(event.target.value)}
-                  placeholder="Amount paid"
-                />
-                <input
-                  className="moovu-input"
-                  type="file"
-                  accept="image/*,.pdf"
-                  onClick={() => void requestNativeCameraPermissions()}
-                  onChange={(event) => setPopFile(event.target.files?.[0] ?? null)}
-                />
-                <textarea
-                  className="moovu-input min-h-24 resize-none"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Optional note for admin"
-                />
-                <label className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-                  <input
-                    className="mt-1"
-                    type="checkbox"
-                    checked={confirmed}
-                    onChange={(event) => setConfirmed(event.target.checked)}
-                  />
-                  <span>I confirm I paid the selected subscription amount and uploaded the correct POP.</span>
-                </label>
-                <button
-                  type="button"
-                  className="moovu-btn moovu-btn-primary w-full"
-                  disabled={busy}
-                  onClick={() => void submitSubscriptionPayment()}
-                >
-                  {busy ? "Submitting..." : `Submit ${selectedPlanDetails.label} POP`}
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="moovu-card p-5 sm:p-6">
-            <h2 className="text-xl font-black">Subscription requests</h2>
-            <div className="mt-4 space-y-3">
-              {requests.length === 0 ? (
-                <EmptyState title="No subscription requests" description="Your submitted subscription POPs will appear here." />
-              ) : (
-                requests.map((row) => (
-                  <div key={row.id} className="moovu-card-interactive p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="font-black">{row.payment_reference}</div>
-                        <div className="mt-1 text-sm text-slate-600">
-                          {planLabel(row.subscription_plan)} · {money(row.amount_submitted)}
-                        </div>
-                      </div>
-                      <StatusBadge status={row.status} />
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                      <span>Submitted {displayDate(row.submitted_at)}</span>
-                      <Link className="font-bold text-[var(--moovu-primary)]" href={`/driver/payment-receipts/${row.id}`}>
-                        Open receipt
-                      </Link>
-                    </div>
-                    {row.review_note ? <div className="mt-3 text-sm text-slate-700">Admin note: {row.review_note}</div> : null}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="moovu-card p-5 sm:p-6">
-            <h2 className="text-xl font-black">Approved history</h2>
-            <div className="mt-4 space-y-3">
-              {payments.length === 0 && approvedRequests.length === 0 && rejectedRequests.length === 0 ? (
-                <EmptyState title="No payment history" description="Approved and reviewed subscription payments will appear here." />
-              ) : (
-                <>
-                  {payments.map((row) => (
-                    <div key={row.id} className="rounded-3xl border border-[var(--moovu-border)] bg-white p-4">
-                      <div className="font-black">{money(row.amount_paid)} · {row.payment_method}</div>
-                      <div className="mt-1 text-sm text-slate-600">{row.reference ?? "--"}</div>
-                      <div className="mt-2 text-xs text-slate-500">{displayDate(row.created_at)}</div>
-                    </div>
-                  ))}
-                  {rejectedRequests.map((row) => (
-                    <div key={row.id} className="rounded-3xl border border-red-100 bg-red-50 p-4">
-                      <div className="font-black text-red-900">Rejected · {row.payment_reference}</div>
-                      <div className="mt-1 text-sm text-red-800">{row.review_note ?? "No admin note."}</div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <DriverBottomNav />
-    </main>
-  );
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="moovu-card p-5 sm:p-6"><h2 className="text-xl font-black">Verified payment history</h2><div className="mt-4 space-y-3">
+          {payments.length === 0 ? <EmptyState title="No verified payments" description="Verified online subscription payments will appear here." /> : payments.map(row => <div key={row.id} className="rounded-3xl border border-[var(--moovu-border)] bg-white p-4"><div className="font-black">{money(row.amount_paid)} · {row.payment_method}</div><div className="mt-1 text-sm text-slate-600">{row.reference ?? "--"}</div><div className="mt-2 text-xs text-slate-500">{displayDate(row.created_at)}</div></div>)}
+        </div></div>
+        <div className="moovu-card p-5 sm:p-6"><h2 className="text-xl font-black">Historical manual requests</h2><p className="mt-2 text-sm text-slate-600">Previous records remain available for audit. New manual transfer submissions are closed.</p><div className="mt-4 space-y-3">
+          {legacyRequests.length === 0 ? <EmptyState title="No historical requests" description="No previous manual subscription requests were found." /> : legacyRequests.map(row => <div key={row.id} className="rounded-3xl border border-[var(--moovu-border)] bg-white p-4"><div className="flex justify-between gap-3"><span className="font-black">{row.payment_reference}</span><StatusBadge status={row.status} /></div><div className="mt-2 text-sm text-slate-600">{money(row.amount_submitted)} · {displayDate(row.submitted_at)}</div></div>)}
+        </div></div>
+      </section>
+    </div><DriverBottomNav />
+  </main>;
 }

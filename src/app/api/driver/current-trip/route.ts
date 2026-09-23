@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { noShowEligibleAt } from "@/lib/finance/cancellationFees";
+import { phase4AuthorityForTrip } from "@/lib/finance/phase4AuthorityServer";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";
@@ -23,6 +24,8 @@ type DriverCurrentTripResponse = {
   created_at: string | null;
   driver_arrived_at?: string | null;
   no_show_eligible_at?: string | null;
+  no_show_authoritatively_eligible?: boolean;
+  arrival_evidence_qualified?: boolean | null;
   stops?: unknown;
   original_fare?: number | null;
   final_add_stop_increase?: number | null;
@@ -57,6 +60,8 @@ const CURRENT_TRIP_SELECT = `
   estimated_fare,
   fare_adjustment_amount,
   fare_breakdown
+  ,driver_arrived_at
+  ,arrival_evidence_qualified
 `;
 
 const LEGACY_CURRENT_TRIP_SELECT = `
@@ -174,18 +179,21 @@ export async function GET(req: Request) {
     let enrichedTrip = (trip as DriverCurrentTripResponse | null) ?? null;
 
     if (enrichedTrip?.id && enrichedTrip.status === "arrived") {
-      const { data: arrivedEvents } = await supabaseAdmin
-        .from("trip_events")
-        .select("created_at")
-        .eq("trip_id", enrichedTrip.id)
-        .eq("event_type", "driver_arrived")
-        .order("created_at", { ascending: false })
-        .limit(1);
-
+      const authority = await phase4AuthorityForTrip(supabaseAdmin, enrichedTrip.id);
+      let arrivedAt = enrichedTrip.driver_arrived_at ?? null;
+      if (authority === "LEGACY") {
+        const { data: arrivedEvents } = await supabaseAdmin.from("trip_events").select("created_at")
+          .eq("trip_id", enrichedTrip.id).eq("event_type", "driver_arrived")
+          .order("created_at", { ascending: false }).limit(1);
+        arrivedAt = arrivedEvents?.[0]?.created_at ?? null;
+      }
+      const eligibleAt = authority === "PHASE4" && enrichedTrip.arrival_evidence_qualified
+        ? noShowEligibleAt(arrivedAt) : authority === "LEGACY" ? noShowEligibleAt(arrivedAt) : null;
       enrichedTrip = {
         ...enrichedTrip,
-        driver_arrived_at: arrivedEvents?.[0]?.created_at ?? null,
-        no_show_eligible_at: noShowEligibleAt(arrivedEvents?.[0]?.created_at ?? null),
+        driver_arrived_at: arrivedAt,
+        no_show_eligible_at: eligibleAt,
+        no_show_authoritatively_eligible: Boolean(eligibleAt && Date.parse(eligibleAt) <= Date.now()),
       };
     }
 

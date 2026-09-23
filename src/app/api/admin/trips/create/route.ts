@@ -3,8 +3,10 @@ import { requireAdminUser } from "@/lib/auth/admin";
 import { calculateFare } from "@/lib/fare/calculateFare";
 import { normalizeRideOptionId, resolveAdminTripFare } from "@/lib/domain/fare";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
-
-const PAYMENT_METHODS = new Set(["cash", "online", "other"]);
+import { calculateDrivingRoute } from "@/lib/maps/routeService";
+import { isValidLatitude, isValidLongitude } from "@/lib/maps/mapRequestPolicy";
+import { callHardenedRpc } from "@/lib/server/hardenedRpc";
+import { isAdminTripPaymentMethod } from "@/lib/trips/adminTripPaymentMethod";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -33,12 +35,10 @@ export async function POST(req: Request) {
     const paymentMethod = cleanText(body?.paymentMethod) || "cash";
     const driverId = cleanText(body?.driverId);
     const rideOptionId = normalizeRideOptionId(body?.rideOptionId ?? body?.rideOption ?? body?.ride_option);
-    const distanceKm = Number(body?.distanceKm);
     const pickupLat = Number(body?.pickupLat);
     const pickupLng = Number(body?.pickupLng);
     const dropoffLat = Number(body?.dropoffLat);
     const dropoffLng = Number(body?.dropoffLng);
-    const durationMin = body?.durationMin === "" || body?.durationMin == null ? null : Number(body.durationMin);
     const requestedFare = body?.fare == null || body?.fare === "" ? null : Number(body.fare);
     const fareOverrideRequested = body?.fareOverride === true;
     const fareOverrideReason = cleanText(body?.fareOverrideReason).slice(0, 500);
@@ -47,20 +47,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Pickup and dropoff are required." }, { status: 400 });
     }
 
-    if (!PAYMENT_METHODS.has(paymentMethod)) {
+    if (!isAdminTripPaymentMethod(paymentMethod)) {
       return NextResponse.json({ ok: false, error: "Invalid payment method." }, { status: 400 });
     }
 
-    if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
-      return NextResponse.json({ ok: false, error: "Distance is required." }, { status: 400 });
-    }
-
-    if (![pickupLat, pickupLng, dropoffLat, dropoffLng].every(Number.isFinite)) {
+    if ([body?.pickupLat, body?.pickupLng, body?.dropoffLat, body?.dropoffLng]
+      .some((value) => value == null || value === "")
+      || !isValidLatitude(pickupLat) || !isValidLatitude(dropoffLat)
+      || !isValidLongitude(pickupLng) || !isValidLongitude(dropoffLng)) {
       return NextResponse.json(
         { ok: false, error: "Valid pickup and dropoff coordinates are required." },
         { status: 400 }
       );
     }
+
+    // Client distance/time are display hints, never an authoritative fare basis.
+    const route = await calculateDrivingRoute({
+      origin: { lat: pickupLat, lng: pickupLng },
+      destination: { lat: dropoffLat, lng: dropoffLng },
+      actorKey: `admin:${auth.user.id}`,
+    }).catch(() => null);
+    if (!route || !Number.isFinite(route.distanceKm) || route.distanceKm <= 0
+      || !Number.isFinite(route.durationMin) || route.durationMin < 0) {
+      return NextResponse.json(
+        { ok: false, error: "A verified route is unavailable. Please retry before creating this trip." },
+        { status: 503 },
+      );
+    }
+    const { distanceKm, durationMin } = route;
 
     const activeSurge = await getActiveManualSurge();
     const calculatedFare = calculateFare({
@@ -89,7 +103,9 @@ export async function POST(req: Request) {
 
     const startOtp = generateOtp();
     const endOtp = generateOtp();
-    const initialStatus = driverId ? "assigned" : "requested";
+    // Trip creation is valid independently; selected-driver assignment is a
+    // separate authoritative transaction and cannot bypass eligibility.
+    const initialStatus = "requested";
     const { supabaseAdmin, user } = auth;
 
     if (driverId) {
@@ -130,7 +146,7 @@ export async function POST(req: Request) {
         duration_min: durationMin != null && Number.isFinite(durationMin) ? durationMin : null,
         ride_option: rideOptionId,
         status: initialStatus,
-        driver_id: driverId || null,
+        driver_id: null,
         start_otp: startOtp,
         end_otp: endOtp,
         start_otp_verified: false,
@@ -190,18 +206,30 @@ export async function POST(req: Request) {
       });
     }
 
+    let assignmentWarning: string | null = null;
     if (driverId) {
-      await supabaseAdmin.from("trip_events").insert({
-        trip_id: trip.id,
-        event_type: "assignment",
-        message: `Assigned driver ${driverId}`,
-        old_status: "requested",
-        new_status: "assigned",
-        created_by: user.id,
-      });
+      const assignment = await callHardenedRpc<{ trip_id: string; driver_id: string; replayed: boolean }>(
+        supabaseAdmin,
+        "phase05b_assign_driver",
+        { p_trip_id: trip.id, p_driver_id: driverId, p_actor_id: user.id },
+      );
+      if (!assignment.ok) {
+        assignmentWarning = assignment.error;
+        console.error("[admin-trip-create] trip created but hardened assignment was rejected", {
+          tripId: trip.id, driverId, code: assignment.code,
+        });
+      }
     }
 
-    return NextResponse.json({ ok: true, tripId: trip.id });
+    return NextResponse.json({
+      ok: true,
+      tripId: trip.id,
+      assignmentApplied: Boolean(driverId) && !assignmentWarning,
+      assignmentWarning,
+      message: assignmentWarning
+        ? "Trip created safely but left unassigned because the selected driver could not be reserved."
+        : "Trip created successfully.",
+    });
   } catch (error: unknown) {
     console.error("[admin-trip-create] unexpected error", errorMessage(error, "Unknown error"));
     return NextResponse.json(

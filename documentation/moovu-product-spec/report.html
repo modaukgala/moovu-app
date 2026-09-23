@@ -1,0 +1,2937 @@
+
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MOOVU System Design &amp; Product Specification</title>
+        <link rel="stylesheet" href="./report.css" />
+      </head>
+      <body>
+        <div class="report-header">
+          <div class="brand-row">
+            <img src="./assets/logo-main.png" alt="MOOVU" />
+            <span>MOOVU System Design &amp; Product Specification</span>
+          </div>
+          <span>1.0 • 6 August 2026</span>
+        </div>
+        <div class="report-footer">
+          <span class="footer-note">MOOVU • Customer • Driver • Dispatch • Operations</span>
+          <span class="page-number"></span>
+        </div>
+
+        <main class="report">
+          <section class="cover">
+            <div class="cover-top">
+              <div class="cover-chip">MOOVU internal product document</div>
+              <img src="./assets/logo-white.png" alt="MOOVU white logo" />
+            </div>
+            <div class="cover-panel">
+              <div>
+                <h1>MOOVU System Design &amp; Product Specification</h1>
+                <h2>Complete Product, Business and Technical Overview</h2>
+                <div style="margin-top:18px" class="summary-chip">Customer • Driver • Dispatch • Operations</div>
+                <div class="cover-card" style="margin-top:22px">
+                  <h3>Purpose</h3>
+                  <p>This document explains what MOOVU is, how it works, how customers, drivers and administrators use it, how rides move through the system, and how the business earns and governs transport operations.</p>
+                </div>
+              </div>
+              <div class="cover-visual">
+                <img src="./screenshots/home.png" alt="MOOVU application preview" />
+              </div>
+            </div>
+            <div class="cover-meta">
+              <div class="cover-meta-card"><strong>Version</strong><span>1.0</span></div>
+              <div class="cover-meta-card"><strong>Generated</strong><span>6 August 2026</span></div>
+              <div class="cover-meta-card"><strong>Audience</strong><span>Operations, investors, builders</span></div>
+              <div class="cover-meta-card"><strong>Category</strong><span>Ride-hailing and local transport technology</span></div>
+            </div>
+          </section>
+
+          <section class="front-matter">
+            <div class="front-grid">
+              <div class="card soft">
+                <div class="kicker">Document information</div>
+                <h2 class="section-title" style="margin-top:8px">MOOVU System Design & Product Specification</h2>
+                <p>Organisation: MOOVU<br/>Product category: Ride-hailing and local transport technology<br/>Version: 1.0<br/>Generation date: 6 August 2026</p>
+                <p>This document is intended to help management, partners, investors, designers, developers, testers, support staff and driver-onboarding staff understand the current MOOVU product and operations model.</p>
+              </div>
+              <div class="card">
+                <div class="kicker">How to use this document</div>
+                <ul><li>Product sections explain what each application surface does.</li><li>Business-process sections explain how money, eligibility and review flows work.</li><li>User-flow sections explain customer, driver and admin movement through the product.</li><li>Technical sections explain how the platform coordinates data, notifications and controls.</li><li>Operational sections explain how MOOVU runs as a real transport system.</li></ul>
+              </div>
+            </div>
+          </section>
+
+          <section class="toc">
+            <div class="card">
+              <div class="kicker">Table of contents</div>
+              <h2 class="section-title" style="margin-top:8px">Report navigation</h2>
+              <div class="toc-list">
+                
+                  <a class="toc-item" href="#executive-summary">
+                    <strong>1. Executive Summary</strong>
+                    <span>MOOVU is a multi-sided ride-hailing platform built around township and local-community transport. It combines a customer booking experience, a driver operations system, and an admin control center that govern booking, dispatch, payments, subscriptions, receipts, OTP verification, and operations.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#brand-identity">
+                    <strong>2. MOOVU Brand and Product Identity</strong>
+                    <span>The live application uses a blue-led palette, strong white surfaces, aqua and sky accents, and a taxi-branded MOOVU mark. The brand language emphasizes trust, local reliability, clarity, and smartphone-first usability.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#what-moovu-is">
+                    <strong>3. What MOOVU Is</strong>
+                    <span>MOOVU is a ride-hailing and operations platform that coordinates customers, drivers, subscriptions, dispatch, finance and oversight in one system.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#problem-market">
+                    <strong>4. Problem and Market Context</strong>
+                    <span>MOOVU is designed for local township and peri-urban transport conditions where dependable short-distance movement, safety confidence, operational oversight, and practical cash-friendly ride management matter.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#business-model">
+                    <strong>5. MOOVU Business Model</strong>
+                    <span>MOOVU earns from customer trip pricing, driver subscriptions, and trip commission. Finance is mediated through admin-reviewed proof-of-payment flows and auditable wallet or receipt records.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#users-roles">
+                    <strong>6. Platform Users and Roles</strong>
+                    <span>MOOVU separates public, customer, driver, and admin activity through role-specific pages, account linking, and server-validated access control.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#platform-overview">
+                    <strong>7. MOOVU Platform Overview</strong>
+                    <span>The platform spans public web entry, customer and driver route domains, an admin control system, native shells, server APIs, Supabase, Google Maps and Firebase-backed notification delivery.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#customer-journey">
+                    <strong>8. Complete Customer Journey</strong>
+                    <span>The customer lifecycle begins with account access and location setup, moves through fare estimation and driver search, and ends with OTP-protected completion, receipt access, and rating.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#customer-screen-catalogue">
+                    <strong>9. Customer Screen Catalogue</strong>
+                    <span>Customer screens cover public entry, authentication, booking, active ride handling, account management and legal support.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#driver-onboarding">
+                    <strong>10. Driver Onboarding Journey</strong>
+                    <span>Driver onboarding is a guided multi-step process that captures eligibility, account details, identity data, document requirements, vehicle details, and review submission.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#driver-documents">
+                    <strong>11. Driver Documents</strong>
+                    <span>MOOVU models driver identity, licence, compliance, and vehicle records as private reviewed documents with operational consequences for readiness and trust.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#driver-eligibility">
+                    <strong>12. Driver Eligibility</strong>
+                    <span>Receiving trips is contingent on account approval, subscription status, commission balance, live GPS, availability, and ride-capacity compatibility.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#driver-subscriptions">
+                    <strong>13. Driver Subscription System</strong>
+                    <span>Drivers pay one of three subscription plans, upload proof of payment, wait for admin approval, then receive activated operating access according to the selected duration.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#driver-operations">
+                    <strong>14. Driver Application and Operations</strong>
+                    <span>After approval, a driver uses the portal to go online, receive trip offers, reach pickup, verify start OTP, navigate, complete the trip with end OTP, and review earnings and balances.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#driver-screen-catalogue">
+                    <strong>15. Driver Screen Catalogue</strong>
+                    <span>Driver-facing screens cover onboarding, live operations, history, earnings, subscriptions, commission payments, support, account control and deletion.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#admin-ops-overview">
+                    <strong>16. Admin Operations Overview</strong>
+                    <span>MOOVU administrators supervise the platform operationally: onboarding, trip oversight, dispatch, payment review, subscriptions, commissions, receipts and reporting all pass through the admin surface.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#admin-screen-catalogue">
+                    <strong>17. Admin Screen Catalogue</strong>
+                    <span>Admin screens span operations, customers, drivers, payments, reports and system notifications. The navigation structure itself reflects MOOVU's business operations model.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#trip-lifecycle">
+                    <strong>18. Complete Trip Lifecycle</strong>
+                    <span>Trips move through explicit lifecycle states, with audit events, offer state, OTP milestones, fare finalization and completion records.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#dispatch-matching">
+                    <strong>19. Driver Dispatch and Matching</strong>
+                    <span>Dispatch is a scored, eligibility-aware, time-boxed candidate search that uses explicit driver filters, radius logic, and an atomic acceptance process to prevent duplicate assignment.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#fare-pricing">
+                    <strong>20. Fare and Pricing System</strong>
+                    <span>Fare calculation is centralized around ride-option rules, booking fee, distance, duration, surge, waiting, stop logic, minimum fare and final-trip adjustment.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#maps-location">
+                    <strong>21. Maps and Live Location</strong>
+                    <span>MOOVU combines customer location selection, Google Maps geocoding and routing, and driver heartbeat updates to drive booking, dispatch, route display and completion checks.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#otp-security">
+                    <strong>22. OTP and Trip Security</strong>
+                    <span>Start and end OTP checkpoints give MOOVU a practical trip-security layer that aligns start, trip progression and completion with explicit rider validation.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#notifications-realtime">
+                    <strong>23. Notifications and Realtime Updates</strong>
+                    <span>MOOVU stores push delivery targets across web, Android and iOS, sends server-side visible notifications through Firebase or Web Push, and routes users back into the correct portal.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#earnings-commission">
+                    <strong>24. Driver Earnings and MOOVU Commission</strong>
+                    <span>Completed trips generate gross fare, driver net, and MOOVU commission entries that flow into the wallet and settlement system.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#payments-subscriptions-reviews">
+                    <strong>25. Payments and Subscription Reviews</strong>
+                    <span>Driver payments are proof-based, typed as subscription, commission or combined, and require admin review before they affect subscription state or commission balance.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#receipts-records">
+                    <strong>26. Receipts and Records</strong>
+                    <span>Receipts are customer-facing trip records and admin-visible financial evidence surfaces. The platform also preserves structured trip and payment history for audit and support.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#auth-access-control">
+                    <strong>27. Authentication and Access Control</strong>
+                    <span>MOOVU uses Supabase authentication, customer or driver profile linking, admin role checks, protected routes and account deletion flows to keep each portal bounded.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#information-model">
+                    <strong>28. MOOVU Information Model</strong>
+                    <span>The MOOVU database is not just a storage layer. It is a direct model of customers, drivers, trips, offers, subscriptions, wallet state, payments, receipts and notification routes.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#api-capabilities">
+                    <strong>29. API Capability Catalogue</strong>
+                    <span>Business capabilities are implemented as customer, driver, admin, maps, notification and supporting server routes. Each capability is validated server-side rather than trusting client intent.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#applications-work-together">
+                    <strong>30. How the Applications Work Together</strong>
+                    <span>Customer, server, database, dispatch, notifications, driver and admin logic are synchronized through explicit server-side mutations and event-driven messaging.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#safety-trust">
+                    <strong>31. Safety and Trust</strong>
+                    <span>MOOVU's trust model is built from approval, documentation, OTP checkpoints, visibility, audit trails, support and controlled operator readiness rather than a single isolated safety feature.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#support-exceptions">
+                    <strong>32. Support and Exception Handling</strong>
+                    <span>The platform explicitly handles declines, no-driver outcomes, invalid OTP, expired subscriptions, payment rejection, GPS loss, active-trip restrictions and notification-denied states.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#product-differentiators">
+                    <strong>33. Product Differentiators</strong>
+                    <span>MOOVU's strongest product differentiators are operational, local and commercially structural rather than cosmetic.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#maturity-scorecard">
+                    <strong>34. Feature Maturity Scorecard</strong>
+                    <span>The scorecard below reflects implementation completeness, not commercial scale or market traction.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#confirmed-partial-runtime">
+                    <strong>35. Confirmed, Partial and Runtime-Dependent Capabilities</strong>
+                    <span>Some capabilities are confirmed directly from source and surrounding documentation, while others depend on environment, migration or real-device verification.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#intended-vs-implemented">
+                    <strong>36. Intended Versus Implemented Behaviour</strong>
+                    <span>The platform contains a small number of business-rule or naming mismatches that should be tracked explicitly rather than obscured.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#operational-playbooks">
+                    <strong>37. Operational Playbooks</strong>
+                    <span>The operating model is practical and role-driven. Each recurring operational scenario has a clear owner and result.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#glossary">
+                    <strong>38. Glossary</strong>
+                    <span>These terms are central to understanding how MOOVU behaves as a product and business system.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#product-summary">
+                    <strong>39. What MOOVU Currently Does</strong>
+                    <span>MOOVU currently provides a full booking-to-operations cycle that joins customer requests, driver execution and admin oversight.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#technical-summary">
+                    <strong>40. How MOOVU Does It</strong>
+                    <span>The platform works by coordinating structured web and native-ready interfaces with server-side validation, stored records, and timed operational logic.</span>
+                  </a>
+                
+                  <a class="toc-item" href="#beginning-to-end">
+                    <strong>41. MOOVU Explained from Beginning to End</strong>
+                    <span>The sequence below explains the whole operating system in one continuous narrative.</span>
+                  </a>
+                
+                <a class="toc-item" href="#appendix-a"><strong>Appendices A–H</strong><span>Pricing, eligibility, documents, subscriptions, status, notifications, permissions and admin checklists.</span></a>
+              </div>
+            </div>
+          </section>
+
+          
+            <section class="section" id="executive-summary">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">1</div>
+                  <h2 class="section-title">1. Executive Summary</h2>
+                </div>
+                <div class="section-summary">MOOVU is a multi-sided ride-hailing platform built around township and local-community transport. It combines a customer booking experience, a driver operations system, and an admin control center that govern booking, dispatch, payments, subscriptions, receipts, OTP verification, and operations.</div>
+              </div>
+              
+        <div class="card soft">
+          <div class="kicker">MOOVU at a glance</div>
+          <div class="glance-grid" style="margin-top:14px">
+            <div class="glance-item"><strong>Product type</strong><span>Ride-hailing operations platform</span></div>
+            <div class="glance-item"><strong>Main users</strong><span>Customers, drivers, administrators</span></div>
+            <div class="glance-item"><strong>Primary market</strong><span>Siyabuswa, KwaMhlanga, KwaNdebele nearby areas and township local travel</span></div>
+            <div class="glance-item"><strong>Core services</strong><span>Booking, dispatch, OTP, receipts, subscriptions</span></div>
+            <div class="glance-item"><strong>Ride categories</strong><span>MOOVU Go and MOOVU Go XL</span></div>
+            <div class="glance-item"><strong>Driver pricing</strong><span>Subscription plus commission governance</span></div>
+            <div class="glance-item"><strong>Technology base</strong><span>Next.js 16 App Router, React 19, TypeScript, Supabase Auth, Database and Storage</span></div>
+            <div class="glance-item"><strong>Operational model</strong><span>Admin-reviewed, locally managed transport network</span></div>
+          </div>
+        </div>
+        <div class="two-col" style="margin-top:16px">
+          <div class="card">
+            <p>MOOVU is more than a simple booking website. The customer side creates and tracks trips, the driver side controls readiness and trip execution, and the admin side supervises operations, onboarding, finance, and exceptions. That combination makes MOOVU a full service operations platform rather than a single-view application.</p>
+            <p>The business model combines customer fares, driver subscriptions, commission controls, cancellation and no-show handling, proof-of-payment reviews, and receipt records. The product is designed for real-world local transport operations rather than a demonstration booking form.</p>
+          </div>
+          <div>
+            
+    <figure class="screenshot small">
+      <img src="./screenshots/home.png" alt="Customer-facing MOOVU landing screen showing the app-style entry experience." />
+    </figure>
+    <div class="caption">Customer-facing MOOVU landing screen showing the app-style entry experience.</div>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="brand-identity">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">2</div>
+                  <h2 class="section-title">2. MOOVU Brand and Product Identity</h2>
+                </div>
+                <div class="section-summary">The live application uses a blue-led palette, strong white surfaces, aqua and sky accents, and a taxi-branded MOOVU mark. The brand language emphasizes trust, local reliability, clarity, and smartphone-first usability.</div>
+              </div>
+              
+        <div class="two-col">
+          <div class="card">
+            <div class="kicker">Brand palette</div>
+            <div class="glance-grid">
+    
+    <div class="glance-item">
+      <strong>Primary blue</strong>
+      <span><span style="display:inline-block;width:14px;height:14px;border-radius:999px;background:#1f74c9;margin-right:8px;vertical-align:-2px;"></span>#1f74c9</span>
+    </div>
+  
+    
+    <div class="glance-item">
+      <strong>Dark blue</strong>
+      <span><span style="display:inline-block;width:14px;height:14px;border-radius:999px;background:#244f9e;margin-right:8px;vertical-align:-2px;"></span>#244f9e</span>
+    </div>
+  
+    
+    <div class="glance-item">
+      <strong>Sky</strong>
+      <span><span style="display:inline-block;width:14px;height:14px;border-radius:999px;background:#b0e0f0;margin-right:8px;vertical-align:-2px;"></span>#b0e0f0</span>
+    </div>
+  
+    
+    <div class="glance-item">
+      <strong>Aqua</strong>
+      <span><span style="display:inline-block;width:14px;height:14px;border-radius:999px;background:#c0f0e0;margin-right:8px;vertical-align:-2px;"></span>#c0f0e0</span>
+    </div>
+  
+    
+    <div class="glance-item">
+      <strong>Green</strong>
+      <span><span style="display:inline-block;width:14px;height:14px;border-radius:999px;background:#16a34a;margin-right:8px;vertical-align:-2px;"></span>#16a34a</span>
+    </div>
+  
+    
+    <div class="glance-item">
+      <strong>Gold accent</strong>
+      <span><span style="display:inline-block;width:14px;height:14px;border-radius:999px;background:#f5b301;margin-right:8px;vertical-align:-2px;"></span>#f5b301</span>
+    </div>
+  
+    
+    <div class="glance-item">
+      <strong>Navy</strong>
+      <span><span style="display:inline-block;width:14px;height:14px;border-radius:999px;background:#0f172a;margin-right:8px;vertical-align:-2px;"></span>#0f172a</span>
+    </div>
+  
+    
+    <div class="glance-item">
+      <strong>Ink</strong>
+      <span><span style="display:inline-block;width:14px;height:14px;border-radius:999px;background:#050505;margin-right:8px;vertical-align:-2px;"></span>#050505</span>
+    </div>
+  
+  </div>
+            <p style="margin-top:14px">The platform consistently uses a cool blue primary, clean white cards, soft sky backgrounds, and aqua support accents. This creates a branded look that feels premium while remaining practical for daily use in customer, driver, and admin surfaces.</p>
+          </div>
+          <div class="card">
+            <div class="kicker">Brand assets</div>
+            <div class="three-col" style="margin-top:14px;align-items:center">
+              <img src="./assets/logo-main.png" alt="MOOVU logo" style="width:100%;border-radius:18px;background:#fff;padding:10px;border:1px solid #d7e2ea;" />
+              <img src="./assets/logo-black.png" alt="MOOVU dark logo" style="width:100%;border-radius:18px;background:#f8fbff;padding:10px;border:1px solid #d7e2ea;" />
+              <img src="./assets/logo-white.png" alt="MOOVU light logo" style="width:100%;border-radius:18px;background:#0f172a;padding:10px;border:1px solid #d7e2ea;" />
+            </div>
+            <p style="margin-top:14px">The visual identity carries taxi symbolism, locality, and directness. It is positioned as a serious transport utility rather than a decorative consumer lifestyle brand.</p>
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="what-moovu-is">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">3</div>
+                  <h2 class="section-title">3. What MOOVU Is</h2>
+                </div>
+                <div class="section-summary">MOOVU is a ride-hailing and operations platform that coordinates customers, drivers, subscriptions, dispatch, finance and oversight in one system.</div>
+              </div>
+              
+        <div class="card">
+          <p><strong>Public definition:</strong> MOOVU is a local ride-booking platform that lets people request safe nearby transport, track a driver, verify the trip with OTP, and receive a clear receipt afterward.</p>
+          <p><strong>Business definition:</strong> MOOVU is a managed transport marketplace where the business controls who can operate, how drivers pay subscriptions and commission, and how trips, receipts, and support cases are supervised.</p>
+          <p><strong>Technical definition:</strong> MOOVU is a multi-surface web and mobile-ready system built on Next.js, Supabase, Google Maps, Firebase messaging, and Capacitor. It combines customer booking, driver readiness, admin oversight, push notifications, storage-backed uploads, and finance workflows.</p>
+          <ul><li>Ride-hailing platform: customers request rides and drivers complete them.</li><li>Booking system: customer input becomes a structured trip record.</li><li>Driver-management system: onboarding, subscriptions, readiness, GPS and earnings are managed.</li><li>Dispatch platform: eligible drivers are scored and offered trips in timed cycles.</li><li>Subscription platform: drivers pay daily, weekly, or monthly access fees.</li><li>Commission and settlement platform: completed trips create commission due and admin-reviewed settlements.</li><li>Operations control system: admin users supervise trips, applications, receipts, dispatch and payments.</li><li>Multi-sided marketplace: customers, drivers and MOOVU operations interact through one system.</li></ul>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="problem-market">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">4</div>
+                  <h2 class="section-title">4. Problem and Market Context</h2>
+                </div>
+                <div class="section-summary">MOOVU is designed for local township and peri-urban transport conditions where dependable short-distance movement, safety confidence, operational oversight, and practical cash-friendly ride management matter.</div>
+              </div>
+              
+        <div class="two-col">
+          <div class="card">
+            <p>For customers, the core problem is simple: transport must be requestable, visible, and safe enough to trust. MOOVU answers that with live driver matching, clear fare display, driver identity visibility, OTP-protected start and completion, receipts, and support surfaces.</p>
+            <p>For drivers, the problem is different: they need a controlled route into earning, predictable operating rules, visibility into commission owed, a clear subscription system, and a trip flow that protects them against ambiguous starts and ends. MOOVU addresses those needs with onboarding review, readiness checks, OTP validation, earnings summaries, and wallet-based commission tracking.</p>
+          </div>
+          <div class="diagram-grid">
+            
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Problem to solution map">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Problem to solution map</text>
+        
+      <rect x="113" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="188" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Unstructured ride requests</text>
+      
+      <line x1="263" y1="64" x2="279" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="269,56 279,64 269,72" fill="#1f74c9" />
+    
+      <rect x="279" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="354" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">MOOVU booking record</text>
+      
+      <line x1="429" y1="64" x2="445" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="435,56 445,64 435,72" fill="#1f74c9" />
+    
+      <rect x="445" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="520" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Verified driver dispatch</text>
+      
+      <line x1="595" y1="64" x2="611" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="601,56 611,64 601,72" fill="#1f74c9" />
+    
+      <rect x="611" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="686" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">OTP-secured trip</text>
+      
+      <line x1="761" y1="64" x2="777" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="767,56 777,64 767,72" fill="#1f74c9" />
+    
+      <rect x="777" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="852" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Receipt and reporting</text>
+      
+      
+    
+      </svg>
+      <figcaption>Problem to solution map</figcaption>
+    </figure>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="business-model">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">5</div>
+                  <h2 class="section-title">5. MOOVU Business Model</h2>
+                </div>
+                <div class="section-summary">MOOVU earns from customer trip pricing, driver subscriptions, and trip commission. Finance is mediated through admin-reviewed proof-of-payment flows and auditable wallet or receipt records.</div>
+              </div>
+              
+        <div class="two-col">
+          <div class="card">
+            
+    <table>
+      <thead>
+        <tr><th>Income channel</th><th>How it works</th><th>Operational note</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Customer fares</td><td>Customers see an estimate at booking and a final trip amount after completion logic finalizes the trip.</td><td>Finalization allows fare adjustment after actual route conditions.</td></tr>
+            
+              <tr><td>Driver subscriptions</td><td>Drivers select daily, weekly, or monthly access and upload proof of payment.</td><td>Admin approval activates the selected plan.</td></tr>
+            
+              <tr><td>Trip commission</td><td>Completed trips create MOOVU commission due against the driver wallet.</td><td>Drivers are blocked from going online when due exceeds R100.</td></tr>
+            
+              <tr><td>Cancellation and no-show fees</td><td>Applicable fees are recorded separately from normal trip commission.</td><td>Fee splits are fixed between driver and MOOVU.</td></tr>
+            
+      </tbody>
+    </table>
+  
+            <div class="callout warning" style="margin-top:14px">
+              <strong>Business rule requiring confirmation:</strong>
+              the codebase contains both a legacy fallback commission constant of 9.5% and ride-option commission rules of 10% for MOOVU Go and 12% for MOOVU Go XL. The report treats that as a confirmed mismatch rather than a hidden assumption.
+            </div>
+          </div>
+          <div class="diagram-grid">
+            
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="MOOVU money flow">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">MOOVU money flow</text>
+        
+      <rect x="113" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="188" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Customer fare</text>
+      
+      <line x1="263" y1="64" x2="279" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="269,56 279,64 269,72" fill="#16a34a" />
+    
+      <rect x="279" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="354" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Trip finalization</text>
+      
+      <line x1="429" y1="64" x2="445" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="435,56 445,64 435,72" fill="#16a34a" />
+    
+      <rect x="445" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="520" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Driver net earnings</text>
+      
+      <line x1="595" y1="64" x2="611" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="601,56 611,64 601,72" fill="#16a34a" />
+    
+      <rect x="611" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="686" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Commission wallet due</text>
+      
+      <line x1="761" y1="64" x2="777" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="767,56 777,64 767,72" fill="#16a34a" />
+    
+      <rect x="777" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="852" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Admin-reviewed settlement</text>
+      
+      
+    
+      </svg>
+      <figcaption>MOOVU money flow</figcaption>
+    </figure>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="users-roles">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">6</div>
+                  <h2 class="section-title">6. Platform Users and Roles</h2>
+                </div>
+                <div class="section-summary">MOOVU separates public, customer, driver, and admin activity through role-specific pages, account linking, and server-validated access control.</div>
+              </div>
+              
+        <div class="card landscape-page">
+          
+    <table>
+      <thead>
+        <tr><th>Role</th><th>Primary permission</th><th>Restriction</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Visitor</td><td>Can access public landing, legal pages, and customer or driver entry points</td><td>No trip or protected data access</td></tr>
+            
+              <tr><td>Customer</td><td>Can create bookings, track trips, use OTP, chat, rate, and view receipts</td><td>Cannot access driver or admin operations</td></tr>
+            
+              <tr><td>Driver applicant</td><td>Can create a driver account and submit onboarding data</td><td>Cannot receive trips until approved and eligible</td></tr>
+            
+              <tr><td>Approved driver</td><td>Can log in, go online, receive offers, execute trips, and manage earnings</td><td>Cannot use admin operational tools</td></tr>
+            
+              <tr><td>Administrator</td><td>Can review trips, drivers, receipts, and payments</td><td>Requires approved admin role in profiles table</td></tr>
+            
+              <tr><td>Dispatcher</td><td>Operational dispatch visibility and intervention</td><td>Subset of admin roles</td></tr>
+            
+              <tr><td>Support</td><td>Operational and customer support visibility</td><td>Subset of admin roles</td></tr>
+            
+              <tr><td>Payment reviewer</td><td>Reviews subscription, commission and combined driver payments</td><td>Admin-protected workflow</td></tr>
+            
+              <tr><td>Owner</td><td>Highest administrative authority</td><td>Role-based, not separate app surface</td></tr>
+            
+      </tbody>
+    </table>
+  
+          <p style="margin-top:14px">Admin permissions are not free-form. They are resolved from the profile role set accepted by the application: owner, admin, dispatcher and support. Driver ownership is not inferred from client claims; it is resolved through an explicit driver account link table.</p>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="platform-overview">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">7</div>
+                  <h2 class="section-title">7. MOOVU Platform Overview</h2>
+                </div>
+                <div class="section-summary">The platform spans public web entry, customer and driver route domains, an admin control system, native shells, server APIs, Supabase, Google Maps and Firebase-backed notification delivery.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 420" role="img" aria-label="MOOVU platform architecture">
+        <text x="20" y="22" font-size="16" font-weight="700" fill="#0f172a">MOOVU platform architecture</text>
+        
+      <text x="184" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Public and web surfaces</text>
+      
+        <rect x="24" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Public landing</text>
+        <text x="184" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Customer entry</text>
+      
+        <rect x="24" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Customer application</text>
+        <text x="184" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Booking and trip tracking</text>
+      
+        <rect x="24" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Driver application</text>
+        <text x="184" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Onboarding and trip execution</text>
+      
+        <rect x="24" y="294" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="316" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Admin operations</text>
+        <text x="184" y="332" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Trips, finance and review</text>
+      
+    
+      <text x="520" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">MOOVU backend</text>
+      
+        <rect x="360" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#2bb5a0" stroke-width="2.5"/>
+        <text x="520" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Customer services</text>
+        <text x="520" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Booking, tracking, rating</text>
+      
+        <rect x="360" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#2bb5a0" stroke-width="2.5"/>
+        <text x="520" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Driver services</text>
+        <text x="520" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Offers, OTP, completion</text>
+      
+        <rect x="360" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#2bb5a0" stroke-width="2.5"/>
+        <text x="520" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Admin services</text>
+        <text x="520" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Review, reporting, dispatch</text>
+      
+        <rect x="360" y="294" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#2bb5a0" stroke-width="2.5"/>
+        <text x="520" y="316" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Notification and finance</text>
+        <text x="520" y="332" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Push, wallet, receipts</text>
+      
+    
+      <text x="856" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Platform dependencies</text>
+      
+        <rect x="696" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Supabase</text>
+        <text x="856" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Auth, DB, storage</text>
+      
+        <rect x="696" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Google Maps</text>
+        <text x="856" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Distance, geocode, routing</text>
+      
+        <rect x="696" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Firebase / web push</text>
+        <text x="856" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Device notifications</text>
+      
+        <rect x="696" y="294" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="316" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Capacitor shells</text>
+        <text x="856" y="332" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Android and iOS packaging</text>
+      
+    
+      </svg>
+      <figcaption>MOOVU platform architecture</figcaption>
+    </figure>
+  
+        <div class="two-col" style="margin-top:16px">
+          <div class="card">
+            <p>Customer, driver and admin traffic can be partitioned by route and by host. Middleware rewrites admin and driver subdomains into the relevant application path. That means the system can present separate branded portals while sharing one application backend.</p>
+          </div>
+          <div class="card">
+            <p>The customer iOS shell uses the customer bundle identifier and the driver iOS shell uses the driver bundle identifier. Each shell points to its own route domain. The Android and iOS shells are packaging layers on top of the same web application logic.</p>
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="customer-journey">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">8</div>
+                  <h2 class="section-title">8. Complete Customer Journey</h2>
+                </div>
+                <div class="section-summary">The customer lifecycle begins with account access and location setup, moves through fare estimation and driver search, and ends with OTP-protected completion, receipt access, and rating.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Customer journey">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Customer journey</text>
+        
+      <rect x="20" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="95" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Open MOOVU</text>
+      
+      <line x1="170" y1="64" x2="186" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="176,56 186,64 176,72" fill="#1f74c9" />
+    
+      <rect x="186" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="261" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Sign in or create account</text>
+      
+      <line x1="336" y1="64" x2="352" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="342,56 352,64 342,72" fill="#1f74c9" />
+    
+      <rect x="352" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="427" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Choose pickup and destination</text>
+      
+      <line x1="502" y1="64" x2="518" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="508,56 518,64 508,72" fill="#1f74c9" />
+    
+      <rect x="518" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="593" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Select ride type</text>
+      
+      <line x1="668" y1="64" x2="684" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="674,56 684,64 674,72" fill="#1f74c9" />
+    
+      <rect x="684" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="759" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Confirm ride</text>
+      
+      <line x1="834" y1="64" x2="850" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="840,56 850,64 840,72" fill="#1f74c9" />
+    
+      <rect x="850" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="925" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Track driver</text>
+      
+      <line x1="1000" y1="64" x2="1016" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="1006,56 1016,64 1006,72" fill="#1f74c9" />
+    
+      <rect x="1016" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="1091" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Verify OTP</text>
+      
+      <line x1="1166" y1="64" x2="1182" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="1172,56 1182,64 1172,72" fill="#1f74c9" />
+    
+      <rect x="1182" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="1257" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Receive receipt</text>
+      
+      
+    
+      </svg>
+      <figcaption>Customer journey</figcaption>
+    </figure>
+  
+        <div class="two-col" style="margin-top:16px">
+          <div class="card">
+            <p>The customer can request the current location, paste or search locations, adjust pickup on a map, add up to two stops, and choose MOOVU Go or MOOVU Go XL. Pricing is shown before booking and recalculated server-side so the backend does not trust client fare input.</p>
+            <p>After a driver accepts, the customer sees assigned-driver information, trip status changes, OTP state, chat access, and final actions such as receipt and rating. Account deletion and legal surfaces are also part of the live customer experience.</p>
+          </div>
+          <div>
+            
+    <figure class="screenshot small">
+      <img src="./screenshots/customerAuth.png" alt="Customer authentication surface used before booking when no active session exists." />
+    </figure>
+    <div class="caption">Customer authentication surface used before booking when no active session exists.</div>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="customer-screen-catalogue">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">9</div>
+                  <h2 class="section-title">9. Customer Screen Catalogue</h2>
+                </div>
+                <div class="section-summary">Customer screens cover public entry, authentication, booking, active ride handling, account management and legal support.</div>
+              </div>
+              
+        <div class="two-col">
+          <div class="card landscape-page">
+            
+    <table>
+      <thead>
+        <tr><th>Customer screen</th><th>Purpose</th><th>Primary access</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Landing page</td><td>App-style entry screen, booking CTA, trust panels, driver application CTA</td><td>Visitor / customer</td></tr>
+            
+              <tr><td>Customer authentication</td><td>Phone, email and password-based access to customer account</td><td>Visitor</td></tr>
+            
+              <tr><td>Booking page</td><td>Pickup, destination, stops, ride option, fare estimate, notifications, booking submit</td><td>Customer</td></tr>
+            
+              <tr><td>Ride history</td><td>Previous trips, receipt access, rating links</td><td>Customer</td></tr>
+            
+              <tr><td>Active trip</td><td>Assigned driver, fare state, OTP state, chat, final actions</td><td>Customer</td></tr>
+            
+              <tr><td>Receipt</td><td>Trip proof with fare and ride details</td><td>Customer</td></tr>
+            
+              <tr><td>Rating</td><td>Post-trip rating flow</td><td>Customer</td></tr>
+            
+              <tr><td>Account and security</td><td>Profile and account security surfaces</td><td>Customer</td></tr>
+            
+              <tr><td>Delete account</td><td>Apple-compliant in-app deletion flow</td><td>Customer</td></tr>
+            
+              <tr><td>Privacy, terms and contact</td><td>Legal and support surfaces</td><td>Visitor / customer</td></tr>
+            
+      </tbody>
+    </table>
+  
+          </div>
+          <div class="diagram-grid">
+            
+    <figure class="screenshot small">
+      <img src="./screenshots/home.png" alt="Customer landing page with app-style booking entry and trust panels." />
+    </figure>
+    <div class="caption">Customer landing page with app-style booking entry and trust panels.</div>
+  
+            
+    <figure class="screenshot small">
+      <img src="./screenshots/customerAuth.png" alt="Customer account creation and sign-in surface." />
+    </figure>
+    <div class="caption">Customer account creation and sign-in surface.</div>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="driver-onboarding">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">10</div>
+                  <h2 class="section-title">10. Driver Onboarding Journey</h2>
+                </div>
+                <div class="section-summary">Driver onboarding is a guided multi-step process that captures eligibility, account details, identity data, document requirements, vehicle details, and review submission.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Driver onboarding">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Driver onboarding</text>
+        
+      <rect x="20" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="95" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Eligibility</text>
+      
+      <line x1="170" y1="64" x2="186" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="176,56 186,64 176,72" fill="#1f74c9" />
+    
+      <rect x="186" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="261" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Account</text>
+      
+      <line x1="336" y1="64" x2="352" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="342,56 352,64 342,72" fill="#1f74c9" />
+    
+      <rect x="352" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="427" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Personal details</text>
+      
+      <line x1="502" y1="64" x2="518" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="508,56 518,64 508,72" fill="#1f74c9" />
+    
+      <rect x="518" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="593" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Documents</text>
+      
+      <line x1="668" y1="64" x2="684" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="674,56 684,64 674,72" fill="#1f74c9" />
+    
+      <rect x="684" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="759" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Vehicle details</text>
+      
+      <line x1="834" y1="64" x2="850" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="840,56 850,64 840,72" fill="#1f74c9" />
+    
+      <rect x="850" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="925" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Photos</text>
+      
+      <line x1="1000" y1="64" x2="1016" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="1006,56 1016,64 1006,72" fill="#1f74c9" />
+    
+      <rect x="1016" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="1091" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Review and submit</text>
+      
+      
+    
+      </svg>
+      <figcaption>Driver onboarding</figcaption>
+    </figure>
+  
+        <div class="two-col" style="margin-top:16px">
+          <div class="card">
+            <p>The onboarding surface intentionally separates required documents from optional or later-stage operational documents. A driver can submit while PDP or PrDP is still pending because the current business rule tracks the status without making it an unconditional application blocker.</p>
+            <p>Vehicle and identity validation are already opinionated. The application enforces basic format checks for items such as South African ID number, VIN, engine number, seating capacity, and vehicle registration structure.</p>
+          </div>
+          <div>
+            
+    <figure class="screenshot small">
+      <img src="./screenshots/driverApply.png" alt="Driver onboarding application with readiness tracking and step-based flow." />
+    </figure>
+    <div class="caption">Driver onboarding application with readiness tracking and step-based flow.</div>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="driver-documents">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">11</div>
+                  <h2 class="section-title">11. Driver Documents</h2>
+                </div>
+                <div class="section-summary">MOOVU models driver identity, licence, compliance, and vehicle records as private reviewed documents with operational consequences for readiness and trust.</div>
+              </div>
+              
+        <div class="card landscape-page">
+          
+    <table>
+      <thead>
+        <tr><th>Document</th><th>Why it exists</th><th>Required now</th><th>Review effect</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>SA ID or passport</td><td>Identity verification and account legitimacy</td><td>Yes</td><td>Required to verify the driver applicant</td></tr>
+            
+              <tr><td>Driver licence</td><td>Driving eligibility</td><td>Yes</td><td>Required to operate</td></tr>
+            
+              <tr><td>Proof of residence</td><td>Local compliance and contact confidence</td><td>Yes</td><td>Required for onboarding review</td></tr>
+            
+              <tr><td>Profile photo</td><td>Rider-facing trust and identity</td><td>Yes</td><td>Supports driver trust display</td></tr>
+            
+              <tr><td>PDP / PrDP</td><td>Professional transport readiness</td><td>Tracked, not always blocking</td><td>May be requested before full operations</td></tr>
+            
+              <tr><td>Vehicle registration</td><td>Vehicle ownership and lawful operation</td><td>Yes</td><td>Vehicle validation</td></tr>
+            
+              <tr><td>Licence disc</td><td>Road legality</td><td>Yes</td><td>Vehicle validation</td></tr>
+            
+              <tr><td>Roadworthy certificate</td><td>Operational safety confidence</td><td>Yes</td><td>Vehicle validation</td></tr>
+            
+              <tr><td>Vehicle insurance</td><td>Risk and compliance context</td><td>Optional where available</td><td>Improves operational confidence</td></tr>
+            
+              <tr><td>Vehicle photos</td><td>Physical vehicle review and rider trust</td><td>Expected</td><td>Visual verification</td></tr>
+            
+              <tr><td>Police clearance</td><td>Optional safety strengthening</td><td>Optional</td><td>Enhanced safety review when present</td></tr>
+            
+              <tr><td>Transport permit</td><td>Optional commercial operation support</td><td>Optional</td><td>Context-dependent</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="driver-eligibility">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">12</div>
+                  <h2 class="section-title">12. Driver Eligibility</h2>
+                </div>
+                <div class="section-summary">Receiving trips is contingent on account approval, subscription status, commission balance, live GPS, availability, and ride-capacity compatibility.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 280" role="img" aria-label="Driver eligibility decision path">
+        <text x="20" y="22" font-size="16" font-weight="700" fill="#0f172a">Driver eligibility decision path</text>
+        <rect x="380" y="44" rx="22" ry="22" width="280" height="62" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+        <text x="520" y="71" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Can this driver receive a trip?</text>
+        <text x="520" y="90" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Driver can receive a trip</text>
+        
+            <line x1="520" y1="106" x2="180" y2="146" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+            <rect x="70" y="146" rx="20" ry="20" width="220" height="88" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+            <text x="180" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Account and review state</text>
+            <text x="180" y="193" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Approved, active, verified and profile-complete</text>
+            <text x="180" y="214" text-anchor="middle" font-size="10" font-weight="700" fill="#166534">Must pass</text>
+          
+            <line x1="520" y1="106" x2="418" y2="146" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+            <rect x="308" y="146" rx="20" ry="20" width="220" height="88" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+            <text x="418" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Commercial readiness</text>
+            <text x="418" y="193" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Subscription active and balance due below R100</text>
+            <text x="418" y="214" text-anchor="middle" font-size="10" font-weight="700" fill="#166534">Must pass</text>
+          
+            <line x1="520" y1="106" x2="656" y2="146" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+            <rect x="546" y="146" rx="20" ry="20" width="220" height="88" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+            <text x="656" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Live trip readiness</text>
+            <text x="656" y="193" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Online, not busy, GPS fresh and not already offered</text>
+            <text x="656" y="214" text-anchor="middle" font-size="10" font-weight="700" fill="#166534">Must pass</text>
+          
+            <line x1="520" y1="106" x2="894" y2="146" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+            <rect x="784" y="146" rx="20" ry="20" width="220" height="88" fill="#ffffff" stroke="#d97706" stroke-width="2.5"/>
+            <text x="894" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Vehicle fit</text>
+            <text x="894" y="193" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Ride-option capacity must match seating rule</text>
+            <text x="894" y="214" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">Mismatch blocks dispatch</text>
+          
+      </svg>
+      <figcaption>Driver eligibility decision path</figcaption>
+    </figure>
+  
+        <div class="card" style="margin-top:16px">
+          <p>Vehicle capacity logic currently contains a naming mismatch. Operationally, the fare system presents MOOVU Go XL, while the seating-capacity helper still refers to Go Plus for seven-seat review paths. The eligibility rule itself is still clear: the larger ride category requires higher capacity and may require admin review depending on the vehicle record.</p>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="driver-subscriptions">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">13</div>
+                  <h2 class="section-title">13. Driver Subscription System</h2>
+                </div>
+                <div class="section-summary">Drivers pay one of three subscription plans, upload proof of payment, wait for admin approval, then receive activated operating access according to the selected duration.</div>
+              </div>
+              
+        <div class="two-col">
+          <div class="card">
+            
+    <table>
+      <thead>
+        <tr><th>Plan</th><th>Amount</th><th>Duration</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Daily</td><td>R45</td><td>1 day</td></tr>
+            
+              <tr><td>Weekly</td><td>R100</td><td>7 days</td></tr>
+            
+              <tr><td>Monthly</td><td>R250</td><td>30 days</td></tr>
+            
+      </tbody>
+    </table>
+  
+            <p style="margin-top:14px">Subscription approval is not automatic. The driver submits a payment request, an admin reviews the proof of payment, and only then does the driver record update to active status with the correct expiry window. That keeps plan activation tied to reviewed proof rather than a client-side claim.</p>
+          </div>
+          <div class="diagram-grid">
+            
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Subscription lifecycle">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Subscription lifecycle</text>
+        
+      <rect x="30" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="105" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Select plan</text>
+      
+      <line x1="180" y1="64" x2="196" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="186,56 196,64 186,72" fill="#16a34a" />
+    
+      <rect x="196" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="271" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Upload proof</text>
+      
+      <line x1="346" y1="64" x2="362" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="352,56 362,64 352,72" fill="#16a34a" />
+    
+      <rect x="362" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="437" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Pending review</text>
+      
+      <line x1="512" y1="64" x2="528" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="518,56 528,64 518,72" fill="#16a34a" />
+    
+      <rect x="528" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="603" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Admin approval</text>
+      
+      <line x1="678" y1="64" x2="694" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="684,56 694,64 684,72" fill="#16a34a" />
+    
+      <rect x="694" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="769" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Plan activated</text>
+      
+      <line x1="844" y1="64" x2="860" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="850,56 860,64 850,72" fill="#16a34a" />
+    
+      <rect x="860" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="935" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Expiry and renewal</text>
+      
+      
+    
+      </svg>
+      <figcaption>Subscription lifecycle</figcaption>
+    </figure>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="driver-operations">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">14</div>
+                  <h2 class="section-title">14. Driver Application and Operations</h2>
+                </div>
+                <div class="section-summary">After approval, a driver uses the portal to go online, receive trip offers, reach pickup, verify start OTP, navigate, complete the trip with end OTP, and review earnings and balances.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Driver operational journey">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Driver operational journey</text>
+        
+      <rect x="20" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="95" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Log in</text>
+      
+      <line x1="170" y1="64" x2="186" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="176,56 186,64 176,72" fill="#1f74c9" />
+    
+      <rect x="186" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="261" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Check readiness</text>
+      
+      <line x1="336" y1="64" x2="352" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="342,56 352,64 342,72" fill="#1f74c9" />
+    
+      <rect x="352" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="427" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Go online</text>
+      
+      <line x1="502" y1="64" x2="518" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="508,56 518,64 508,72" fill="#1f74c9" />
+    
+      <rect x="518" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="593" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Receive offer</text>
+      
+      <line x1="668" y1="64" x2="684" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="674,56 684,64 674,72" fill="#1f74c9" />
+    
+      <rect x="684" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="759" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Reach pickup</text>
+      
+      <line x1="834" y1="64" x2="850" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="840,56 850,64 840,72" fill="#1f74c9" />
+    
+      <rect x="850" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="925" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Start OTP</text>
+      
+      <line x1="1000" y1="64" x2="1016" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="1006,56 1016,64 1006,72" fill="#1f74c9" />
+    
+      <rect x="1016" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="1091" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Complete trip</text>
+      
+      <line x1="1166" y1="64" x2="1182" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="1172,56 1182,64 1172,72" fill="#1f74c9" />
+    
+      <rect x="1182" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="1257" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Review earnings</text>
+      
+      
+    
+      </svg>
+      <figcaption>Driver operational journey</figcaption>
+    </figure>
+  
+        <div class="two-col" style="margin-top:16px">
+          <div class="card">
+            <p>The driver portal is both an operational cockpit and a compliance gate. Online state depends on subscription validity, commission balance, and location freshness. Trip actions are then constrained again by arrival radius, OTP rules, minimum trip duration, and destination-area completion tolerance.</p>
+          </div>
+          <div>
+            
+    <figure class="screenshot small">
+      <img src="./screenshots/driverLogin.png" alt="Driver sign-in surface for the operational portal." />
+    </figure>
+    <div class="caption">Driver sign-in surface for the operational portal.</div>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="driver-screen-catalogue">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">15</div>
+                  <h2 class="section-title">15. Driver Screen Catalogue</h2>
+                </div>
+                <div class="section-summary">Driver-facing screens cover onboarding, live operations, history, earnings, subscriptions, commission payments, support, account control and deletion.</div>
+              </div>
+              
+        <div class="two-col">
+          <div class="card landscape-page">
+            
+    <table>
+      <thead>
+        <tr><th>Driver screen</th><th>Purpose</th><th>Primary user</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Driver login</td><td>Separate driver sign-in surface and route domain</td><td>Driver</td></tr>
+            
+              <tr><td>Driver application</td><td>Guided multi-step onboarding</td><td>Applicant</td></tr>
+            
+              <tr><td>Driver home</td><td>Online status, offer state, GPS, live trip actions</td><td>Approved driver</td></tr>
+            
+              <tr><td>Trip offers</td><td>Offer reception, countdown, accept or decline</td><td>Online driver</td></tr>
+            
+              <tr><td>Driver history</td><td>Past trip list and filters</td><td>Driver</td></tr>
+            
+              <tr><td>Driver earnings</td><td>Gross, net, commission and wallet summaries</td><td>Driver</td></tr>
+            
+              <tr><td>Driver subscriptions</td><td>Plan selection and proof of payment submission</td><td>Driver</td></tr>
+            
+              <tr><td>Driver commission payments</td><td>Commission payment to MOOVU with POP upload</td><td>Driver</td></tr>
+            
+              <tr><td>Driver account</td><td>Identity, documents, quick actions</td><td>Driver</td></tr>
+            
+              <tr><td>Delete account</td><td>In-app account deletion flow</td><td>Driver</td></tr>
+            
+      </tbody>
+    </table>
+  
+          </div>
+          <div class="card">
+            <p>Not every driver surface is publicly screenshot-safe, because some pages depend on active linked driver identities or financial records. Where real authenticated content is not safely includable, this report treats the screen catalogue as a factual operational inventory rather than a visual mockup.</p>
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="admin-ops-overview">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">16</div>
+                  <h2 class="section-title">16. Admin Operations Overview</h2>
+                </div>
+                <div class="section-summary">MOOVU administrators supervise the platform operationally: onboarding, trip oversight, dispatch, payment review, subscriptions, commissions, receipts and reporting all pass through the admin surface.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Typical admin day">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Typical admin day</text>
+        
+      <rect x="30" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="105" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Review readiness</text>
+      
+      <line x1="180" y1="64" x2="196" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="186,56 196,64 186,72" fill="#1f74c9" />
+    
+      <rect x="196" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="271" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Watch applications</text>
+      
+      <line x1="346" y1="64" x2="362" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="352,56 362,64 352,72" fill="#1f74c9" />
+    
+      <rect x="362" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="437" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Monitor trips</text>
+      
+      <line x1="512" y1="64" x2="528" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="518,56 528,64 518,72" fill="#1f74c9" />
+    
+      <rect x="528" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="603" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Review payments</text>
+      
+      <line x1="678" y1="64" x2="694" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="684,56 694,64 684,72" fill="#1f74c9" />
+    
+      <rect x="694" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="769" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Resolve issues</text>
+      
+      <line x1="844" y1="64" x2="860" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="850,56 860,64 850,72" fill="#1f74c9" />
+    
+      <rect x="860" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="935" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Close with reporting</text>
+      
+      
+    
+      </svg>
+      <figcaption>Typical admin day</figcaption>
+    </figure>
+  
+        <div class="card" style="margin-top:16px">
+          <p>The admin role is not only a back-office reporting view. It is a live operational control surface with trip visibility, dispatch context, driver review, receipt access, and payment approvals that immediately affect eligibility and driver platform access.</p>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="admin-screen-catalogue">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">17</div>
+                  <h2 class="section-title">17. Admin Screen Catalogue</h2>
+                </div>
+                <div class="section-summary">Admin screens span operations, customers, drivers, payments, reports and system notifications. The navigation structure itself reflects MOOVU's business operations model.</div>
+              </div>
+              
+        <div class="two-col">
+          <div class="card landscape-page">
+            
+    <table>
+      <thead>
+        <tr><th>Admin screen</th><th>Purpose</th><th>Primary user</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Admin dashboard</td><td>Operational overview and KPI summaries</td><td>Administrator</td></tr>
+            
+              <tr><td>Trips</td><td>Trip list and detail review</td><td>Administrator / support</td></tr>
+            
+              <tr><td>Dispatch board</td><td>Live trip assignment and intervention</td><td>Dispatcher</td></tr>
+            
+              <tr><td>Dispatch map</td><td>Geographic operational view</td><td>Dispatcher</td></tr>
+            
+              <tr><td>Drivers</td><td>Driver directory, status and profile management</td><td>Admin</td></tr>
+            
+              <tr><td>Applications</td><td>Driver onboarding review queue</td><td>Admin</td></tr>
+            
+              <tr><td>Payment reviews</td><td>Subscription, commission and combined payment review</td><td>Payment reviewer</td></tr>
+            
+              <tr><td>Subscriptions</td><td>Subscription management and approval workflow</td><td>Payment reviewer</td></tr>
+            
+              <tr><td>Commission payments</td><td>Commission settlement management</td><td>Payment reviewer</td></tr>
+            
+              <tr><td>Receipts</td><td>Trip and payment receipt access</td><td>Admin / support</td></tr>
+            
+              <tr><td>Reports and earnings</td><td>Operational and financial reporting</td><td>Admin / owner</td></tr>
+            
+              <tr><td>Notifications</td><td>Admin-side notification surface</td><td>Admin</td></tr>
+            
+      </tbody>
+    </table>
+  
+          </div>
+          <div class="diagram-grid">
+            
+    <figure class="screenshot small">
+      <img src="./screenshots/adminLogin.png" alt="Admin sign-in screen for operations access." />
+    </figure>
+    <div class="caption">Admin sign-in screen for operations access.</div>
+  
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="trip-lifecycle">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">18</div>
+                  <h2 class="section-title">18. Complete Trip Lifecycle</h2>
+                </div>
+                <div class="section-summary">Trips move through explicit lifecycle states, with audit events, offer state, OTP milestones, fare finalization and completion records.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Trip status lifecycle">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Trip status lifecycle</text>
+        
+      <rect x="30" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="105" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Scheduled or requested</text>
+      
+      <line x1="180" y1="64" x2="196" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="186,56 196,64 186,72" fill="#1f74c9" />
+    
+      <rect x="196" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="271" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Offered</text>
+      
+      <line x1="346" y1="64" x2="362" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="352,56 362,64 352,72" fill="#1f74c9" />
+    
+      <rect x="362" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="437" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Assigned</text>
+      
+      <line x1="512" y1="64" x2="528" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="518,56 528,64 518,72" fill="#1f74c9" />
+    
+      <rect x="528" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="603" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Arrived</text>
+      
+      <line x1="678" y1="64" x2="694" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="684,56 694,64 684,72" fill="#1f74c9" />
+    
+      <rect x="694" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="769" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Ongoing</text>
+      
+      <line x1="844" y1="64" x2="860" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="850,56 860,64 850,72" fill="#1f74c9" />
+    
+      <rect x="860" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="935" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Completed or cancelled</text>
+      
+      
+    
+      </svg>
+      <figcaption>Trip status lifecycle</figcaption>
+    </figure>
+  
+        <div class="card" style="margin-top:16px">
+          
+    <table>
+      <thead>
+        <tr><th>Status</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>scheduled</td><td>Trip is booked for future release.</td></tr>
+            
+              <tr><td>requested</td><td>Immediate trip created and ready for dispatch.</td></tr>
+            
+              <tr><td>offered</td><td>Trip offer is active in the dispatch process.</td></tr>
+            
+              <tr><td>assigned</td><td>A driver has accepted the trip.</td></tr>
+            
+              <tr><td>arrived</td><td>Driver has reached pickup.</td></tr>
+            
+              <tr><td>ongoing</td><td>Trip has started after OTP verification.</td></tr>
+            
+              <tr><td>completed</td><td>Trip has ended and fare is finalized.</td></tr>
+            
+              <tr><td>cancelled</td><td>Trip ended without successful completion.</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="dispatch-matching">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">19</div>
+                  <h2 class="section-title">19. Driver Dispatch and Matching</h2>
+                </div>
+                <div class="section-summary">Dispatch is a scored, eligibility-aware, time-boxed candidate search that uses explicit driver filters, radius logic, and an atomic acceptance process to prevent duplicate assignment.</div>
+              </div>
+              
+        <div class="diagram-grid">
+          
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Dispatch candidate selection">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Dispatch candidate selection</text>
+        
+      <rect x="30" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="105" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Trip requested</text>
+      
+      <line x1="180" y1="64" x2="196" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="186,56 196,64 186,72" fill="#1f74c9" />
+    
+      <rect x="196" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="271" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Find online drivers</text>
+      
+      <line x1="346" y1="64" x2="362" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="352,56 362,64 352,72" fill="#1f74c9" />
+    
+      <rect x="362" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="437" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Apply readiness filters</text>
+      
+      <line x1="512" y1="64" x2="528" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="518,56 528,64 518,72" fill="#1f74c9" />
+    
+      <rect x="528" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="603" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Score distance and quality</text>
+      
+      <line x1="678" y1="64" x2="694" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="684,56 694,64 684,72" fill="#1f74c9" />
+    
+      <rect x="694" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="769" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Create offer group</text>
+      
+      <line x1="844" y1="64" x2="860" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="850,56 860,64 850,72" fill="#1f74c9" />
+    
+      <rect x="860" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="935" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Wait for acceptance</text>
+      
+      
+    
+      </svg>
+      <figcaption>Dispatch candidate selection</figcaption>
+    </figure>
+  
+          
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 252" role="img" aria-label="Atomic offer acceptance">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Atomic offer acceptance</text>
+        
+      <rect x="0" y="24" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="62" font-size="12" font-weight="700" fill="#0f172a">Driver A</text>
+      
+        <rect x="135" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Accepts</text>
+      
+        <rect x="279" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">RPC checks</text>
+      
+        <rect x="423" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="489" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Wins or loses</text>
+      
+      <line x1="267" y1="57" x2="279" y2="57" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/><line x1="411" y1="57" x2="423" y2="57" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="92" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="130" font-size="12" font-weight="700" fill="#0f172a">Driver B</text>
+      
+        <rect x="135" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Accepts</text>
+      
+        <rect x="279" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">RPC checks</text>
+      
+        <rect x="423" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="489" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Wins or loses</text>
+      
+      <line x1="267" y1="125" x2="279" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/><line x1="411" y1="125" x2="423" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="160" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="198" font-size="12" font-weight="700" fill="#0f172a">Trip record</text>
+      
+        <rect x="135" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Pending offer</text>
+      
+        <rect x="279" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Single assignment</text>
+      
+        <rect x="423" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="489" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Other offers withdrawn</text>
+      
+      <line x1="267" y1="193" x2="279" y2="193" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/><line x1="411" y1="193" x2="423" y2="193" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      </svg>
+      <figcaption>Atomic offer acceptance</figcaption>
+    </figure>
+  
+        </div>
+        <div class="two-col" style="margin-top:16px">
+          <div class="card">
+            
+    <table>
+      <thead>
+        <tr><th>Dispatch setting</th><th>Current implementation</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Offer window</td><td>25 seconds</td></tr>
+            
+              <tr><td>Escalation cadence</td><td>25-second rounds</td></tr>
+            
+              <tr><td>Initial radius</td><td>8 km</td></tr>
+            
+              <tr><td>Expanded radius</td><td>20 km</td></tr>
+            
+              <tr><td>Maximum cycles</td><td>3</td></tr>
+            
+              <tr><td>Maximum search time</td><td>180 seconds in code</td></tr>
+            
+              <tr><td>GPS freshness</td><td>90 seconds</td></tr>
+            
+      </tbody>
+    </table>
+  
+          </div>
+          <div class="card">
+            <p>Candidate ranking is not distance-only. The selection code combines distance, driver quality, acceptance behaviour, recent offer rotation and missed-offer penalties, then filters out busy, stale, declined, ineligible or already-offered drivers. That gives MOOVU an operationally rational dispatch basis rather than a naive nearest-only search.</p>
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="fare-pricing">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">20</div>
+                  <h2 class="section-title">20. Fare and Pricing System</h2>
+                </div>
+                <div class="section-summary">Fare calculation is centralized around ride-option rules, booking fee, distance, duration, surge, waiting, stop logic, minimum fare and final-trip adjustment.</div>
+              </div>
+              
+        <div class="card landscape-page">
+          
+    <table>
+      <thead>
+        <tr><th>Ride option</th><th>Capacity</th><th>Base fare</th><th>Booking fee</th><th>Minimum</th><th>Per km</th><th>Per minute</th><th>Waiting</th><th>Commission</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>MOOVU Go</td><td>Up to 3 riders</td><td>R15</td><td>R4</td><td>R40</td><td>R9/km</td><td>R1.50/min</td><td>R2/min after 3 free minutes</td><td>10%</td></tr>
+            
+              <tr><td>MOOVU Go XL</td><td>Up to 6 riders</td><td>R25</td><td>R5</td><td>R70</td><td>R12/km</td><td>R2.00/min</td><td>R3/min after 3 free minutes</td><td>12%</td></tr>
+            
+      </tbody>
+    </table>
+  
+          <p style="margin-top:14px">Distance-tier discounts are applied after surge and before minimum fare rounding. Stops are capped at two and use a discounted add-stop increase model instead of a full raw route increase. Final customer price is recalculated at completion so the last known trip route and any stop adjustments can influence the final fare.</p>
+        </div>
+        <div class="diagram-grid" style="margin-top:16px">
+          
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Fare calculation pipeline">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Fare calculation pipeline</text>
+        
+      <rect x="20" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="95" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Base fare and booking fee</text>
+      
+      <line x1="170" y1="64" x2="186" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="176,56 186,64 176,72" fill="#1f74c9" />
+    
+      <rect x="186" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="261" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Distance and duration</text>
+      
+      <line x1="336" y1="64" x2="352" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="342,56 352,64 342,72" fill="#1f74c9" />
+    
+      <rect x="352" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="427" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Surge multiplier</text>
+      
+      <line x1="502" y1="64" x2="518" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="508,56 518,64 508,72" fill="#1f74c9" />
+    
+      <rect x="518" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="593" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Distance discount</text>
+      
+      <line x1="668" y1="64" x2="684" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="674,56 684,64 674,72" fill="#1f74c9" />
+    
+      <rect x="684" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="759" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Stops and waiting</text>
+      
+      <line x1="834" y1="64" x2="850" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="840,56 850,64 840,72" fill="#1f74c9" />
+    
+      <rect x="850" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="925" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Minimum fare</text>
+      
+      <line x1="1000" y1="64" x2="1016" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="1006,56 1016,64 1006,72" fill="#1f74c9" />
+    
+      <rect x="1016" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="1091" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Rounded total</text>
+      
+      
+    
+      </svg>
+      <figcaption>Fare calculation pipeline</figcaption>
+    </figure>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="maps-location">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">21</div>
+                  <h2 class="section-title">21. Maps and Live Location</h2>
+                </div>
+                <div class="section-summary">MOOVU combines customer location selection, Google Maps geocoding and routing, and driver heartbeat updates to drive booking, dispatch, route display and completion checks.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 420" role="img" aria-label="Map and location data flow">
+        <text x="20" y="22" font-size="16" font-weight="700" fill="#0f172a">Map and location data flow</text>
+        
+      <text x="184" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Customer location inputs</text>
+      
+        <rect x="24" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Typed search</text>
+        <text x="184" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Autocomplete and paste parsing</text>
+      
+        <rect x="24" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Current location</text>
+        <text x="184" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Browser or native geolocation</text>
+      
+        <rect x="24" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Map pin adjustment</text>
+        <text x="184" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Pickup and destination refinement</text>
+      
+    
+      <text x="520" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Route services</text>
+      
+        <rect x="360" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Geocoding</text>
+        <text x="520" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Address to coordinates</text>
+      
+        <rect x="360" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Directions and matrix</text>
+        <text x="520" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Distance and duration</text>
+      
+        <rect x="360" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Route summary</text>
+        <text x="520" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Fare and ETA inputs</text>
+      
+    
+      <text x="856" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Driver telemetry</text>
+      
+        <rect x="696" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Live heartbeat</text>
+        <text x="856" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Driver coordinates and freshness</text>
+      
+        <rect x="696" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Dispatch fit</text>
+        <text x="856" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Nearby eligible drivers</text>
+      
+        <rect x="696" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Trip action guard</text>
+        <text x="856" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Arrival and completion radius</text>
+      
+    
+      </svg>
+      <figcaption>Map and location data flow</figcaption>
+    </figure>
+  
+      
+            </section>
+          
+            <section class="section" id="otp-security">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">22</div>
+                  <h2 class="section-title">22. OTP and Trip Security</h2>
+                </div>
+                <div class="section-summary">Start and end OTP checkpoints give MOOVU a practical trip-security layer that aligns start, trip progression and completion with explicit rider validation.</div>
+              </div>
+              
+        <div class="diagram-grid">
+          
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 252" role="img" aria-label="Trip start OTP sequence">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Trip start OTP sequence</text>
+        
+      <rect x="0" y="24" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="62" font-size="12" font-weight="700" fill="#0f172a">Customer</text>
+      
+        <rect x="135" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Receives start OTP</text>
+      
+        <rect x="279" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Shares code at pickup</text>
+      
+      <line x1="267" y1="57" x2="279" y2="57" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="92" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="130" font-size="12" font-weight="700" fill="#0f172a">Driver</text>
+      
+        <rect x="135" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Enters OTP</text>
+      
+        <rect x="279" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Trip may start</text>
+      
+      <line x1="267" y1="125" x2="279" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="160" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="198" font-size="12" font-weight="700" fill="#0f172a">Server</text>
+      
+        <rect x="135" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Checks assigned trip</text>
+      
+        <rect x="279" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Marks OTP verified</text>
+      
+      <line x1="267" y1="193" x2="279" y2="193" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      </svg>
+      <figcaption>Trip start OTP sequence</figcaption>
+    </figure>
+  
+          
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 252" role="img" aria-label="Trip end OTP sequence">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Trip end OTP sequence</text>
+        
+      <rect x="0" y="24" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="62" font-size="12" font-weight="700" fill="#0f172a">Customer</text>
+      
+        <rect x="135" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Provides end OTP</text>
+      
+        <rect x="279" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Confirms end</text>
+      
+      <line x1="267" y1="57" x2="279" y2="57" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="92" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="130" font-size="12" font-weight="700" fill="#0f172a">Driver</text>
+      
+        <rect x="135" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Enters OTP</text>
+      
+        <rect x="279" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Requests completion</text>
+      
+      <line x1="267" y1="125" x2="279" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="160" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="198" font-size="12" font-weight="700" fill="#0f172a">Server</text>
+      
+        <rect x="135" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Validates OTP and trip duration</text>
+      
+        <rect x="279" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Finalizes trip</text>
+      
+      <line x1="267" y1="193" x2="279" y2="193" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      </svg>
+      <figcaption>Trip end OTP sequence</figcaption>
+    </figure>
+  
+        </div>
+        <div class="card" style="margin-top:16px">
+          <p>The security model also includes start-state checks, minimum trip duration logic, completion distance tolerance, and explicit admin or bypass handling. That means OTP is not a decoration; it is wired into trip-state control and audit history.</p>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="notifications-realtime">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">23</div>
+                  <h2 class="section-title">23. Notifications and Realtime Updates</h2>
+                </div>
+                <div class="section-summary">MOOVU stores push delivery targets across web, Android and iOS, sends server-side visible notifications through Firebase or Web Push, and routes users back into the correct portal.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 420" role="img" aria-label="Notification routing">
+        <text x="20" y="22" font-size="16" font-weight="700" fill="#0f172a">Notification routing</text>
+        
+      <text x="184" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Event producers</text>
+      
+        <rect x="24" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Trip events</text>
+        <text x="184" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Offer, accept, arrive, complete</text>
+      
+        <rect x="24" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Chat messages</text>
+        <text x="184" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Trip-linked conversation</text>
+      
+        <rect x="24" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Finance reviews</text>
+        <text x="184" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Subscription and commission updates</text>
+      
+    
+      <text x="520" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Notification infrastructure</text>
+      
+        <rect x="360" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">FCM token registry</text>
+        <text x="520" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Android, iOS, web</text>
+      
+        <rect x="360" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Legacy web push</text>
+        <text x="520" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Browser subscription fallback</text>
+      
+        <rect x="360" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Routing data</text>
+        <text x="520" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Deep links and native action tokens</text>
+      
+    
+      <text x="856" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Destination apps</text>
+      
+        <rect x="696" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Customer</text>
+        <text x="856" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Ride and booking pages</text>
+      
+        <rect x="696" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Driver</text>
+        <text x="856" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Offer and trip pages</text>
+      
+        <rect x="696" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Admin</text>
+        <text x="856" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Trip and payment review pages</text>
+      
+    
+      </svg>
+      <figcaption>Notification routing</figcaption>
+    </figure>
+  
+        <div class="card" style="margin-top:16px">
+          
+    <table>
+      <thead>
+        <tr><th>Event</th><th>Customer</th><th>Driver</th><th>Admin</th><th>Delivery</th><th>Destination</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>New trip request</td><td>No</td><td>Yes</td><td>Yes</td><td>FCM / web push</td><td>Driver portal and admin trip oversight</td></tr>
+            
+              <tr><td>Driver accepted trip</td><td>Yes</td><td>No</td><td>Yes</td><td>FCM / web push</td><td>Customer ride view and admin dispatch</td></tr>
+            
+              <tr><td>Driver arrived</td><td>Yes</td><td>No</td><td>Optional</td><td>FCM / web push</td><td>Customer ride view</td></tr>
+            
+              <tr><td>Trip started</td><td>Yes</td><td>Optional</td><td>Optional</td><td>FCM / web push</td><td>Customer ride view</td></tr>
+            
+              <tr><td>Trip completed</td><td>Yes</td><td>Yes</td><td>Yes</td><td>FCM / web push</td><td>Customer ride view, driver history, admin trips</td></tr>
+            
+              <tr><td>Customer chat message</td><td>No</td><td>Yes</td><td>No</td><td>FCM / web push</td><td>Driver live trip context</td></tr>
+            
+              <tr><td>Driver chat reply</td><td>Yes</td><td>No</td><td>No</td><td>FCM / web push</td><td>Customer live trip context</td></tr>
+            
+              <tr><td>Subscription payment submitted</td><td>No</td><td>No</td><td>Yes</td><td>FCM / web push</td><td>Admin payment reviews</td></tr>
+            
+              <tr><td>Commission payment submitted</td><td>No</td><td>No</td><td>Yes</td><td>FCM / web push</td><td>Admin payment reviews</td></tr>
+            
+              <tr><td>Payment approved or rejected</td><td>No</td><td>Yes</td><td>No</td><td>FCM / web push</td><td>Driver earnings and receipts</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="earnings-commission">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">24</div>
+                  <h2 class="section-title">24. Driver Earnings and MOOVU Commission</h2>
+                </div>
+                <div class="section-summary">Completed trips generate gross fare, driver net, and MOOVU commission entries that flow into the wallet and settlement system.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Commission and driver net flow">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Commission and driver net flow</text>
+        
+      <rect x="30" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="105" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Trip completed</text>
+      
+      <line x1="180" y1="64" x2="196" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="186,56 196,64 186,72" fill="#16a34a" />
+    
+      <rect x="196" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="271" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Fare finalized</text>
+      
+      <line x1="346" y1="64" x2="362" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="352,56 362,64 352,72" fill="#16a34a" />
+    
+      <rect x="362" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="437" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Commission calculated</text>
+      
+      <line x1="512" y1="64" x2="528" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="518,56 528,64 518,72" fill="#16a34a" />
+    
+      <rect x="528" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="603" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Driver net stored</text>
+      
+      <line x1="678" y1="64" x2="694" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="684,56 694,64 684,72" fill="#16a34a" />
+    
+      <rect x="694" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="769" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Wallet balance updated</text>
+      
+      <line x1="844" y1="64" x2="860" y2="64" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/><polygon points="850,56 860,64 850,72" fill="#16a34a" />
+    
+      <rect x="860" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+      <text x="935" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Settlement reviewed</text>
+      
+      
+    
+      </svg>
+      <figcaption>Commission and driver net flow</figcaption>
+    </figure>
+  
+        <div class="card" style="margin-top:16px">
+          <p>Wallet state is not cosmetic. It directly affects whether a driver can continue going online. The threshold is currently R100 due, after which the driver may still log in and submit payment but is restricted from taking more trips until settlement reduces the balance.</p>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="payments-subscriptions-reviews">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">25</div>
+                  <h2 class="section-title">25. Payments and Subscription Reviews</h2>
+                </div>
+                <div class="section-summary">Driver payments are proof-based, typed as subscription, commission or combined, and require admin review before they affect subscription state or commission balance.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 320" role="img" aria-label="Payment review sequence">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Payment review sequence</text>
+        
+      <rect x="0" y="24" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="62" font-size="12" font-weight="700" fill="#0f172a">Driver</text>
+      
+        <rect x="135" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Select payment type</text>
+      
+        <rect x="279" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Upload POP</text>
+      
+        <rect x="423" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="489" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Submit request</text>
+      
+      <line x1="267" y1="57" x2="279" y2="57" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/><line x1="411" y1="57" x2="423" y2="57" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="92" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="130" font-size="12" font-weight="700" fill="#0f172a">Server</text>
+      
+        <rect x="135" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Store request</text>
+      
+        <rect x="279" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Notify admins</text>
+      
+        <rect x="423" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="489" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Await review</text>
+      
+      <line x1="267" y1="125" x2="279" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/><line x1="411" y1="125" x2="423" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="160" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="198" font-size="12" font-weight="700" fill="#0f172a">Admin</text>
+      
+        <rect x="135" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Open payment review</text>
+      
+        <rect x="279" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Approve / reject</text>
+      
+        <rect x="423" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="489" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Update driver state</text>
+      
+      <line x1="267" y1="193" x2="279" y2="193" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/><line x1="411" y1="193" x2="423" y2="193" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="228" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="266" font-size="12" font-weight="700" fill="#0f172a">Driver</text>
+      
+        <rect x="135" y="238" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="260" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Receive review result</text>
+      
+        <rect x="279" y="238" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="260" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">View payment receipt</text>
+      
+      <line x1="267" y1="261" x2="279" y2="261" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      </svg>
+      <figcaption>Payment review sequence</figcaption>
+    </figure>
+  
+      
+            </section>
+          
+            <section class="section" id="receipts-records">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">26</div>
+                  <h2 class="section-title">26. Receipts and Records</h2>
+                </div>
+                <div class="section-summary">Receipts are customer-facing trip records and admin-visible financial evidence surfaces. The platform also preserves structured trip and payment history for audit and support.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 150" role="img" aria-label="Receipt anatomy">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Receipt anatomy</text>
+        
+      <rect x="30" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="105" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Trip identity</text>
+      
+      <line x1="180" y1="64" x2="196" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="186,56 196,64 186,72" fill="#1f74c9" />
+    
+      <rect x="196" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="271" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Customer and driver details</text>
+      
+      <line x1="346" y1="64" x2="362" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="352,56 362,64 352,72" fill="#1f74c9" />
+    
+      <rect x="362" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="437" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Pickup and destination</text>
+      
+      <line x1="512" y1="64" x2="528" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="518,56 528,64 518,72" fill="#1f74c9" />
+    
+      <rect x="528" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="603" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Fare and payment fields</text>
+      
+      <line x1="678" y1="64" x2="694" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="684,56 694,64 684,72" fill="#1f74c9" />
+    
+      <rect x="694" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="769" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Receipt date</text>
+      
+      <line x1="844" y1="64" x2="860" y2="64" stroke="#1f74c9" stroke-width="4" stroke-linecap="round"/><polygon points="850,56 860,64 850,72" fill="#1f74c9" />
+    
+      <rect x="860" y="28" rx="22" ry="22" width="150" height="72" fill="#ffffff" stroke="#1f74c9" stroke-width="3"/>
+      <text x="935" y="58" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Print or view access</text>
+      
+      
+    
+      </svg>
+      <figcaption>Receipt anatomy</figcaption>
+    </figure>
+  
+      
+            </section>
+          
+            <section class="section" id="auth-access-control">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">27</div>
+                  <h2 class="section-title">27. Authentication and Access Control</h2>
+                </div>
+                <div class="section-summary">MOOVU uses Supabase authentication, customer or driver profile linking, admin role checks, protected routes and account deletion flows to keep each portal bounded.</div>
+              </div>
+              
+        <div class="card landscape-page">
+          
+    <table>
+      <thead>
+        <tr><th>Access surface</th><th>Auth mechanism</th><th>Role or ownership check</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Customer</td><td>Supabase session and bearer token</td><td>Customer record linked by auth user</td></tr>
+            
+              <tr><td>Driver</td><td>Supabase session and bearer token</td><td>Driver account maps auth user to driver ID</td></tr>
+            
+              <tr><td>Admin</td><td>Supabase session and bearer token</td><td>Profiles role must be one of accepted admin roles</td></tr>
+            
+              <tr><td>Account deletion</td><td>Password re-verification and DELETE confirmation</td><td>Blocks active trip deletion</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="information-model">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">28</div>
+                  <h2 class="section-title">28. MOOVU Information Model</h2>
+                </div>
+                <div class="section-summary">The MOOVU database is not just a storage layer. It is a direct model of customers, drivers, trips, offers, subscriptions, wallet state, payments, receipts and notification routes.</div>
+              </div>
+              
+        
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 420" role="img" aria-label="Simplified information model">
+        <text x="20" y="22" font-size="16" font-weight="700" fill="#0f172a">Simplified information model</text>
+        
+      <text x="184" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Identity and roles</text>
+      
+        <rect x="24" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Profiles</text>
+        <text x="184" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Admin roles</text>
+      
+        <rect x="24" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Customers</text>
+        <text x="184" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Rider accounts</text>
+      
+        <rect x="24" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Driver accounts</text>
+        <text x="184" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Auth to driver map</text>
+      
+        <rect x="24" y="294" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="184" y="316" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Drivers</text>
+        <text x="184" y="332" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Operational driver record</text>
+      
+    
+      <text x="520" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Trips and execution</text>
+      
+        <rect x="360" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Trips</text>
+        <text x="520" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Core booking record</text>
+      
+        <rect x="360" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Trip events</text>
+        <text x="520" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Audit trail</text>
+      
+        <rect x="360" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Driver trip offers</text>
+        <text x="520" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Dispatch state</text>
+      
+        <rect x="360" y="294" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#1f74c9" stroke-width="2.5"/>
+        <text x="520" y="316" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Trip messages</text>
+        <text x="520" y="332" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Accepted-trip chat</text>
+      
+    
+      <text x="856" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Finance and control</text>
+      
+        <rect x="696" y="78" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Wallets</text>
+        <text x="856" y="116" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Commission due</text>
+      
+        <rect x="696" y="150" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Settlements</text>
+        <text x="856" y="188" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Driver payments to MOOVU</text>
+      
+        <rect x="696" y="222" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="244" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">Subscription payments</text>
+        <text x="856" y="260" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Approved plan payments</text>
+      
+        <rect x="696" y="294" rx="20" ry="20" width="320" height="52" fill="#ffffff" stroke="#16a34a" stroke-width="2.5"/>
+        <text x="856" y="316" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">FCM tokens</text>
+        <text x="856" y="332" text-anchor="middle" font-size="10" font-weight="600" fill="#5b6776">Push delivery targets</text>
+      
+    
+      </svg>
+      <figcaption>Simplified information model</figcaption>
+    </figure>
+  
+        <div class="card" style="margin-top:16px">
+          
+    <table>
+      <thead>
+        <tr><th>Entity</th><th>Represents</th><th>Workflow dependency</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Customers</td><td>Customer profile and authenticated rider identity</td><td>Auth-linked account, bookings, receipts, ratings</td></tr>
+            
+              <tr><td>Drivers</td><td>Operational driver profile and live availability</td><td>Eligibility, dispatch, earnings, subscriptions</td></tr>
+            
+              <tr><td>Driver accounts</td><td>Links auth users to driver records</td><td>Ownership checks</td></tr>
+            
+              <tr><td>Driver applications</td><td>Pre-approval onboarding submissions</td><td>Admin review queue</td></tr>
+            
+              <tr><td>Driver documents</td><td>Driver document metadata and review status</td><td>Eligibility and compliance</td></tr>
+            
+              <tr><td>Trips</td><td>Ride booking and lifecycle record</td><td>Core transaction and dispatch anchor</td></tr>
+            
+              <tr><td>Trip events</td><td>Lifecycle audit trail</td><td>Support, audit, OTP and dispatch history</td></tr>
+            
+              <tr><td>Driver trip offers</td><td>Offer queue for staged dispatch</td><td>Offer state and atomic acceptance</td></tr>
+            
+              <tr><td>Driver wallets</td><td>Commission due, totals and account status</td><td>Eligibility lock and financial reporting</td></tr>
+            
+              <tr><td>Driver settlements</td><td>Commission payments received</td><td>Balance reduction and audit</td></tr>
+            
+              <tr><td>Driver payment requests</td><td>Subscription or commission proof submissions</td><td>Admin review workflow</td></tr>
+            
+              <tr><td>Driver subscription payments</td><td>Approved subscription payment records</td><td>Subscription activation history</td></tr>
+            
+              <tr><td>Driver subscription events</td><td>Subscription timeline and admin actions</td><td>Lifecycle history</td></tr>
+            
+              <tr><td>Trip cancellation fees</td><td>Late cancellation and no-show ledger</td><td>Customer fee handling</td></tr>
+            
+              <tr><td>Trip messages</td><td>Customer-driver live chat messages</td><td>Accepted trip messaging</td></tr>
+            
+              <tr><td>Trip ratings</td><td>Post-trip rating records</td><td>Experience and quality tracking</td></tr>
+            
+              <tr><td>Push subscriptions</td><td>Legacy web push subscription records</td><td>Browser push delivery</td></tr>
+            
+              <tr><td>FCM tokens</td><td>Device token registry across web, Android and iOS</td><td>Push routing</td></tr>
+            
+              <tr><td>App pricing settings</td><td>Server-controlled pricing settings such as manual surge</td><td>Operational pricing control</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="api-capabilities">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">29</div>
+                  <h2 class="section-title">29. API Capability Catalogue</h2>
+                </div>
+                <div class="section-summary">Business capabilities are implemented as customer, driver, admin, maps, notification and supporting server routes. Each capability is validated server-side rather than trusting client intent.</div>
+              </div>
+              
+        <div class="card landscape-page">
+          
+    <table>
+      <thead>
+        <tr><th>Business area</th><th>Capabilities</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Customer</td><td>Register, authenticate, create trip, estimate route, track trip, cancel trip, add stop, rate trip, view history, view receipt, delete account, register notifications</td></tr>
+            
+              <tr><td>Driver</td><td>Apply, upload documents, update location, go online, receive offers, accept or decline, mark arrived, start trip, complete trip, view history, view earnings, submit payment, view subscription, view commission, delete account</td></tr>
+            
+              <tr><td>Admin</td><td>Authenticate, review applications, inspect documents, monitor trips, dispatch or re-offer, review payments, manage subscriptions, view receipts, manage reports and notifications</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="applications-work-together">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">30</div>
+                  <h2 class="section-title">30. How the Applications Work Together</h2>
+                </div>
+                <div class="section-summary">Customer, server, database, dispatch, notifications, driver and admin logic are synchronized through explicit server-side mutations and event-driven messaging.</div>
+              </div>
+              
+        <div class="diagram-grid">
+          
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 320" role="img" aria-label="Customer creates booking">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Customer creates booking</text>
+        
+      <rect x="0" y="24" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="62" font-size="12" font-weight="700" fill="#0f172a">Customer app</text>
+      
+        <rect x="135" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Submit booking</text>
+      
+        <rect x="279" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Wait for result</text>
+      
+      <line x1="267" y1="57" x2="279" y2="57" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="92" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="130" font-size="12" font-weight="700" fill="#0f172a">MOOVU server</text>
+      
+        <rect x="135" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Validate and calculate</text>
+      
+        <rect x="279" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Create trip</text>
+      
+        <rect x="423" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="489" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Trigger dispatch</text>
+      
+      <line x1="267" y1="125" x2="279" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/><line x1="411" y1="125" x2="423" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="160" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="198" font-size="12" font-weight="700" fill="#0f172a">Database</text>
+      
+        <rect x="135" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Persist trip</text>
+      
+        <rect x="279" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Persist trip events</text>
+      
+      <line x1="267" y1="193" x2="279" y2="193" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="228" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="266" font-size="12" font-weight="700" fill="#0f172a">Notifications</text>
+      
+        <rect x="135" y="238" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="260" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Notify customer</text>
+      
+        <rect x="279" y="238" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="260" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Notify admins</text>
+      
+      <line x1="267" y1="261" x2="279" y2="261" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      </svg>
+      <figcaption>Customer creates booking</figcaption>
+    </figure>
+  
+          
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 320" role="img" aria-label="Driver accepts booking">
+        <text x="20" y="18" font-size="16" font-weight="700" fill="#0f172a">Driver accepts booking</text>
+        
+      <rect x="0" y="24" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="62" font-size="12" font-weight="700" fill="#0f172a">Driver app</text>
+      
+        <rect x="135" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Receive offer</text>
+      
+        <rect x="279" y="34" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Accept offer</text>
+      
+      <line x1="267" y1="57" x2="279" y2="57" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="92" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="130" font-size="12" font-weight="700" fill="#0f172a">Server</text>
+      
+        <rect x="135" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Run atomic RPC</text>
+      
+        <rect x="279" y="102" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Assign driver</text>
+      
+      <line x1="267" y1="125" x2="279" y2="125" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="160" width="1040" height="68" fill="#f8fbff" />
+      <text x="12" y="198" font-size="12" font-weight="700" fill="#0f172a">Database</text>
+      
+        <rect x="135" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Update trip</text>
+      
+        <rect x="279" y="170" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Cancel losing offers</text>
+      
+      <line x1="267" y1="193" x2="279" y2="193" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      <rect x="0" y="228" width="1040" height="68" fill="#ffffff" />
+      <text x="12" y="266" font-size="12" font-weight="700" fill="#0f172a">Notifications</text>
+      
+        <rect x="135" y="238" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="201" y="260" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Notify customer</text>
+      
+        <rect x="279" y="238" rx="18" ry="18" width="132" height="46" fill="#ffffff" stroke="#1f74c9" stroke-width="2"/>
+        <text x="345" y="260" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">Notify admins</text>
+      
+      <line x1="267" y1="261" x2="279" y2="261" stroke="#1f74c9" stroke-width="3" stroke-linecap="round"/>
+    
+      </svg>
+      <figcaption>Driver accepts booking</figcaption>
+    </figure>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="safety-trust">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">31</div>
+                  <h2 class="section-title">31. Safety and Trust</h2>
+                </div>
+                <div class="section-summary">MOOVU's trust model is built from approval, documentation, OTP checkpoints, visibility, audit trails, support and controlled operator readiness rather than a single isolated safety feature.</div>
+              </div>
+              
+        <div class="card">
+          <ul><li>Driver approval before operational access</li><li>Document review and vehicle evidence</li><li>Driver and vehicle identity surfaces</li><li>Start OTP and end OTP</li><li>Trip event audit trail</li><li>Admin visibility into lifecycle and payments</li><li>Customer-driver chat after driver acceptance</li><li>Location-based trip execution rules</li><li>Account deletion and legal support surfaces</li></ul>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="support-exceptions">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">32</div>
+                  <h2 class="section-title">32. Support and Exception Handling</h2>
+                </div>
+                <div class="section-summary">The platform explicitly handles declines, no-driver outcomes, invalid OTP, expired subscriptions, payment rejection, GPS loss, active-trip restrictions and notification-denied states.</div>
+              </div>
+              
+        <div class="card landscape-page">
+          
+    <table>
+      <thead>
+        <tr><th>Scenario</th><th>System response</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>No drivers available</td><td>Trip remains unassigned and dispatch cycles continue until search is exhausted or trip is cancelled.</td></tr>
+            
+              <tr><td>Driver declines</td><td>Next dispatch attempt is triggered and decline is recorded.</td></tr>
+            
+              <tr><td>Driver ignores offer</td><td>Offer expires and the cycle can progress.</td></tr>
+            
+              <tr><td>Invalid OTP</td><td>Start or completion action is rejected.</td></tr>
+            
+              <tr><td>Driver loses GPS freshness</td><td>Eligibility or trip guard can fail until heartbeat recovers.</td></tr>
+            
+              <tr><td>Expired subscription</td><td>Driver cannot operate until plan is active again.</td></tr>
+            
+              <tr><td>Excessive commission due</td><td>Driver cannot go online while balance due is at or above threshold.</td></tr>
+            
+              <tr><td>Failed payment upload</td><td>Driver payment request is rejected before submission.</td></tr>
+            
+              <tr><td>Notification permission denied</td><td>In-app flow continues, but push delivery is unavailable.</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="product-differentiators">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">33</div>
+                  <h2 class="section-title">33. Product Differentiators</h2>
+                </div>
+                <div class="section-summary">MOOVU's strongest product differentiators are operational, local and commercially structural rather than cosmetic.</div>
+              </div>
+              
+        <div class="card">
+          <ul><li>Township and local-community route focus instead of generic nationwide framing.</li><li>Subscription plus commission model for drivers.</li><li>OTP at both trip start and trip completion.</li><li>Admin-reviewed payment-proof operations rather than blind client claims.</li><li>Locally managed driver onboarding with document and vehicle emphasis.</li><li>Operations-centered admin portal rather than a minimal report-only back office.</li></ul>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="maturity-scorecard">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">34</div>
+                  <h2 class="section-title">34. Feature Maturity Scorecard</h2>
+                </div>
+                <div class="section-summary">The scorecard below reflects implementation completeness, not commercial scale or market traction.</div>
+              </div>
+              
+        <div class="card">
+          
+            <div class="maturity-row">
+              <strong>Customer accounts</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Solid account, legal acceptance and deletion flow are present.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Customer booking</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Core ride request flow is implemented with fare logic, stops and surge.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Fare calculation</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Centralized fare rules exist, with finalization and stop-aware adjustments.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Driver onboarding</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Multi-step guided application is implemented, with review hooks.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Driver documents</strong>
+              <div class="maturity-bar"><span style="width:60%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Document model exists; runtime depends on bucket and policy alignment.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Driver subscriptions</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Plan pricing, review flow and activation logic exist.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Driver eligibility</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Eligibility checks are explicit across subscription, balance and vehicle capacity.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Dispatch</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Scored candidate selection and atomic acceptance exist, but durable worker matters.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Driver trip execution</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Offer, arrive, OTP, complete and earnings flow are implemented.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Live location</strong>
+              <div class="maturity-bar"><span style="width:60%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Foreground tracking is present; closed-app tracking remains runtime-dependent.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>OTP</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Start and end OTP gates are implemented with admin and bypass controls.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Notifications</strong>
+              <div class="maturity-bar"><span style="width:60%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Infrastructure is strong, but device/runtime delivery remains environment-dependent.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Admin operations</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Broad operational coverage exists across trips, drivers and finance.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Finance</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Wallet, settlement, payment review and subscription logic are implemented.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Commission</strong>
+              <div class="maturity-bar"><span style="width:60%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Core logic exists, but commission rules contain a documented mismatch.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Receipts</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Customer and admin receipt access exists.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Native mobile integration</strong>
+              <div class="maturity-bar"><span style="width:60%"></span></div>
+              <span style="font-size:11px;color:#5b6776">Split Capacitor shells are present; real-device delivery still matters.</span>
+            </div>
+          
+            <div class="maturity-row">
+              <strong>Support and safety</strong>
+              <div class="maturity-bar"><span style="width:80%"></span></div>
+              <span style="font-size:11px;color:#5b6776">OTP, review, chat, audit trail and location visibility are present.</span>
+            </div>
+          
+        </div>
+      
+            </section>
+          
+            <section class="section" id="confirmed-partial-runtime">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">35</div>
+                  <h2 class="section-title">35. Confirmed, Partial and Runtime-Dependent Capabilities</h2>
+                </div>
+                <div class="section-summary">Some capabilities are confirmed directly from source and surrounding documentation, while others depend on environment, migration or real-device verification.</div>
+              </div>
+              
+        <div class="three-col">
+          <div class="card">
+            <div class="badge confirmed">Confirmed</div>
+            <ul><li>Customer booking and fare calculation services</li><li>Driver onboarding flow</li><li>Admin payment review logic</li><li>OTP trip controls</li><li>Receipt routes</li><li>Subscription pricing and approval logic</li></ul>
+          </div>
+          <div class="card">
+            <div class="badge partial">Partial or inconsistent</div>
+            <ul><li>Commission percentage consistency</li><li>Go XL versus Go Plus naming consistency</li><li>Dispatch expiry timing documentation versus code</li><li>Some operational tables depend on migration alignment</li></ul>
+          </div>
+          <div class="card">
+            <div class="badge runtime">Runtime-dependent</div>
+            <ul><li>Closed-app push notification delivery</li><li>Background location continuity on native devices</li><li>Storage and signed URL policy behaviour in real environments</li><li>Fully authenticated dashboard screenshots with real data</li></ul>
+          </div>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="intended-vs-implemented">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">36</div>
+                  <h2 class="section-title">36. Intended Versus Implemented Behaviour</h2>
+                </div>
+                <div class="section-summary">The platform contains a small number of business-rule or naming mismatches that should be tracked explicitly rather than obscured.</div>
+              </div>
+              
+        <div class="card landscape-page">
+          
+    <table>
+      <thead>
+        <tr><th>Product area</th><th>Intended behaviour</th><th>Implemented behaviour</th><th>Business effect</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Commission</td><td>Single agreed MOOVU commission rule</td><td>9.5% fallback constant plus 10% / 12% ride-option rules</td><td>Historical or fallback rows may diverge from current ride-option pricing</td></tr>
+            
+              <tr><td>Ride naming</td><td>One larger ride-category name</td><td>MOOVU Go XL in fare surfaces and Go Plus in some eligibility labels</td><td>Terminology drift</td></tr>
+            
+              <tr><td>Dispatch expiry</td><td>One agreed trip search timeout</td><td>180 seconds in code, different narrative in operations notes</td><td>Operational expectation mismatch</td></tr>
+            
+              <tr><td>Background operations</td><td>Continuous device delivery and telemetry</td><td>Foreground flows are implemented, but background or closed-app behaviour depends on runtime capabilities</td><td>Requires environment validation</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="operational-playbooks">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">37</div>
+                  <h2 class="section-title">37. Operational Playbooks</h2>
+                </div>
+                <div class="section-summary">The operating model is practical and role-driven. Each recurring operational scenario has a clear owner and result.</div>
+              </div>
+              
+        <div class="card landscape-page">
+          
+    <table>
+      <thead>
+        <tr><th>Playbook</th><th>Responsible role</th><th>Expected action</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>New driver onboarding</td><td>Admin</td><td>Review application, documents, vehicle data, then approve or request corrections.</td></tr>
+            
+              <tr><td>Daily driver readiness</td><td>Operations / dispatcher</td><td>Check subscription, online status, GPS freshness and blocked balances.</td></tr>
+            
+              <tr><td>Customer booking support</td><td>Support</td><td>Review trip record, dispatch state, location data and customer messages.</td></tr>
+            
+              <tr><td>No-driver trip handling</td><td>Dispatcher</td><td>Check candidate pool, radius, eligibility, recent declines and trip age.</td></tr>
+            
+              <tr><td>Active-trip intervention</td><td>Admin / support</td><td>Review trip status, OTP state, trip events and location freshness.</td></tr>
+            
+              <tr><td>Subscription approval</td><td>Payment reviewer</td><td>Review payment proof, approve, activate plan and notify driver.</td></tr>
+            
+              <tr><td>Commission-payment approval</td><td>Payment reviewer</td><td>Review payment proof, settle wallet, issue receipt path and notify driver.</td></tr>
+            
+              <tr><td>Driver account restriction</td><td>Admin</td><td>Deactivate or suspend status and document reason.</td></tr>
+            
+              <tr><td>Trip cancellation review</td><td>Support / admin</td><td>Inspect status, timestamps, cancellation reason and fees.</td></tr>
+            
+              <tr><td>End-of-day operations review</td><td>Owner / admin</td><td>Review trips, payments, subscriptions, blocked balances and issues.</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="glossary">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">38</div>
+                  <h2 class="section-title">38. Glossary</h2>
+                </div>
+                <div class="section-summary">These terms are central to understanding how MOOVU behaves as a product and business system.</div>
+              </div>
+              
+        <div class="card">
+          
+    <table>
+      <thead>
+        <tr><th>Term</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Dispatch</td><td>The trip assignment process that searches for eligible drivers and sends offers.</td></tr>
+            
+              <tr><td>Trip offer</td><td>A timed assignment opportunity sent to eligible online drivers.</td></tr>
+            
+              <tr><td>Search cycle</td><td>A dispatch round with a set radius and offer window.</td></tr>
+            
+              <tr><td>MOOVU Go</td><td>The base ride category for up to three riders.</td></tr>
+            
+              <tr><td>MOOVU Go XL / Go Plus</td><td>The larger-capacity ride category for up to six riders; naming differs across surfaces.</td></tr>
+            
+              <tr><td>Final fare</td><td>The customer fare after distance, duration, stops, surge, discounts and end-of-trip finalization.</td></tr>
+            
+              <tr><td>Wallet balance</td><td>Driver commission balance still owed to MOOVU.</td></tr>
+            
+              <tr><td>Settlement</td><td>A driver commission payment accepted by MOOVU.</td></tr>
+            
+              <tr><td>FCM token</td><td>The push-registration token used to send Firebase notifications to devices.</td></tr>
+            
+              <tr><td>GPS freshness</td><td>Whether the driver heartbeat is recent enough to trust for dispatch or trip actions.</td></tr>
+            
+      </tbody>
+    </table>
+  
+        </div>
+      
+            </section>
+          
+            <section class="section" id="product-summary">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">39</div>
+                  <h2 class="section-title">39. What MOOVU Currently Does</h2>
+                </div>
+                <div class="section-summary">MOOVU currently provides a full booking-to-operations cycle that joins customer requests, driver execution and admin oversight.</div>
+              </div>
+              
+        <div class="card">
+          <p>MOOVU lets a rider create an account, request a ride, choose a ride category, see a fare estimate, wait for a driver, verify the trip through OTP, chat when a driver is assigned, and receive a receipt afterward. The same platform also lets drivers apply, be reviewed, manage subscriptions, receive offers, execute the ride, and track what they owe MOOVU or what they earned from completed trips.</p>
+          <p>On the business side, MOOVU gives administrators visibility into trips, applications, payment proof, receipts, driver status, notifications, subscriptions and commission settlement. That makes the application usable not only by riders and drivers, but by the operating business that must keep the network healthy.</p>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="technical-summary">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">40</div>
+                  <h2 class="section-title">40. How MOOVU Does It</h2>
+                </div>
+                <div class="section-summary">The platform works by coordinating structured web and native-ready interfaces with server-side validation, stored records, and timed operational logic.</div>
+              </div>
+              
+        <div class="card">
+          <p>MOOVU uses structured server routes to receive trip requests, calculate prices, persist records, trigger dispatch, record trip events, and notify the correct audience. It stores customer, driver, trip, finance and notification state in Supabase, while Google Maps provides location intelligence and Firebase handles visible push notifications.</p>
+          <p>Driver and admin access are protected by role and ownership checks, not by client navigation alone. That means a booking, offer acceptance, payment review or completion action is meaningful only after the server confirms the user and the relevant trip or driver relationship.</p>
+        </div>
+      
+            </section>
+          
+            <section class="section" id="beginning-to-end">
+              <div class="section-head">
+                <div>
+                  <div class="kicker">41</div>
+                  <h2 class="section-title">41. MOOVU Explained from Beginning to End</h2>
+                </div>
+                <div class="section-summary">The sequence below explains the whole operating system in one continuous narrative.</div>
+              </div>
+              
+        <div class="card">
+          <ol>
+            <li>A customer joins MOOVU, accepts legal terms, and provides trip details.</li>
+            <li>A driver applies through onboarding, including identity and vehicle information.</li>
+            <li>An admin reviews the application and approves a driver for operations.</li>
+            <li>The driver pays a subscription plan and waits for admin approval.</li>
+            <li>The driver goes online once subscription and balance rules allow it.</li>
+            <li>The customer books a ride with pickup, destination, optional stops and ride category.</li>
+            <li>The server calculates the fare, creates the trip record, and starts dispatch.</li>
+            <li>Dispatch searches for eligible drivers, scores them, and offers the trip.</li>
+            <li>A driver accepts, the system assigns the trip atomically, and the customer is notified.</li>
+            <li>The driver reaches pickup, passes the arrival rule and prepares to start the trip.</li>
+            <li>The start OTP is entered so the trip can transition to ongoing.</li>
+            <li>The ride proceeds, with live status, messages and route context available.</li>
+            <li>Stops and actual route conditions can influence the final price before completion.</li>
+            <li>The end OTP is entered, minimum duration is checked, and the trip completes.</li>
+            <li>The final fare is stored, commission is applied, driver net is calculated, and receipts become available.</li>
+            <li>The admin system continues to oversee payments, subscriptions, commissions and exception handling.</li>
+            <li>Notifications connect all participants through the lifecycle where device and runtime support allow.</li>
+          </ol>
+        </div>
+      
+            </section>
+          
+
+          
+    <section class="appendix" id="appendix-a">
+      <div class="section-head">
+        <div>
+          <div class="kicker">Appendix A</div>
+          <h2 class="section-title">Ride Pricing Reference</h2>
+        </div>
+      </div>
+      <div class="card">
+    <table>
+      <thead>
+        <tr><th>Ride option</th><th>Key pricing</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>MOOVU Go</td><td>R15 base, R9/km, R1.50/min, R40 minimum, R2/min after 3 free minutes</td></tr>
+            
+              <tr><td>MOOVU Go XL</td><td>R25 base, R12/km, R2.00/min, R70 minimum, R3/min after 3 free minutes</td></tr>
+            
+      </tbody>
+    </table>
+  </div>
+    </section>
+    <section class="appendix" id="appendix-b">
+      <div class="section-head"><div><div class="kicker">Appendix B</div><h2 class="section-title">Driver Eligibility Checklist</h2></div></div>
+      <div class="card"><ul><li>Approved or active driver status</li><li>Verified review state where applicable</li><li>Profile completed</li><li>Subscription active and not expired</li><li>Balance due below R100 lock threshold</li><li>Online and not busy</li><li>GPS available and heartbeat fresh</li><li>Vehicle capacity matches ride option</li><li>No conflicting active trip or active offer</li><li>Driver has not already declined this trip</li></ul></div>
+    </section>
+    <section class="appendix" id="appendix-c">
+      <div class="section-head"><div><div class="kicker">Appendix C</div><h2 class="section-title">Driver Document Checklist</h2></div></div>
+      <div class="card">
+    <table>
+      <thead>
+        <tr><th>Document group</th><th>Included items</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Identity</td><td>SA ID or passport, driver licence, profile photo, proof of residence</td></tr>
+            
+              <tr><td>Operational</td><td>PDP / PrDP where available, police clearance where supported, transport permit where supported</td></tr>
+            
+              <tr><td>Vehicle</td><td>Vehicle registration, licence disc, roadworthy certificate, insurance proof</td></tr>
+            
+              <tr><td>Visual evidence</td><td>Front, back, left, right, interior and number plate photos</td></tr>
+            
+      </tbody>
+    </table>
+  </div>
+    </section>
+    <section class="appendix" id="appendix-d">
+      <div class="section-head"><div><div class="kicker">Appendix D</div><h2 class="section-title">Subscription Reference</h2></div></div>
+      <div class="card">
+    <table>
+      <thead>
+        <tr><th>Plan</th><th>Amount</th><th>Duration</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Daily</td><td>R45</td><td>1 day</td></tr>
+            
+              <tr><td>Weekly</td><td>R100</td><td>7 days</td></tr>
+            
+              <tr><td>Monthly</td><td>R250</td><td>30 days</td></tr>
+            
+      </tbody>
+    </table>
+  </div>
+    </section>
+    <section class="appendix" id="appendix-e">
+      <div class="section-head"><div><div class="kicker">Appendix E</div><h2 class="section-title">Trip Status Reference</h2></div></div>
+      <div class="card">
+    <table>
+      <thead>
+        <tr><th>Status</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>scheduled</td><td>Future trip waiting for release window</td></tr>
+            
+              <tr><td>requested</td><td>Current trip waiting for dispatch</td></tr>
+            
+              <tr><td>offered</td><td>Offer in progress</td></tr>
+            
+              <tr><td>assigned</td><td>Accepted by one driver</td></tr>
+            
+              <tr><td>arrived</td><td>Driver has reached pickup</td></tr>
+            
+              <tr><td>ongoing</td><td>Trip is active after start OTP</td></tr>
+            
+              <tr><td>completed</td><td>Trip ended and final fare was applied</td></tr>
+            
+              <tr><td>cancelled</td><td>Trip ended without completion</td></tr>
+            
+      </tbody>
+    </table>
+  </div>
+    </section>
+    <section class="appendix" id="appendix-f">
+      <div class="section-head"><div><div class="kicker">Appendix F</div><h2 class="section-title">Notification Event Matrix</h2></div></div>
+      <div class="card">
+    <table>
+      <thead>
+        <tr><th>Event</th><th>Customer</th><th>Driver</th><th>Admin</th><th>Delivery</th><th>Destination</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>New trip request</td><td>No</td><td>Yes</td><td>Yes</td><td>FCM / web push</td><td>Driver portal and admin trip oversight</td></tr>
+            
+              <tr><td>Driver accepted trip</td><td>Yes</td><td>No</td><td>Yes</td><td>FCM / web push</td><td>Customer ride view and admin dispatch</td></tr>
+            
+              <tr><td>Driver arrived</td><td>Yes</td><td>No</td><td>Optional</td><td>FCM / web push</td><td>Customer ride view</td></tr>
+            
+              <tr><td>Trip started</td><td>Yes</td><td>Optional</td><td>Optional</td><td>FCM / web push</td><td>Customer ride view</td></tr>
+            
+              <tr><td>Trip completed</td><td>Yes</td><td>Yes</td><td>Yes</td><td>FCM / web push</td><td>Customer ride view, driver history, admin trips</td></tr>
+            
+              <tr><td>Customer chat message</td><td>No</td><td>Yes</td><td>No</td><td>FCM / web push</td><td>Driver live trip context</td></tr>
+            
+              <tr><td>Driver chat reply</td><td>Yes</td><td>No</td><td>No</td><td>FCM / web push</td><td>Customer live trip context</td></tr>
+            
+              <tr><td>Subscription payment submitted</td><td>No</td><td>No</td><td>Yes</td><td>FCM / web push</td><td>Admin payment reviews</td></tr>
+            
+              <tr><td>Commission payment submitted</td><td>No</td><td>No</td><td>Yes</td><td>FCM / web push</td><td>Admin payment reviews</td></tr>
+            
+              <tr><td>Payment approved or rejected</td><td>No</td><td>Yes</td><td>No</td><td>FCM / web push</td><td>Driver earnings and receipts</td></tr>
+            
+      </tbody>
+    </table>
+  </div>
+    </section>
+    <section class="appendix" id="appendix-g">
+      <div class="section-head"><div><div class="kicker">Appendix G</div><h2 class="section-title">Role and Permission Matrix</h2></div></div>
+      <div class="card">
+    <table>
+      <thead>
+        <tr><th>Role</th><th>Primary permission</th><th>Restriction</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>Visitor</td><td>Can access public landing, legal pages, and customer or driver entry points</td><td>No trip or protected data access</td></tr>
+            
+              <tr><td>Customer</td><td>Can create bookings, track trips, use OTP, chat, rate, and view receipts</td><td>Cannot access driver or admin operations</td></tr>
+            
+              <tr><td>Driver applicant</td><td>Can create a driver account and submit onboarding data</td><td>Cannot receive trips until approved and eligible</td></tr>
+            
+              <tr><td>Approved driver</td><td>Can log in, go online, receive offers, execute trips, and manage earnings</td><td>Cannot use admin operational tools</td></tr>
+            
+              <tr><td>Administrator</td><td>Can review trips, drivers, receipts, and payments</td><td>Requires approved admin role in profiles table</td></tr>
+            
+              <tr><td>Dispatcher</td><td>Operational dispatch visibility and intervention</td><td>Subset of admin roles</td></tr>
+            
+              <tr><td>Support</td><td>Operational and customer support visibility</td><td>Subset of admin roles</td></tr>
+            
+              <tr><td>Payment reviewer</td><td>Reviews subscription, commission and combined driver payments</td><td>Admin-protected workflow</td></tr>
+            
+              <tr><td>Owner</td><td>Highest administrative authority</td><td>Role-based, not separate app surface</td></tr>
+            
+      </tbody>
+    </table>
+  </div>
+    </section>
+    <section class="appendix" id="appendix-h">
+      <div class="section-head"><div><div class="kicker">Appendix H</div><h2 class="section-title">Admin Daily Operations Checklist</h2></div></div>
+      <div class="card">
+    <table>
+      <thead>
+        <tr><th>Playbook</th><th>Owner</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        
+              <tr><td>New driver onboarding</td><td>Admin</td><td>Review application, documents, vehicle data, then approve or request corrections.</td></tr>
+            
+              <tr><td>Daily driver readiness</td><td>Operations / dispatcher</td><td>Check subscription, online status, GPS freshness and blocked balances.</td></tr>
+            
+              <tr><td>Customer booking support</td><td>Support</td><td>Review trip record, dispatch state, location data and customer messages.</td></tr>
+            
+              <tr><td>No-driver trip handling</td><td>Dispatcher</td><td>Check candidate pool, radius, eligibility, recent declines and trip age.</td></tr>
+            
+              <tr><td>Active-trip intervention</td><td>Admin / support</td><td>Review trip status, OTP state, trip events and location freshness.</td></tr>
+            
+              <tr><td>Subscription approval</td><td>Payment reviewer</td><td>Review payment proof, approve, activate plan and notify driver.</td></tr>
+            
+              <tr><td>Commission-payment approval</td><td>Payment reviewer</td><td>Review payment proof, settle wallet, issue receipt path and notify driver.</td></tr>
+            
+              <tr><td>Driver account restriction</td><td>Admin</td><td>Deactivate or suspend status and document reason.</td></tr>
+            
+              <tr><td>Trip cancellation review</td><td>Support / admin</td><td>Inspect status, timestamps, cancellation reason and fees.</td></tr>
+            
+              <tr><td>End-of-day operations review</td><td>Owner / admin</td><td>Review trips, payments, subscriptions, blocked balances and issues.</td></tr>
+            
+      </tbody>
+    </table>
+  </div>
+    </section>
+  
+        </main>
+      </body>
+    </html>
+  

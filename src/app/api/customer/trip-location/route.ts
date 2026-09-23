@@ -24,19 +24,27 @@ export async function GET(req: Request) {
 
     let location: { lat: number | null; lng: number | null; heading: number | null; last_seen: string | null } | null = null;
     if (trip.driver_id && ["assigned", "arrived", "ongoing"].includes(String(trip.status))) {
-      const { data: liveLocation } = await auth.supabaseAdmin
+      const { data: liveLocation, error: liveLocationError } = await auth.supabaseAdmin
         .from("trip_live_locations")
-        .select("lat,lng,heading,recorded_at")
+        .select("lat,lng,heading,captured_at")
         .eq("trip_id", tripId)
         .eq("driver_id", trip.driver_id)
         .maybeSingle();
+
+      if (liveLocationError) {
+        console.error("[customer-trip-location] live location lookup failed", {
+          tripId,
+          code: liveLocationError.code,
+          message: liveLocationError.message,
+        });
+      }
 
       if (liveLocation) {
         location = {
           lat: Number(liveLocation.lat),
           lng: Number(liveLocation.lng),
           heading: liveLocation.heading == null ? null : Number(liveLocation.heading),
-          last_seen: liveLocation.recorded_at,
+          last_seen: liveLocation.captured_at,
         };
       } else {
         const { data: driver } = await auth.supabaseAdmin

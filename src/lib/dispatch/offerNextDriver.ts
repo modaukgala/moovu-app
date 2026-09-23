@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { sendPushSafe } from "@/lib/push-server";
 import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
+import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 
 type DriverRow = {
   id: string;
@@ -43,23 +44,12 @@ function distanceKm(
 }
 
 function canTakeTrips(driver: DriverRow) {
-  const expiryMs = driver.subscription_expires_at
-    ? new Date(driver.subscription_expires_at).getTime()
-    : null;
-
-  const subscriptionValid =
-    driver.subscription_status === "active" &&
-    expiryMs != null &&
-    expiryMs > Date.now();
-
   return (
     driver.online === true &&
     driver.busy === false &&
     driver.lat != null &&
     driver.lng != null &&
-    (driver.verification_status === "approved" ||
-      driver.verification_status === null) &&
-    subscriptionValid
+    (driver.verification_status === "approved" || driver.verification_status === null)
   );
 }
 
@@ -145,8 +135,22 @@ export async function offerNextDriver(params: {
     return { ok: false as const, error: driversError.message };
   }
 
-  const candidates = ((drivers || []) as DriverRow[])
-    .filter(canTakeTrips)
+  const prelim = ((drivers || []) as DriverRow[]).filter(canTakeTrips);
+  const driverIds = prelim.map((driver) => driver.id);
+  const { data: wallets, error: walletsError } = driverIds.length
+    ? await supabase.from("driver_wallets").select("driver_id,balance_due").in("driver_id", driverIds)
+    : { data: [], error: null };
+  if (walletsError) return { ok: false as const, error: walletsError.message };
+  const walletByDriver = new Map((wallets ?? []).map((row) => [String(row.driver_id), Number(row.balance_due ?? 0)]));
+  const authorities = await Promise.all(prelim.map((driver) => resolveDriverFinanceAuthority(supabase, {
+    driverId: driver.id, subscriptionStatus: driver.subscription_status,
+    subscriptionExpiresAt: driver.subscription_expires_at, legacyBalanceDue: walletByDriver.get(driver.id) ?? 0,
+  })));
+  const unavailable = authorities.find((result) => !result.ok);
+  if (unavailable && !unavailable.ok) return { ok: false as const, error: unavailable.error };
+  const eligibleIds = new Set(prelim.filter((_driver, index) => authorities[index].ok && authorities[index].authority.financiallyEligible).map((driver) => driver.id));
+  const candidates = prelim
+    .filter((driver) => eligibleIds.has(driver.id))
     .filter((d) => !triedDriverIds.has(d.id))
     .map((driver) => ({
       ...driver,

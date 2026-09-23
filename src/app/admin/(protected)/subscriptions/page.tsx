@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -102,6 +102,7 @@ export default function AdminSubscriptionsPage() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
+  const updateOperationKeyRef = useRef("");
   const [reviewDraft, setReviewDraft] = useState<{
     requestId: string;
     action: "approve" | "reject" | "waiting";
@@ -245,6 +246,7 @@ export default function AdminSubscriptionsPage() {
       return;
     }
 
+    if (!updateOperationKeyRef.current) updateOperationKeyRef.current = crypto.randomUUID();
     const res = await fetch("/api/admin/subscriptions/update", {
       method: "POST",
       headers: {
@@ -257,6 +259,7 @@ export default function AdminSubscriptionsPage() {
         days: days ?? null,
         note: note || null,
         plan: plan || null,
+        operationKey: updateOperationKeyRef.current,
       }),
     });
 
@@ -269,6 +272,7 @@ export default function AdminSubscriptionsPage() {
     }
 
     setMsg("Subscription updated.");
+    updateOperationKeyRef.current = "";
     await loadDrivers();
     await loadHistory(selected.id);
   }

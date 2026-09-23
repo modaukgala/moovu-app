@@ -1,131 +1,32 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
-import {
-  getDriverSubscriptionDays,
-  getDriverSubscriptionStartDate,
-  isDriverSubscriptionPlan,
-} from "@/lib/finance/driverPayments";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { callHardenedRpc } from "@/lib/server/hardenedRpc";
 
-type SubscriptionPatch = {
-  subscription_status: string;
-  subscription_expires_at: string | null;
-  subscription_plan: string | null;
-};
-
-function addDays(base: Date, days: number) {
-  return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
-}
+type Result = { status: string; expires_at: string | null; replayed: boolean };
 
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
-    if (!auth.ok) {
-      return NextResponse.json(
-        { ok: false, error: auth.error },
-        { status: auth.status }
-      );
+    if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    if (!isFinancialAdminRole(auth.profile.role)) {
+      return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
     }
-
-    const { supabaseAdmin } = auth;
     const body = await req.json().catch(() => null);
-
-    const driverId = String(body && typeof body === "object" && "driverId" in body ? body.driverId : "").trim();
-    const action = String(body && typeof body === "object" && "action" in body ? body.action : "").trim();
-    const days = body && typeof body === "object" && "days" in body && body.days != null ? Number(body.days) : null;
-    const note = body && typeof body === "object" && "note" in body && body.note ? String(body.note) : null;
-    const planRaw = body && typeof body === "object" && "plan" in body && body.plan ? String(body.plan) : null;
-    const expiryIso = body && typeof body === "object" && "expiry" in body && body.expiry ? String(body.expiry) : null;
-
-    if (!driverId) {
-      return NextResponse.json({ ok: false, error: "Missing driverId" }, { status: 400 });
-    }
-
-    const { data: driver, error: dErr } = await supabaseAdmin
-      .from("drivers")
-      .select("id,subscription_status,subscription_expires_at,subscription_plan")
-      .eq("id", driverId)
-      .single();
-
-    if (dErr || !driver) {
-      return NextResponse.json({ ok: false, error: dErr?.message ?? "Driver not found" }, { status: 404 });
-    }
-
-    const oldStatus = driver.subscription_status ?? "inactive";
-    const oldExp = driver.subscription_expires_at ? new Date(driver.subscription_expires_at) : null;
-
-    let newStatus = oldStatus;
-    let newExp: Date | null = oldExp;
-    let newPlan = driver.subscription_plan ?? null;
-
-    if (planRaw) {
-      if (!isDriverSubscriptionPlan(planRaw)) {
-        return NextResponse.json({ ok: false, error: "Invalid subscription plan." }, { status: 400 });
-      }
-      newPlan = planRaw;
-    }
-
-    if (action === "activate") {
-      newStatus = "active";
-      if (newPlan && isDriverSubscriptionPlan(newPlan)) {
-        newExp = addDays(
-          getDriverSubscriptionStartDate(driver.subscription_expires_at, new Date()),
-          getDriverSubscriptionDays(newPlan),
-        );
-      } else if (!newExp || newExp.getTime() <= Date.now()) {
-        newExp = addDays(new Date(), 30);
-      }
-    } else if (action === "suspend") {
-      newStatus = "suspended";
-    } else if (action === "inactive") {
-      newStatus = "inactive";
-    } else if (action === "grace") {
-      newStatus = "grace";
-    } else if (action === "extend") {
-      if (!days || days <= 0) {
-        return NextResponse.json({ ok: false, error: "days must be > 0 for extend" }, { status: 400 });
-      }
-      const base = newExp && newExp.getTime() > Date.now() ? newExp : new Date();
-      newExp = addDays(base, days);
-      newStatus = "active";
-    } else if (action === "set_expiry") {
-      if (!expiryIso) {
-        return NextResponse.json({ ok: false, error: "Missing expiry" }, { status: 400 });
-      }
-      newExp = new Date(expiryIso);
-      if (isNaN(newExp.getTime())) {
-        return NextResponse.json({ ok: false, error: "Invalid expiry date" }, { status: 400 });
-      }
-    } else {
-      return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
-    }
-
-    const patch: SubscriptionPatch = {
-      subscription_status: newStatus,
-      subscription_expires_at: newExp ? newExp.toISOString() : null,
-      subscription_plan: newPlan,
-    };
-
-    const { error: upErr } = await supabaseAdmin.from("drivers").update(patch).eq("id", driverId);
-    if (upErr) {
-      return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 });
-    }
-
-    await supabaseAdmin.from("driver_subscription_events").insert({
-      driver_id: driverId,
-      actor: "admin",
-      action,
-      old_status: oldStatus,
-      new_status: newStatus,
-      old_expires_at: oldExp ? oldExp.toISOString() : null,
-      new_expires_at: newExp ? newExp.toISOString() : null,
-      note,
+    const driverId = String(body?.driverId ?? "").trim();
+    const operationKey = String(body?.operationKey ?? "").trim();
+    const action = String(body?.action ?? "").trim();
+    const days = body?.days == null ? null : Number(body.days);
+    if (!driverId) return NextResponse.json({ ok: false, error: "Missing driverId" }, { status: 400 });
+    if (!operationKey) return NextResponse.json({ ok: false, error: "Stable operation key is required." }, { status: 400 });
+    if (!["activate", "suspend", "inactive", "grace", "extend", "set_expiry"].includes(action)) return NextResponse.json({ ok: false, error: "Invalid action" }, { status: 400 });
+    const result = await callHardenedRpc<Result>(auth.supabaseAdmin, "phase05b_update_subscription", {
+      p_operation_key: `subscription-update:${operationKey}`, p_driver_id: driverId, p_action: action,
+      p_days: Number.isFinite(days) ? days : null, p_note: body?.note ? String(body.note) : null,
+      p_plan: body?.plan ? String(body.plan) : null, p_expiry: body?.expiry ? String(body.expiry) : null,
+      p_actor_id: auth.user.id,
     });
-
-    return NextResponse.json({
-      ok: true,
-      status: newStatus,
-      expires_at: newExp ? newExp.toISOString() : null,
-    });
+    if (!result.ok) return NextResponse.json({ ok: false, error: result.error, code: result.code }, { status: result.status });
+    return NextResponse.json({ ok: true, status: result.result.status, expires_at: result.result.expires_at, replayed: result.result.replayed });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error" }, { status: 500 });
   }

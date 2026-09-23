@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { requireAdminUser, isFinancialAdminRole } from "@/lib/auth/admin";
 
 const ALLOWED_STATUSES = new Set(["pending", "approved", "active", "inactive", "suspended", "rejected"]);
 
@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     if (!auth.ok) {
       return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
+    if (!isFinancialAdminRole(auth.profile.role)) return NextResponse.json({ ok: false, error: "Authorized reviewer access required." }, { status: 403 });
 
     const body = await req.json();
     const driverId = String(body?.driverId ?? "").trim();
@@ -27,13 +28,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid driver status." }, { status: 400 });
     }
 
-    const { error } = await auth.supabaseAdmin
-      .from("drivers")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", driverId);
+    if (!["active", "inactive"].includes(status)) return NextResponse.json({ ok: false, error: "Use versioned onboarding review for approval, rejection and corrections." }, { status: 409 });
+    const { error } = await auth.supabaseAdmin.rpc("phase6_operating_status", { p_actor: auth.user.id, p_driver: driverId, p_status: status, p_reason: typeof body.reason === "string" && body.reason.trim().length >= 8 ? body.reason.trim().slice(0, 2000) : "Administrative operating status control" });
 
     if (error) {
-      console.error("[admin-driver-status] failed to update driver", { driverId, status, error });
       if (error.code === "23514") {
         return NextResponse.json(
           { ok: false, error: "This driver status is not supported by the current database setup." },

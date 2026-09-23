@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { haversineKm } from "@/lib/dispatch/driverScoring";
-import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
+import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { resolveCachedJson } from "@/lib/server/requestControl";
 
@@ -64,8 +64,6 @@ export async function GET(req: Request) {
       if (!["approved", "active"].includes(String(driver.status ?? ""))) return false;
       if (driver.verification_status && driver.verification_status !== "approved") return false;
       if (driver.profile_completed === false) return false;
-      if (!["active", "grace"].includes(String(driver.subscription_status ?? ""))) return false;
-      if (!driver.subscription_expires_at || new Date(driver.subscription_expires_at).getTime() <= now) return false;
       if (Number(driver.seating_capacity ?? 0) < (rideOption === "group" ? 6 : 3)) return false;
       return haversineKm(lat, lng, Number(driver.lat), Number(driver.lng)) <=
         LIVE_LOCATION_CONFIG.customerDriverRadiusKm;
@@ -91,15 +89,17 @@ export async function GET(req: Request) {
       });
       return { ok: true, drivers: [] };
     }
-    const locked = new Set(
-      (wallets.data ?? [])
-        .filter((row) => Number(row.balance_due ?? 0) >= DRIVER_COMMISSION_LOCK_LIMIT)
-        .map((row) => String(row.driver_id)),
-    );
+    const walletByDriver = new Map((wallets.data ?? []).map((row) => [String(row.driver_id), Number(row.balance_due ?? 0)]));
+    const authorityResults = await Promise.all(prelim.map((driver) => resolveDriverFinanceAuthority(auth.supabaseAdmin, {
+      driverId: driver.id, subscriptionStatus: driver.subscription_status,
+      subscriptionExpiresAt: driver.subscription_expires_at, legacyBalanceDue: walletByDriver.get(driver.id) ?? 0,
+    })));
+    if (authorityResults.some((result) => !result.ok)) return { ok: true, drivers: [] };
+    const eligible = new Set(prelim.filter((_driver, index) => authorityResults[index].ok && authorityResults[index].authority.financiallyEligible).map((driver) => driver.id));
     const active = new Set((activeTrips.data ?? []).map((row) => String(row.driver_id)));
 
     const drivers = prelim
-      .filter((driver) => !locked.has(driver.id) && !active.has(driver.id))
+      .filter((driver) => eligible.has(driver.id) && !active.has(driver.id))
       .map((driver) => ({
         markerId: createHash("sha256").update(driver.id).digest("hex").slice(0, 16),
         lat: Number(Number(driver.lat).toFixed(4)),

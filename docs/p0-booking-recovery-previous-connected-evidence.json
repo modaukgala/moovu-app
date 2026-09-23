@@ -1,0 +1,544 @@
+{
+  "run": "aa5404e9",
+  "disposable": "tangtlmdpnvmoviwrgvd",
+  "production_mutated": false,
+  "customer_id": "2d780e69-b804-4d2c-9b45-e3cbf058d0a6",
+  "fixture_driver_ids": [
+    "76dda1ae-db80-4b63-af8f-c40788f6fe64",
+    "71ec3ee6-b80a-44f0-b5cb-e751cc2af96b",
+    "4ad34bab-ab13-4a17-9a62-bb2511d71cbc",
+    "d1bcc64b-50dc-4797-ba9e-be9133074c14",
+    "53941e5e-2846-4431-9a95-cb9f36004f0f",
+    "74436197-3de3-45fa-bab7-bec3345541e4",
+    "a413f20a-d42f-49eb-8fe3-6ea5818e9ce5",
+    "c7a36fed-e6c7-40be-9ab8-06a5c1bc4d9a",
+    "2fba9892-97ac-46ab-b908-05c31288d0a7",
+    "9aaf723c-a96b-4a76-9610-a5ecbac10581",
+    "348c2b9e-4c56-4d00-a4fa-4ba05328e106",
+    "6fafda13-dd91-4d38-8a76-8c372536c73b",
+    "c9fa9fae-f6d1-4276-8618-b12cf45fe193",
+    "a2d91bf6-2c61-4efe-beed-db3d17a37c91",
+    "6a2a416b-a781-4681-af6d-3b5ecab9ea23",
+    "3c2821ca-02db-4015-b3dd-004e823e1508",
+    "b7233745-4c04-49a0-bdde-130ad03d871d",
+    "05205b4e-b1c1-418d-ab5f-67f3c56f5ecc",
+    "d6d1f513-4034-4b64-ae23-42fb3b8ded4b",
+    "e7e91a4d-bfaa-41f7-a592-ff915202c35c",
+    "2402e21d-3971-4a7f-abc0-f3ce847ea691",
+    "dbd84ab8-0280-4fe5-81c2-7e5ea346fa69",
+    "5c367aae-5367-46a8-b206-7bd40b1c06e2",
+    "3f75034a-8df1-4dc5-8b20-8d6187c6fad0",
+    "7b12c874-86c7-4663-9227-d3c90c8276a9",
+    "10dfc656-5780-44b9-9224-3bb89eaec52a",
+    "b8dc5dce-d93e-413e-95af-f3521bce9539",
+    "28b0f6d5-faea-4f4e-b78a-ac6f137f532a",
+    "98e270a2-eaa3-4975-8868-9b4671325b78",
+    "35c7883d-86eb-4945-af94-f737a284bd0e",
+    "f818ed54-25bb-4e9d-b516-f02b6dac8d8e",
+    "c5cecee0-ba4a-485d-a5a7-746951cf9e0b",
+    "96652a5d-2971-4e78-baff-5abf6cacb3c1",
+    "1506c816-8c21-41b8-9ec9-53c92021e1aa",
+    "17897186-d4a3-4081-8f65-36cd9304058c",
+    "e3fc4363-bd8b-4d14-8bba-e20d354916dc"
+  ],
+  "trip_ids": [
+    "842ac80f-536f-4a09-b05e-778893a05b1b",
+    "c3c5fbf2-8510-4391-8436-7acb2f715216",
+    "2f00812b-cd9c-4e74-a07a-48d91d107b7b",
+    "fed24430-22ce-4fc7-9895-da1a793e6005",
+    "fa08b75b-2b90-4141-bb0c-0ba3f30d16ef",
+    "38dcd53b-713d-4e28-a5eb-b8a8b10415f9",
+    "f57dec65-f494-45a0-8629-ad466c5584c9",
+    "ab4ce7d5-7998-437e-bc9e-7d9819bf27f8",
+    "21003f27-b8a5-4e33-b1d2-3dbd44b022b0",
+    "0e481555-3af0-4067-a52a-1c727ad4382f",
+    "c5667619-7744-4cf7-9278-2fdde3eba085",
+    "ec9fb60e-c5cb-4ace-a452-05a41a7634e6"
+  ],
+  "checks": [
+    {
+      "name": "Unauthenticated booking blocked",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Real customer signup API succeeds",
+      "pass": true,
+      "details": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Signup creates least-privileged canonical profile without fixture profile insertion",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Existing Auth fallback account creation establishes actor profile",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer RLS hides another profile",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer cannot promote own profile",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer cannot execute trusted booking RPC",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go authenticated booking creates server-owned actor and fare",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go dispatch offers a subscription-free eligible driver",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go driver receives real authenticated in-app offer",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go booking and offer generate no commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go authenticated driver acceptance",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "status": "assigned"
+      }
+    },
+    {
+      "name": "go acceptance generates no commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go subscription-free authenticated GPS heartbeat",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go authenticated arrival",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "message": "Trip marked as arrived.",
+        "kmAway": 0,
+        "distanceAudit": "Driver marked arrived 0.00 km from pickup.",
+        "noShowEvidenceQualified": true
+      }
+    },
+    {
+      "name": "go customer sees assigned driver after acceptance",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go wrong start OTP blocked",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go authenticated start OTP",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "message": "Trip started successfully.",
+        "kmAway": 0,
+        "distanceAudit": "Trip started with OTP 0.00 km from pickup."
+      }
+    },
+    {
+      "name": "go start generates no commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go minimum trip duration guard remains active",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer trip ownership cannot be impersonated",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Booking replay preserves one trip and one offer",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Booking replay returns persisted OTPs",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group authenticated booking creates server-owned actor and fare",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group dispatch offers a subscription-free eligible driver",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group driver receives real authenticated in-app offer",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group booking and offer generate no commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group authenticated driver acceptance",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "status": "assigned"
+      }
+    },
+    {
+      "name": "group acceptance generates no commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group subscription-free authenticated GPS heartbeat",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group authenticated arrival",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "message": "Trip marked as arrived.",
+        "kmAway": 0,
+        "distanceAudit": "Driver marked arrived 0.00 km from pickup.",
+        "noShowEvidenceQualified": true
+      }
+    },
+    {
+      "name": "group customer sees assigned driver after acceptance",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group wrong start OTP blocked",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group authenticated start OTP",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "message": "Trip started successfully.",
+        "kmAway": 0,
+        "distanceAudit": "Trip started with OTP 0.00 km from pickup."
+      }
+    },
+    {
+      "name": "group start generates no commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group minimum trip duration guard remains active",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R0 exact authoritative debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R0 connected subscription-free dispatch eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R0 authenticated driver offer receipt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R0 authenticated acceptance",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R49.99 exact authoritative debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R49.99 connected subscription-free dispatch eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R49.99 authenticated driver offer receipt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R49.99 authenticated acceptance",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R50 exact authoritative debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R50 connected subscription-free dispatch eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R50 database reservation cannot bypass eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R100 exact authoritative debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R100 connected subscription-free dispatch eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R100 database reservation cannot bypass eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Suspended exact authoritative debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Suspended connected subscription-free dispatch eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Suspended database reservation cannot bypass eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Rejected exact authoritative debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Rejected connected subscription-free dispatch eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Rejected database reservation cannot bypass eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Offline exact authoritative debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Offline connected subscription-free dispatch eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Offline database reservation cannot bypass eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Wrong class exact authoritative debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Wrong class connected subscription-free dispatch eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Wrong class database reservation cannot bypass eligibility",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "R50 does not block active-trip GPS telemetry",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go wrong end OTP blocked",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go authenticated end OTP and completion",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "status": 200,
+        "message": "Trip completed successfully.",
+        "fare": {
+          "estimatedFare": 55,
+          "originalFare": 55,
+          "addStopIncrease": 0,
+          "stopWaitingFee": 0,
+          "finalFare": 52,
+          "adjustmentAmount": 0
+        },
+        "commission": {
+          "skipped": false,
+          "fareAmount": 55,
+          "commissionPct": 15,
+          "commissionAmount": 7.8,
+          "driverNet": 44.2
+        },
+        "elapsedSeconds": 127,
+        "minRequiredSeconds": 120,
+        "distanceAudit": "Trip completed 0.00 km from destination.",
+        "kmAway": 0
+      }
+    },
+    {
+      "name": "go exactly one balanced 15% commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go no duplicate legacy driver debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "go completion replay creates no duplicate obligation",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group wrong end OTP blocked",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group authenticated end OTP and completion",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "status": 200,
+        "message": "Trip completed successfully.",
+        "fare": {
+          "estimatedFare": 79,
+          "originalFare": 79,
+          "addStopIncrease": 0,
+          "stopWaitingFee": 0,
+          "finalFare": 74,
+          "adjustmentAmount": 0
+        },
+        "commission": {
+          "skipped": false,
+          "fareAmount": 79,
+          "commissionPct": 15,
+          "commissionAmount": 11.1,
+          "driverNet": 62.9
+        },
+        "elapsedSeconds": 126,
+        "minRequiredSeconds": 120,
+        "distanceAudit": "Trip completed 0.00 km from destination.",
+        "kmAway": 0
+      }
+    },
+    {
+      "name": "group exactly one balanced 15% commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group no duplicate legacy driver debt",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "group completion replay creates no duplicate obligation",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Existing active XL finishes after R50 threshold crossing",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Connected candidate cap remains 25",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Expiry advances to untried candidate rather than repeating previous batch",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Authenticated decline persisted and never retried",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Admin attempted count derives from canonical history",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "No eligible driver creates safe searchable trip without commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer constraint error stays sanitized",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Server retains failure diagnostics",
+      "pass": true,
+      "details": null
+    }
+  ],
+  "passed": 81,
+  "failed": 0,
+  "notes": "Authenticated HTTP lifecycle with simulated GPS via the real heartbeat API and real elapsed duration; no real-device push sends."
+}

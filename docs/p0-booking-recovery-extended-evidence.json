@@ -1,0 +1,154 @@
+{
+  "run": "8ad1f109",
+  "disposable": "tangtlmdpnvmoviwrgvd",
+  "production_mutated": false,
+  "customer_id": "25cab797-061d-42a6-9947-ad182b992076",
+  "fixture_driver_ids": [
+    "29c5048b-d3c9-4c3b-8f00-418cf991c461",
+    "09251f99-0b66-41af-84be-702b30b77e00",
+    "888d8ca6-6f1f-43b3-9266-f7187ff59a43",
+    "1d9b737d-abd9-408c-a304-f790f5b47fe9"
+  ],
+  "trip_ids": [
+    "1644cb6f-e75d-4556-a32a-f43b03c4ad68",
+    "1c192a97-3746-4b4b-b2a5-1b74b009bdd7",
+    "0a3e5d88-125e-4036-8125-41226697dd3e",
+    "d415fa9e-afb7-4ac8-a1cb-36a403eab53c",
+    "075b3944-79ad-4f89-a37a-53f002d4aced",
+    "25119798-d786-4b6e-b0cd-64aa30c71bc6"
+  ],
+  "checks": [
+    {
+      "name": "Unauthenticated booking blocked",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Real customer signup API succeeds",
+      "pass": true,
+      "details": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Signup creates least-privileged canonical profile without fixture profile insertion",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Existing Auth fallback account creation establishes actor profile",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer RLS hides another profile",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer cannot promote own profile",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer cannot execute trusted booking RPC",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Concurrent reservations for one driver permit exactly one trip",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Trip-scoped expiry leaves unrelated due offers untouched",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Expired offer cannot reserve again in the same cycle",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Expired candidate can retry only in explicit later cycle",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Concurrent authenticated acceptance has one winner",
+      "pass": true,
+      "details": [
+        {
+          "status": 409
+        },
+        {
+          "status": 200
+        }
+      ]
+    },
+    {
+      "name": "Acceptance race cancels losing offer without commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Concurrent booking replay preserves trip identity and OTP",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Untrusted client cannot reserve offers",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Untrusted client cannot accept or expire offers",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Untrusted client cannot reserve offers",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Untrusted client cannot accept or expire offers",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Concurrent customer persistence preserves one unchanged canonical actor",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Go-only vehicle cannot receive XL through live dispatch or direct reservation",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Six-seat review vehicle remains Go-only and cannot bypass XL reservation",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "No eligible driver creates safe searchable trip without commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Customer constraint error stays sanitized",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Server retains failure diagnostics",
+      "pass": true,
+      "details": null
+    }
+  ],
+  "passed": 24,
+  "failed": 0,
+  "notes": "Authenticated HTTP lifecycle with simulated GPS via the real heartbeat API and real elapsed duration; no real-device push sends."
+}

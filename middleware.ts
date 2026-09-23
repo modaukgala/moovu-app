@@ -19,6 +19,15 @@ export function middleware(req: NextRequest) {
   const host = getHost(req);
   const pathname = req.nextUrl.pathname;
 
+  const retiredMutations = ["/api/driver/apply", "/api/driver/profile/save", "/api/driver/documents/upload", "/api/driver/account/delete", "/api/admin/applications/action", "/api/admin/applications/create-driver", "/api/admin/driver-verification", "/api/admin/driver-corrections", "/api/admin/driver-document-review", "/api/admin/driver-docs/upload", "/api/admin/drivers/create"];
+  if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && retiredMutations.includes(pathname)) {
+    return NextResponse.json({ error: "Use the versioned Driver onboarding and Admin review flow." }, { status: 410, headers: { "Cache-Control": "no-store" } });
+  }
+  if (["/driver/apply", "/driver/complete-profile"].includes(pathname) || ["/apply", "/complete-profile"].includes(pathname) && host.startsWith("driver.")) {
+    const destination = req.nextUrl.clone(); destination.pathname = "/driver/onboarding";
+    return NextResponse.redirect(destination);
+  }
+
   if (isPublicAsset(pathname)) {
     return NextResponse.next();
   }

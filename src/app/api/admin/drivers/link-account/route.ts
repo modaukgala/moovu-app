@@ -1,89 +1,32 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { callHardenedRpc } from "@/lib/server/hardenedRpc";
 
-async function getUserIdByEmail(supabaseAdmin: SupabaseClient, email: string): Promise<string | null> {
-  const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000, page: 1 });
+async function getUserIdByEmail(client: SupabaseClient, email: string) {
+  const { data, error } = await client.auth.admin.listUsers({ perPage: 1000, page: 1 });
   if (error) return null;
-
-  const user = (data?.users ?? []).find(
-    (u: User) => (u.email ?? "").toLowerCase() === email.toLowerCase()
-  );
-  return user?.id ?? null;
+  return (data?.users ?? []).find((user: User) => (user.email ?? "").toLowerCase() === email)?.id ?? null;
 }
-
+type Result = { user_id: string; driver_id: string | null; action: string; replayed: boolean };
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
-    if (!auth.ok) {
-      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
-    }
-
-    const { supabaseAdmin } = auth;
-    const body = await req.json();
-
-    const email = String(body.email ?? "").trim().toLowerCase();
-    const driverIdRaw = body.driverId;
-    const action = String(body.action ?? "link");
-
-    if (!email) {
-      return NextResponse.json({ ok: false, error: "Missing email" }, { status: 400 });
-    }
-
-    const userId = await getUserIdByEmail(supabaseAdmin, email);
-    if (!userId) {
-      return NextResponse.json({ ok: false, error: "No auth user found for that email" }, { status: 404 });
-    }
-
-    if (action === "unlink") {
-      const { error } = await supabaseAdmin
-        .from("driver_accounts")
-        .upsert({ user_id: userId, driver_id: null }, { onConflict: "user_id" });
-
-      if (error) {
-        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-      }
-
-      return NextResponse.json({ ok: true, message: "Unlinked successfully", userId });
-    }
-
-    const driverId = String(driverIdRaw ?? "").trim();
-    if (!driverId) {
-      return NextResponse.json({ ok: false, error: "Missing driverId" }, { status: 400 });
-    }
-
-    const { data: driver, error: dErr } = await supabaseAdmin
-      .from("drivers")
-      .select("id")
-      .eq("id", driverId)
-      .single();
-
-    if (dErr || !driver) {
-      return NextResponse.json(
-        { ok: false, error: "Driver UUID not found in drivers table" },
-        { status: 404 }
-      );
-    }
-
-    const { error: upErr } = await supabaseAdmin
-      .from("driver_accounts")
-      .upsert({ user_id: userId, driver_id: driverId }, { onConflict: "user_id" });
-
-    if (upErr) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: upErr.message + " (That driver may already be linked to another account.)",
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ ok: true, message: "Linked successfully", userId, driverId });
+    if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    const body = await req.json().catch(() => null);
+    const email = String(body?.email ?? "").trim().toLowerCase();
+    const action = String(body?.action ?? "link");
+    if (!email || !["link", "unlink"].includes(action)) return NextResponse.json({ ok: false, error: "Invalid email or action." }, { status: 400 });
+    const userId = await getUserIdByEmail(auth.supabaseAdmin, email);
+    if (!userId) return NextResponse.json({ ok: false, error: "No auth user found for that email" }, { status: 404 });
+    const driverId = body?.driverId ? String(body.driverId).trim() : null;
+    if (action === "link" && !driverId) return NextResponse.json({ ok: false, error: "Missing driverId" }, { status: 400 });
+    const result = await callHardenedRpc<Result>(auth.supabaseAdmin, "phase05b_manage_driver_link", {
+      p_application_id: null, p_user_id: userId, p_driver_id: driverId, p_action: action, p_actor_id: auth.user.id,
+    });
+    if (!result.ok) return NextResponse.json({ ok: false, error: result.error, code: result.code }, { status: result.status });
+    return NextResponse.json({ ok: true, replayed: result.result.replayed, message: `${action === "link" ? "Linked" : "Unlinked"} successfully`, userId, driverId });
   } catch (error: unknown) {
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Server error" },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error" }, { status: 500 });
   }
 }

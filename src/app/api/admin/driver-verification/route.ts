@@ -1,3 +1,4 @@
+import { phase6LegacyMutation } from "@/lib/drivers/phase6LegacyRoutes";
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { buildDriverReadiness } from "@/lib/driver-validation";
@@ -7,6 +8,8 @@ import {
 } from "@/lib/drivers/statusContract";
 
 export async function POST(req: Request) {
+  const retirement = phase6LegacyMutation(req);
+  if (retirement) return retirement;
   try {
     const auth = await requireAdminUser(req);
     if (!auth.ok) {

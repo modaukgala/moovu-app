@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -49,6 +49,7 @@ export default function AdminSettlementsPage() {
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const operationKeyRef = useRef("");
 
   const getToken = useCallback(async () => {
     const {
@@ -102,13 +103,14 @@ export default function AdminSettlementsPage() {
       return { ok: false };
     }
 
+    if (!operationKeyRef.current) operationKeyRef.current = crypto.randomUUID();
     const res = await fetch("/api/admin/settlements/record", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, operationKey: operationKeyRef.current }),
     });
 
     return res.json().catch(() => null);
@@ -143,6 +145,7 @@ export default function AdminSettlementsPage() {
     }
 
     setMsg(json?.message || "Settlement recorded successfully.");
+    operationKeyRef.current = "";
     setAmountPaid("");
     setReference("");
     setNote("");
@@ -186,6 +189,7 @@ export default function AdminSettlementsPage() {
     }
 
     setMsg("Full commission balance cleared successfully.");
+    operationKeyRef.current = "";
     setAmountPaid("");
     setReference("");
     setNote("");

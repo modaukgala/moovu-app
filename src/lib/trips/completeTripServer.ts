@@ -1,10 +1,16 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { FinalFareBreakdown } from "@/lib/domain/fare";
-import { applyTripCommissionServer } from "@/lib/finance/applyTripCommissionServer";
+import { callHardenedRpc } from "@/lib/server/hardenedRpc";
+import { callPhase2Rpc } from "@/lib/server/phase2Rpc";
+import { phase2Mode } from "@/lib/finance/phase2Policy";
+import {
+  processPhase2ShadowRecoveryJob,
+  type Phase2ShadowRecoveryJob,
+} from "@/lib/finance/phase2ShadowRecovery";
+import { isOutboxDeliveryEnabled } from "@/lib/notifications/outboxDelivery";
 import { haversineKm, isFreshHeartbeat, minimumRequiredTripSeconds } from "@/lib/geo/tripGuards";
 import { notifyAdmins, notifyCustomerForTrip, notifyDriverForTrip } from "@/lib/push-notify";
 import {
-  buildCompletionAuditFields,
   completionSchemaErrorMessage,
   completionSchemaSelect,
   END_OTP_BYPASS_REASONS,
@@ -38,14 +44,61 @@ type CompletionTrip = {
   estimated_fare?: number | null;
   actual_distance_km?: number | null;
   actual_duration_min?: number | null;
+  financial_version?: number | null;
+  phase5_policy_version?: string | null;
+  phase5_driver_fare_basis_cents?: number | null;
 };
 
 const COMPLETE_SELECT = `
   id,status,driver_id,fare_amount,duration_min,distance_km,dropoff_lat,dropoff_lng,
   start_otp_verified,end_otp,end_otp_verified,trip_started_at,ride_option,original_fare,final_add_stop_increase,
   stop_waiting_fee,final_fare,route_distance_km,route_duration_min,estimated_fare,
-  actual_distance_km,actual_duration_min
+  actual_distance_km,actual_duration_min,financial_version,phase5_policy_version,phase5_driver_fare_basis_cents
 `;
+
+type AtomicCompletionResult = {
+  trip_id: string;
+  driver_id: string;
+  fare_amount: number;
+  commission_pct: number;
+  commission_amount: number;
+  driver_net: number;
+  replayed: boolean;
+};
+
+async function postShadowTripCommission(tripId: string, actorId: string, legacyReplayed: boolean) {
+  const sourceKey = `trip_commission:${tripId}`;
+  try {
+    const claim = await callPhase2Rpc<{ claimed: boolean; job?: Phase2ShadowRecoveryJob }>(
+      supabaseAdmin,
+      "phase2_claim_shadow_recovery_job",
+      { p_operation_key: sourceKey },
+    );
+    if (!claim.ok || !claim.result.claimed || !claim.result.job) {
+      if (!claim.ok) console.error("[phase2-finance] shadow recovery claim failed", {
+        tripId, sourceKey, legacyReplayed, state: "unresolved", code: claim.code,
+      });
+      return;
+    }
+    const shadow = await processPhase2ShadowRecoveryJob(supabaseAdmin, {
+      ...claim.result.job,
+      actor_id: claim.result.job.actor_id ?? actorId,
+    });
+    if (!shadow.ok) {
+      console.error("[phase2-finance] shadow trip posting requires reconciliation", {
+        tripId, sourceKey, legacyReplayed, state: "unresolved", code: shadow.code, retryable: shadow.retryable,
+      });
+    } else {
+      console.info("[phase2-finance] shadow trip posting reconciled", {
+        tripId, sourceKey, legacyReplayed, state: "resolved", shadowReplayed: shadow.replayed,
+      });
+    }
+  } catch {
+    console.error("[phase2-finance] shadow trip posting requires reconciliation", {
+      tripId, sourceKey, legacyReplayed, state: "unresolved", code: "transport_failure",
+    });
+  }
+}
 
 export type CompleteTripServerResult =
   | {
@@ -65,7 +118,7 @@ export type CompleteTripServerResult =
       distanceAudit: string;
       kmAway: number | null;
     }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; code?: string; referenceId?: string };
 
 export async function completeTripServer(params: {
   tripId: string;
@@ -94,6 +147,29 @@ export async function completeTripServer(params: {
   }
   if (trip.status !== "ongoing") {
     if (trip.status === "completed") {
+      if (phase2Mode() !== "OFF") {
+        // Require the existing authorized completion event before repairing its shadow side effect.
+        const replay = await callHardenedRpc<AtomicCompletionResult>(supabaseAdmin, "phase05b_complete_trip", {
+          p_trip_id: params.tripId,
+          p_actor_id: params.actorId,
+          p_expected_driver_id: params.driverId ?? trip.driver_id,
+          p_mode: params.mode,
+          p_otp: params.otp?.trim() || null,
+          p_reason: params.reason ?? null,
+          p_note: params.note ?? null,
+          p_expected_financial_version: Number(trip.financial_version ?? 0),
+          p_expected_fare: trip.phase5_policy_version && trip.phase5_driver_fare_basis_cents
+            ? trip.phase5_driver_fare_basis_cents / 100 : trip.final_fare ?? trip.fare_amount,
+          p_distance_audit: "Completed trip shadow recovery.",
+        });
+        if (!replay.ok) return {
+          ok: false, status: replay.status, error: replay.error,
+          code: replay.code, referenceId: replay.referenceId,
+        };
+        if (replay.result.replayed === true) {
+          if (phase2Mode() !== "OFF") await postShadowTripCommission(params.tripId, params.actorId, true);
+        }
+      }
       return { ok: false, status: 409, error: "Trip has already been completed." };
     }
     if (trip.status === "cancelled") {
@@ -179,12 +255,17 @@ export async function completeTripServer(params: {
     };
   }
 
-  const lockedFare = buildLockedFareBreakdown({
-    finalFare: trip.final_fare,
-    fareAmount: trip.fare_amount,
-    estimatedFare: trip.estimated_fare,
-    originalFare: trip.original_fare,
-  });
+  const phase5DriverFare = trip.phase5_policy_version && trip.phase5_driver_fare_basis_cents
+    ? trip.phase5_driver_fare_basis_cents / 100
+    : null;
+  const lockedFare = buildLockedFareBreakdown(phase5DriverFare
+    ? { finalFare: phase5DriverFare, fareAmount: phase5DriverFare, estimatedFare: phase5DriverFare, originalFare: phase5DriverFare }
+    : {
+        finalFare: trip.final_fare,
+        fareAmount: trip.fare_amount,
+        estimatedFare: trip.estimated_fare,
+        originalFare: trip.original_fare,
+      });
   if (!lockedFare) {
     return { ok: false, status: 400, error: "Trip fare is missing or invalid." };
   }
@@ -220,125 +301,35 @@ export async function completeTripServer(params: {
     }.`;
   }
 
-  const commissionResult = await applyTripCommissionServer({
-    tripId: params.tripId,
-    driverId: trip.driver_id,
-    fareAmount,
-    createdBy: params.actorId,
-    rideOptionId: trip.ride_option,
+  const financeMode = phase2Mode();
+  const completed = await callHardenedRpc<AtomicCompletionResult>(supabaseAdmin, "phase05b_complete_trip", {
+    p_trip_id: params.tripId,
+    p_actor_id: params.actorId,
+    p_expected_driver_id: params.driverId ?? trip.driver_id,
+    p_mode: params.mode,
+    p_otp: params.otp?.trim() || null,
+    p_reason: params.reason ?? null,
+    p_note: params.note ?? null,
+    p_expected_financial_version: Number(trip.financial_version ?? 0),
+    p_expected_fare: phase5DriverFare ?? fareAmount,
+    p_distance_audit: distanceAudit,
   });
-  if (!commissionResult.ok) {
-    return { ok: false, status: 500, error: `Commission failed, so the trip was not completed: ${commissionResult.error}` };
+  if (!completed.ok) {
+    return {
+      ok: false,
+      status: completed.status,
+      error: completed.error,
+      code: completed.code,
+      referenceId: completed.referenceId,
+    };
+  }
+  const commissionResult = completed.result;
+
+  if (financeMode !== "OFF") {
+    await postShadowTripCommission(params.tripId, params.actorId, commissionResult.replayed);
   }
 
-  const now = new Date().toISOString();
-  const update = {
-    status: "completed",
-    completed_at: now,
-    ...buildCompletionAuditFields({
-      mode: params.mode,
-      actorId: params.actorId,
-      now,
-      note: params.note,
-      reason: params.reason,
-    }),
-    fare_amount: fare.finalFare,
-    final_fare: fare.finalFare,
-    estimated_fare: fare.estimatedFare,
-    fare_adjustment_amount: fare.adjustmentAmount,
-    fare_adjustment_reason: fare.adjustmentAmount > 0 ? "active_stop_added" : "finalized_without_adjustment",
-    fare_finalized_at: now,
-    actual_distance_km: trip.actual_distance_km ?? trip.route_distance_km ?? trip.distance_km ?? null,
-    actual_duration_min: trip.actual_duration_min ?? trip.route_duration_min ?? trip.duration_min ?? null,
-    actual_route_source:
-      params.mode === "admin"
-        ? "admin_override"
-        : trip.actual_distance_km != null
-          ? "gps_audit"
-          : "route_estimate",
-  };
-
-  const updated = await supabaseAdmin
-    .from("trips")
-    .update(update)
-    .eq("id", params.tripId)
-    .eq("status", "ongoing")
-    .select("id")
-    .maybeSingle();
-
-  if (updated.error && missingCompletionColumn(updated.error)) {
-    if (params.mode === "admin" || params.mode === "bypass") {
-      console.error("[trip-complete] completion update schema is incomplete", {
-        tripId: params.tripId,
-        mode: params.mode,
-        code: updated.error.code,
-        message: updated.error.message,
-      });
-      return {
-        ok: false,
-        status: 503,
-        error: completionSchemaErrorMessage(params.mode),
-      };
-    }
-    const legacy = await supabaseAdmin
-      .from("trips")
-      .update({
-        status: "completed",
-        end_otp_verified: true,
-        fare_amount: fare.finalFare,
-      })
-      .eq("id", params.tripId)
-      .eq("status", "ongoing")
-      .select("id")
-      .maybeSingle();
-    if (legacy.error) return { ok: false, status: 500, error: legacy.error.message };
-  } else if (updated.error) {
-    return { ok: false, status: 500, error: updated.error.message };
-  } else if (!updated.data?.id) {
-    return { ok: false, status: 409, error: "Trip status changed while it was being completed." };
-  }
-
-  await supabaseAdmin.from("drivers").update({ busy: false }).eq("id", trip.driver_id);
-
-  const completionLabel =
-    params.mode === "otp"
-      ? "End OTP verified"
-      : params.mode === "bypass"
-        ? `Driver confirmed the trip ended and fare was received without End OTP: ${params.reason}`
-        : `Completed by admin: ${String(params.note ?? "").trim()}`;
-  await supabaseAdmin.from("trip_events").insert([
-    {
-      trip_id: params.tripId,
-      event_type:
-        params.mode === "otp"
-          ? "end_otp_verified"
-          : params.mode === "bypass"
-            ? "end_otp_bypassed"
-            : "trip_completed_admin",
-      message: completionLabel,
-      old_status: "ongoing",
-      new_status: params.mode === "otp" ? "ongoing" : "completed",
-      created_by: params.actorId,
-    },
-    {
-      trip_id: params.tripId,
-      event_type: "fare_finalized",
-      message: `Final fare confirmed at R${fare.finalFare}.`,
-      old_status: "ongoing",
-      new_status: "ongoing",
-      created_by: params.actorId,
-    },
-    {
-      trip_id: params.tripId,
-      event_type: "trip_completed",
-      message: `${distanceAudit} ${completionLabel}.`,
-      old_status: "ongoing",
-      new_status: "completed",
-      created_by: params.actorId,
-    },
-  ]);
-
-  await Promise.all([
+  if (!commissionResult.replayed && !isOutboxDeliveryEnabled()) await Promise.all([
     notifyCustomerForTrip(
       params.tripId,
       "Trip completed",
@@ -366,11 +357,11 @@ export async function completeTripServer(params: {
     message: "Trip completed successfully.",
     fare,
     commission: {
-      skipped: commissionResult.skipped,
-      fareAmount: commissionResult.calc.fareAmount,
-      commissionPct: commissionResult.calc.commissionPct,
-      commissionAmount: commissionResult.calc.commissionAmount,
-      driverNet: commissionResult.calc.driverNet,
+      skipped: commissionResult.replayed,
+      fareAmount: Number(commissionResult.fare_amount),
+      commissionPct: Number(commissionResult.commission_pct),
+      commissionAmount: Number(commissionResult.commission_amount),
+      driverNet: Number(commissionResult.driver_net),
     },
     elapsedSeconds,
     minRequiredSeconds,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { requireAdminUser, isFinancialAdminRole } from "@/lib/auth/admin";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { supabaseAdmin } = auth;
+    if (!isFinancialAdminRole(auth.profile.role)) return NextResponse.json({ error: "Authorized document reviewer required." }, { status: 403 });
     const driverId = req.nextUrl.searchParams.get("driverId");
 
     if (!driverId) {

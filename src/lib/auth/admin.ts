@@ -2,6 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 
 export const ALLOWED_ADMIN_ROLES = ["owner", "admin", "dispatcher", "support"] as const;
 type AdminRole = (typeof ALLOWED_ADMIN_ROLES)[number];
+export type FinancialAdminRole = "owner" | "admin";
+
+export function isFinancialAdminRole(value: unknown): value is FinancialAdminRole {
+  return value === "owner" || value === "admin";
+}
 
 function isAllowedAdminRole(value: unknown): value is AdminRole {
   return typeof value === "string" && ALLOWED_ADMIN_ROLES.includes(value as AdminRole);

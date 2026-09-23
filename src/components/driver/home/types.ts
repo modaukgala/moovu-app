@@ -43,6 +43,7 @@ export type CurrentTrip = {
   created_at: string | null;
   driver_arrived_at?: string | null;
   no_show_eligible_at?: string | null;
+  no_show_authoritatively_eligible?: boolean;
   ride_option?: string | null;
   stops?: unknown;
   original_fare?: number | null;
@@ -104,6 +105,8 @@ export type DriverEarningsSnapshot = {
 export type TripActionResponse = {
   ok?: boolean;
   error?: string;
+  code?: string;
+  referenceId?: string;
   fare?: { finalFare?: number };
   commission?: { driverNet?: number; commissionAmount?: number };
 };

@@ -1,3 +1,4 @@
+import { phase6LegacyMutation } from "@/lib/drivers/phase6LegacyRoutes";
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import {
@@ -25,6 +26,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export async function POST(req: Request) {
+  const retirement = phase6LegacyMutation(req);
+  if (retirement) return retirement;
   try {
     const auth = await requireAdminUser(req);
     if (!auth.ok) {

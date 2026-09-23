@@ -1,0 +1,18 @@
+
+> moovu-kasi@0.1.0 dev
+> next dev --port 3100
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3100
+- Network:       http://192.168.0.29:3100
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 1775ms
+ GET / 200 in 1792ms (compile: 1443ms, render: 349ms)
+ GET / 200 in 719ms (compile: 12ms, render: 707ms)
+○ Compiling /customer/auth ...
+ GET /customer/auth?next=/book 200 in 3.2s (compile: 3.1s, render: 91ms)
+ GET /driver/login 200 in 3.1s (compile: 3.0s, render: 97ms)
+ GET /driver/apply 200 in 958ms (compile: 873ms, render: 85ms)
+ GET /admin/login 200 in 1915ms (compile: 1812ms, render: 103ms)

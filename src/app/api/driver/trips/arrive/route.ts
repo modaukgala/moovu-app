@@ -5,6 +5,8 @@ import {
   isFreshHeartbeat,
 } from "@/lib/geo/tripGuards";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
+import { callHardenedRpc } from "@/lib/server/hardenedRpc";
+import { isOutboxDeliveryEnabled } from "@/lib/notifications/outboxDelivery";
 
 function roundedKm(value: number | null) {
   return value == null ? null : Math.round(value * 100) / 100;
@@ -144,38 +146,35 @@ export async function POST(req: Request) {
       distanceAudit = `Driver marked arrived ${kmAway.toFixed(2)} km from pickup${freshnessNote}.`;
     }
 
-    const { error: updateError } = await supabaseAdmin
-      .from("trips")
-      .update({
-        status: "arrived",
-      })
-      .eq("id", tripId);
-
-    if (updateError) {
+    const arrival = await callHardenedRpc<{
+      trip_id: string;
+      distance_m: number | null;
+      location_age_seconds: number | null;
+      no_show_evidence_qualified: boolean;
+      replayed: boolean;
+    }>(supabaseAdmin, "phase05b_mark_arrived", {
+      p_trip_id: tripId,
+      p_driver_id: driverId,
+      p_actor_id: user.id,
+      p_driver_lat: driver.lat == null ? null : Number(driver.lat),
+      p_driver_lng: driver.lng == null ? null : Number(driver.lng),
+      p_location_at: driver.last_seen,
+    });
+    if (!arrival.ok) {
       return NextResponse.json(
-        { ok: false, error: updateError.message },
-        { status: 500 }
+        { ok: false, error: arrival.error, code: arrival.code, referenceId: arrival.referenceId },
+        { status: arrival.status },
       );
     }
 
-    try {
-      await supabaseAdmin.from("trip_events").insert({
-        trip_id: tripId,
-        event_type: "driver_arrived",
-        message: distanceAudit,
-        old_status: "assigned",
-        new_status: "arrived",
-      });
-    } catch {}
-
-    await notifyCustomerForTrip(
+    if (!arrival.result.replayed && !isOutboxDeliveryEnabled()) await notifyCustomerForTrip(
       tripId,
       "Driver Arrived",
       "Your driver has arrived at the pickup point.",
       `/ride/${tripId}`
     );
 
-    await notifyAdmins(
+    if (!arrival.result.replayed && !isOutboxDeliveryEnabled()) await notifyAdmins(
       "Driver Arrived",
       `Driver arrived for trip ${tripId}.`,
       "/admin/trips"
@@ -186,6 +185,7 @@ export async function POST(req: Request) {
       message: "Trip marked as arrived.",
       kmAway: roundedKm(kmAway),
       distanceAudit,
+      noShowEvidenceQualified: arrival.result.no_show_evidence_qualified,
     });
   } catch (error: unknown) {
     return NextResponse.json(

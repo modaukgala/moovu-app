@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
 import { DISPATCH_CONFIG } from "@/lib/dispatch/config";
 import { haversineKm } from "@/lib/dispatch/driverScoring";
 import type { DispatchCandidate, DispatchScoreBreakdown } from "@/lib/dispatch/types";
 import { isDriverEligibleForRideOption } from "@/lib/drivers/rideEligibility";
+import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
+import { phase6NewWork } from "@/lib/drivers/phase6NewWork";
+import { readOfferAttempts, untriedCandidatesFirst, type OfferAttempt } from "@/lib/dispatch/attemptHistory";
 
 type CandidateRow = {
   id: string;
@@ -92,6 +94,7 @@ export async function getDispatchCandidates(params: {
   pickupLng: number;
   rideOption?: string | null;
   radiusKm: number;
+  cycle: number;
   excludedDriverIds?: string[];
 }) {
   const { supabase, tripId, pickupLat, pickupLng, rideOption, radiusKm } = params;
@@ -116,8 +119,6 @@ export async function getDispatchCandidates(params: {
     if (driver.profile_completed === false) return false;
     if (!["approved", "active"].includes(String(driver.status ?? ""))) return false;
     if (driver.verification_status && driver.verification_status !== "approved") return false;
-    if (!["active", "grace"].includes(String(driver.subscription_status ?? ""))) return false;
-    if (!driver.subscription_expires_at || new Date(driver.subscription_expires_at).getTime() <= now) return false;
     if (driver.lat == null || driver.lng == null) return false;
     if (!isDriverEligibleForRideOption(driver.seating_capacity, rideOption)) return false;
     return haversineKm(pickupLat, pickupLng, Number(driver.lat), Number(driver.lng)) <= radiusKm;
@@ -136,25 +137,43 @@ export async function getDispatchCandidates(params: {
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").in("driver_id", driverIds),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").in("driver_id", driverIds),
     supabase.from("trips").select("driver_id").in("driver_id", driverIds).in("status", ["assigned", "arrived", "ongoing"]),
-    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).in("driver_id", driverIds).eq("status", "declined"),
+    readOfferAttempts(supabase, tripId, driverIds),
     supabase.from("driver_trip_offers").select("driver_id").in("driver_id", driverIds).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()),
   ]);
 
-  const fatal = [walletsResult.error, activeTripsResult.error, activeOfferResult.error].find(Boolean);
+  const fatal = [walletsResult.error, activeTripsResult.error, declinedResult.error, activeOfferResult.error].find(Boolean);
   if (fatal) throw new Error(fatal.message);
 
   const wallets = new Map(((walletsResult.data ?? []) as WalletRow[]).map((row) => [row.driver_id, row]));
+  const authorityResults = await Promise.all(prelim.map((driver) => resolveDriverFinanceAuthority(supabase, {
+    driverId: driver.id,
+    subscriptionStatus: driver.subscription_status,
+    subscriptionExpiresAt: driver.subscription_expires_at,
+    legacyBalanceDue: wallets.get(driver.id)?.balance_due,
+  })));
+  const unavailable = authorityResults.find((result) => !result.ok);
+  if (unavailable && !unavailable.ok) throw new Error(unavailable.error);
+  const onboardingResults = await Promise.all(prelim.map(driver => phase6NewWork(supabase, driver.id)));
+  const onboardingUnavailable = onboardingResults.find(result => !result.ok);
+  if (onboardingUnavailable) throw new Error(onboardingUnavailable.error ?? "Onboarding eligibility unavailable.");
+  const onboardingEligible = new Set(prelim.filter((_, index) => onboardingResults[index].eligible).map(driver => driver.id));
+  const financeByDriver = new Map(prelim.map((driver, index) => [
+    driver.id,
+    authorityResults[index].ok ? authorityResults[index].authority : null,
+  ]));
   const qualities = new Map(((qualityResult.data ?? []) as QualityRow[]).map((row) => [row.driver_id, row]));
   const stats = new Map(((statsResult.data ?? []) as OfferStatsRow[]).map((row) => [row.driver_id, row]));
   const activeDriverIds = new Set((activeTripsResult.data ?? []).map((row) => row.driver_id).filter(Boolean));
-  const declinedDriverIds = new Set((declinedResult.data ?? []).map((row) => row.driver_id).filter(Boolean));
+  const history = (declinedResult.data ?? []) as OfferAttempt[];
+  const declinedDriverIds = new Set(history.filter(row => row.status === "declined").map(row => row.driver_id));
   const activeOfferDriverIds = new Set((activeOfferResult.data ?? []).map((row) => row.driver_id).filter(Boolean));
 
-  return prelim
+  const eligible = prelim
+    .filter(driver => onboardingEligible.has(driver.id))
     .filter((driver) => !activeDriverIds.has(driver.id))
     .filter((driver) => !declinedDriverIds.has(driver.id))
     .filter((driver) => !activeOfferDriverIds.has(driver.id))
-    .filter((driver) => Number(wallets.get(driver.id)?.balance_due ?? 0) < DRIVER_COMMISSION_LOCK_LIMIT)
+    .filter((driver) => financeByDriver.get(driver.id)?.financiallyEligible === true)
     .map((driver): DispatchCandidate => {
       const distanceKm = round2(haversineKm(pickupLat, pickupLng, Number(driver.lat), Number(driver.lng)));
       const scoreBreakdown = scoreCandidate({
@@ -172,6 +191,7 @@ export async function getDispatchCandidates(params: {
       };
     })
     .sort((a, b) => b.score - a.score);
+  return untriedCandidatesFirst(eligible, history, params.cycle);
 }
 
 export async function getPreferredDispatchCandidate(params: {
@@ -181,6 +201,7 @@ export async function getPreferredDispatchCandidate(params: {
   pickupLat: number;
   pickupLng: number;
   rideOption?: string | null;
+  cycle: number;
 }) {
   const { supabase, tripId, driverId, pickupLat, pickupLng, rideOption } = params;
   const now = Date.now();
@@ -207,15 +228,13 @@ export async function getPreferredDispatchCandidate(params: {
   if (row.profile_completed === false) return { ok: false as const, error: "Driver profile is incomplete." };
   if (!["approved", "active"].includes(String(row.status ?? ""))) return { ok: false as const, error: "Driver is not approved or active." };
   if (row.verification_status && row.verification_status !== "approved") return { ok: false as const, error: "Driver verification is not approved." };
-  if (!["active", "grace"].includes(String(row.subscription_status ?? ""))) return { ok: false as const, error: "Driver subscription is not active." };
-  if (!row.subscription_expires_at || new Date(row.subscription_expires_at).getTime() <= now) return { ok: false as const, error: "Driver subscription has expired." };
   if (row.lat == null || row.lng == null) return { ok: false as const, error: "Driver GPS location is missing." };
   if (!isDriverEligibleForRideOption(row.seating_capacity, rideOption)) return { ok: false as const, error: "Driver vehicle does not match this ride type." };
 
   const [walletResult, activeTripsResult, declinedResult, activeOfferResult, qualityResult, statsResult] = await Promise.all([
     supabase.from("driver_wallets").select("driver_id,balance_due").eq("driver_id", driverId).maybeSingle(),
     supabase.from("trips").select("driver_id").eq("driver_id", driverId).in("status", ["assigned", "arrived", "ongoing"]).limit(1),
-    supabase.from("driver_trip_offers").select("driver_id").eq("trip_id", tripId).eq("driver_id", driverId).eq("status", "declined").limit(1),
+    readOfferAttempts(supabase, tripId, [driverId]),
     supabase.from("driver_trip_offers").select("driver_id").eq("driver_id", driverId).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()).limit(1),
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").eq("driver_id", driverId).maybeSingle(),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").eq("driver_id", driverId).maybeSingle(),
@@ -223,9 +242,22 @@ export async function getPreferredDispatchCandidate(params: {
 
   const fatal = [walletResult.error, activeTripsResult.error, declinedResult.error, activeOfferResult.error].find(Boolean);
   if (fatal) throw new Error(fatal.message);
-  if (Number((walletResult.data as WalletRow | null)?.balance_due ?? 0) >= DRIVER_COMMISSION_LOCK_LIMIT) return { ok: false as const, error: "Driver commission balance is locked." };
+  const finance = await resolveDriverFinanceAuthority(supabase, {
+    driverId,
+    subscriptionStatus: row.subscription_status,
+    subscriptionExpiresAt: row.subscription_expires_at,
+    legacyBalanceDue: Number((walletResult.data as WalletRow | null)?.balance_due ?? 0),
+  });
+  if (!finance.ok) return { ok: false as const, error: finance.error };
+  const onboarding = await phase6NewWork(supabase, driverId);
+  if (!onboarding.ok || !onboarding.eligible) return { ok: false as const, error: onboarding.error ?? "Onboarding unavailable." };
+  if (!finance.authority.financiallyEligible) return { ok: false as const, error: finance.authority.subscriptionRequired
+    ? "Driver subscription or commission eligibility is inactive."
+    : "Driver Phase 2 commission debt is at or above the R50 limit." };
   if ((activeTripsResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already has an active trip." };
-  if ((declinedResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already declined this trip." };
+  if (untriedCandidatesFirst([{ driverId }], (declinedResult.data ?? []) as OfferAttempt[], params.cycle).length === 0) {
+    return { ok: false as const, error: "Driver already declined or was attempted in this offer round." };
+  }
   if ((activeOfferResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already has another active trip offer." };
 
   const distanceKm = round2(haversineKm(pickupLat, pickupLng, Number(row.lat), Number(row.lng)));

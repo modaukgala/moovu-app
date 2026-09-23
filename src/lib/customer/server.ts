@@ -108,9 +108,10 @@ async function ensureCustomerProfile(params: {
       .single();
 
     if (legacyInsertError || !legacyInserted) {
+      console.error("[customer-identity] legacy persistence failed", legacyInsertError);
       return {
         ok: false as const,
-        error: legacyInsertError?.message || "Failed to rebuild customer profile.",
+        error: "We couldn't restore your account details. Please try again or contact MOOVU support.",
       };
     }
 
@@ -121,9 +122,10 @@ async function ensureCustomerProfile(params: {
   }
 
   if (insertError || !inserted) {
+    console.error("[customer-identity] persistence failed", insertError);
     return {
       ok: false as const,
-      error: insertError?.message || "Failed to rebuild customer profile.",
+      error: "We couldn't restore your account details. Please try again or contact MOOVU support.",
     };
   }
 
@@ -159,7 +161,8 @@ export async function getAuthenticatedCustomer(req: Request) {
     .maybeSingle();
 
   if (customerError) {
-    return { ok: false as const, status: 500, error: customerError.message };
+    console.error("[customer-identity] lookup failed", customerError);
+    return { ok: false as const, status: 500, error: "We couldn't load your account details. Please try again." };
   }
 
   let customer = existingCustomer;

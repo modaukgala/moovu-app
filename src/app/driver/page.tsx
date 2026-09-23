@@ -23,7 +23,6 @@ import { EndOtpBypassDialog, SubscriptionRequiredDialog, TripCompletionOverlay }
 import FloatingCustomerChat from "@/components/driver/home/FloatingCustomerChat";
 import NavigationChooser from "@/components/driver/home/NavigationChooser";
 import TripOfferPanel from "@/components/driver/home/TripOfferPanel";
-import { getNoShowFee } from "@/lib/finance/cancellationFees";
 import {
   DRIVER_COMMISSION_LOCK_LIMIT,
   DRIVER_COMMISSION_WARNING_RATIO,
@@ -339,6 +338,7 @@ export default function DriverHomePage() {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        "X-MOOVU-Feedback-Mode": "local",
       },
       body: JSON.stringify({ online: wantOnline }),
     });
@@ -560,6 +560,7 @@ export default function DriverHomePage() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "X-MOOVU-Feedback-Mode": "local",
         },
         body: JSON.stringify({
           tripId: offer.id,
@@ -613,6 +614,7 @@ export default function DriverHomePage() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "X-MOOVU-Feedback-Mode": "local",
         },
         body: JSON.stringify(payload),
       });
@@ -657,11 +659,11 @@ export default function DriverHomePage() {
   }
 
   async function arriveTrip(tripId: string) {
-    await tripAction("/api/driver/trips/arrive", { tripId }, "Marked as arrived âœ…");
+    await tripAction("/api/driver/trips/arrive", { tripId }, "Marked as arrived");
   }
 
   async function startTrip(tripId: string, otp: string) {
-    await tripAction("/api/driver/trips/start", { tripId, otp }, "Trip started âœ…");
+    await tripAction("/api/driver/trips/start", { tripId, otp }, "Trip started");
   }
 
   async function completeTrip(
@@ -711,6 +713,7 @@ export default function DriverHomePage() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "X-MOOVU-Feedback-Mode": "local",
         },
         body: JSON.stringify({ tripId: completedFareSummary.tripId }),
       });
@@ -1130,10 +1133,6 @@ export default function DriverHomePage() {
       Math.ceil((new Date(currentTrip.no_show_eligible_at).getTime() - nowMs) / 1000)
     );
   }, [currentTrip?.no_show_eligible_at, nowMs]);
-  const currentNoShowFee = useMemo(
-    () => getNoShowFee(currentTrip?.ride_option),
-    [currentTrip?.ride_option]
-  );
   const offerStops = useMemo(() => parseTripStops(offer?.stops), [offer?.stops]);
   const currentTripStops = useMemo(() => parseTripStops(currentTrip?.stops), [currentTrip?.stops]);
   const pickupInstruction =
@@ -1159,6 +1158,7 @@ export default function DriverHomePage() {
 
   return (
     <main className="moovu-page moovu-driver-shell text-black">
+      <div className="mx-auto my-3 max-w-6xl rounded-xl border bg-white p-4"><a className="font-semibold underline" href="/driver/onboarding">Complete Driver re-registration / view application</a><p className="mt-1 text-sm">Deadline: 30 November 2026. Incomplete re-registration blocks new work from 1 December 2026; active trips continue.</p></div>
       {driverActionError && (
         <CenteredMessageBox
           title="Action needs attention"
@@ -1529,10 +1529,12 @@ export default function DriverHomePage() {
                             "No-show timer starts after the arrival event is recorded."
                           ) : noShowSecondsLeft > 0 ? (
                             `Customer no-show can be marked in ${Math.ceil(noShowSecondsLeft / 60)} min.`
+                          ) : !currentTrip.no_show_authoritatively_eligible ? (
+                            "Checking server eligibility for no-show. Please wait a moment."
                           ) : (
                             <div className="space-y-3">
                               <p className="font-semibold">
-                                Customer no-show is now eligible. No-show fee: R{currentNoShowFee.feeAmount}. Driver payout: R{currentNoShowFee.driverAmount}.
+                                Customer no-show is now eligible. The server will assess the applicable fee and earned Driver compensation.
                               </p>
                               <button
                                 type="button"

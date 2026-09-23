@@ -177,6 +177,7 @@ export async function dispatchTrip(params: {
         pickupLat: Number(trip.pickup_lat),
         pickupLng: Number(trip.pickup_lng),
         rideOption: trip.ride_option,
+        cycle,
       });
       candidates = preferred.ok ? [preferred.candidate] : [];
       if (!preferred.ok) {
@@ -195,6 +196,7 @@ export async function dispatchTrip(params: {
         pickupLng: Number(trip.pickup_lng),
         rideOption: trip.ride_option,
         radiusKm,
+        cycle,
       });
     }
   } catch (error: unknown) {

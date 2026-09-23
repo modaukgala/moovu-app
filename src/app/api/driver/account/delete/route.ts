@@ -1,9 +1,12 @@
+import { phase6LegacyMutation } from "@/lib/drivers/phase6LegacyRoutes";
 import { NextResponse } from "next/server";
 import { deleteDriverAccount } from "@/lib/account-deletion/service";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getDriverIdForUser, getUserFromBearer } from "@/app/api/driver/utils";
 
 export async function POST(req: Request) {
+  const retirement = phase6LegacyMutation(req);
+  if (retirement) return retirement;
   // Apple Guideline 5.1.1(v) Account Deletion Compliance
   const user = await getUserFromBearer(req);
 

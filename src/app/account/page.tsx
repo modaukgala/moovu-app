@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, CreditCard, FileText, Headphones, LogOut, Pencil, ShieldCheck, Trash2 } from "lucide-react";
+import { Bell, CreditCard, FileText, Gift, Headphones, LogOut, Pencil, ShieldCheck, Trash2 } from "lucide-react";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CustomerProfileHeader from "@/components/customer/CustomerProfileHeader";
@@ -173,6 +173,7 @@ export default function CustomerAccountPage() {
           <CustomerSettingsRow icon={Pencil} label={editing ? "Close personal details" : "Personal details"} detail={loading ? "Loading your profile" : "Name and verified contact details"} onClick={() => setEditing((value) => !value)} />
           <CustomerSettingsRow href="/account/security" icon={ShieldCheck} label="Security" detail="Email and cellphone verification" />
           <CustomerSettingsRow href="/account/payment-methods" icon={CreditCard} label="Payment methods" detail="Cash/Transfer is currently available" />
+          <CustomerSettingsRow href="/account/moovu-plus" icon={Gift} label="MOOVU+ and credits" detail="Membership, promotional credit and referrals" />
           <CustomerSettingsRow href="/book" icon={Bell} label="Notifications" detail="Manage trip updates on this device" />
         </section>
 

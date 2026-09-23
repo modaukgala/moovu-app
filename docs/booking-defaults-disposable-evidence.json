@@ -1,0 +1,1782 @@
+{
+  "date": "2026-09-16",
+  "scope": "DISPOSABLE_ONLY",
+  "project": "tangtlmdpnvmoviwrgvd",
+  "production": "mvazbszenqahgqpznhhq",
+  "productionMutations": false,
+  "productionActorProfileAlignment": {
+    "createdByForeignKey": "FOREIGN KEY (created_by) REFERENCES profiles(id)",
+    "validated": true,
+    "activeCustomersWithAuthId": 1213,
+    "missingActorProfiles": 1213,
+    "disposableCreatedByForeignKeyAbsent": true,
+    "positiveHttpFixtureCreatedActorProfile": true,
+    "productionRecoveryWithOnlyDefaultsRepair": "NOT_SUFFICIENT"
+  },
+  "run": "b2ac0543",
+  "httpChecks": {
+    "passed": 25,
+    "failed": 2,
+    "failedChecks": [
+      "No-subscription nearest driver can receive work",
+      "Legacy attempted array records offered driver"
+    ]
+  },
+  "sqlDefaultMechanism": {
+    "passed": 4,
+    "failed": 0
+  },
+  "debtReservationProbe": [
+    {
+      "result": {
+        "pass": true,
+        "finance": {
+          "mode": "AUTHORITATIVE",
+          "driver_id": "ae628bf3-09c4-4c51-be08-fc93332faca4",
+          "net_owed_cents": 6500,
+          "configured_mode": "AUTHORITATIVE",
+          "phase2_eligible": false,
+          "contract_version": "phase-2-v1",
+          "debt_limit_cents": 5000,
+          "legacy_debt_cents": 0,
+          "financially_eligible": false,
+          "commission_debt_cents": 6500,
+          "subscription_required": false,
+          "authoritative_eligible": false,
+          "unapplied_credit_cents": 0,
+          "authoritative_effective_from": "2026-09-15T18:44:31.016571+00:00"
+        },
+        "message": "Driver is not financially eligible for new work",
+        "sqlstate": "P0001"
+      }
+    }
+  ],
+  "tripInvariants": [
+    {
+      "result": {
+        "offers": [
+          {
+            "status": "expired",
+            "driver_id": "7942ed4a-0302-4441-b25a-e8055305b759",
+            "accept_seconds": 7.944595,
+            "escalation_seconds": 7.944595
+          },
+          {
+            "status": "declined",
+            "driver_id": "7942ed4a-0302-4441-b25a-e8055305b759",
+            "accept_seconds": 25,
+            "escalation_seconds": 25
+          }
+        ],
+        "trip_id": "fb3d3203-bc29-4b40-bf58-18349adb8ec7",
+        "durable_jobs": 0,
+        "booking_audits": 1,
+        "completion_events": 0,
+        "defaulted_columns": {
+          "id": "fb3d3203-bc29-4b40-bf58-18349adb8ec7",
+          "status": "offered",
+          "ride_type": "now",
+          "created_at": "2026-09-16T11:06:12.49689+00:00",
+          "otp_verified": false,
+          "commission_pct": 5,
+          "dispatch_cycle": 2,
+          "dispatch_state": "searching",
+          "issue_reported": false,
+          "payment_method": "cash",
+          "schedule_status": "none",
+          "end_otp_verified": false,
+          "dispatch_sequence": 2,
+          "financial_version": 0,
+          "start_otp_verified": false,
+          "cancellation_fee_amount": 0,
+          "dispatch_priority_score": 0,
+          "cancellation_moovu_amount": 0,
+          "completed_without_end_otp": false,
+          "driver_reliability_impact": 0,
+          "cancellation_driver_amount": 0,
+          "offer_attempted_driver_ids": [],
+          "customer_reliability_impact": 0,
+          "cancelled_within_free_window": false
+        },
+        "null_required_columns": [],
+        "financial_transactions": 0,
+        "phase5_credit_redemptions": 0,
+        "legacy_wallet_transactions": 0
+      }
+    },
+    {
+      "result": {
+        "offers": [
+          {
+            "status": "expired",
+            "driver_id": "9228db00-a31d-4253-93b5-980b7fef8bb0",
+            "accept_seconds": 8.274879,
+            "escalation_seconds": 8.274879
+          },
+          {
+            "status": "declined",
+            "driver_id": "9228db00-a31d-4253-93b5-980b7fef8bb0",
+            "accept_seconds": 25,
+            "escalation_seconds": 25
+          }
+        ],
+        "trip_id": "6afa323e-0874-4910-bd42-bb0f396129a0",
+        "durable_jobs": 2,
+        "booking_audits": 1,
+        "completion_events": 0,
+        "defaulted_columns": {
+          "id": "6afa323e-0874-4910-bd42-bb0f396129a0",
+          "status": "offered",
+          "ride_type": "now",
+          "created_at": "2026-09-16T11:08:10.399772+00:00",
+          "otp_verified": false,
+          "commission_pct": 5,
+          "dispatch_cycle": 2,
+          "dispatch_state": "searching",
+          "issue_reported": false,
+          "payment_method": "cash",
+          "schedule_status": "none",
+          "end_otp_verified": false,
+          "dispatch_sequence": 2,
+          "financial_version": 0,
+          "start_otp_verified": false,
+          "cancellation_fee_amount": 0,
+          "dispatch_priority_score": 0,
+          "cancellation_moovu_amount": 0,
+          "completed_without_end_otp": false,
+          "driver_reliability_impact": 0,
+          "cancellation_driver_amount": 0,
+          "offer_attempted_driver_ids": [],
+          "customer_reliability_impact": 0,
+          "cancelled_within_free_window": false
+        },
+        "null_required_columns": [],
+        "financial_transactions": 0,
+        "phase5_credit_redemptions": 0,
+        "legacy_wallet_transactions": 0
+      }
+    }
+  ],
+  "productionFunction": {
+    "hash": "5199da6a1dc1cf78208104829d6c47d6",
+    "security": true,
+    "config": [
+      "search_path=public, extensions, pg_temp"
+    ],
+    "acl": "{postgres=X/postgres,service_role=X/postgres}"
+  },
+  "disposableFunction": {
+    "hash": "2995edfe238920f45c67ffe730f76005",
+    "security": true,
+    "config": [
+      "search_path=public, extensions, pg_temp"
+    ],
+    "acl": "{postgres=X/postgres,service_role=X/postgres}"
+  },
+  "productionColumns": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "default": "uuid_generate_v4()",
+      "notnull": true
+    },
+    {
+      "name": "created_by",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "driver_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "rider_name",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "rider_phone",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "pickup_address",
+      "type": "text",
+      "default": null,
+      "notnull": true
+    },
+    {
+      "name": "dropoff_address",
+      "type": "text",
+      "default": null,
+      "notnull": true
+    },
+    {
+      "name": "scheduled_for",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "payment_method",
+      "type": "text",
+      "default": "'cash'::text",
+      "notnull": true
+    },
+    {
+      "name": "fare_amount",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "default": "'requested'::text",
+      "notnull": true
+    },
+    {
+      "name": "cancel_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "default": "now()",
+      "notnull": true
+    },
+    {
+      "name": "distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "pickup_lat",
+      "type": "numeric",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "pickup_lng",
+      "type": "numeric",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dropoff_lat",
+      "type": "numeric",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dropoff_lng",
+      "type": "numeric",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "offer_expires_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "offer_status",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "offer_attempted_driver_ids",
+      "type": "uuid[]",
+      "default": "'{}'::uuid[]",
+      "notnull": true
+    },
+    {
+      "name": "commission_pct",
+      "type": "numeric(5,2)",
+      "default": "5.00",
+      "notnull": false
+    },
+    {
+      "name": "commission_amount",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "driver_net_earnings",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "start_otp",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "end_otp",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "start_otp_verified",
+      "type": "boolean",
+      "default": "false",
+      "notnull": false
+    },
+    {
+      "name": "end_otp_verified",
+      "type": "boolean",
+      "default": "false",
+      "notnull": false
+    },
+    {
+      "name": "otp_verified",
+      "type": "boolean",
+      "default": "false",
+      "notnull": false
+    },
+    {
+      "name": "customer_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "customer_auth_user_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "issue_reported",
+      "type": "boolean",
+      "default": "false",
+      "notnull": true
+    },
+    {
+      "name": "issue_report_note",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancelled_by",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_fee_amount",
+      "type": "numeric(12,2)",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "cancellation_policy_code",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "ride_type",
+      "type": "text",
+      "default": "'now'::text",
+      "notnull": true
+    },
+    {
+      "name": "schedule_status",
+      "type": "text",
+      "default": "'none'::text",
+      "notnull": true
+    },
+    {
+      "name": "scheduled_release_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "released_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_priority_score",
+      "type": "numeric(10,2)",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "completed_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "ride_option",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_type",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancelled_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_driver_amount",
+      "type": "numeric(10,2)",
+      "default": "0",
+      "notnull": false
+    },
+    {
+      "name": "cancellation_moovu_amount",
+      "type": "numeric(10,2)",
+      "default": "0",
+      "notnull": false
+    },
+    {
+      "name": "free_cancellation_until",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "driver_arrived_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "no_show_eligible_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_breakdown",
+      "type": "jsonb",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "surge_label",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "surge_multiplier",
+      "type": "numeric(6,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "remote_pickup_fee",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "waiting_fee_amount",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "chargeable_waiting_minutes",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "long_distance_uplift_pct",
+      "type": "numeric(6,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "long_distance_uplift_amount",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "customer_reliability_impact",
+      "type": "numeric(5,2)",
+      "default": "0",
+      "notnull": false
+    },
+    {
+      "name": "driver_reliability_impact",
+      "type": "numeric(5,2)",
+      "default": "0",
+      "notnull": false
+    },
+    {
+      "name": "stops",
+      "type": "jsonb",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "original_distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "original_duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "original_fare",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "route_distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "route_duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "extra_stop_distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "extra_stop_duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "raw_add_stop_increase",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "add_stop_discount_percent",
+      "type": "numeric(5,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "final_add_stop_increase",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "stop_waiting_fee",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "final_fare",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "estimated_fare",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_adjustment_amount",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_adjustment_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_finalized_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "actual_distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "actual_duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "actual_route_source",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "active_stop_added_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "active_stop_added_by",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "active_stop_note",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_started_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_cycle",
+      "type": "integer",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "dispatch_sequence",
+      "type": "integer",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "dispatch_state",
+      "type": "text",
+      "default": "'idle'::text",
+      "notnull": true
+    },
+    {
+      "name": "dispatch_search_radius_km",
+      "type": "numeric(10,3)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_failure_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_updated_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "trip_started_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "current_fare",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "actual_fare_breakdown",
+      "type": "jsonb",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_last_recalculated_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "auto_cancel_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "completed_by",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "admin_completion_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "admin_completion_note",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "completed_without_end_otp",
+      "type": "boolean",
+      "default": "false",
+      "notnull": true
+    },
+    {
+      "name": "end_otp_bypass_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "end_otp_bypass_note",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "end_otp_bypassed_by",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "end_otp_bypassed_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "financial_version",
+      "type": "bigint",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "arrival_evidence_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_driver_lat",
+      "type": "numeric(10,7)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_driver_lng",
+      "type": "numeric(10,7)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_pickup_lat",
+      "type": "numeric(10,7)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_pickup_lng",
+      "type": "numeric(10,7)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_distance_m",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_location_age_seconds",
+      "type": "integer",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_evidence_qualified",
+      "type": "boolean",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_evidence_version",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_reason_details",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_status_at_request",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancelled_within_free_window",
+      "type": "boolean",
+      "default": "false",
+      "notnull": false
+    },
+    {
+      "name": "commission_policy_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "commission_basis_points",
+      "type": "integer",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "commission_rounding_version",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "commission_locked_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_policy_version",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_policy_effective_from",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_ride_fare_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_service_fee_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_membership_waiver_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_credit_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_customer_total_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_driver_fare_basis_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_membership_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_booking_key",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    }
+  ],
+  "disposableColumns": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "default": "gen_random_uuid()",
+      "notnull": true
+    },
+    {
+      "name": "created_by",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "customer_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "driver_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "default": "'requested'::text",
+      "notnull": true
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "default": "now()",
+      "notnull": true
+    },
+    {
+      "name": "fare_amount",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "final_fare",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "estimated_fare",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "original_fare",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "commission_pct",
+      "type": "numeric(5,2)",
+      "default": "5.00",
+      "notnull": false
+    },
+    {
+      "name": "commission_amount",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "driver_net_earnings",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "start_otp",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "end_otp",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "start_otp_verified",
+      "type": "boolean",
+      "default": "false",
+      "notnull": false
+    },
+    {
+      "name": "end_otp_verified",
+      "type": "boolean",
+      "default": "false",
+      "notnull": false
+    },
+    {
+      "name": "trip_started_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "ride_option",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "completed_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "completed_without_end_otp",
+      "type": "boolean",
+      "default": "false",
+      "notnull": true
+    },
+    {
+      "name": "end_otp_bypass_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "end_otp_bypass_note",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "end_otp_bypassed_by",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "end_otp_bypassed_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "completed_by",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "admin_completion_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "admin_completion_note",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_finalized_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_adjustment_amount",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_adjustment_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "pickup_lat",
+      "type": "numeric",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "pickup_lng",
+      "type": "numeric",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "driver_arrived_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "no_show_eligible_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "free_cancellation_until",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_fee_amount",
+      "type": "numeric(12,2)",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "cancellation_driver_amount",
+      "type": "numeric(10,2)",
+      "default": "0",
+      "notnull": false
+    },
+    {
+      "name": "cancellation_moovu_amount",
+      "type": "numeric(10,2)",
+      "default": "0",
+      "notnull": false
+    },
+    {
+      "name": "cancellation_policy_code",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_type",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancel_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancelled_by",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancelled_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "offer_status",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "offer_expires_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "financial_version",
+      "type": "bigint",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "arrival_evidence_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_driver_lat",
+      "type": "numeric(10,7)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_driver_lng",
+      "type": "numeric(10,7)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_pickup_lat",
+      "type": "numeric(10,7)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_pickup_lng",
+      "type": "numeric(10,7)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_distance_m",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_location_age_seconds",
+      "type": "integer",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_evidence_qualified",
+      "type": "boolean",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "arrival_evidence_version",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_reason_details",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancellation_status_at_request",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "cancelled_within_free_window",
+      "type": "boolean",
+      "default": "false",
+      "notnull": false
+    },
+    {
+      "name": "commission_policy_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "commission_basis_points",
+      "type": "integer",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "commission_rounding_version",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "commission_locked_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "payment_method",
+      "type": "text",
+      "default": "'cash'::text",
+      "notnull": true
+    },
+    {
+      "name": "pickup_address",
+      "type": "text",
+      "default": null,
+      "notnull": true
+    },
+    {
+      "name": "dropoff_address",
+      "type": "text",
+      "default": null,
+      "notnull": true
+    },
+    {
+      "name": "dropoff_lat",
+      "type": "numeric",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dropoff_lng",
+      "type": "numeric",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "final_add_stop_increase",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "stop_waiting_fee",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "route_distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "route_duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "actual_distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "actual_duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "otp_verified",
+      "type": "boolean",
+      "default": "false",
+      "notnull": false
+    },
+    {
+      "name": "dispatch_started_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_cycle",
+      "type": "integer",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "dispatch_sequence",
+      "type": "integer",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "dispatch_state",
+      "type": "text",
+      "default": "'idle'::text",
+      "notnull": true
+    },
+    {
+      "name": "dispatch_search_radius_km",
+      "type": "numeric(10,3)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_failure_reason",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_updated_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_policy_version",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_policy_effective_from",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_ride_fare_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_service_fee_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_membership_waiver_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_credit_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_customer_total_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_driver_fare_basis_cents",
+      "type": "bigint",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_membership_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "phase5_booking_key",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "rider_name",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "rider_phone",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "scheduled_for",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "offer_attempted_driver_ids",
+      "type": "uuid[]",
+      "default": "'{}'::uuid[]",
+      "notnull": true
+    },
+    {
+      "name": "customer_auth_user_id",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "issue_reported",
+      "type": "boolean",
+      "default": "false",
+      "notnull": true
+    },
+    {
+      "name": "issue_report_note",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "ride_type",
+      "type": "text",
+      "default": "'now'::text",
+      "notnull": true
+    },
+    {
+      "name": "schedule_status",
+      "type": "text",
+      "default": "'none'::text",
+      "notnull": true
+    },
+    {
+      "name": "scheduled_release_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "released_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "dispatch_priority_score",
+      "type": "numeric(10,2)",
+      "default": "0",
+      "notnull": true
+    },
+    {
+      "name": "fare_breakdown",
+      "type": "jsonb",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "surge_label",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "surge_multiplier",
+      "type": "numeric(6,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "remote_pickup_fee",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "waiting_fee_amount",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "chargeable_waiting_minutes",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "long_distance_uplift_pct",
+      "type": "numeric(6,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "long_distance_uplift_amount",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "customer_reliability_impact",
+      "type": "numeric(5,2)",
+      "default": "0",
+      "notnull": false
+    },
+    {
+      "name": "driver_reliability_impact",
+      "type": "numeric(5,2)",
+      "default": "0",
+      "notnull": false
+    },
+    {
+      "name": "stops",
+      "type": "jsonb",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "original_distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "original_duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "extra_stop_distance_km",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "extra_stop_duration_min",
+      "type": "numeric(10,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "raw_add_stop_increase",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "add_stop_discount_percent",
+      "type": "numeric(5,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "actual_route_source",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "active_stop_added_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "active_stop_added_by",
+      "type": "uuid",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "active_stop_note",
+      "type": "text",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "current_fare",
+      "type": "numeric(12,2)",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "actual_fare_breakdown",
+      "type": "jsonb",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "fare_last_recalculated_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    },
+    {
+      "name": "auto_cancel_at",
+      "type": "timestamp with time zone",
+      "default": null,
+      "notnull": false
+    }
+  ],
+  "validation": {
+    "tests": {
+      "passed": 208,
+      "failed": 0
+    },
+    "bookingRegression": {
+      "passed": 4,
+      "failed": 0,
+      "includedInFullSuite": true
+    },
+    "typecheck": "PASS",
+    "lint": {
+      "errors": 0,
+      "existingWarnings": 3
+    },
+    "build": "PASS"
+  },
+  "status": "NOT_READY"
+}

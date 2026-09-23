@@ -1,10 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-
-type WalletTransaction = {
-  amount: number | null;
-  direction: string | null;
-  tx_type: string | null;
-};
+import { callHardenedRpc } from "@/lib/server/hardenedRpc";
 
 function num(value: unknown) {
   const parsed = Number(value ?? 0);
@@ -42,74 +37,29 @@ export async function ensureDriverWallet(driverId: string) {
 }
 
 export async function recalculateDriverWalletServer(driverId: string) {
-  const walletResult = await ensureDriverWallet(driverId);
-  if (!walletResult.wallet || walletResult.error) {
-    return { ok: false as const, error: walletResult.error ?? "Could not prepare driver wallet." };
-  }
-
-  const [
-    { data: completedTrips, error: tripsError },
-    { data: settlements, error: settlementsError },
-    { data: transactions, error: transactionError },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from("trips")
-      .select("fare_amount,commission_amount,driver_net_earnings")
-      .eq("driver_id", driverId)
-      .eq("status", "completed"),
-    supabaseAdmin
-      .from("driver_settlements")
-      .select("amount_paid")
-      .eq("driver_id", driverId),
-    supabaseAdmin
-      .from("driver_wallet_transactions")
-      .select("amount,direction,tx_type")
-      .eq("driver_id", driverId),
-  ]);
-
-  const error = tripsError ?? settlementsError ?? transactionError;
-  if (error) return { ok: false as const, error: error.message };
-
-  const trips = completedTrips ?? [];
-  const totalCommission = trips.reduce((sum, row) => sum + num(row.commission_amount), 0);
-  const totalDriverNet = trips.reduce(
-    (sum, row) =>
-      sum +
-      (row.driver_net_earnings != null
-        ? num(row.driver_net_earnings)
-        : num(row.fare_amount) - num(row.commission_amount)),
-    0,
-  );
-  const totalSettled = (settlements ?? []).reduce((sum, row) => sum + num(row.amount_paid), 0);
-  const cancellationCredits = ((transactions ?? []) as WalletTransaction[])
-    .filter((row) => row.tx_type === "cancellation_credit" && row.direction === "credit")
-    .reduce((sum, row) => sum + num(row.amount), 0);
-  const balanceDue = Math.max(0, totalCommission - totalSettled - cancellationCredits);
-
-  const { data: wallet, error: walletError } = await supabaseAdmin
-    .from("driver_wallets")
-    .update({
-      balance_due: balanceDue,
-      total_commission: totalCommission,
-      total_driver_net: totalDriverNet + cancellationCredits,
-      total_trips_completed: trips.length,
-      account_status: balanceDue > 0 ? "due" : "settled",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", walletResult.wallet.id)
-    .select("*")
-    .single();
-
-  if (walletError) return { ok: false as const, error: walletError.message };
+  const refreshed = await callHardenedRpc<{
+    driver_id: string;
+    total_commission: number;
+    total_driver_net: number;
+    total_trips_completed: number;
+    total_settled: number;
+    cancellation_credits: number;
+    balance_due: number;
+  }>(supabaseAdmin, "phase05b_refresh_driver_wallet", { p_driver_id: driverId });
+  if (!refreshed.ok) return { ok: false as const, error: refreshed.error, code: refreshed.code };
+  const totals = refreshed.result;
+  const { data: wallet, error: walletError } = await supabaseAdmin.from("driver_wallets")
+    .select("*").eq("driver_id", driverId).single();
+  if (walletError || !wallet) return { ok: false as const, error: walletError?.message ?? "Wallet refresh returned no row." };
   return {
     ok: true as const,
     wallet,
     totals: {
-      totalCommission,
-      totalDriverNet,
-      totalSettled,
-      cancellationCredits,
-      balanceDue,
+      totalCommission: Number(totals.total_commission),
+      totalDriverNet: Number(totals.total_driver_net),
+      totalSettled: Number(totals.total_settled),
+      cancellationCredits: Number(totals.cancellation_credits),
+      balanceDue: Number(totals.balance_due),
     },
   };
 }

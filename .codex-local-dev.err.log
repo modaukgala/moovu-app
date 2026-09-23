@@ -1,0 +1,16 @@
+⚠ Fast Refresh had to perform a full reload when ./node_modules/next/dist/client/image-component.js changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+⚠ Fast Refresh had to perform a full reload when ./node_modules/next/dist/client/image-component.js changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[trip-chat] trip lookup failed {
+  tripId: '20447ee4-34ed-4598-bd4e-b241d690aa43',
+  reason: 'TypeError: fetch failed'
+}
+[trip-chat] message load failed {
+  tripId: '20447ee4-34ed-4598-bd4e-b241d690aa43',
+  role: 'driver',
+  reason: 'TypeError: fetch failed'
+}
+[trip-chat] message load failed {
+  tripId: '20447ee4-34ed-4598-bd4e-b241d690aa43',
+  role: 'driver',
+  reason: 'TypeError: fetch failed'
+}

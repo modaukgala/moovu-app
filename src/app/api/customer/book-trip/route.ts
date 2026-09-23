@@ -16,6 +16,9 @@ import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 import { calculateDrivingRoute } from "@/lib/maps/routeService";
 import { createRouteSignature } from "@/lib/maps/mapRequestPolicy";
 import { verifyRouteQuote } from "@/lib/maps/routeQuote";
+import { callPhase4Rpc } from "@/lib/server/phase4Rpc";
+import { calculatePhase5Fare } from "@/lib/finance/phase5Fare";
+import { normalizeCustomerPaymentMethod } from "@/lib/payments/customerPaymentMethod";
 
 function generateOtp() {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -45,28 +48,31 @@ function hasOkFlag(value: unknown): value is { ok?: boolean } {
   return typeof value === "object" && value !== null && "ok" in value;
 }
 
-function isMissingOptionalPricingColumn(error: { code?: string; message?: string } | null | undefined) {
+function isMissingOptionalPricingColumn(
+  error: { code?: string; message?: string } | null | undefined,
+) {
   const message = String(error?.message ?? "").toLowerCase();
-  return error?.code === "42703" && (
-    message.includes("surge_label") ||
-    message.includes("surge_multiplier") ||
-    message.includes("fare_breakdown") ||
-    message.includes("stops") ||
-    message.includes("original_distance_km") ||
-    message.includes("original_duration_min") ||
-    message.includes("original_fare") ||
-    message.includes("route_distance_km") ||
-    message.includes("route_duration_min") ||
-    message.includes("extra_stop_distance_km") ||
-    message.includes("extra_stop_duration_min") ||
-    message.includes("raw_add_stop_increase") ||
-    message.includes("add_stop_discount_percent") ||
-    message.includes("final_add_stop_increase") ||
-    message.includes("stop_waiting_fee") ||
-    message.includes("final_fare") ||
-    message.includes("estimated_fare") ||
-    message.includes("fare_adjustment_amount") ||
-    message.includes("fare_adjustment_reason")
+  return (
+    error?.code === "42703" &&
+    (message.includes("surge_label") ||
+      message.includes("surge_multiplier") ||
+      message.includes("fare_breakdown") ||
+      message.includes("stops") ||
+      message.includes("original_distance_km") ||
+      message.includes("original_duration_min") ||
+      message.includes("original_fare") ||
+      message.includes("route_distance_km") ||
+      message.includes("route_duration_min") ||
+      message.includes("extra_stop_distance_km") ||
+      message.includes("extra_stop_duration_min") ||
+      message.includes("raw_add_stop_increase") ||
+      message.includes("add_stop_discount_percent") ||
+      message.includes("final_add_stop_increase") ||
+      message.includes("stop_waiting_fee") ||
+      message.includes("final_fare") ||
+      message.includes("estimated_fare") ||
+      message.includes("fare_adjustment_amount") ||
+      message.includes("fare_adjustment_reason"))
   );
 }
 
@@ -114,22 +120,30 @@ type BookTripBody = {
   pickup_instruction?: string | null;
   notes?: string | null;
   routeQuote?: string | null;
+  phase5ExpectedTotalCents?: number | null;
+  bookingKey?: string | null;
 };
 
 function normalizeStops(value: unknown) {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, MAX_TRIP_STOPS).map((stop) => {
-    const item = (stop ?? {}) as StopPayload;
-    return {
-      address: pickFirstString(item.address),
-      placeId: pickFirstString(item.placeId, item.place_id),
-      lat: asNumber(item.lat),
-      lng: asNumber(item.lng),
-    };
-  }).filter((stop) => stop.address && stop.lat != null && stop.lng != null);
+  return value
+    .slice(0, MAX_TRIP_STOPS)
+    .map((stop) => {
+      const item = (stop ?? {}) as StopPayload;
+      return {
+        address: pickFirstString(item.address),
+        placeId: pickFirstString(item.placeId, item.place_id),
+        lat: asNumber(item.lat),
+        lng: asNumber(item.lng),
+      };
+    })
+    .filter((stop) => stop.address && stop.lat != null && stop.lng != null);
 }
 
-function samePoint(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+function samePoint(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+) {
   return Math.abs(a.lat - b.lat) < 0.00008 && Math.abs(a.lng - b.lng) < 0.00008;
 }
 
@@ -158,20 +172,31 @@ export async function POST(req: Request) {
     const auth = await getAuthenticatedCustomer(req);
 
     if (!auth.ok) {
-      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+      return NextResponse.json(
+        { ok: false, error: auth.error },
+        { status: auth.status },
+      );
     }
 
     if (auth.customer.status !== "active") {
       return NextResponse.json(
         { ok: false, error: "Your customer account is not active." },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
     const body = (await req.json()) as BookTripBody;
 
-    const pickupAddress = pickFirstString(body.pickupAddress, body.pickup_address, body.pickup);
-    const dropoffAddress = pickFirstString(body.dropoffAddress, body.dropoff_address, body.dropoff);
+    const pickupAddress = pickFirstString(
+      body.pickupAddress,
+      body.pickup_address,
+      body.pickup,
+    );
+    const dropoffAddress = pickFirstString(
+      body.dropoffAddress,
+      body.dropoff_address,
+      body.dropoff,
+    );
 
     const pickupLat = asNumber(body.pickupLat ?? body.pickup_lat);
     const pickupLng = asNumber(body.pickupLng ?? body.pickup_lng);
@@ -179,59 +204,122 @@ export async function POST(req: Request) {
     const dropoffLng = asNumber(body.dropoffLng ?? body.dropoff_lng);
     const pickupInstruction = pickFirstString(
       body.pickupInstruction,
-      body.pickup_instruction
+      body.pickup_instruction,
     ).slice(0, 240);
 
-    const paymentMethod = pickFirstString(body.paymentMethod, body.payment_method) || "cash";
+    const paymentMethod = normalizeCustomerPaymentMethod(
+      pickFirstString(body.paymentMethod, body.payment_method) || "cash",
+    );
+
+    if (!paymentMethod) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid payment method." },
+        { status: 400 },
+      );
+    }
+
+    const requiresOnlinePayment = paymentMethod === "online";
+
+    const debt = await callPhase4Rpc<{
+      booking_blocked: boolean;
+      open_cents: number;
+      remaining_rides: number;
+      disputed: boolean;
+    }>(
+      auth.supabaseAdmin,
+      "phase4_customer_debt_state",
+      { p_customer_id: auth.customer.id },
+      (value) =>
+        typeof value.booking_blocked === "boolean" &&
+        typeof value.open_cents === "number",
+    );
+    if (!debt.ok)
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Booking eligibility is unavailable. Please try again.",
+        },
+        { status: 503 },
+      );
+    if (debt.result.booking_blocked)
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "PHASE4_BOOKING_BLOCKED",
+          outstandingAmount: Number(debt.result.open_cents) / 100,
+          error:
+            "Resolve your outstanding cancellation or no-show fee before booking another ride.",
+        },
+        { status: 409 },
+      );
     let distanceKm = asNumber(body.distanceKm ?? body.distance_km);
     let durationMin = asNumber(body.durationMin ?? body.duration_min);
-    let originalDistanceKm = asNumber(body.originalDistanceKm ?? body.original_distance_km) ?? distanceKm;
-    let originalDurationMin = asNumber(body.originalDurationMin ?? body.original_duration_min) ?? durationMin;
+    let originalDistanceKm =
+      asNumber(body.originalDistanceKm ?? body.original_distance_km) ??
+      distanceKm;
+    let originalDurationMin =
+      asNumber(body.originalDurationMin ?? body.original_duration_min) ??
+      durationMin;
     const stops = normalizeStops(body.stops);
 
     const rideTypeRaw = pickFirstString(body.rideType, body.ride_type) || "now";
     const rideType = rideTypeRaw === "scheduled" ? "scheduled" : "now";
     const rideOptionId = normalizeRideOptionId(
-      pickFirstString(body.rideOption, body.ride_option)
+      pickFirstString(body.rideOption, body.ride_option),
     );
     const rideOption = getRideOption(rideOptionId);
 
-    const scheduledForRaw = pickFirstString(body.scheduledFor, body.scheduled_for);
-    const scheduledDate = rideType === "scheduled" ? parseScheduledDate(scheduledForRaw) : null;
+    const scheduledForRaw = pickFirstString(
+      body.scheduledFor,
+      body.scheduled_for,
+    );
+    const scheduledDate =
+      rideType === "scheduled" ? parseScheduledDate(scheduledForRaw) : null;
     const scheduledFor = scheduledDate ? scheduledDate.toISOString() : null;
 
     if (!pickupAddress || !dropoffAddress) {
       return NextResponse.json(
         { ok: false, error: "Pickup and destination are required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (pickupLat == null || pickupLng == null || dropoffLat == null || dropoffLng == null) {
+    if (
+      pickupLat == null ||
+      pickupLng == null ||
+      dropoffLat == null ||
+      dropoffLng == null
+    ) {
       return NextResponse.json(
-        { ok: false, error: "Pickup and destination coordinates are required." },
-        { status: 400 }
+        {
+          ok: false,
+          error: "Pickup and destination coordinates are required.",
+        },
+        { status: 400 },
       );
     }
 
     if (distanceKm == null || durationMin == null) {
       return NextResponse.json(
         { ok: false, error: "Distance and duration are required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (originalDistanceKm == null || originalDurationMin == null) {
       return NextResponse.json(
-        { ok: false, error: "Original route distance and duration are required." },
-        { status: 400 }
+        {
+          ok: false,
+          error: "Original route distance and duration are required.",
+        },
+        { status: 400 },
       );
     }
 
     if (Array.isArray(body.stops) && body.stops.length > MAX_TRIP_STOPS) {
       return NextResponse.json(
         { ok: false, error: "A trip can have a maximum of 2 stops." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -241,59 +329,84 @@ export async function POST(req: Request) {
       const point = { lat: stop.lat!, lng: stop.lng! };
       if (samePoint(point, pickupPoint)) {
         return NextResponse.json(
-          { ok: false, error: `Stop ${index + 1} cannot be the same as pickup.` },
-          { status: 400 }
+          {
+            ok: false,
+            error: `Stop ${index + 1} cannot be the same as pickup.`,
+          },
+          { status: 400 },
         );
       }
       if (samePoint(point, dropoffPoint)) {
         return NextResponse.json(
-          { ok: false, error: `Stop ${index + 1} cannot be the same as final destination.` },
-          { status: 400 }
+          {
+            ok: false,
+            error: `Stop ${index + 1} cannot be the same as final destination.`,
+          },
+          { status: 400 },
         );
       }
-      const duplicate = stops.some((other, otherIndex) =>
-        otherIndex !== index &&
-        other.lat != null &&
-        other.lng != null &&
-        samePoint(point, { lat: other.lat, lng: other.lng })
+      const duplicate = stops.some(
+        (other, otherIndex) =>
+          otherIndex !== index &&
+          other.lat != null &&
+          other.lng != null &&
+          samePoint(point, { lat: other.lat, lng: other.lng }),
       );
       if (duplicate) {
         return NextResponse.json(
           { ok: false, error: "Duplicate stops are not allowed." },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
 
     if (distanceKm < originalDistanceKm || durationMin < originalDurationMin) {
       return NextResponse.json(
-        { ok: false, error: "Stop route cannot be shorter than the original route." },
-        { status: 400 }
+        {
+          ok: false,
+          error: "Stop route cannot be shorter than the original route.",
+        },
+        { status: 400 },
       );
     }
 
-    const stopPoints = stops.map((stop) => ({ lat: stop.lat!, lng: stop.lng! }));
+    const stopPoints = stops.map((stop) => ({
+      lat: stop.lat!,
+      lng: stop.lng!,
+    }));
     const expectedRouteSignature = createRouteSignature({
       origin: pickupPoint,
       destination: dropoffPoint,
       waypoints: stopPoints,
       travelMode: "driving",
     });
-    const quotedRoute = verifyRouteQuote(body.routeQuote, expectedRouteSignature);
-    const serverRoute = quotedRoute ?? await calculateServerRoute({
-      pickup: pickupPoint,
-      dropoff: dropoffPoint,
-      stops: stopPoints,
-      actorKey: `customer-book-trip:${auth.customer.id}`,
-    }).catch((error: unknown) => {
-      console.error("[book-trip] server route calculation failed", error instanceof Error ? error.message : error);
-      return null;
-    });
+    const quotedRoute = verifyRouteQuote(
+      body.routeQuote,
+      expectedRouteSignature,
+    );
+    const serverRoute =
+      quotedRoute ??
+      (await calculateServerRoute({
+        pickup: pickupPoint,
+        dropoff: dropoffPoint,
+        stops: stopPoints,
+        actorKey: `customer-book-trip:${auth.customer.id}`,
+      }).catch((error: unknown) => {
+        console.error(
+          "[book-trip] server route calculation failed",
+          error instanceof Error ? error.message : error,
+        );
+        return null;
+      }));
 
-    if (!serverRoute && stops.length > 0) {
+    if (!serverRoute) {
       return NextResponse.json(
-        { ok: false, error: "Could not calculate the route through your stops. Please adjust the stops and try again." },
-        { status: 400 }
+        {
+          ok: false,
+          error:
+            "A verified route is unavailable. Please refresh your route and try again.",
+        },
+        { status: 503 },
       );
     }
 
@@ -307,8 +420,11 @@ export async function POST(req: Request) {
     if (rideType === "scheduled") {
       if (!scheduledDate || !scheduledFor) {
         return NextResponse.json(
-          { ok: false, error: "Please choose a valid scheduled date and time." },
-          { status: 400 }
+          {
+            ok: false,
+            error: "Please choose a valid scheduled date and time.",
+          },
+          { status: 400 },
         );
       }
 
@@ -319,19 +435,44 @@ export async function POST(req: Request) {
       if (scheduledMs <= now) {
         return NextResponse.json(
           { ok: false, error: "Scheduled trip time must be in the future." },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
       if (scheduledMs - now < minimumLeadMs) {
         return NextResponse.json(
-          { ok: false, error: "Scheduled trips must be at least 15 minutes ahead." },
-          { status: 400 }
+          {
+            ok: false,
+            error: "Scheduled trips must be at least 15 minutes ahead.",
+          },
+          { status: 400 },
         );
       }
     }
 
     const activeSurge = await getActiveManualSurge();
+    const { data: phase5Policy, error: phase5PolicyError } =
+      await auth.supabaseAdmin.rpc("phase5_policy_at", {
+        p_at: new Date().toISOString(),
+      });
+    if (phase5PolicyError && phase5PolicyError.code !== "PGRST202") {
+      return NextResponse.json(
+        { ok: false, error: "Pricing authority is unavailable." },
+        { status: 503 },
+      );
+    }
+    const phase5Active = !!phase5Policy;
+    const phase5StateResult = phase5Active
+      ? await auth.supabaseAdmin.rpc("phase5_customer_state", {
+          p_customer_id: auth.customer.id,
+        })
+      : { data: null, error: null };
+    if (phase5StateResult.error) {
+      return NextResponse.json(
+        { ok: false, error: "Customer benefits are unavailable." },
+        { status: 503 },
+      );
+    }
     const fare = calculateFare({
       distanceKm: originalDistanceKm,
       distanceDiscountKm: originalDistanceKm,
@@ -339,6 +480,7 @@ export async function POST(req: Request) {
       rideOptionId,
       surgeLabel: activeSurge.mode,
       surgeMultiplier: activeSurge.multiplier,
+      includeEmbeddedBookingFee: !phase5Active,
     });
     const journeyBaseFare = calculateFare({
       distanceKm: originalDistanceKm,
@@ -347,6 +489,7 @@ export async function POST(req: Request) {
       rideOptionId,
       surgeLabel: activeSurge.mode,
       surgeMultiplier: activeSurge.multiplier,
+      includeEmbeddedBookingFee: !phase5Active,
     });
     const addStop = calculateAddStopIncrease({
       rideOptionId,
@@ -368,16 +511,54 @@ export async function POST(req: Request) {
       stopWaitingFee: stopWaiting.stopWaitingFee,
     });
     const finalFare = journeyFare.totalFare;
+    const phase5Pricing = phase5Active
+      ? calculatePhase5Fare({
+          rideFareCents: Math.round(finalFare * 100),
+          rideOptionId,
+          activeMember: phase5StateResult.data?.membership_active === true,
+          availableCreditCents: Number(
+            phase5StateResult.data?.available_credit_cents ?? 0,
+          ),
+        })
+      : null;
+    if (phase5Pricing) {
+      if (
+        !Number.isSafeInteger(body.phase5ExpectedTotalCents) ||
+        body.phase5ExpectedTotalCents !== phase5Pricing.customerTotalCents
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "PHASE5_QUOTE_CHANGED",
+            error:
+              "Your price changed. Review the updated total before booking.",
+            quote: phase5Pricing,
+          },
+          { status: 409 },
+        );
+      }
+      if (!/^[0-9a-f-]{36}$/i.test(String(body.bookingKey ?? ""))) {
+        return NextResponse.json(
+          { ok: false, error: "A valid booking request ID is required." },
+          { status: 400 },
+        );
+      }
+    }
 
     const startOtp = generateOtp();
     const endOtp = generateOtp();
-    const riderName = fullCustomerName(auth.customer.first_name, auth.customer.last_name);
+    const riderName = fullCustomerName(
+      auth.customer.first_name,
+      auth.customer.last_name,
+    );
 
     const initialStatus = rideType === "scheduled" ? "scheduled" : "requested";
     const scheduleStatus = rideType === "scheduled" ? "scheduled" : "none";
     const scheduledReleaseAt =
       rideType === "scheduled" && scheduledFor
-        ? new Date(new Date(scheduledFor).getTime() - 15 * 60 * 1000).toISOString()
+        ? new Date(
+            new Date(scheduledFor).getTime() - 15 * 60 * 1000,
+          ).toISOString()
         : null;
 
     const tripPayload: Record<string, unknown> = {
@@ -394,7 +575,9 @@ export async function POST(req: Request) {
       payment_method: paymentMethod,
       distance_km: distanceKm,
       duration_min: durationMin,
-      fare_amount: finalFare,
+      fare_amount: phase5Pricing
+        ? phase5Pricing.customerTotalCents / 100
+        : finalFare,
       ride_option: rideOptionId,
       status: initialStatus,
       ride_type: rideType,
@@ -402,6 +585,7 @@ export async function POST(req: Request) {
       scheduled_release_at: scheduledReleaseAt,
       schedule_status: scheduleStatus,
       offer_status: null,
+      offer_attempted_driver_ids: [],
       driver_id: null,
       start_otp: startOtp,
       end_otp: endOtp,
@@ -421,7 +605,10 @@ export async function POST(req: Request) {
         stopWaiting,
         journeyFare,
         pickupInstruction: pickupInstruction || null,
-        finalFare,
+        finalFare: phase5Pricing
+          ? phase5Pricing.customerTotalCents / 100
+          : finalFare,
+        phase5: phase5Pricing,
       },
       stops,
       original_distance_km: originalDistanceKm,
@@ -435,19 +622,35 @@ export async function POST(req: Request) {
       add_stop_discount_percent: addStop.addStopDiscountPercent,
       final_add_stop_increase: addStop.finalAddStopIncrease,
       stop_waiting_fee: stopWaiting.stopWaitingFee,
-      final_fare: finalFare,
-      estimated_fare: finalFare,
+      final_fare: phase5Pricing
+        ? phase5Pricing.customerTotalCents / 100
+        : finalFare,
+      estimated_fare: phase5Pricing
+        ? phase5Pricing.customerTotalCents / 100
+        : finalFare,
       fare_adjustment_amount: 0,
       fare_adjustment_reason: "booking_confirmed",
     };
 
-    let insertResult = await auth.supabaseAdmin
-      .from("trips")
-      .insert(tripPayload)
-      .select("*")
-      .single();
+    let insertResult = phase5Pricing
+      ? await auth.supabaseAdmin
+          .rpc("phase5_create_trip", {
+            p_customer_id: auth.customer.id,
+            p_actor_id: auth.user.id,
+            p_booking_key: body.bookingKey,
+            p_trip_payload: tripPayload,
+            p_ride_fare_cents: phase5Pricing.rideFareCents,
+            p_ride_option: rideOptionId,
+            p_expected_customer_total_cents: phase5Pricing.customerTotalCents,
+          })
+          .then(({ data, error }) => ({ data: data?.trip ?? null, error }))
+      : await auth.supabaseAdmin
+          .from("trips")
+          .insert(tripPayload)
+          .select("*")
+          .single();
 
-    if (isMissingOptionalPricingColumn(insertResult.error)) {
+    if (!phase5Pricing && isMissingOptionalPricingColumn(insertResult.error)) {
       const legacyPayload = { ...tripPayload };
       delete legacyPayload.surge_label;
       delete legacyPayload.surge_multiplier;
@@ -479,16 +682,62 @@ export async function POST(req: Request) {
     const { data: trip, error: tripErr } = insertResult;
 
     if (tripErr || !trip) {
+      console.error("[book-trip] trip creation failed", {
+        code: tripErr?.code ?? "NO_TRIP_RETURNED",
+        message: tripErr?.message ?? "No trip returned by booking authority",
+      });
+      if (String(tripErr?.message ?? "").includes("PHASE4_BOOKING_BLOCKED")) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "PHASE4_BOOKING_BLOCKED",
+            error:
+              "Resolve your outstanding cancellation or no-show fee before booking another ride.",
+          },
+          { status: 409 },
+        );
+      }
+      if (String(tripErr?.message ?? "").includes("PHASE5_QUOTE_CHANGED")) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "PHASE5_QUOTE_CHANGED",
+            error:
+              "Your price changed. Review the updated total before booking.",
+          },
+          { status: 409 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: tripErr?.message || "Failed to create trip." },
-        { status: 500 }
+        { ok: false, error: "We couldn't create your trip. Please try again." },
+        { status: 500 },
       );
+    }
+
+    if (phase5Pricing && paymentMethod === "online" && trip.payment_method !== "online") {
+      const { error: onlineMethodError } = await auth.supabaseAdmin.rpc(
+        "phase3_mark_trip_online_before_dispatch",
+        { p_trip_id: trip.id, p_customer_id: auth.customer.id },
+      );
+      if (onlineMethodError) {
+        console.error("[book-trip] online payment method correction failed", {
+          code: onlineMethodError.code,
+          message: onlineMethodError.message,
+          tripId: trip.id,
+        });
+        return NextResponse.json(
+          { ok: false, error: "We couldn't secure online payment for this trip." },
+          { status: 500 },
+        );
+      }
+      trip.payment_method = "online";
     }
 
     try {
       await auth.supabaseAdmin.from("trip_events").insert({
         trip_id: trip.id,
-        event_type: rideType === "scheduled" ? "scheduled_trip_created" : "trip_created",
+        event_type:
+          rideType === "scheduled" ? "scheduled_trip_created" : "trip_created",
         message:
           rideType === "scheduled"
             ? `Scheduled trip created for ${scheduledFor}. Auto release planned for ${scheduledReleaseAt}. Ride option: ${rideOption.name}. Surge: ${activeSurge.label}.`
@@ -500,22 +749,44 @@ export async function POST(req: Request) {
 
     await notifyCustomerForTrip(
       trip.id,
-      rideType === "scheduled" ? "Scheduled ride created" : "Ride request received",
+      rideType === "scheduled"
+        ? "Scheduled ride created"
+        : "Ride request received",
       rideType === "scheduled"
         ? `Your ride has been scheduled from ${pickupAddress} to ${dropoffAddress}.`
         : `We received your ride request from ${pickupAddress} to ${dropoffAddress}.`,
-      `/ride/${trip.id}`
+      `/ride/${trip.id}`,
+    ).catch((error: unknown) =>
+      console.warn("[book-trip] post-commit Customer notification deferred", {
+        tripId: trip.id,
+        reason: error instanceof Error ? error.message : "notification_failure",
+      }),
     );
 
     await notifyAdmins(
       rideType === "scheduled" ? "New scheduled ride" : "New Ride Request",
       `${riderName} requested a ride from ${pickupAddress} to ${dropoffAddress}.`,
-      "/admin/trips"
+      "/admin/trips",
+    ).catch((error: unknown) =>
+      console.warn("[book-trip] post-commit Admin notification deferred", {
+        tripId: trip.id,
+        reason: error instanceof Error ? error.message : "notification_failure",
+      }),
     );
 
     let autoOfferResult: unknown = null;
 
-    if (rideType === "now") {
+    /*
+     * CASH:
+     * Existing behaviour remains unchanged.
+     * Immediate rides can enter dispatch after booking.
+     *
+     * ONLINE:
+     * Never dispatch here.
+     * The trip must first receive a verified successful payment.
+     * Dispatch will happen only from the trusted payment flow.
+     */
+    if (rideType === "now" && !requiresOnlinePayment) {
       try {
         autoOfferResult = await dispatchTrip({ tripId: trip.id });
       } catch {
@@ -528,15 +799,45 @@ export async function POST(req: Request) {
       tripId: trip.id,
       trip,
       fareBreakdown: tripPayload.fare_breakdown ?? fare,
-      otp: { startOtp, endOtp },
-      autoOfferStarted: rideType === "now" && hasOkFlag(autoOfferResult) ? !!autoOfferResult.ok : false,
-      autoOfferResult,
+      otp: { startOtp: trip.start_otp, endOtp: trip.end_otp },
+
+      payment: requiresOnlinePayment
+        ? {
+            required: true,
+            method: "online",
+            status: "pending",
+          }
+        : {
+            required: false,
+            method: "cash",
+            status: "not_required",
+          },
+
+      autoOfferStarted:
+        !requiresOnlinePayment &&
+        rideType === "now" &&
+        hasOkFlag(autoOfferResult)
+          ? !!autoOfferResult.ok
+          : false,
+
+      autoOfferResult:
+        !requiresOnlinePayment &&
+        hasOkFlag(autoOfferResult) &&
+        !autoOfferResult.ok
+          ? {
+              ok: false,
+              error: "We're still searching for an available driver.",
+            }
+          : autoOfferResult,
     });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Server error";
+    console.error(
+      "[book-trip] unexpected booking failure",
+      e instanceof Error ? e.message : "Unknown error",
+    );
     return NextResponse.json(
-      { ok: false, error: message },
-      { status: 500 }
+      { ok: false, error: "We couldn't create your trip. Please try again." },
+      { status: 500 },
     );
   }
 }
