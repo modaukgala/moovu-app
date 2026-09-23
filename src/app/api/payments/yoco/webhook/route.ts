@@ -156,13 +156,11 @@ export async function POST(req: Request) {
   const [
     { data: customerAttempt, error: customerLookupError },
     { data: driverAttempt, error: driverLookupError },
-    { data: subscriptionAttempt, error: subscriptionLookupError },
   ] = await Promise.all([
     supabaseAdmin.from("online_payment_attempts").select("id").eq("provider", "YOCO").eq("provider_checkout_id", checkoutId).maybeSingle(),
     supabaseAdmin.from("driver_online_payment_attempts").select("id").eq("provider", "YOCO").eq("provider_checkout_id", checkoutId).maybeSingle(),
-    supabaseAdmin.from("driver_subscription_online_payment_attempts").select("id").eq("provider", "YOCO").eq("provider_checkout_id", checkoutId).maybeSingle(),
   ]);
-  if (customerLookupError || driverLookupError || subscriptionLookupError) {
+  if (customerLookupError || driverLookupError) {
     return NextResponse.json({ ok: false, error: "Payment verification failed." }, { status: 500 });
   }
 
@@ -174,16 +172,14 @@ export async function POST(req: Request) {
     console.error("[yoco-webhook] provider mode mismatch", { eventId, configuredMode });
     return NextResponse.json({ ok: false, error: "Webhook environment mismatch." }, { status: 409 });
   }
-  if ([customerAttempt, driverAttempt, subscriptionAttempt].filter(Boolean).length > 1) {
+  if ([customerAttempt, driverAttempt].filter(Boolean).length > 1) {
     console.error("[yoco-webhook] ambiguous checkout authority", { eventId, checkoutId });
     return NextResponse.json({ ok: false, error: "Payment authority conflict." }, { status: 409 });
   }
 
-  const processor = subscriptionAttempt
-    ? "phase3_process_trusted_subscription_payment_event"
-    : driverAttempt
-      ? "phase3_process_trusted_driver_payment_event"
-      : "phase3_process_trusted_payment_event";
+  const processor = driverAttempt
+    ? "phase3_process_trusted_driver_payment_event"
+    : "phase3_process_trusted_payment_event";
   const { data: processingResult, error: processingError } = await supabaseAdmin.rpc(processor, {
       p_provider: "YOCO",
       p_event_id: eventId,
@@ -202,7 +198,7 @@ export async function POST(req: Request) {
       code: processingError.code,
       message: processingError.message,
       eventId,
-      paymentDomain: subscriptionAttempt ? "DRIVER_SUBSCRIPTION" : driverAttempt ? "DRIVER_COMMISSION" : "CUSTOMER_TRIP",
+      paymentDomain: driverAttempt ? "DRIVER_COMMISSION" : "CUSTOMER_TRIP",
     });
 
     return NextResponse.json(

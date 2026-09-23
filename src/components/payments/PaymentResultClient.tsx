@@ -85,7 +85,7 @@ export default function PaymentResultClient(props: {
           {error ?? (presentation.kind === "success"
             ? "Your payment was verified by the trusted payment service."
             : presentation.kind === "pending"
-              ? "We are waiting for the secure provider confirmation. You can safely leave this page and return later."
+              ? "Yoco returned you to MOOVU. We're confirming the payment through the trusted provider channel before updating your account."
               : "No payment authority was changed by this browser redirect.")}
         </p>
         {status?.amountCents != null && (

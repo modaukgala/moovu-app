@@ -37,10 +37,10 @@ export function paymentResultPresentation(
   requested: "success" | "cancel" | "failure",
   state: string | null,
 ) {
-  if (state === "SUCCEEDED") return { kind: "success" as const, title: "Payment confirmed" };
+  if (state === "SUCCEEDED") return { kind: "success" as const, title: "Payment received" };
   if (state === "RECONCILIATION_REQUIRED") return { kind: "warning" as const, title: "Payment needs review" };
   if (requested === "success" && ["CREATED", "PENDING"].includes(state ?? "")) {
-    return { kind: "pending" as const, title: "Confirming payment" };
+    return { kind: "pending" as const, title: "Confirming your payment..." };
   }
   if (requested === "cancel") return { kind: "neutral" as const, title: "Payment cancelled" };
   return { kind: "failure" as const, title: "Payment not completed" };

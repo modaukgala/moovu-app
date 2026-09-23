@@ -639,9 +639,14 @@ export async function POST(req: Request) {
       fare_adjustment_reason: "booking_confirmed",
     };
 
+    const phase5CreateTripRpc =
+      paymentMethod === "online"
+        ? "phase5_create_online_trip"
+        : "phase5_create_trip";
+
     let insertResult = phase5Pricing
       ? await auth.supabaseAdmin
-          .rpc("phase5_create_trip", {
+          .rpc(phase5CreateTripRpc, {
             p_customer_id: auth.customer.id,
             p_actor_id: auth.user.id,
             p_booking_key: body.bookingKey,
@@ -719,25 +724,6 @@ export async function POST(req: Request) {
         { ok: false, error: "We couldn't create your trip. Please try again." },
         { status: 500 },
       );
-    }
-
-    if (phase5Pricing && paymentMethod === "online" && trip.payment_method !== "online") {
-      const { error: onlineMethodError } = await auth.supabaseAdmin.rpc(
-        "phase3_mark_trip_online_before_dispatch",
-        { p_trip_id: trip.id, p_customer_id: auth.customer.id },
-      );
-      if (onlineMethodError) {
-        console.error("[book-trip] online payment method correction failed", {
-          code: onlineMethodError.code,
-          message: onlineMethodError.message,
-          tripId: trip.id,
-        });
-        return NextResponse.json(
-          { ok: false, error: "We couldn't secure online payment for this trip." },
-          { status: 500 },
-        );
-      }
-      trip.payment_method = "online";
     }
 
     try {

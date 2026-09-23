@@ -31,4 +31,5 @@ test("checkout amounts come from server authority and redirect cannot post succe
   assert.match(webhook, /verifyYocoWebhookSignature/);
   assert.match(webhook, /phase3_process_trusted_driver_payment_event/);
   assert.match(webhook, /dispatchVerifiedOnlineTrip/);
+  assert.doesNotMatch(webhook, /driver_subscription_online_payment_attempts/);
 });

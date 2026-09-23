@@ -10,7 +10,9 @@ import { yocoEventModeMatches } from "./yoco/mode.ts";
 
 test("browser success redirect remains pending until trusted state succeeds", () => {
   assert.equal(paymentResultPresentation("success", "PENDING").kind, "pending");
+  assert.equal(paymentResultPresentation("success", "PENDING").title, "Confirming your payment...");
   assert.equal(paymentResultPresentation("success", "SUCCEEDED").kind, "success");
+  assert.equal(paymentResultPresentation("success", "SUCCEEDED").title, "Payment received");
   assert.notEqual(paymentResultPresentation("success", "FAILED").kind, "success");
 });
 

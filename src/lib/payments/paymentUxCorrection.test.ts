@@ -42,12 +42,33 @@ test("manual payment write endpoints fail closed", () => {
 });
 
 test("online trip method repair is service-only and cannot alter dispatched trips", () => {
-  const sql = readFileSync("supabase/migrations/20260923103000_phase3_online_trip_method_repair.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20260923195500_p0_online_payment_recovery.sql", "utf8");
+  const booking = readFileSync("src/app/api/customer/book-trip/route.ts", "utf8");
   assert.match(sql, /phase3_mark_trip_online_before_dispatch/);
+  assert.match(sql, /phase5_create_online_trip/);
   assert.match(sql, /auth\.role\(\) is distinct from 'service_role'/);
   assert.match(sql, /Trip already entered dispatch/);
+  assert.doesNotMatch(sql, /set payment_method='online',\s*updated_at=/);
   assert.match(sql, /grant execute[^;]+to service_role/i);
   assert.doesNotMatch(sql, /grant execute[^;]+to (?:anon|authenticated)/i);
+  assert.match(booking, /paymentMethod === "online"[\s\S]*"phase5_create_online_trip"/);
+  assert.doesNotMatch(booking, /online payment method correction failed/);
+});
+
+test("webhook only queries installed Customer and Driver payment authorities", () => {
+  const webhook = readFileSync("src/app/api/payments/yoco/webhook/route.ts", "utf8");
+  assert.match(webhook, /online_payment_attempts/);
+  assert.match(webhook, /driver_online_payment_attempts/);
+  assert.doesNotMatch(webhook, /driver_subscription_online_payment_attempts/);
+});
+
+test("Driver reconciliation uses authenticated Yoco retrieval and deterministic replay identity", () => {
+  const script = readFileSync("scripts/reconcile-yoco-driver-payment.mjs", "utf8");
+  assert.match(script, /YOCO_AUTHENTICATED_CHECKOUT_RETRIEVAL/);
+  assert.match(script, /checkout\.status !== "completed"/);
+  assert.match(script, /checkout-retrieval:\$\{checkout\.paymentId\}/);
+  assert.match(script, /phase3_process_trusted_driver_payment_event/);
+  assert.doesNotMatch(script, /insert\([^)]*online_provider_events/);
 });
 
 test("native hosted checkout falls back without exposing a Browser plugin failure", () => {
