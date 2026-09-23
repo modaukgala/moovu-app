@@ -6,6 +6,8 @@ import { isDriverEligibleForRideOption } from "@/lib/drivers/rideEligibility";
 import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 import { phase6NewWork } from "@/lib/drivers/phase6NewWork";
 import { readOfferAttempts, untriedCandidatesFirst, type OfferAttempt } from "@/lib/dispatch/attemptHistory";
+import { ACTIVE_ASSIGNED_TRIP_STATUSES } from "@/lib/trips/tripContract";
+import { ACTIVE_DRIVER_OFFER_STATUSES } from "@/lib/dispatch/offerContract";
 
 type CandidateRow = {
   id: string;
@@ -136,9 +138,9 @@ export async function getDispatchCandidates(params: {
     supabase.from("driver_wallets").select("driver_id,balance_due").in("driver_id", driverIds),
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").in("driver_id", driverIds),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").in("driver_id", driverIds),
-    supabase.from("trips").select("driver_id").in("driver_id", driverIds).in("status", ["assigned", "arrived", "ongoing"]),
+    supabase.from("trips").select("driver_id").in("driver_id", driverIds).in("status", [...ACTIVE_ASSIGNED_TRIP_STATUSES]),
     readOfferAttempts(supabase, tripId, driverIds),
-    supabase.from("driver_trip_offers").select("driver_id").in("driver_id", driverIds).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()),
+    supabase.from("driver_trip_offers").select("driver_id").in("driver_id", driverIds).in("status", [...ACTIVE_DRIVER_OFFER_STATUSES]).gt("accept_deadline_at", new Date(now).toISOString()),
   ]);
 
   const fatal = [walletsResult.error, activeTripsResult.error, declinedResult.error, activeOfferResult.error].find(Boolean);
@@ -233,9 +235,9 @@ export async function getPreferredDispatchCandidate(params: {
 
   const [walletResult, activeTripsResult, declinedResult, activeOfferResult, qualityResult, statsResult] = await Promise.all([
     supabase.from("driver_wallets").select("driver_id,balance_due").eq("driver_id", driverId).maybeSingle(),
-    supabase.from("trips").select("driver_id").eq("driver_id", driverId).in("status", ["assigned", "arrived", "ongoing"]).limit(1),
+    supabase.from("trips").select("driver_id").eq("driver_id", driverId).in("status", [...ACTIVE_ASSIGNED_TRIP_STATUSES]).limit(1),
     readOfferAttempts(supabase, tripId, [driverId]),
-    supabase.from("driver_trip_offers").select("driver_id").eq("driver_id", driverId).in("status", ["pending", "shown"]).gt("accept_deadline_at", new Date(now).toISOString()).limit(1),
+    supabase.from("driver_trip_offers").select("driver_id").eq("driver_id", driverId).in("status", [...ACTIVE_DRIVER_OFFER_STATUSES]).gt("accept_deadline_at", new Date(now).toISOString()).limit(1),
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").eq("driver_id", driverId).maybeSingle(),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").eq("driver_id", driverId).maybeSingle(),
   ]);

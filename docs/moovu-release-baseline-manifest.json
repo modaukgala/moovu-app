@@ -1,0 +1,78 @@
+{
+  "manifestVersion": 1,
+  "generatedAt": "2026-09-23T19:25:29.1253641+02:00",
+  "repository": "D:/Users/KN Mudau/Desktop/Websites/moovu-kasi-rides-redesign",
+  "git": {
+    "branch": "main",
+    "head": "61cb00ed054b53038d273905fa86b9076aa267ad",
+    "workingTreeClean": false,
+    "releaseAuthority": "git-head-plus-sha256-overlay"
+  },
+  "production": {
+    "vercelDeploymentId": "dpl_12NaVfBEisT9kqBf8fSdTSxJ3qAv",
+    "supabaseProjectRef": "mvazbszenqahgqpznhhq",
+    "schemaEvidence": "docs/moovu-master-transformation-audit.md",
+    "phase2Mode": "AUTHORITATIVE",
+    "scheduledTripStatusSupported": false,
+    "phase6EligibilityInstalled": false
+  },
+  "applicationContract": {
+    "schemaProfile": "baseline",
+    "requiredPreflight": "node scripts/release-schema-preflight.mjs --profile=baseline",
+    "featureFlags": {
+      "scheduledRides": false,
+      "NEXT_PUBLIC_MOOVU_PHASE6_NEW_WORK_ELIGIBILITY": "disabled-or-absent"
+    },
+    "requiredRpcs": [
+      "phase5_create_trip",
+      "reserve_trip_offer",
+      "accept_trip_offer",
+      "decline_trip_offer",
+      "phase05b_complete_trip",
+      "phase2_finance_eligibility"
+    ]
+  },
+  "preparedButNotProductionApplied": [
+    "supabase/migrations/20260916190136_phase6_driver_onboarding.sql",
+    "supabase/migrations/20260916191949_phase6_security_completion.sql",
+    "supabase/migrations/20260916192353_phase6_retention_workflow.sql",
+    "supabase/migrations/20260917190034_phase6_retention_hold_release.sql",
+    "supabase/migrations/20260917190412_phase6_operating_status_guard.sql",
+    "supabase/migrations/20260917191303_phase6_latest_cycle_authority.sql",
+    "supabase/migrations/20260918035959_phase6_legacy_document_read_scope.sql",
+    "docs/phase-3-payment-ux-subscription-yoco-correction.sql",
+    "supabase/migrations/20260923103000_phase3_online_trip_method_repair.sql"
+  ],
+  "excludedFromRelease": [
+    "all unrelated dirty-tree files",
+    "local logs",
+    "disposable evidence",
+    "unreviewed Phase 4-6 overlays",
+    "Phase 3 payment UX correction until its separate gate resumes"
+  ],
+  "overlaySha256": {
+    "runtime": {
+      "src/app/api/customer/book-trip/route.ts": "fc84655351f07b3dcfdbb511eb247950e2fc1892e87b7790bd7efbe1fd4264da",
+      "src/app/book/page.tsx": "f7e5ab1f193f68002beb0a743de39a79fc4a9a9feaab0ce16e3fba38c6801c99",
+      "src/app/driver/page.tsx": "a849a37a9e8fe3b04834890a607e44350c32bdd82300afeaf8a985c03201aeba",
+      "src/lib/dispatch/dispatchCandidates.ts": "2fa836c0d75cafa282fae031354158182d25423856106bed58ae490ff012f869",
+      "src/lib/dispatch/dispatchTrip.ts": "8a5067a766e389712959fb4af38de241facdf505af943769a2ee18bee24430c8",
+      "src/lib/dispatch/expireTripOffers.ts": "b0b58d50812b855dec863aefb4dc866a05a9fd30eaf02bc7ec147ecc98d1c0d8",
+      "src/lib/drivers/phase6NewWork.ts": "adbbe62569db1768c31d2bdf941a9478cbfcc71bd9214f63e35e3b45bebf8caf",
+      "src/lib/dispatch/offerContract.ts": "379f851ac253fccf403c5c8b3faa9ca1cfde5c3e2355c51a63afcdd75fe081e2",
+      "src/lib/release/releaseFlags.ts": "6420983755866bbfcec5424634561861ccf66f3109e92c9327bdf83fa3b35f02",
+      "src/lib/trips/tripContract.ts": "955cc5e4a29ae64d7257850c39e557e735b55f690cfbac37231dec11fef02235"
+    },
+    "validation": {
+      "scripts/release-schema-preflight.mjs": "0c2674a9aeaac330ac6b27921d9701cc7a950a45a7ebbf3dd369b75d5731a123",
+      "scripts/p0-booking-recovery-e2e.mjs": "c695664b48f6b2a78018de252316796802525d257f0e4128df6ccacc7b2b9a14",
+      "src/lib/drivers/stabilisationContracts.test.ts": "7293180abcc1550ac5fe9a9d52799f5cd89800d993e21ba30669a25daa2ac33b",
+      "src/lib/payments/paymentUxCorrection.test.ts": "580ea89fa7178df889c9cb154561237f933322c86cd7d8f128c7aeff4db71d97",
+      "src/lib/trips/adminTripPaymentMethod.test.ts": "65751f1b7c1f81cfaa6648ae1ab2b5cc28e2207aae9a5d481055f9e97a8aae22"
+    }
+  },
+  "preservedConcurrentWork": [
+    "src/lib/payments/checkoutNavigation.ts",
+    "supabase/migrations/20260923103000_phase3_online_trip_method_repair.sql"
+  ]
+}

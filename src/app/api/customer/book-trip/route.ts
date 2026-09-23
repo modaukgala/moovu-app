@@ -19,6 +19,7 @@ import { verifyRouteQuote } from "@/lib/maps/routeQuote";
 import { callPhase4Rpc } from "@/lib/server/phase4Rpc";
 import { calculatePhase5Fare } from "@/lib/finance/phase5Fare";
 import { normalizeCustomerPaymentMethod } from "@/lib/payments/customerPaymentMethod";
+import { SCHEDULED_RIDES_ENABLED } from "@/lib/release/releaseFlags";
 
 function generateOtp() {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -264,6 +265,12 @@ export async function POST(req: Request) {
 
     const rideTypeRaw = pickFirstString(body.rideType, body.ride_type) || "now";
     const rideType = rideTypeRaw === "scheduled" ? "scheduled" : "now";
+    if (rideType === "scheduled" && !SCHEDULED_RIDES_ENABLED) {
+      return NextResponse.json(
+        { ok: false, code: "SCHEDULED_RIDES_DISABLED", error: "Scheduled rides are temporarily unavailable. Please request a ride now." },
+        { status: 409 },
+      );
+    }
     const rideOptionId = normalizeRideOptionId(
       pickFirstString(body.rideOption, body.ride_option),
     );

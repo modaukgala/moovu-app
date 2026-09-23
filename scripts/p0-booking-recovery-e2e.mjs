@@ -64,10 +64,11 @@ async function driver(options = {}) {
   const account = await authUser("driver");
   const id = randomUUID();
   required(await db.from("drivers").insert({ id, first_name: "P0", last_name: run,
+    phone: `+276${String(Date.now()).slice(-7)}${drivers.length % 10}`,
     status: options.status ?? "approved", verification_status: "approved", profile_completed: true,
     online: options.online ?? true, busy: false, is_deleted: false, seating_capacity: options.seats ?? 7,
     lat: options.lat ?? pickup.lat, lng: pickup.lng, last_seen: new Date().toISOString(),
-    subscription_status: "expired", subscription_expires_at: null }), "Subscription-free driver");
+    subscription_status: "inactive", subscription_expires_at: null }), "Subscription-free driver");
   required(await db.from("driver_accounts").insert({ user_id: account.id, driver_id: id }), "Driver link");
   required(await db.from("driver_wallets").insert({ driver_id: id, balance_due: 0 }), "Legacy wallet");
   const row = { ...account, driverId: id };
@@ -108,7 +109,7 @@ async function noCommission(id, label) {
 let route;
 async function booking(option = "go", extra = {}, at = pickup) {
   const destination = at === pickup ? dropoff : { lat: at.lat - .005, lng: at.lng + .02 };
-  const routed = at === pickup ? route : (await request("/api/maps/distance", customer.token, {
+  const routed = (await request("/api/maps/distance", customer.token, {
     origin_lat: at.lat, origin_lng: at.lng, destination_lat: destination.lat, destination_lng: destination.lng, waypoints: [] })).body;
   const quote = await request("/api/customer/phase5-quote", customer.token, { pickup: at, dropoff: destination,
     stops: [], routeQuote: routed.routeQuote, rideOption: option });
@@ -304,7 +305,7 @@ try {
   for (const item of [
     { label: "R0", debt: 0, expected: true }, { label: "R49.99", debt: 4999, expected: true },
     { label: "R50", debt: 5000, expected: false }, { label: "R100", debt: 10000, expected: false },
-    { label: "Suspended", status: "suspended", debt: 0, expected: false },
+    { label: "Inactive", status: "inactive", debt: 0, expected: false },
     { label: "Rejected", status: "rejected", debt: 0, expected: false },
     { label: "Offline", online: false, debt: 0, expected: false },
     { label: "Wrong class", seats: 2, debt: 0, expected: false },
@@ -369,8 +370,8 @@ try {
   check("No eligible driver creates safe searchable trip without commission", noDriver.result.body.autoOfferStarted === false && (await offers(noDriver.id)).length === 0);
   const failing = await request("/api/customer/book-trip", customer.token, { ...noDriver.payload, bookingKey: randomUUID(), rideType: "scheduled",
     scheduledFor: new Date(Date.now() + 1800000).toISOString() });
-  check("Customer constraint error stays sanitized", failing.status === 500 && failing.body?.error === "We couldn't create your trip. Please try again.");
-  check("Server retains failure diagnostics", logs.includes("[book-trip] trip creation failed") && logs.includes("23514"));
+  check("Scheduled creation is rejected before an incompatible database write", failing.status === 409 &&
+    failing.body?.code === "SCHEDULED_RIDES_DISABLED");
 } catch (error) {
   check("All connected sections reached", false, error instanceof Error ? error.message : String(error));
   console.log("ISOLATED_SERVER_DIAGNOSTIC " + logs.slice(-4500));

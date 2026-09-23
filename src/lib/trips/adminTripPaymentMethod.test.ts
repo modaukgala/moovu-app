@@ -73,6 +73,9 @@ test("customer booking accepts cash and online while rejecting unknown payment m
     "@/lib/customer/server": { getAuthenticatedCustomer: async () => ({ ok: true, customer: { id: "customer-1", status: "active" }, supabaseAdmin: {} }) },
     "@/lib/server/phase4Rpc": { callPhase4Rpc: async () => ({ ok: true, result: { booking_blocked: false } }) },
     "@/lib/finance/phase5Fare": { calculatePhase5Fare: () => ({}) },
+    "@/lib/payments/customerPaymentMethod": { normalizeCustomerPaymentMethod: (value: string) =>
+      value === "cash" || value === "online" ? value : null },
+    "@/lib/release/releaseFlags": { SCHEDULED_RIDES_ENABLED: false },
     "@/lib/push-notify": {},
     "@/lib/maps/routeService": {},
     "@/lib/maps/mapRequestPolicy": {},

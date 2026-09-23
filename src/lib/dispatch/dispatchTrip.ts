@@ -8,6 +8,7 @@ import { cancelExpiredDispatch } from "@/lib/dispatch/cancelExpiredDispatch";
 import type { DispatchResult } from "@/lib/dispatch/types";
 import { cappedCandidates, settledPool } from "@/lib/dispatch/reliability";
 import { expireTripOffers } from "@/lib/dispatch/expireTripOffers";
+import { DISPATCHABLE_TRIP_STATUSES } from "@/lib/trips/tripContract";
 
 type AtomicOfferRow = {
   offer_id: string;
@@ -115,7 +116,7 @@ export async function dispatchTrip(params: {
   if (tripError || !trip) {
     return { ok: false, tripId: params.tripId, error: tripError?.message ?? "Trip not found." };
   }
-  if (!["requested", "offered"].includes(String(trip.status))) {
+  if (!(DISPATCHABLE_TRIP_STATUSES as readonly string[]).includes(String(trip.status))) {
     return { ok: false, tripId: trip.id, error: "Trip is no longer dispatchable." };
   }
   if (trip.driver_id && trip.status !== "offered") {

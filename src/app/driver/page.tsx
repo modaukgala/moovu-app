@@ -41,6 +41,7 @@ import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
+import { phase6DriverNoticeEnabled } from "@/lib/release/releaseFlags";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
 import {
   canReceiveTripOffers,
@@ -1158,7 +1159,12 @@ export default function DriverHomePage() {
 
   return (
     <main className="moovu-page moovu-driver-shell text-black">
-      <div className="mx-auto my-3 max-w-6xl rounded-xl border bg-white p-4"><a className="font-semibold underline" href="/driver/onboarding">Complete Driver re-registration / view application</a><p className="mt-1 text-sm">Deadline: 30 November 2026. Incomplete re-registration blocks new work from 1 December 2026; active trips continue.</p></div>
+      {phase6DriverNoticeEnabled() && (
+        <div className="mx-auto my-3 max-w-6xl rounded-xl border bg-white p-4">
+          <a className="font-semibold underline" href="/driver/onboarding">Complete Driver re-registration / view application</a>
+          <p className="mt-1 text-sm">Complete the current onboarding cycle before accepting new work. Active trips continue.</p>
+        </div>
+      )}
       {driverActionError && (
         <CenteredMessageBox
           title="Action needs attention"

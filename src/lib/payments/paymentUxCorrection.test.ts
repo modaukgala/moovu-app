@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+// @ts-expect-error Node strip-types requires explicit extensions.
 import { normalizeCustomerPaymentMethod } from "./customerPaymentMethod.ts";
+// @ts-expect-error Node strip-types requires explicit extensions.
 import { DRIVER_SUBSCRIPTION_PLANS } from "../finance/driverPayments.ts";
 
 test("customer payment methods canonicalize only cash and online", () => {
@@ -37,4 +39,20 @@ test("manual payment write endpoints fail closed", () => {
   const customerRoute = readFileSync("src/app/api/customer/phase5-account/route.ts", "utf8");
   assert.match(driverRoute, /status: 410/);
   assert.match(customerRoute, /Manual bank-transfer membership submissions are no longer accepted/);
+});
+
+test("online trip method repair is service-only and cannot alter dispatched trips", () => {
+  const sql = readFileSync("supabase/migrations/20260923103000_phase3_online_trip_method_repair.sql", "utf8");
+  assert.match(sql, /phase3_mark_trip_online_before_dispatch/);
+  assert.match(sql, /auth\.role\(\) is distinct from 'service_role'/);
+  assert.match(sql, /Trip already entered dispatch/);
+  assert.match(sql, /grant execute[^;]+to service_role/i);
+  assert.doesNotMatch(sql, /grant execute[^;]+to (?:anon|authenticated)/i);
+});
+
+test("native hosted checkout falls back without exposing a Browser plugin failure", () => {
+  const navigation = readFileSync("src/lib/payments/checkoutNavigation.ts", "utf8");
+  assert.match(navigation, /try\s*\{/);
+  assert.match(navigation, /catch \(error\)/);
+  assert.match(navigation, /window\.location\.assign/);
 });

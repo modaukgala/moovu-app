@@ -1,21 +1,21 @@
 {
-  "run": "8ad1f109",
+  "run": "afa9dafe",
   "disposable": "tangtlmdpnvmoviwrgvd",
   "production_mutated": false,
-  "customer_id": "25cab797-061d-42a6-9947-ad182b992076",
+  "customer_id": "5be17f70-7635-4f36-baff-d406eb41917f",
   "fixture_driver_ids": [
-    "29c5048b-d3c9-4c3b-8f00-418cf991c461",
-    "09251f99-0b66-41af-84be-702b30b77e00",
-    "888d8ca6-6f1f-43b3-9266-f7187ff59a43",
-    "1d9b737d-abd9-408c-a304-f790f5b47fe9"
+    "d74c2b44-1abc-46b1-a78e-a0abf1b63210",
+    "935cfa62-a305-4391-95f1-426e46596bd6",
+    "633960d1-ad7f-4136-84e7-98ea6c3116ba",
+    "9bcda952-3f53-4307-be1d-f07d63df2169"
   ],
   "trip_ids": [
-    "1644cb6f-e75d-4556-a32a-f43b03c4ad68",
-    "1c192a97-3746-4b4b-b2a5-1b74b009bdd7",
-    "0a3e5d88-125e-4036-8125-41226697dd3e",
-    "d415fa9e-afb7-4ac8-a1cb-36a403eab53c",
-    "075b3944-79ad-4f89-a37a-53f002d4aced",
-    "25119798-d786-4b6e-b0cd-64aa30c71bc6"
+    "c5fa061b-a5ff-4af1-a658-5b12f2b269a3",
+    "e2e9fbb0-8010-449f-84e6-b9808c78aa68",
+    "3aa6e528-519e-46df-b877-381461a730fe",
+    "cad79478-1f6b-4d6e-8478-52ead30a05e3",
+    "9f1c1c31-de30-4c17-b7a1-27ce4b9dd901",
+    "e1a695a7-c08e-44e1-b1c4-441afc1081bb"
   ],
   "checks": [
     {
@@ -80,10 +80,10 @@
       "pass": true,
       "details": [
         {
-          "status": 409
+          "status": 200
         },
         {
-          "status": 200
+          "status": 409
         }
       ]
     },
@@ -138,17 +138,12 @@
       "details": null
     },
     {
-      "name": "Customer constraint error stays sanitized",
-      "pass": true,
-      "details": null
-    },
-    {
-      "name": "Server retains failure diagnostics",
+      "name": "Scheduled creation is rejected before an incompatible database write",
       "pass": true,
       "details": null
     }
   ],
-  "passed": 24,
+  "passed": 23,
   "failed": 0,
   "notes": "Authenticated HTTP lifecycle with simulated GPS via the real heartbeat API and real elapsed duration; no real-device push sends."
 }

@@ -1,58 +1,68 @@
 {
-  "run": "76c60e7c",
+  "run": "501e614b",
   "disposable": "tangtlmdpnvmoviwrgvd",
   "production_mutated": false,
-  "customer_id": "0d55f184-ff84-43c4-b5fd-230ae71ef8cd",
+  "customer_id": "55569bbd-543a-4da3-86c1-62c420cd2147",
   "fixture_driver_ids": [
-    "f7f82dbd-907b-412c-983d-0efa98aca4dd",
-    "bef181a9-df60-4288-90c5-a23ed4b8cbab",
-    "d45243bd-b1db-4211-b96e-1dea886b5a77",
-    "1d677659-e230-407f-a8d1-96347de23bb5",
-    "948f3986-088b-4326-ab94-47655647f1a5",
-    "fc208062-8c78-4dce-a864-ba8611e799b2",
-    "2e44c44c-99d5-4e27-8d8a-7584e2d57ed3",
-    "2f50e43b-5382-41a3-8390-200827a338c5",
-    "6522c922-0cc8-4e14-8e5a-d76f17d04d70",
-    "c4879717-d7e1-43c9-b6b3-e661570fc274",
-    "dad2c836-53e3-47f9-89b0-51c083ecf150",
-    "92ece5f8-7c7d-4648-a024-9c98a617b3c5",
-    "0853a223-7c3e-439f-8d46-cc36ab6fdaf4",
-    "22d1d87b-793a-4117-a54a-81e8a7ec28b5",
-    "331f4301-22f1-40ee-8c39-09eb6f3fb8d2",
-    "5a52cb34-196f-4767-9870-766478e27100",
-    "57792f2f-5e4c-40c9-af1b-e808977fc2ce",
-    "1c8500f1-7947-4057-abeb-5381dc26df13",
-    "bb94c25d-f341-41da-bf39-aa7eb89bf870",
-    "7e7dfca8-af95-4db6-b377-32ed2b94dbd6",
-    "a53996a0-0012-4387-af26-11f58cfdd1b4",
-    "5fd37bb8-95ff-4c24-9035-acd9b8077d37",
-    "14d31a44-0a96-4772-a778-77fc4dc1e8c0",
-    "ff29df95-9834-4709-9f57-8a1bc41c3ded",
-    "64f985a6-015a-4904-be92-f1802bf2d8cd",
-    "28f217fb-ad23-48d7-884e-2f3f7f95ab56",
-    "1454bade-a004-4236-9e42-a7395d8b4c3f",
-    "2db6911a-179b-4a4d-ad8b-770ecf8eeb28",
-    "2e43d212-6021-4877-9667-82f4f7ee8c8e",
-    "e4367d3f-8f0a-4bcf-a41b-ce446bcc5933",
-    "ae56c5f9-29bd-4853-8882-d0b7510d8452",
-    "070539ea-db7b-4f76-b181-cd7e6dbd4b11",
-    "fb39acc9-acd1-40a3-8d48-dba61c3edfc1",
-    "2a75ef4f-3953-4c1b-8c3d-1168c7aa8a3b",
-    "6636135f-19a7-4104-8483-8b940d4d0a40",
-    "35667079-5b61-4545-94e4-0102b4bb6a49"
+    "51fa3db7-c709-43ac-b35a-8eb3f6d1b516",
+    "54dd2c4c-38a5-46ff-94dc-8027826afc73",
+    "c14e0c3c-766a-4e56-a1c5-4036681949b5",
+    "6ba0aea5-90e1-4b77-9017-47b6cce2a6bd",
+    "bb998f6b-d274-4114-8f10-caeea60b4756",
+    "769a8f15-79da-4f4c-8ce6-6db31e293171",
+    "d3a41412-165c-4c79-8137-a68a7fac2889",
+    "5686ea76-5ad4-4bfc-b1b3-bc005771bdc6",
+    "ec712558-b423-46e1-9659-9fa4d3063657",
+    "ae944f66-51de-4ed1-85de-48e18dfa1f31",
+    "ff9c0f98-97fb-4e4d-b1a3-a6d3f92f0792",
+    "1c1723b8-c328-4b75-a3f8-30a81676eb4d",
+    "caa004d2-601f-49a2-aec7-df7f80123db7",
+    "4f0e53f2-1614-4185-a3ab-6800c694d45b",
+    "98a9acfd-bf78-4731-a13a-bc75c1e072f3",
+    "6d086c22-f586-44e9-9bb6-22e2b724a330",
+    "a8a2aa3d-60b5-425d-ab51-954205e8afcc",
+    "cadc5b2a-3525-46ef-ab39-16c803b25a8f",
+    "aa9b548b-9463-429a-9119-391fe1f589db",
+    "432de3ec-1489-4be4-881a-0f3e1188cbb3",
+    "ccdeb69a-7b1f-4cbb-881f-bf7e6d0101be",
+    "b8bb03b6-451a-4300-a290-af6fca4a1c60",
+    "2506bb20-5c11-468e-9686-ccc3a4b618b0",
+    "3259105d-962e-4c4d-88cf-5f2d121ea0ee",
+    "6d57c3b0-4452-4ce3-aa9e-76efe3c0ad91",
+    "87f7e8e5-6880-4bef-b18a-edc1e6acae15",
+    "58dc57c2-deff-4029-ace7-c88136708d94",
+    "16e3760e-3ffc-4d4c-866d-3be242523f78",
+    "76913adf-e01e-4a15-ad04-65248bb8be4d",
+    "e8d9a479-f8a1-4c43-bfd6-3a34a61b0ec5",
+    "06b11bc7-0210-4763-866e-cc3415f276e7",
+    "5cb720e3-08f9-44a9-bb73-c6ee50ca4c21",
+    "c9d947e0-48c3-473a-8eba-a4f30102d4a0",
+    "67f16125-31b1-4032-8d54-2b19660aa3d5",
+    "6daab629-032b-47a4-b1e6-9c289bea1374",
+    "ae580f1d-999a-4071-a80d-7fa952e9ef5e",
+    "0c892b99-0e82-492f-85cb-b014c2e342db",
+    "f57f1c81-ad72-45f3-a8b3-ab0e68a19e57",
+    "09829634-a801-4cdd-861a-9f83b380cb44",
+    "5243071e-e693-4c6a-ab51-c0fc5b6c7f4d"
   ],
   "trip_ids": [
-    "836a0dc8-8590-4da2-abdb-b2bfbd798297",
-    "73e9d210-58e8-4328-b863-979754957a84",
-    "4d6d31d4-fb07-4bca-905a-6425c1896d68",
-    "83d4c8ab-85f4-4547-ba8b-648d1f731796",
-    "a3a806d1-03cd-4a16-abc7-dd958d144dcf",
-    "fd9ebeb8-f346-43b5-ad10-48258fff1992",
-    "853daa44-cf4d-4380-a0b1-de2f7aeea358",
-    "447d4de7-a298-41ec-a7ba-d2c88ed08be9",
-    "c462b5eb-b86a-4c0d-9b6a-eb753766c90a",
-    "cc956b04-00aa-4963-a15d-0cd75a76b09a",
-    "e72d0f1b-4480-4335-acf6-ac0957bdec4c"
+    "33b6218d-28d7-4e46-a455-38ef40a3c8c9",
+    "9f95a6f5-4202-4cad-813c-0137f1567e49",
+    "35fb2bf8-66d2-43a1-9b69-6ff7d7ac961e",
+    "aae25caa-23ea-4620-9072-d3f921ddee53",
+    "bb8f970b-4e83-4d89-84d4-2cb2cefc7645",
+    "58fd443e-6a55-4a1b-ac64-cf1338f425a0",
+    "63c89161-4b36-434a-a8f9-1d92f00e9a0a",
+    "c3399a27-7caa-4a22-a704-f6b78eb7221d",
+    "d29615bd-7dcf-4343-84e8-3701bc049c37",
+    "c970f34d-0256-4d95-94c1-c5b9614a2a6e",
+    "2e249038-f5a9-4889-a658-9ffed8782538",
+    "d18b7887-9606-427f-b73d-25ac6981eb72",
+    "de039fda-988e-41f8-b9f7-2c470fc0c8b3",
+    "d09e1d02-135a-46fd-a046-b38083628a9a",
+    "67ae3755-476b-437b-9f66-cb6ba0ff0c73",
+    "240d480a-d2c0-474e-8d51-d05065a27d85",
+    "5dc4011d-eec0-4086-93fa-95c6caacb23b"
   ],
   "checks": [
     {
@@ -336,17 +346,17 @@
       "details": null
     },
     {
-      "name": "Suspended exact authoritative debt",
+      "name": "Inactive exact authoritative debt",
       "pass": true,
       "details": null
     },
     {
-      "name": "Suspended connected subscription-free dispatch eligibility",
+      "name": "Inactive connected subscription-free dispatch eligibility",
       "pass": true,
       "details": null
     },
     {
-      "name": "Suspended database reservation cannot bypass eligibility",
+      "name": "Inactive database reservation cannot bypass eligibility",
       "pass": true,
       "details": null
     },
@@ -427,7 +437,7 @@
           "commissionAmount": 7.8,
           "driverNet": 44.2
         },
-        "elapsedSeconds": 127,
+        "elapsedSeconds": 126,
         "minRequiredSeconds": 120,
         "distanceAudit": "Trip completed 0.00 km from destination.",
         "kmAway": 0
@@ -475,7 +485,7 @@
           "commissionAmount": 11.1,
           "driverNet": 62.9
         },
-        "elapsedSeconds": 130,
+        "elapsedSeconds": 126,
         "minRequiredSeconds": 120,
         "distanceAudit": "Trip completed 0.00 km from destination.",
         "kmAway": 0
@@ -503,21 +513,113 @@
     },
     {
       "name": "Connected candidate cap remains 25",
-      "pass": false,
+      "pass": true,
       "details": null
     },
     {
       "name": "Expiry advances to untried candidate rather than repeating previous batch",
-      "pass": false,
+      "pass": true,
       "details": null
     },
     {
-      "name": "All connected sections reached",
-      "pass": false,
-      "details": "The expression evaluated to a falsy value:\n\n  assert.ok(owner)\n"
+      "name": "Authenticated decline persisted and never retried",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Admin attempted count derives from canonical history",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Concurrent reservations for one driver permit exactly one trip",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Trip-scoped expiry leaves unrelated due offers untouched",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Expired offer cannot reserve again in the same cycle",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Expired candidate can retry only in explicit later cycle",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Concurrent authenticated acceptance has one winner",
+      "pass": true,
+      "details": [
+        {
+          "status": 200
+        },
+        {
+          "status": 409
+        }
+      ]
+    },
+    {
+      "name": "Acceptance race cancels losing offer without commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Concurrent booking replay preserves trip identity and OTP",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Untrusted client cannot reserve offers",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Untrusted client cannot accept or expire offers",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Untrusted client cannot reserve offers",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Untrusted client cannot accept or expire offers",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Concurrent customer persistence preserves one unchanged canonical actor",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Go-only vehicle cannot receive XL through live dispatch or direct reservation",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Six-seat review vehicle remains Go-only and cannot bypass XL reservation",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "No eligible driver creates safe searchable trip without commission",
+      "pass": true,
+      "details": null
+    },
+    {
+      "name": "Scheduled creation is rejected before an incompatible database write",
+      "pass": true,
+      "details": null
     }
   ],
-  "passed": 74,
-  "failed": 3,
+  "passed": 94,
+  "failed": 0,
   "notes": "Authenticated HTTP lifecycle with simulated GPS via the real heartbeat API and real elapsed duration; no real-device push sends."
 }

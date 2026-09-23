@@ -54,6 +54,7 @@ import {
 } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { openHostedPaymentCheckout } from "@/lib/payments/checkoutNavigation";
+import { SCHEDULED_RIDES_ENABLED } from "@/lib/release/releaseFlags";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 type CustomerMe = {
@@ -2733,12 +2734,13 @@ export default function RiderBookingPage() {
             </button>
             <button
               type="button"
+              disabled={!SCHEDULED_RIDES_ENABLED}
               className={
                 rideType === "scheduled" ? "moovu-segmented-active" : ""
               }
-              onClick={() => setRideType("scheduled")}
+              onClick={() => SCHEDULED_RIDES_ENABLED && setRideType("scheduled")}
             >
-              Schedule
+              Schedule {SCHEDULED_RIDES_ENABLED ? "" : "(temporarily unavailable)"}
             </button>
           </div>
         </div>
@@ -2755,7 +2757,7 @@ export default function RiderBookingPage() {
               }`}
               onClick={() => setPaymentMethod("cash")}
             >
-              Cash / Transfer
+              Cash
             </button>
 
             <button
@@ -3436,7 +3438,7 @@ export default function RiderBookingPage() {
             <div>
               <span>Payment</span>
               <strong>
-                {paymentMethod === "cash" ? "Cash / Transfer" : paymentMethod}
+                {paymentMethod === "cash" ? "Cash" : paymentMethod}
               </strong>
             </div>
             <div className="text-right">
