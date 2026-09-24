@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
 import { CheckCircle2, Clock3, CreditCard, TriangleAlert, XCircle } from "lucide-react";
+import { closeHostedPaymentCheckout } from "@/lib/payments/checkoutNavigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { formatZarCents, paymentResultPresentation } from "@/lib/payments/onlinePayment";
 
@@ -59,10 +60,7 @@ export default function PaymentResultClient(props: {
 
   const presentation = paymentResultPresentation(props.kind, status?.state ?? null);
   const returnToApp = useCallback(async () => {
-    if (Capacitor.isNativePlatform()) {
-      const { Browser } = await import("@capacitor/browser");
-      await Browser.close().catch(() => undefined);
-    }
+    await closeHostedPaymentCheckout();
     router.push(props.backHref);
   }, [props.backHref, router]);
   const Icon = presentation.kind === "success" ? CheckCircle2

@@ -179,7 +179,9 @@ export default function DriverCommissionPaymentsPage() {
       return;
     }
     try {
-      await openHostedPaymentCheckout(body.redirectUrl);
+      await openHostedPaymentCheckout(body.redirectUrl, {
+        returnPath: `/driver/payment/success?attemptId=${encodeURIComponent(body.attemptId)}`,
+      });
     } catch (error) {
       setBusy(false);
       setMsg(error instanceof Error ? error.message : "Unable to open secure checkout.");

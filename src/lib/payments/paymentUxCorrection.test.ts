@@ -73,7 +73,23 @@ test("Driver reconciliation uses authenticated Yoco retrieval and deterministic 
 
 test("native hosted checkout falls back without exposing a Browser plugin failure", () => {
   const navigation = readFileSync("src/lib/payments/checkoutNavigation.ts", "utf8");
+  assert.match(navigation, /Capacitor\.isPluginAvailable\("Browser"\)/);
+  assert.match(navigation, /browserFinished/);
+  assert.match(navigation, /appStateChange/);
+  assert.match(navigation, /if \(returned\) return/);
+  assert.match(navigation, /trustedReturnPath/);
   assert.match(navigation, /try\s*\{/);
   assert.match(navigation, /catch \(error\)/);
   assert.match(navigation, /window\.location\.assign/);
+});
+
+test("Customer and Driver checkout dismissal refreshes trusted payment status without creating another checkout", () => {
+  const customer = readFileSync("src/app/book/page.tsx", "utf8");
+  const driver = readFileSync("src/app/driver/commission-payments/page.tsx", "utf8");
+  const result = readFileSync("src/components/payments/PaymentResultClient.tsx", "utf8");
+
+  assert.match(customer, /openHostedPaymentCheckout\(checkoutJson\.redirectUrl,[\s\S]*returnPath: `\/payment\/success\?tripId=/);
+  assert.match(driver, /openHostedPaymentCheckout\(body\.redirectUrl,[\s\S]*returnPath: `\/driver\/payment\/success\?attemptId=/);
+  assert.match(result, /closeHostedPaymentCheckout/);
+  assert.doesNotMatch(result, /await import\("@capacitor\/browser"\)/);
 });

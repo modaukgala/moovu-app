@@ -2004,7 +2004,9 @@ export default function RiderBookingPage() {
           return;
         }
 
-        await openHostedPaymentCheckout(checkoutJson.redirectUrl);
+        await openHostedPaymentCheckout(checkoutJson.redirectUrl, {
+          returnPath: `/payment/success?tripId=${encodeURIComponent(tripId)}`,
+        });
         return;
       }
 
