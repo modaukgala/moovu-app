@@ -140,7 +140,7 @@ export async function getDispatchCandidates(params: {
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").in("driver_id", driverIds),
     supabase.from("trips").select("driver_id").in("driver_id", driverIds).in("status", [...ACTIVE_ASSIGNED_TRIP_STATUSES]),
     readOfferAttempts(supabase, tripId, driverIds),
-    supabase.from("driver_trip_offers").select("driver_id").in("driver_id", driverIds).in("status", [...ACTIVE_DRIVER_OFFER_STATUSES]).gt("accept_deadline_at", new Date(now).toISOString()),
+    supabase.from("driver_trip_offers").select("driver_id,trips!inner(status,driver_id)").in("driver_id", driverIds).in("status", [...ACTIVE_DRIVER_OFFER_STATUSES]).gt("accept_deadline_at", new Date(now).toISOString()).in("trips.status", ["requested", "offered"]).is("trips.driver_id", null),
   ]);
 
   const fatal = [walletsResult.error, activeTripsResult.error, declinedResult.error, activeOfferResult.error].find(Boolean);
@@ -237,7 +237,7 @@ export async function getPreferredDispatchCandidate(params: {
     supabase.from("driver_wallets").select("driver_id,balance_due").eq("driver_id", driverId).maybeSingle(),
     supabase.from("trips").select("driver_id").eq("driver_id", driverId).in("status", [...ACTIVE_ASSIGNED_TRIP_STATUSES]).limit(1),
     readOfferAttempts(supabase, tripId, [driverId]),
-    supabase.from("driver_trip_offers").select("driver_id").eq("driver_id", driverId).in("status", [...ACTIVE_DRIVER_OFFER_STATUSES]).gt("accept_deadline_at", new Date(now).toISOString()).limit(1),
+    supabase.from("driver_trip_offers").select("driver_id,trips!inner(status,driver_id)").eq("driver_id", driverId).in("status", [...ACTIVE_DRIVER_OFFER_STATUSES]).gt("accept_deadline_at", new Date(now).toISOString()).in("trips.status", ["requested", "offered"]).is("trips.driver_id", null).limit(1),
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").eq("driver_id", driverId).maybeSingle(),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").eq("driver_id", driverId).maybeSingle(),
   ]);

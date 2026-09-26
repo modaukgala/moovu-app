@@ -4,7 +4,7 @@ import { getUserFromBearer } from "@/app/api/driver/utils";
 import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 
 const TRIP_SELECT =
-  "id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount,payment_method";
+  "id,driver_id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount,payment_method";
 const TRIP_SELECT_WITH_STOPS =
   `${TRIP_SELECT},ride_option,stops,original_fare,final_add_stop_increase,final_fare,stop_waiting_fee`;
 
@@ -90,10 +90,12 @@ export async function GET(req: Request) {
     const nowIso = new Date().toISOString();
     const { data: offers, error: offerErr } = await supabaseAdmin
       .from("driver_trip_offers")
-      .select("trip_id,accept_deadline_at,offered_at")
+      .select("trip_id,accept_deadline_at,offered_at,trips!inner(status,driver_id)")
       .eq("driver_id", driverId)
       .in("status", ["pending", "shown"])
       .gt("accept_deadline_at", nowIso)
+      .in("trips.status", ["requested", "offered"])
+      .is("trips.driver_id", null)
       .order("offered_at", { ascending: false })
       .limit(1);
 
@@ -129,11 +131,12 @@ export async function GET(req: Request) {
 
       return NextResponse.json({
         ok: true,
-        offer: legacyTrip ? { ...legacyTrip, offer_expires_at: offerRow.accept_deadline_at } : null,
+        offer: legacyTrip && !legacyTrip.driver_id && ["requested", "offered"].includes(legacyTrip.status) && Date.parse(offerRow.accept_deadline_at) > Date.now()
+          ? { ...legacyTrip, offer_expires_at: offerRow.accept_deadline_at } : null,
       });
     }
 
-    if (!trip || ["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(String(trip.status ?? "").toLowerCase())) {
+    if (!trip || trip.driver_id || !["requested", "offered"].includes(String(trip.status ?? "").toLowerCase()) || !(Date.parse(offerRow.accept_deadline_at) > Date.now())) {
       return NextResponse.json({ ok: true, offer: null });
     }
 

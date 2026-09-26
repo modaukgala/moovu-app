@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserFromBearer } from "@/app/api/driver/utils";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isMissingOfferTableError } from "@/lib/trip-offers";
+import { offerOutcome } from "@/lib/dispatch/offerOutcome";
 
 const OFFER_SELECT = `
   id,
@@ -64,35 +65,6 @@ type TripRow = {
   ride_option?: string | null;
   created_at: string | null;
 };
-
-type OfferOutcome =
-  | "accepted_by_you"
-  | "accepted_by_another"
-  | "missed"
-  | "declined"
-  | "cancelled"
-  | "pending";
-
-function offerOutcome(offer: OfferRow, trip: TripRow | null, driverId: string): OfferOutcome {
-  const status = String(offer.status ?? "").toLowerCase();
-  const tripStatus = String(trip?.status ?? "").toLowerCase();
-
-  if (status === "accepted") return "accepted_by_you";
-  if (["declined", "rejected"].includes(status)) return "declined";
-  if (status === "expired") return "missed";
-  if (["pending", "shown"].includes(status)) return "pending";
-
-  if (
-    status === "cancelled" &&
-    trip?.driver_id &&
-    trip.driver_id !== driverId &&
-    (tripStatus !== "cancelled" || trip.offer_status === "accepted")
-  ) {
-    return "accepted_by_another";
-  }
-
-  return "cancelled";
-}
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Server error.";

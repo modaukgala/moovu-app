@@ -4,7 +4,7 @@ import { getUserFromBearer } from "@/app/api/driver/utils";
 import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 
 const TRIP_SELECT =
-  "id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount";
+  "id,driver_id,status,offer_status,offer_expires_at,pickup_address,dropoff_address,pickup_lat,pickup_lng,dropoff_lat,dropoff_lng,distance_km,duration_min,fare_amount";
 
 export async function POST(req: Request) {
   try {
@@ -65,10 +65,12 @@ export async function POST(req: Request) {
     const nowIso = new Date().toISOString();
     const { data: offers, error: offerErr } = await supabaseAdmin
       .from("driver_trip_offers")
-      .select("trip_id,accept_deadline_at,offered_at")
+      .select("trip_id,accept_deadline_at,offered_at,trips!inner(status,driver_id)")
       .eq("driver_id", driverId)
       .in("status", ["pending", "shown"])
       .gt("accept_deadline_at", nowIso)
+      .in("trips.status", ["requested", "offered"])
+      .is("trips.driver_id", null)
       .order("offered_at", { ascending: false })
       .limit(5);
 
@@ -94,7 +96,7 @@ export async function POST(req: Request) {
     );
 
     const fresh = (trips ?? [])
-      .filter((trip) => !["assigned", "arrived", "ongoing", "completed", "cancelled"].includes(String(trip.status ?? "").toLowerCase()))
+      .filter((trip) => !trip.driver_id && ["requested", "offered"].includes(String(trip.status ?? "").toLowerCase()) && Date.parse(deadlineByTripId.get(trip.id) ?? "") > Date.now())
       .map((trip) => ({
         ...trip,
         offer_expires_at: deadlineByTripId.get(trip.id) ?? trip.offer_expires_at,
