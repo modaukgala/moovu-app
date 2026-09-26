@@ -20,6 +20,7 @@ const navItems = [
   { href: "/admin/onboarding", label: "Onboarding Review", group: "Drivers" },
   { href: "/admin/link-driver", label: "Link Driver", group: "Drivers" },
   { href: "/admin/payment-reviews", label: "Payments", group: "Payments" },
+  { href: "/admin/online-payments", label: "Online Payments", group: "Payments" },
   { href: "/admin/moovu-plus", label: "MOOVU+", group: "Payments" },
   { href: "/admin/commission-payments", label: "Commissions", group: "Payments" },
   { href: "/admin/subscriptions", label: "Subscriptions", group: "Payments" },
