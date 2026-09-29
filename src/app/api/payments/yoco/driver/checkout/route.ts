@@ -61,6 +61,9 @@ export async function POST(req: Request) {
     }
 
     let attemptId = existing?.id as string | undefined;
+    if (existing?.state === "CREATED") {
+      return NextResponse.json({ ok: false, error: "Uncertain checkout requires reconciliation before retry." }, { status: 409 });
+    }
     if (!attemptId) {
       const { data: created, error: createError } = await auth.supabaseAdmin.from("driver_online_payment_attempts").insert({
         driver_id: auth.driverId, provider: "YOCO", obligation_type: "COMMISSION_DEBT",
@@ -85,6 +88,7 @@ export async function POST(req: Request) {
 
     const app = baseUrl(req);
     const checkout = await createYocoCheckout({
+      idempotencyKey: `moovu:checkout:${attemptId}`,
       amountCents, currency: "ZAR",
       successUrl: `${app}/driver/payment/success?attemptId=${encodeURIComponent(attemptId)}`,
       cancelUrl: `${app}/driver/payment/cancel?attemptId=${encodeURIComponent(attemptId)}`,

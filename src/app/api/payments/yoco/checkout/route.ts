@@ -178,6 +178,9 @@ export async function POST(req: Request) {
     }
 
     let attemptId = existingAttempt?.id ?? null;
+    if (existingAttempt?.state === "CREATED") {
+      return NextResponse.json({ ok: false, error: "Uncertain checkout requires reconciliation before retry." }, { status: 409 });
+    }
 
     if (!attemptId) {
       const { data: createdAttempt, error: createAttemptError } =
@@ -217,6 +220,7 @@ export async function POST(req: Request) {
     const appBaseUrl = getAppBaseUrl(req);
 
     const yocoCheckout = await createYocoCheckout({
+      idempotencyKey: `moovu:checkout:${attemptId}`,
       amountCents,
       currency: "ZAR",
 
@@ -232,7 +236,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const { error: updateError } = await auth.supabaseAdmin
+    const { data: updatedAttempt, error: updateError } = await auth.supabaseAdmin
       .from("online_payment_attempts")
       .update({
         provider_checkout_id: yocoCheckout.id,
@@ -242,12 +246,12 @@ export async function POST(req: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", attemptId)
-      .eq("state", "CREATED");
+      .eq("state", "CREATED").select("id").maybeSingle();
 
-    if (updateError) {
+    if (updateError || !updatedAttempt) {
       console.error("[yoco-checkout] attempt update failed", {
-        code: updateError.code,
-        message: updateError.message,
+        code: updateError?.code,
+        message: updateError?.message,
       });
 
       return NextResponse.json(
