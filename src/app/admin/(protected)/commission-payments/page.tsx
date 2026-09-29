@@ -7,7 +7,6 @@ import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type CommissionRequest = {
@@ -109,8 +108,7 @@ function wallet(row: SettlementDriver) {
 
 function standing(balanceDue: number, hasPending: boolean) {
   if (hasPending) return "pending review";
-  if (balanceDue >= DRIVER_COMMISSION_LOCK_LIMIT) return "locked";
-  if (balanceDue > 0) return "warning";
+  if (balanceDue > 0) return "due";
   return "good standing";
 }
 
@@ -301,8 +299,8 @@ export default function AdminCommissionPaymentsPage() {
     0
   );
   const totalPaid = drivers.reduce((sum, row) => sum + Number(wallet(row).total_paid ?? 0), 0);
-  const lockedDrivers = drivers.filter(
-    (row) => Number(wallet(row).balance_due ?? 0) >= DRIVER_COMMISSION_LOCK_LIMIT
+  const owingDrivers = drivers.filter(
+    (row) => Number(wallet(row).balance_due ?? 0) > 0
   );
   const collectedThisMonth = drivers.reduce((sum, row) => {
     const driverWallet = wallet(row);
@@ -433,7 +431,7 @@ export default function AdminCommissionPaymentsPage() {
               Commission payments
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Review driver commission POPs, track locked accounts, and keep MOOVU collections clear from subscription revenue.
+              Review driver commission POPs, track outstanding balances, and keep MOOVU collections clear from subscription revenue.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -451,7 +449,7 @@ export default function AdminCommissionPaymentsPage() {
       <section className="grid gap-3 md:grid-cols-5">
         <MetricCard label="Total owed" value={money(totalOwed)} helper="Unpaid MOOVU commission" tone="warning" />
         <MetricCard label="Pending reviews" value={String(pendingRequests.length)} helper="Commission POPs" tone={pendingRequests.length ? "warning" : "default"} />
-        <MetricCard label="Locked drivers" value={String(lockedDrivers.length)} helper={`At ${money(DRIVER_COMMISSION_LOCK_LIMIT)} or more`} tone={lockedDrivers.length ? "danger" : "success"} />
+        <MetricCard label="Drivers owing" value={String(owingDrivers.length)} helper="Outstanding commission" />
         <MetricCard label="Collected this month" value={money(collectedThisMonth)} helper="From latest wallet records" tone="success" />
         <MetricCard label="All-time collected" value={money(totalPaid)} helper={`${money(totalCommissionEarned)} generated`} tone="primary" />
       </section>
@@ -460,7 +458,7 @@ export default function AdminCommissionPaymentsPage() {
         <div className="moovu-card-interactive p-5">
           <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">Collection rule</div>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Drivers are blocked from going online once commission owed reaches {money(DRIVER_COMMISSION_LOCK_LIMIT)}.
+            Commission remains payable to MOOVU. Outstanding commission does not lock driver access.
           </p>
         </div>
         <div className="moovu-card-interactive p-5">
@@ -567,7 +565,6 @@ export default function AdminCommissionPaymentsPage() {
                 const driverWallet = wallet(row);
                 const balance = Number(driverWallet.balance_due ?? 0);
                 const hasPending = pendingByDriver.has(driverId(row));
-                const progress = Math.min(100, Math.round((balance / DRIVER_COMMISSION_LOCK_LIMIT) * 100));
                 return (
                   <div key={driverId(row)} className="rounded-3xl border border-[var(--moovu-border)] bg-gradient-to-br from-white to-slate-50 p-4">
                     <div className="grid gap-3 md:grid-cols-5">
@@ -579,12 +576,6 @@ export default function AdminCommissionPaymentsPage() {
                       <div>
                         <div className="text-sm text-slate-500">Balance owed</div>
                         <div className="font-semibold">{money(balance)}</div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className={`h-full rounded-full ${balance >= DRIVER_COMMISSION_LOCK_LIMIT ? "bg-red-500" : "bg-sky-500"}`}
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
                       </div>
                       <div>
                         <div className="text-sm text-slate-500">Paid</div>

@@ -17,12 +17,15 @@ test("commission is calculated in integer cents with half-up rounding", () => {
   assert.equal(calculateCommissionCents(BigInt(104)), BigInt(16));
 });
 
-test("R50 is the exact hard boundary", () => {
-  assert.equal(phase2FinanceState(BigInt(0)).eligible, true);
-  assert.equal(phase2FinanceState(BigInt(4_999)).eligible, true);
-  assert.equal(phase2FinanceState(BigInt(5_000)).eligible, false);
-  assert.equal(phase2FinanceState(BigInt(5_001)).eligible, false);
-  assert.equal(phase2FinanceState(BigInt(10_000)).eligible, false);
+test("commission debt remains payable without an operational ceiling", () => {
+  for (const amount of [0, 4999, 5000, 8580, 10000, 15000, 50000]) {
+    const state = phase2FinanceState(BigInt(amount));
+    assert.equal(state.debtCents, BigInt(amount));
+    assert.equal(state.eligible, true);
+    assert.equal(state.restricted, false);
+    assert.equal(state.warning, false);
+    assert.equal(state.remainingCents, null);
+  }
 });
 
 test("subscription is removed only after authority cutover", () => {

@@ -1,7 +1,5 @@
 export const PHASE2_CONTRACT_VERSION = "phase-2-v1" as const;
 export const PHASE2_COMMISSION_BASIS_POINTS = BigInt(1500);
-export const PHASE2_COMMISSION_DEBT_LIMIT_CENTS = BigInt(5000);
-export const PHASE2_COMMISSION_WARNING_CENTS = BigInt(4000);
 
 export type Phase2Mode = "OFF" | "SHADOW" | "AUTHORITATIVE";
 
@@ -28,12 +26,10 @@ export function phase2FinanceState(debtCents: bigint) {
   const normalized = debtCents > BigInt(0) ? debtCents : BigInt(0);
   return {
     debtCents: normalized,
-    eligible: normalized < PHASE2_COMMISSION_DEBT_LIMIT_CENTS,
-    warning: normalized >= PHASE2_COMMISSION_WARNING_CENTS,
-    restricted: normalized >= PHASE2_COMMISSION_DEBT_LIMIT_CENTS,
-    remainingCents: normalized >= PHASE2_COMMISSION_DEBT_LIMIT_CENTS
-      ? BigInt(0)
-      : PHASE2_COMMISSION_DEBT_LIMIT_CENTS - normalized,
+    eligible: true,
+    warning: false,
+    restricted: false,
+    remainingCents: null,
   };
 }
 

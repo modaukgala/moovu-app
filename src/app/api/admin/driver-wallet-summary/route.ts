@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { recalculateDriverWalletServer } from "@/lib/finance/driverWalletLedger";
-import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
 
 function num(value: unknown) {
   const n = Number(value ?? 0);
@@ -128,10 +127,7 @@ export async function GET(req: Request) {
         total_trips_completed: totalTripsCompleted,
         total_paid: totalSettled,
         cancellation_credits: recalculated.totals.cancellationCredits,
-        threshold_percentage: Math.min(
-          100,
-          Math.round((balanceDue / DRIVER_COMMISSION_LOCK_LIMIT) * 100),
-        ),
+        threshold_percentage: null,
         last_payment_at: walletRow?.last_payment_at ?? null,
         last_payment_amount: walletRow?.last_payment_amount ?? null,
         account_status: balanceDue > 0 ? "due" : "settled",

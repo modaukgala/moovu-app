@@ -254,8 +254,8 @@ export async function getPreferredDispatchCandidate(params: {
   const onboarding = await phase6NewWork(supabase, driverId);
   if (!onboarding.ok || !onboarding.eligible) return { ok: false as const, error: onboarding.error ?? "Onboarding unavailable." };
   if (!finance.authority.financiallyEligible) return { ok: false as const, error: finance.authority.subscriptionRequired
-    ? "Driver subscription or commission eligibility is inactive."
-    : "Driver Phase 2 commission debt is at or above the R50 limit." };
+    ? "Driver subscription is inactive."
+    : "Driver eligibility is currently unavailable." };
   if ((activeTripsResult.data ?? []).length > 0) return { ok: false as const, error: "Driver already has an active trip." };
   if (untriedCandidatesFirst([{ driverId }], (declinedResult.data ?? []) as OfferAttempt[], params.cycle).length === 0) {
     return { ok: false as const, error: "Driver already declined or was attempted in this offer round." };

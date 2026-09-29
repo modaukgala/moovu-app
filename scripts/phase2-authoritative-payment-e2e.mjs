@@ -19,10 +19,10 @@ const trips = ok(await db.from("trips").select("driver_id").like("pickup_address
   .eq("status", "completed").order("created_at", { ascending: false }).limit(3), "fixtures");
 const driverId = trips[0]?.driver_id;
 assert.ok(driverId);
-const admin = ok(await db.from("profiles").select("id").eq("role", "owner").limit(1).single(), "owner");
+const admin = ok(await db.from("profiles").select("id").in("role", ["owner", "admin"]).limit(1).single(), "financial admin");
 const before = ok(await db.rpc("phase2_finance_eligibility", { p_driver_id: driverId }), "before position");
 assert.equal(before.subscription_required, false);
-assert.equal(before.authoritative_eligible, Number(before.net_owed_cents) < 5000);
+assert.equal(before.authoritative_eligible, true);
 
 const amount = Math.max(1, Number(before.net_owed_cents) / 100 + 20);
 const request = ok(await db.from("driver_payment_requests").insert({
@@ -44,7 +44,8 @@ const tx = ok(await db.from("financial_transactions").select("id").eq("idempoten
 assert.equal(tx.length, 1);
 const after = ok(await db.rpc("phase2_finance_eligibility", { p_driver_id: driverId }), "after position");
 assert.equal(Number(after.net_owed_cents), 0);
-assert.equal(Number(after.unapplied_credit_cents), Number(before.unapplied_credit_cents) + 2000);
+assert.equal(Number(after.unapplied_credit_cents),
+  Math.max(0, Number(before.unapplied_credit_cents) - Number(before.commission_debt_cents)) + 2000);
 assert.equal(after.authoritative_eligible, true);
 ok(await db.from("drivers").update({ subscription_status: "inactive", subscription_expires_at: new Date(0).toISOString() })
   .eq("id", driverId), "expire historical subscription");

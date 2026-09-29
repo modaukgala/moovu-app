@@ -14,7 +14,7 @@ const sections = [
       "Account details such as name, cellphone number, email address, login identifiers, driver account link, and role.",
       "Application and verification details such as profile status, vehicle details, documents, admin review notes, approval status, and suspension or deletion records.",
       "Operational data such as online status, busy status, GPS location while online or on a trip, trip offers, accept or decline actions, arrival, OTP start and completion, no-show actions, and trip history.",
-      "Financial records such as fares, driver earnings, MOOVU commission, R100 commission lock status, subscriptions, proof-of-payment uploads, settlements, receipts, payment references, and admin review outcomes.",
+      "Financial records such as fares, driver earnings, MOOVU commission, subscriptions, proof-of-payment uploads, settlements, receipts, payment references, and admin review outcomes.",
       "Device and notification data such as FCM tokens, web push subscriptions, platform type, app type, notification delivery logs, and in-app alert events.",
       "Support and communication data such as customer-driver chat for assigned trips, support messages, admin notes, safety reports, and dispute records.",
     ],

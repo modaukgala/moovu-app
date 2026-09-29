@@ -23,10 +23,6 @@ import { EndOtpBypassDialog, SubscriptionRequiredDialog, TripCompletionOverlay }
 import FloatingCustomerChat from "@/components/driver/home/FloatingCustomerChat";
 import NavigationChooser from "@/components/driver/home/NavigationChooser";
 import TripOfferPanel from "@/components/driver/home/TripOfferPanel";
-import {
-  DRIVER_COMMISSION_LOCK_LIMIT,
-  DRIVER_COMMISSION_WARNING_RATIO,
-} from "@/lib/finance/commission";
 import { notifyInApp } from "@/lib/in-app-notifications";
 import {
   carMarkerIcon,
@@ -1269,15 +1265,13 @@ export default function DriverHomePage() {
           </div>
         ) : (
           <>
-          {earningsSnapshot.amountOwed >= DRIVER_COMMISSION_LOCK_LIMIT * DRIVER_COMMISSION_WARNING_RATIO && (
-            <section className={`mb-4 rounded-2xl border p-4 ${earningsSnapshot.amountOwed >= DRIVER_COMMISSION_LOCK_LIMIT ? "border-red-200 bg-red-50 text-red-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+          {earningsSnapshot.amountOwed > 0 && (
+            <section className="mb-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-slate-950">
               <div className="font-black">
-                {earningsSnapshot.amountOwed >= DRIVER_COMMISSION_LOCK_LIMIT
-                  ? "Commission payment required"
-                  : "You’re approaching your MOOVU commission limit."}
+                Commission due
               </div>
               <div className="mt-1 text-sm font-semibold">
-                {money(earningsSnapshot.amountOwed)} owed · {money(DRIVER_COMMISSION_LOCK_LIMIT)} limit · {money(Math.max(0, DRIVER_COMMISSION_LOCK_LIMIT - earningsSnapshot.amountOwed))} remaining
+                {money(earningsSnapshot.amountOwed)} owed
               </div>
               <button
                 type="button"

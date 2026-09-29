@@ -17,10 +17,6 @@ import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
-import {
-  DRIVER_COMMISSION_LOCK_LIMIT,
-  DRIVER_COMMISSION_WARNING_RATIO,
-} from "@/lib/finance/commission";
 
 type Wallet = {
   balance_due: number | null;
@@ -208,8 +204,6 @@ export default function DriverEarningsPage() {
   }, [loadData]);
 
   const commissionDue = Number(wallet?.balance_due ?? 0);
-  const commissionRatio = commissionDue / DRIVER_COMMISSION_LOCK_LIMIT;
-  const commissionRemaining = Math.max(0, DRIVER_COMMISSION_LOCK_LIMIT - commissionDue);
   const subscriptionSelectedPrice = DRIVER_SUBSCRIPTION_PLANS[selectedPlan].amount;
 
   const now = useMemo(() => new Date(), []);
@@ -300,13 +294,13 @@ export default function DriverEarningsPage() {
           </Link>
         </section>
 
-        {commissionRatio >= DRIVER_COMMISSION_WARNING_RATIO && (
-          <section className={`rounded-[24px] border p-5 ${commissionRatio >= 1 ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
-            <div className={`text-lg font-black ${commissionRatio >= 1 ? "text-red-950" : "text-amber-950"}`}>
-              {commissionRatio >= 1 ? "Commission payment required" : "You’re approaching your MOOVU commission limit."}
+        {commissionDue > 0 && (
+          <section className="rounded-[24px] border border-sky-100 bg-sky-50 p-5">
+            <div className="text-lg font-black text-slate-950">
+              Commission due
             </div>
-            <p className={`mt-2 text-sm font-semibold ${commissionRatio >= 1 ? "text-red-800" : "text-amber-800"}`}>
-              {money(commissionDue)} owed · {money(DRIVER_COMMISSION_LOCK_LIMIT)} limit · {money(commissionRemaining)} remaining
+            <p className="mt-2 text-sm font-semibold text-slate-700">
+              {money(commissionDue)} owed
             </p>
             <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary mt-4">
               View Commission / Pay Commission

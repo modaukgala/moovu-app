@@ -10,7 +10,6 @@ import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { DRIVER_COMMISSION_LOCK_LIMIT } from "@/lib/finance/commission";
 import { openHostedPaymentCheckout } from "@/lib/payments/checkoutNavigation";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -73,10 +72,8 @@ function displayDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "--";
 }
 
-function paymentStatus(balanceDue: number, limit = DRIVER_COMMISSION_LOCK_LIMIT) {
-  if (balanceDue >= limit) return "Payment required";
-  if (balanceDue >= limit * 0.85) return "Warning";
-  return "Good standing";
+function paymentStatus(balanceDue: number) {
+  return balanceDue > 0 ? "Commission due" : "Settled";
 }
 
 export default function DriverCommissionPaymentsPage() {
@@ -147,12 +144,7 @@ export default function DriverCommissionPaymentsPage() {
   }, [loadData]);
 
   const balanceDue = finance ? Number(finance.netOwedCents ?? 0) / 100 : Number(wallet?.balance_due ?? 0);
-  const debtLimit = finance ? Number(finance.thresholdCents ?? 0) / 100 : DRIVER_COMMISSION_LOCK_LIMIT;
-  const remainingBeforeLock = Math.max(0, debtLimit - balanceDue);
-  const lockProgress = Math.min(
-    100,
-    Math.max(0, (balanceDue / Math.max(debtLimit, 0.01)) * 100)
-  );
+
   const pendingCommission = useMemo(
     () =>
       paymentRequests.find((row) =>
@@ -222,75 +214,16 @@ export default function DriverCommissionPaymentsPage() {
             <DriverSectionTabs section="money" />
           </div>
 
-          <div className="grid gap-3 border-t border-[var(--moovu-border)] p-4 sm:grid-cols-3 sm:p-5">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                Current status
-              </p>
-              <div className="mt-2">
-                <StatusBadge
-                  status={
-                    balanceDue >= debtLimit
-                      ? "payment_required"
-                      : balanceDue > 0
-                        ? "warning"
-                        : "good_standing"
-                  }
-                />
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-bold text-slate-700">{money(debtLimit)} online lock limit</span>
-                <span className="font-black text-slate-950">{money(balanceDue)}</span>
-              </div>
-              <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className={`h-full rounded-full ${
-                    balanceDue >= debtLimit
-                      ? "bg-red-500"
-                      : balanceDue > 0
-                        ? "bg-amber-500"
-                        : "bg-emerald-500"
-                  }`}
-                  style={{ width: `${lockProgress}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs font-semibold text-slate-500">
-                {balanceDue >= debtLimit
-                  ? "Payment is required before you can go online again."
-                  : `${money(remainingBeforeLock)} remaining before the online lock.`}
-              </p>
-            </div>
+          <div className="border-t border-[var(--moovu-border)] p-5">
+            <p className="text-sm font-bold text-slate-600">Commission due</p>
+            <p className="mt-2 text-3xl font-black text-slate-950">{money(balanceDue)}</p>
+            <p className="mt-2 text-sm text-slate-600">{balanceDue > 0 ? "Pay your outstanding commission securely online." : "Your commission is settled."}</p>
           </div>
         </section>
-
-        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-4">
-          <MetricCard label="Commission owed" value={money(balanceDue)} helper="Payable to MOOVU" tone={balanceDue > 0 ? "warning" : "success"} />
-          <MetricCard label="Debt limit" value={money(debtLimit)} helper="Online lock threshold" tone="primary" />
-          <MetricCard label="Before lock" value={money(remainingBeforeLock)} helper="Remaining available balance" />
-          <MetricCard label="Status" value={paymentStatus(balanceDue, debtLimit)} helper={driverName} tone={balanceDue >= debtLimit ? "danger" : balanceDue > 0 ? "warning" : "success"} />
+        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
+          <MetricCard label="Commission owed" value={money(balanceDue)} helper="Payable to MOOVU" />
+          <MetricCard label="Status" value={paymentStatus(balanceDue)} helper={driverName} tone={balanceDue > 0 ? "default" : "success"} />
         </section>
-
-        {balanceDue >= debtLimit ? (
-          <section className="rounded-[28px] border border-red-200 bg-red-50 p-5 text-red-900 shadow-[0_16px_34px_rgba(220,38,38,0.08)]">
-            <div className="text-sm font-black uppercase tracking-[0.12em] text-red-700">
-              Online access locked
-            </div>
-            <p className="mt-2 text-sm leading-6">
-              Your MOOVU commission balance is {money(balanceDue)}. Pay the exact authoritative balance online to restore access after verified provider confirmation.
-            </p>
-          </section>
-        ) : balanceDue > 0 ? (
-          <section className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-[0_16px_34px_rgba(245,158,11,0.08)]">
-            <div className="text-sm font-black uppercase tracking-[0.12em] text-amber-700">
-              Commission balance active
-            </div>
-            <p className="mt-2 text-sm leading-6">
-              You can keep driving while your balance stays below {money(debtLimit)}. Paying early keeps your account in good standing.
-            </p>
-          </section>
-        ) : null}
 
         <section className="moovu-card p-5 sm:p-6">
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">

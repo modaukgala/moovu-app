@@ -11,7 +11,7 @@ const supportItems = [
   "Driver application and approval status",
   "Complete-profile and document questions",
   "Subscription payments and expiry questions",
-  "Commission balance, R100 lock, and settlement support",
+  "Commission balance, payments, and settlement support",
   "Trip offers, OTP workflow, chat, cancellations, and no-show support",
   "Notification, login, GPS, and mobile app issues",
 ];

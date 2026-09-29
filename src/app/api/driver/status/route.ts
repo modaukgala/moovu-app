@@ -94,8 +94,8 @@ export async function POST(req: Request) {
           {
             ok: false,
             error: finance.authority.subscriptionRequired
-              ? "Your subscription must be active and commission balance cleared before going online."
-              : `Your Phase 2 commission debt is R${(finance.authority.netOwedCents / 100).toFixed(2)}. Pay it below R${(finance.authority.thresholdCents / 100).toFixed(2)} before going online.`,
+              ? "Your subscription must be active before going online."
+              : "Driver eligibility is currently unavailable. Please try again.",
           },
           { status: 402 }
         );

@@ -73,7 +73,7 @@ export async function resolveDriverFinanceAuthority(
     unappliedCreditCents: 0,
     netOwedCents: debtCents,
     thresholdCents: 10000,
-    financiallyEligible: subscribed && debtCents < 10000,
+    financiallyEligible: subscribed,
     subscriptionRequired: true,
     asOf: new Date().toISOString(),
     policyId: typeof policy.id === "string" ? policy.id : null,

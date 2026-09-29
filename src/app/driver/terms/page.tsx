@@ -32,7 +32,7 @@ const sections = [
     paragraphs: [
       "Driver subscription payments cover access from the current approved payment date for the selected period. Missed unpaid months are not counted backward into the new paid period unless MOOVU separately confirms a correction.",
       "Drivers are responsible for MOOVU commission balances, subscription payments, payment references, proof-of-payment uploads, and any admin review notes shown in the driver portal.",
-      "A driver may be blocked from going online when commission owed reaches the configured lock limit or when subscription/profile requirements are not met.",
+      "Commission remains payable to MOOVU, but outstanding commission does not block driver access. Other applicable subscription, profile and safety requirements remain in effect.",
     ],
   },
   {
