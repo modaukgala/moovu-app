@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createClient } from "@supabase/supabase-js";
+import { createClient as supabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 
@@ -9,16 +9,20 @@ const serviceKey = process.env.PHASE3_E2E_SUPABASE_SERVICE_ROLE_KEY;
 assert.ok(url && anonKey && serviceKey, "Disposable credentials missing.");
 assert.equal(new URL(url).hostname, "tangtlmdpnvmoviwrgvd.supabase.co", "Disposable project guard failed.");
 const options = { auth: { persistSession: false, autoRefreshToken: false } };
+const fixtureClients=[],fixtureUsers=[];
+function createClient(...args){const client=supabaseClient(...args);fixtureClients.push(client);return client;}
 const db = createClient(url, serviceKey, options);
 const anon = createClient(url, anonKey, options);
+async function createFixtureUser(args){const result=await db.auth.admin.createUser(args);if(result.data?.user)fixtureUsers.push(result.data.user.id);return result;}
 function ok(result, stage) {
   if (result.error) throw new Error(`${stage} failed (${result.error.code ?? "provider error"}).`);
   return result.data;
 }
 const marker = randomUUID();
+try {
 const email = `phase6-${marker}@example.invalid`;
 const password = randomUUID() + randomUUID();
-const user = ok(await db.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { phase6_disposable: true } }), "Create disposable identity").user;
+const user = ok(await createFixtureUser({ email, password, email_confirm: true, user_metadata: { phase6_disposable: true } }), "Create disposable identity").user;
 assert.ok(user);
 // Auth signup alone grants no privileged profile role. ENROLL creates only a pending Driver.
 // The primary fixture deliberately has no pre-granted Driver/Staff profile.
@@ -65,7 +69,7 @@ assert.ok((await db.rpc("phase6_command", { p_actor: user.id, p_key: randomUUID(
 assert.equal(ok(await db.rpc("phase6_new_work_eligible", { p_driver: app.driver_id }), "Inactive policy"), true);
 const adminEmail = `phase6-review-${marker}@example.invalid`;
 const reviewerPassword = randomUUID() + randomUUID();
-const reviewer = ok(await db.auth.admin.createUser({ email: adminEmail, password: reviewerPassword, email_confirm: true, user_metadata: { phase6_disposable: true } }), "Create disposable reviewer").user;
+const reviewer = ok(await createFixtureUser({ email: adminEmail, password: reviewerPassword, email_confirm: true, user_metadata: { phase6_disposable: true } }), "Create disposable reviewer").user;
 ok(await db.from("profiles").upsert({ id: reviewer.id, role: "admin", full_name: "Phase 6 disposable reviewer" }), "Set fixture reviewer");
 const reviewerClient = createClient(url, anonKey, options);
 ok(await reviewerClient.auth.signInWithPassword({ email: adminEmail, password: reviewerPassword }), "Sign in reviewer");
@@ -134,7 +138,7 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   const own = await fetch(new URL("/api/driver/onboarding", base), { headers: { Authorization: `Bearer ${driverToken}` } });
   assert.equal(own.status, 200); assert.equal((await own.json()).application.driver_id, app.driver_id);
   const otherEmail = `phase6-other-${marker}@example.invalid`, otherPassword = randomUUID() + randomUUID();
-  const otherUser = ok(await db.auth.admin.createUser({ email: otherEmail, password: otherPassword, email_confirm: true, user_metadata: { phase6_disposable: true } }), "Create other fixture").user;
+  const otherUser = ok(await createFixtureUser({ email: otherEmail, password: otherPassword, email_confirm: true, user_metadata: { phase6_disposable: true } }), "Create other fixture").user;
   ok(await db.from("profiles").upsert({ id: otherUser.id, role: "driver", full_name: "Phase 6 other fixture" }), "Set other fixture role");
   const otherClient = createClient(url, anonKey, options); ok(await otherClient.auth.signInWithPassword({ email: otherEmail, password: otherPassword }), "Sign in other fixture");
   const otherToken = (await otherClient.auth.getSession()).data.session.access_token;
@@ -145,9 +149,9 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   const privileged = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "SAVE", key: randomUUID(), application: otherApp.id, revision: otherApp.revision, payload: { personal: { verification_status: "approved" } } }) }); assert.equal(privileged.status, 400);
   const foreignReference = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "SAVE", key: randomUUID(), application: otherApp.id, revision: otherApp.revision, payload: { personal: { evidence: { id_document: evidence.personal } } } }) }); assert.equal(foreignReference.status, 403);
   const customerEmail = `phase6-customer-${marker}@example.invalid`, customerPassword = randomUUID() + randomUUID();
-  const customerUser = ok(await db.auth.admin.createUser({ email: customerEmail, password: customerPassword, email_confirm: true, user_metadata: { phase6_disposable: true } }), "Create Customer fixture").user;
+  const customerUser = ok(await createFixtureUser({ email: customerEmail, password: customerPassword, email_confirm: true, user_metadata: { phase6_disposable: true } }), "Create Customer fixture").user;
   const customerPhone = `071${Date.now().toString().slice(-7)}`;
-  ok(await db.from("customers").insert({ auth_user_id: customerUser.id, first_name: "Phase6", last_name: "Fixture", email: customerEmail, phone: customerPhone, normalized_phone: `+27${customerPhone.slice(1)}` }), "Bind Customer fixture");
+  const customerFixture = ok(await db.from("customers").insert({ auth_user_id: customerUser.id, first_name: "Phase6", last_name: "Fixture", email: customerEmail, phone: customerPhone, normalized_phone: `+27${customerPhone.slice(1)}` }).select("id").single(), "Bind Customer fixture");
   const customerClient = createClient(url, anonKey, options); ok(await customerClient.auth.signInWithPassword({ email: customerEmail, password: customerPassword }), "Sign in Customer fixture");
   const customerToken = (await customerClient.auth.getSession()).data.session.access_token;
   const customerEnroll = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { Authorization: `Bearer ${customerToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "ENROLL", key: randomUUID() }) }); assert.ok(customerEnroll.status >= 400, "Customer cannot claim Driver enrollment.");
@@ -168,8 +172,33 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   assert.equal(selfApprove.status, 401);
   const legacy = await fetch(new URL("/api/driver/apply", base), { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); assert.equal(legacy.status, 410);
   assert.equal((await fetch(new URL("/api/admin/drivers/remove", base), { method: "POST", body: "{}" })).status, 410, "Legacy deletion must not partially unlink identities.");
+  const historicalTripId = randomUUID();
+  ok(await db.from("trips").insert({ id: historicalTripId, customer_id: customerFixture.id, driver_id: app.driver_id, status: "completed", ride_option: "go", payment_method: "cash", pickup_address: "Disposable historical pickup", dropoff_address: "Disposable historical destination", fare_amount: 55, final_fare: 55, commission_amount: 8.25, driver_net_earnings: 46.75, completed_at: new Date(Date.now() - 86_400_000).toISOString() }), "Create disposable historical completed trip");
+  const historicalTrip = ok(await db.from("trips").select("*").eq("id", historicalTripId).single(), "Historical completed-trip baseline");
+  assert.equal(historicalTrip.status, "completed");
+  assert.equal(historicalTrip.driver_id, app.driver_id);
+  const historicalTripCountBefore = ok(await db.from("trips").select("id").eq("customer_id", customerFixture.id).eq("driver_id", app.driver_id).eq("status", "completed"), "Historical completed-trip count baseline").length;
+  assert.equal(historicalTripCountBefore, 1);
+  const existingFinance = ok(await db.from("financial_accounts").select("*").eq("owner_type", "DRIVER").eq("owner_id", app.driver_id).eq("account_category", "DRIVER_COMMISSION_DEBT").eq("currency", "ZAR").maybeSingle(), "Read existing Driver finance account");
+  if (!existingFinance) ok(await db.rpc("phase1_ensure_financial_account", { p_account_code: `DRIVER:${app.driver_id.toUpperCase()}:COMMISSION_DEBT:ZAR`, p_account_category: "DRIVER_COMMISSION_DEBT", p_owner_type: "DRIVER", p_owner_id: app.driver_id, p_normal_balance_side: "DEBIT", p_currency: "ZAR" }), "Create canonical disposable Driver finance account");
   const financeBefore = ok(await db.from("financial_accounts").select("*").eq("owner_type", "DRIVER").eq("owner_id", app.driver_id).order("id"), "Finance baseline");
+  assert.ok(financeBefore.length >= 1, "Existing Driver must have a financial-account relationship before re-application.");
+  const vehicleBefore = ok(await db.from("phase6_vehicle_assignments").select("*").eq("driver_id", app.driver_id).order("registration"), "Vehicle baseline");
+  assert.ok(vehicleBefore.length >= 1, "Existing Driver must have an assigned vehicle before re-application.");
   const mappingBefore = ok(await db.from("driver_accounts").select("driver_id,user_id").eq("user_id", user.id).single(), "Identity baseline");
+  const authBefore = ok(await db.auth.admin.getUserById(user.id), "Auth identity baseline").user.id;
+  const driverCountBefore = ok(await db.from("drivers").select("id").eq("email", email), "Driver count baseline").length;
+  assert.equal(driverCountBefore, 1, "Fixture has exactly one canonical Driver.");
+  const driverHome = await fetch(new URL("/driver", base));
+  assert.equal(driverHome.status, 200, "Existing Driver dashboard must remain reachable before re-application.");
+  const currentApplication = await fetch(new URL("/api/driver/onboarding", base), { headers: { Authorization: `Bearer ${driverToken}` } });
+  assert.equal(currentApplication.status, 200, "Existing Driver must resolve onboarding under the current Auth identity.");
+  assert.equal((await currentApplication.json()).application.id, app.id);
+  const queueResponse = await fetch(new URL("/api/admin/onboarding", base), { headers: { Authorization: `Bearer ${reviewerToken}` } });
+  assert.equal(queueResponse.status, 200, "Admin review queue must remain available.");
+  const queued = (await queueResponse.json()).applications.find(item => item.id === app.id);
+  assert.ok(queued, "Admin must receive the existing Driver application.");
+  assert.equal(queued.existingDriver, false, "The original first-time application remains identified as new-Driver history.");
   const reinspectionKey = randomUUID();
   const reinspectBody = { action: "REINSPECTION_AUTHORIZED", key: reinspectionKey, application: current.id, revision: current.revision, reason: "Disposable event-triggered vehicle inspection" };
   async function httpCommand(token, body, admin = false) {
@@ -177,9 +206,15 @@ if (process.env.PHASE6_E2E_BASE_URL) {
     const data = await response.json(); return { response, application: data.application, error: data.error };
   }
   const inspection = await httpCommand(reviewerToken, reinspectBody, true); assert.equal(inspection.response.status, 200);
+  const reinspectionQueue = await fetch(new URL("/api/admin/onboarding", base), { headers: { Authorization: `Bearer ${reviewerToken}` } });
+  assert.equal(reinspectionQueue.status, 200);
+  const reinspectionItem = (await reinspectionQueue.json()).applications.find(item => item.id === inspection.application.id);
+  assert.equal(reinspectionItem?.existingDriver, true, "Admin must identify the later cycle as an existing Driver re-application.");
   assert.equal((await httpCommand(reviewerToken, reinspectBody, true)).application.id, inspection.application.id, "Reinspection replay returns the same cycle.");
   assert.equal(ok(await db.from("phase6_enrollments").select("inspection_required").eq("driver_id", app.driver_id).single(), "Inspection hold").inspection_required, true);
   assert.ok((await httpCommand(driverToken, { action: "ENROLL", key: randomUUID() })).application.id === inspection.application.id, "Resume existing identity and cycle.");
+  assert.equal((await httpCommand(driverToken, { action: "ENROLL", key: randomUUID() })).application.id, inspection.application.id, "Repeated Continue resumes the same active application.");
+  assert.equal(ok(await db.from("phase6_applications").select("id").eq("driver_id", app.driver_id).eq("cycle", inspection.application.cycle), "One reinspection cycle").length, 1);
   async function completeCycle(application, token, registration) {
     const refs = {};
     for (const section of ["personal", "driving", "vehicle", "scanner"]) {
@@ -209,9 +244,18 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   assert.equal(conflict.response.status, 409); assert.ok(!String(conflict.error).includes(app.driver_id), "Conflict response must not disclose another Driver identity.");
   assert.equal(ok(await db.from("phase6_applications").select("status").eq("id", competitor.id).single(), "Approval failure rollback").status, "UNDER_REVIEW");
   assert.deepEqual(ok(await db.from("driver_accounts").select("driver_id,user_id").eq("user_id", user.id).single(), "Identity preserved"), mappingBefore);
+  assert.equal(ok(await db.auth.admin.getUserById(user.id), "Auth identity preserved").user.id, authBefore);
+  assert.deepEqual(ok(await db.from("trips").select("*").eq("id", historicalTripId).single(), "Historical trip preserved"), historicalTrip, "Onboarding must neither rewrite nor reassign the historical completed trip.");
+  assert.equal(ok(await db.from("trips").select("id").eq("customer_id", customerFixture.id).eq("driver_id", app.driver_id).eq("status", "completed"), "Historical trip not duplicated").length, historicalTripCountBefore);
+  assert.deepEqual(ok(await db.from("phase6_vehicle_assignments").select("*").eq("driver_id", app.driver_id).order("registration"), "Vehicle preserved"), vehicleBefore);
   assert.deepEqual(ok(await db.from("financial_accounts").select("*").eq("owner_type", "DRIVER").eq("owner_id", app.driver_id).order("id"), "Finance preserved"), financeBefore);
+  assert.equal(ok(await db.from("drivers").select("id").eq("email", email), "No duplicate Driver").length, driverCountBefore);
   const large = new FormData(); large.set("application", reapplied.application.id); large.set("section", "personal"); large.set("source", "gallery"); large.set("file", new Blob([new Uint8Array(8 * 1024 * 1024 + 1)], { type: "image/jpeg" }), "oversize.jpg");
   assert.equal((await fetch(new URL("/api/driver/onboarding/evidence", base), { method: "POST", headers: { Authorization: `Bearer ${driverToken}` }, body: large })).status, 413);
 }
 console.log(process.env.PHASE6_E2E_BASE_URL ? "PHASE 6 DISPOSABLE AUTHENTICATED HTTP / CAPTURE / LIFECYCLE / SECURITY VALIDATION PASSED" : "PHASE 6 DISPOSABLE VERSION / SECURITY / REVIEW VALIDATION PASSED — AUTHENTICATED HTTP E2E REMAINS REQUIRED");
+} finally {
+  for(const client of fixtureClients)await client.auth.signOut({scope:"global"});
+  for(const id of fixtureUsers)await db.auth.admin.updateUserById(id,{password:randomUUID()+randomUUID(),ban_duration:"876000h"});
+}
 

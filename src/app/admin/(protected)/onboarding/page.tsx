@@ -4,9 +4,10 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { PHASE6_SECTIONS, type Phase6Application } from "@/lib/drivers/phase6Policy";
 
 type Review = { id: string; action: string; source_version: number; reason: string; created_at: string };
-type Detail = { application: Phase6Application; versions: { version: number; snapshot: unknown; submitted_at: string }[]; reviews: Review[]; uploads: { id: string; section: string; state: string; source: string }[] };
+type QueueApplication = Phase6Application & { driverName: string; existingDriver: boolean };
+type Detail = { application: Phase6Application; driverName: string; existingDriver: boolean; versions: { version: number; snapshot: unknown; submitted_at: string }[]; reviews: Review[]; uploads: { id: string; section: string; state: string; source: string }[] };
 export default function OnboardingReview() {
-  const [queue, setQueue] = useState<Phase6Application[]>([]);
+  const [queue, setQueue] = useState<QueueApplication[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [reason, setReason] = useState("");
   const [sections, setSections] = useState<string[]>([]);
@@ -63,9 +64,10 @@ export default function OnboardingReview() {
     <h1 className="text-2xl font-bold">Driver onboarding review</h1>
     <p role="status" className="my-4 rounded border p-3">{message}</p>
     <button className="rounded border p-2" disabled={busy || !!pending.current} onClick={() => void load(detail?.application.id)}>Refresh</button>
-    <div className="my-4 flex flex-wrap gap-2">{queue.map(item => <button className="rounded border p-3 text-left" key={item.id} disabled={busy || !!pending.current} onClick={() => void load(item.id)}>Cycle {item.cycle} · {item.status}<br /><span className="text-xs">{item.id}</span></button>)}</div>
+    <div className="my-4 flex flex-wrap gap-2">{queue.map(item => <button className="rounded border p-3 text-left" key={item.id} disabled={busy || !!pending.current} onClick={() => void load(item.id)}>{item.driverName || "Driver name pending"}<br />{item.existingDriver ? "Existing Driver re-application" : "New Driver application"} · Cycle {item.cycle} · {item.status}</button>)}</div>
     {detail && <>
       <h2 className="text-xl font-semibold">Cycle {detail.application.cycle} · Version {detail.application.version} · {status}</h2>
+      <p className="mt-2 font-medium">{detail.driverName || "Driver name pending"} · {detail.existingDriver ? "Existing Driver re-application" : "New Driver application"}</p>
       <p className="my-2">Submitted data cannot be edited. Request a scoped correction, or record a reasoned decision against this version.</p>
       {detail.versions.map(version => <details className="my-3 rounded border p-3" key={version.version} open={version.version === detail.application.version}><summary>Immutable version {version.version} · {new Date(version.submitted_at).toLocaleString()}</summary><pre className="overflow-auto whitespace-pre-wrap break-words text-sm">{JSON.stringify(version.snapshot, null, 2)}</pre></details>)}
       <section><h3 className="font-semibold">Private evidence</h3><p>Capture source is metadata, not authenticity proof. Vehicle Check is manual evidence, not AI diagnosis.</p><div className="my-3 flex flex-wrap gap-2">{detail.uploads.filter(upload => upload.state === "VALIDATED").map(upload => <button className="rounded border p-2" key={upload.id} onClick={() => void preview(upload.id)}>{upload.section} · {upload.source} · View capture</button>)}</div></section>

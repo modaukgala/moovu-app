@@ -37,7 +37,7 @@ import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
-import { phase6DriverNoticeEnabled } from "@/lib/release/releaseFlags";
+import DriverOnboardingEntry from "@/components/driver/DriverOnboardingEntry";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
 import {
   canReceiveTripOffers,
@@ -1155,12 +1155,7 @@ export default function DriverHomePage() {
 
   return (
     <main className="moovu-page moovu-driver-shell text-black">
-      {phase6DriverNoticeEnabled() && (
-        <div className="mx-auto my-3 max-w-6xl rounded-xl border bg-white p-4">
-          <a className="font-semibold underline" href="/driver/onboarding">Complete Driver re-registration / view application</a>
-          <p className="mt-1 text-sm">Complete the current onboarding cycle before accepting new work. Active trips continue.</p>
-        </div>
-      )}
+      <DriverOnboardingEntry />
       {driverActionError && (
         <CenteredMessageBox
           title="Action needs attention"
@@ -1265,23 +1260,6 @@ export default function DriverHomePage() {
           </div>
         ) : (
           <>
-          {earningsSnapshot.amountOwed > 0 && (
-            <section className="mb-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-slate-950">
-              <div className="font-black">
-                Commission due
-              </div>
-              <div className="mt-1 text-sm font-semibold">
-                {money(earningsSnapshot.amountOwed)} owed
-              </div>
-              <button
-                type="button"
-                className="moovu-btn moovu-btn-primary mt-3"
-                onClick={() => router.push("/driver/commission-payments")}
-              >
-                View Commission / Pay Commission
-              </button>
-            </section>
-          )}
           <div className="driver-map-first-layout">
             <section className="moovu-driver-home-stack">
               {!subscriptionAllowsOnline && (

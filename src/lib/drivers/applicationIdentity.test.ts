@@ -7,7 +7,7 @@ import { getApplicantSession } from "./applicantSession.ts";
 
 const user = { id: "verified-user", email: "driver@example.test" };
 const session = { access_token: "offline-test-only", user };
-const input = { email: user.email, password: "offline-test-only", fullName: "Driver", phone: "" };
+const input = { email: user.email, password: "Offline123", fullName: "Driver", phone: "" };
 function authDouble(options: { current?: boolean; login?: boolean; confirmed?: boolean; loginCode?: string } = {}) {
   const calls: string[] = [];
   return {
@@ -35,6 +35,16 @@ test("returning authenticated applicant reuses session", async () => {
 test("returning signed-out applicant signs in rather than signing up again", async () => {
   const auth = authDouble({ login: true });
   assert.equal(await getApplicantSession(auth, input), session);
+  assert.deepEqual(auth.calls, ["session", "login"]);
+});
+test("grandfathered existing Driver password bypasses new-password validation on login", async () => {
+  const auth = authDouble({ login: true });
+  assert.equal(await getApplicantSession(auth, { ...input, password: "legacy" }), session);
+  assert.deepEqual(auth.calls, ["session", "login"]);
+});
+test("new Driver signup applies the owner password rule after unsuccessful login", async () => {
+  const auth = authDouble({ confirmed: true });
+  await assert.rejects(getApplicantSession(auth, { ...input, password: "legacy" }), /at least 8/);
   assert.deepEqual(auth.calls, ["session", "login"]);
 });
 test("initial signup with immediate session can submit", async () => {

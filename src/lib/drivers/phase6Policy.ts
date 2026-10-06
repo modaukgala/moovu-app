@@ -9,7 +9,7 @@ export function phase6Editable(application: Phase6Application, section: Phase6Se
 }
 export function phase6PdpNotice(draft: Phase6Draft) {
   const evidence = draft.driving?.evidence as Record<string, string> | undefined;
-  return evidence?.pdp ? "PDP evidence provided — verification pending or recorded by Admin." : "PDP must be obtained/provided by 30 November 2026. Completing onboarding does not establish legal permission to operate.";
+  return evidence?.pdp ? "PDP evidence provided — verification pending or recorded by Admin." : "PDP evidence is optional for this onboarding checklist. Completing onboarding does not establish legal permission to operate.";
 }
 export function validSaIdentity(value: unknown) {
   const text = String(value ?? "");
@@ -26,6 +26,18 @@ export function validSaIdentity(value: unknown) {
 export function phase6Evidence(draft: Phase6Draft, section: Phase6Section): Record<string, string> {
   const evidence = draft[section]?.evidence;
   return evidence && typeof evidence === "object" && !Array.isArray(evidence) ? evidence as Record<string, string> : {};
+}
+export function phase6MissingRequirements(draft: Phase6Draft): Record<Phase6Section, string[]> {
+  const requiredFields: Record<Phase6Section, readonly string[]> = {
+    personal: ["first_name", "last_name", "phone", "id_number", "home_address", "area_name", "emergency_contact_name", "emergency_contact_phone"],
+    driving: ["license_number", "license_code", "license_expiry"],
+    vehicle: ["vehicle_make", "vehicle_model", "vehicle_color", "vehicle_registration", "vehicle_year", "vehicle_vin", "vehicle_engine_number", "seating_capacity"],
+    scanner: [],
+  };
+  return Object.fromEntries(PHASE6_SECTIONS.map(section => [section, [
+    ...requiredFields[section].filter(field => !String(draft[section]?.[field] ?? "").trim()),
+    ...PHASE6_REQUIRED[section].filter(item => !phase6Evidence(draft, section)[item]),
+  ]])) as Record<Phase6Section, string[]>;
 }
 export const PHASE6_FIELDS: Record<Phase6Section, readonly string[]> = {
   personal: ["first_name", "last_name", "phone", "id_number", "home_address", "area_name", "emergency_contact_name", "emergency_contact_phone", "evidence"],

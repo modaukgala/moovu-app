@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore Node's strip-types runner requires an explicit TypeScript extension.
-import { phase6Editable, phase6PdpNotice, phase6DraftShape, validSaIdentity, PHASE6_CHECKLIST, type Phase6Application } from "./phase6Policy.ts";
+import { phase6Editable, phase6PdpNotice, phase6DraftShape, phase6MissingRequirements, validSaIdentity, PHASE6_CHECKLIST, type Phase6Application } from "./phase6Policy.ts";
 
 const base: Phase6Application = { id: "application", driver_id: "driver", cycle: 1, revision: 0, version: 0, status: "DRAFT", draft: {}, correction_sections: [] };
 test("draft input cannot claim verification or review authority", () => {
@@ -29,8 +29,17 @@ test("requested correction opens only authorized sections", () => {
 test("manual checklist retains six views and three identification captures", () => {
   assert.deepEqual(PHASE6_CHECKLIST, ["front", "rear", "driver_side", "passenger_side", "front_interior", "rear_interior", "odometer", "vin", "engine"]);
 });
+test("review checklist shows required details and evidence without making PDP or insurance mandatory", () => {
+  const missing = phase6MissingRequirements({ driving: { license_number: "ABC", evidence: { pdp: "optional" } }, vehicle: { evidence: { insurance: "optional" } } });
+  assert.ok(missing.personal.includes("first_name"));
+  assert.ok(missing.personal.includes("id_document"));
+  assert.ok(missing.driving.includes("drivers_license"));
+  assert.ok(missing.scanner.includes("front"));
+  assert.ok(!missing.driving.includes("pdp"));
+  assert.ok(!missing.vehicle.includes("insurance"));
+});
 test("PDP evidence does not imply legal permission or verification", () => {
-  assert.match(phase6PdpNotice({}), /30 November 2026/);
+  assert.match(phase6PdpNotice({}), /optional for this onboarding checklist/);
   assert.match(phase6PdpNotice({}), /does not establish legal permission/);
   assert.match(phase6PdpNotice({ driving: { evidence: { pdp: "capture" } } }), /verification pending/);
   assert.doesNotMatch(phase6PdpNotice({ driving: { evidence: { pdp: "capture" } } }), /must be obtained/);

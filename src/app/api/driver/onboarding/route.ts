@@ -3,18 +3,25 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { phase6Auth, phase6Owned } from "@/lib/drivers/phase6Server";
 import { validSaIdentity, phase6DraftShape, type Phase6Draft } from "@/lib/drivers/phase6Policy";
 import { isValidSaMobile, isValidVin, isValidEngineNumber, isValidVehicleRegistration, isValidVehicleYear, isValidSeatingCapacity } from "@/lib/driver-validation";
+import { existingDriverDraft } from "@/lib/drivers/onboardingTransition";
 
 export async function GET(req: Request) {
   const user = await phase6Auth(req);
   if (!user) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
   const mapping = await supabaseAdmin.from("driver_accounts").select("driver_id").eq("user_id", user.id).maybeSingle();
+  if (mapping.error) return NextResponse.json({ error: "Driver identity unavailable." }, { status: 503 });
   if (!mapping.data?.driver_id) return NextResponse.json({ application: null }, { headers: { "Cache-Control": "no-store" } });
   const result = await supabaseAdmin.from("phase6_applications").select("*").eq("driver_id", mapping.data.driver_id).order("cycle", { ascending: false }).limit(1).maybeSingle();
   if (result.error) return NextResponse.json({ error: "Onboarding is unavailable." }, { status: 503 });
   const application = result.data;
   if (application && !(await phase6Owned(req, application.id))) return NextResponse.json({ error: "Driver enrollment required." }, { status: 403 });
   const reviews = application ? await supabaseAdmin.from("phase6_reviews").select("action,reason,sections,source_version,created_at").eq("application_id", application.id).order("created_at") : null;
-  return NextResponse.json({ application, reviews: reviews?.data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+  const [driver, profile] = await Promise.all([
+    supabaseAdmin.from("drivers").select("*").eq("id", mapping.data.driver_id).maybeSingle(),
+    supabaseAdmin.from("driver_profiles").select("*").eq("driver_id", mapping.data.driver_id).maybeSingle(),
+  ]);
+  if (driver.error || profile.error) return NextResponse.json({ error: "Existing Driver details unavailable." }, { status: 503 });
+  return NextResponse.json({ application, reviews: reviews?.data ?? [], existingDetails: existingDriverDraft(driver.data ?? {}, profile.data ?? {}) }, { headers: { "Cache-Control": "no-store" } });
 }
 export async function POST(req: Request) {
   const user = await phase6Auth(req);

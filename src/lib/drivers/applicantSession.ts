@@ -1,3 +1,6 @@
+// @ts-expect-error Node strip-types tests require the explicit extension.
+import { validNewPassword, PASSWORD_GUIDANCE } from "../auth/passwordPolicy.ts";
+
 type ApplicantSession = { access_token: string; user: { id: string; email?: string | null } };
 type AuthResult = { data: { session: ApplicantSession | null }; error: { message: string; code?: string } | null };
 type ApplicantAuth = {
@@ -24,6 +27,7 @@ export async function getApplicantSession(auth: ApplicantAuth, input: {
   if (signedIn.error && signedIn.error.code !== "invalid_credentials") {
     throw new Error(signedIn.error.message);
   }
+  if (!validNewPassword(input.password)) throw new Error(PASSWORD_GUIDANCE);
   const signup = await auth.signUp({ ...credentials, options: { data: {
     role: "driver", full_name: input.fullName, phone: input.phone,
   } } });

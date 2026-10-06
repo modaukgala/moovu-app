@@ -34,9 +34,13 @@ test("one public Phase 6 switch controls both enforcement and the Driver notice"
   assert.equal(phase6DriverNoticeEnabled(disabledEnvironment), false);
 });
 
-test("Driver home hides the Phase 6 notice through the centralized switch", () => {
+test("Driver home offers installed onboarding independently of new-work enforcement", () => {
   const page = readFileSync("src/app/driver/page.tsx", "utf8");
-  assert.match(page, /phase6DriverNoticeEnabled\(\)/);
+  const entry = readFileSync("src/components/driver/DriverOnboardingEntry.tsx", "utf8");
+  assert.match(page, /<DriverOnboardingEntry\s*\/>/);
+  assert.match(entry, /fetch\("\/api\/driver\/onboarding"/);
+  assert.doesNotMatch(entry, /phase6DriverNoticeEnabled/);
+  assert.doesNotMatch(page, /Commission due/);
 });
 
 test("enabled Phase 6 eligibility fails closed when its RPC is absent", async () => {
