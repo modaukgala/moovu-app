@@ -46,7 +46,7 @@ test("transport failure is sanitized and never returns financial success", async
   for (const status of [403, 409, 422, 500]) await assert.rejects(() => requestCheckout(input, c, async () => new Response("{}", { status })));
 });
 test("all shared callers use persistent attempt identity; Customer confirms binding row updated", () => {
-  for (const route of ["checkout", "driver/checkout", "driver/subscription/checkout"]) {
+  for (const route of ["checkout", "driver/checkout"]) {
     const code = readFileSync(`src/app/api/payments/yoco/${route}/route.ts`, "utf8");
     assert.ok(code.includes("idempotencyKey: `moovu:checkout:${attemptId}`"));
     assert.ok(code.includes('?.state === "CREATED")'));
@@ -54,4 +54,7 @@ test("all shared callers use persistent attempt identity; Customer confirms bind
   }
   const trip = readFileSync("src/app/api/payments/yoco/checkout/route.ts", "utf8");
   assert.ok(trip.includes("updateError || !updatedAttempt"));
+  const retired = readFileSync("src/app/api/payments/yoco/driver/subscription/checkout/route.ts", "utf8");
+  assert.match(retired, /status:\s*410/);
+  assert.doesNotMatch(retired, /requestCheckout|callHardenedRpc|\.insert\(/);
 });

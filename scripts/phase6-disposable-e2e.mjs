@@ -133,6 +133,13 @@ assert.equal(current.status, "APPROVED");
 assert.equal(ok(await db.from("drivers").select("id,verification_status,profile_completed").eq("id", app.driver_id).single(), "Verify approved identity").id, app.driver_id);
 if (process.env.PHASE6_E2E_BASE_URL) {
   const base = process.env.PHASE6_E2E_BASE_URL;
+  async function setOnline(token, online) {
+    return fetch(new URL("/api/driver/status", base), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ online }) });
+  }
+  const subscription = ok(await db.from("drivers").select("subscription_status").eq("id", app.driver_id).single(), "Disposable subscription state");
+  assert.notEqual(subscription.subscription_status, "active", "New approved fixture has no active subscription.");
+  assert.equal((await setOnline(driverToken, true)).status, 200, "Approved Driver without subscription may go online.");
+  assert.equal((await setOnline(driverToken, false)).status, 200, "Driver may go offline again.");
   const unauthenticated = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ENROLL", key: randomUUID() }) });
   assert.equal(unauthenticated.status, 401);
   const own = await fetch(new URL("/api/driver/onboarding", base), { headers: { Authorization: `Bearer ${driverToken}` } });
@@ -144,6 +151,7 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   const otherToken = (await otherClient.auth.getSession()).data.session.access_token;
   const otherEnroll = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "ENROLL", key: randomUUID() }) });
   assert.equal(otherEnroll.status, 200); const otherApp = (await otherEnroll.json()).application;
+  assert.ok((await setOnline(otherToken, true)).status >= 400, "Unapproved Driver cannot go online without approval.");
   const corrupt = new FormData(); corrupt.set("application", otherApp.id); corrupt.set("section", "personal"); corrupt.set("source", "gallery"); corrupt.set("file", new Blob(["disguised non-image"], { type: "image/jpeg" }), "fake.jpg");
   assert.equal((await fetch(new URL("/api/driver/onboarding/evidence", base), { method: "POST", headers: { Authorization: `Bearer ${otherToken}` }, body: corrupt })).status, 400, "MIME-disguised content must be rejected.");
   const privileged = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "SAVE", key: randomUUID(), application: otherApp.id, revision: otherApp.revision, payload: { personal: { verification_status: "approved" } } }) }); assert.equal(privileged.status, 400);
@@ -214,6 +222,8 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   assert.equal(ok(await db.from("phase6_enrollments").select("inspection_required").eq("driver_id", app.driver_id).single(), "Inspection hold").inspection_required, true);
   assert.ok((await httpCommand(driverToken, { action: "ENROLL", key: randomUUID() })).application.id === inspection.application.id, "Resume existing identity and cycle.");
   assert.equal((await httpCommand(driverToken, { action: "ENROLL", key: randomUUID() })).application.id, inspection.application.id, "Repeated Continue resumes the same active application.");
+  assert.equal((await setOnline(driverToken, true)).status, 200, "Existing approved Driver may go online during re-application without a subscription.");
+  assert.equal((await setOnline(driverToken, false)).status, 200);
   assert.equal(ok(await db.from("phase6_applications").select("id").eq("driver_id", app.driver_id).eq("cycle", inspection.application.cycle), "One reinspection cycle").length, 1);
   async function completeCycle(application, token, registration) {
     const refs = {};

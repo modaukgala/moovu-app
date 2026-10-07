@@ -16,7 +16,6 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
-import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
 
 type Wallet = {
   balance_due: number | null;
@@ -108,7 +107,6 @@ type CommissionTransaction = {
   created_at: string;
 };
 
-type PlanType = DriverSubscriptionPlan;
 
 function money(value: number | null | undefined) {
   return `R${Number(value ?? 0).toFixed(2)}`;
@@ -143,7 +141,6 @@ export default function DriverEarningsPage() {
   const [noShowDriverEarnings, setNoShowDriverEarnings] = useState(0);
   const [commissionBreakdown, setCommissionBreakdown] = useState<CommissionTransaction[]>([]);
 
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>("month");
 
   const getToken = useCallback(async () => {
     const {
@@ -204,7 +201,6 @@ export default function DriverEarningsPage() {
   }, [loadData]);
 
   const commissionDue = Number(wallet?.balance_due ?? 0);
-  const subscriptionSelectedPrice = DRIVER_SUBSCRIPTION_PLANS[selectedPlan].amount;
 
   const now = useMemo(() => new Date(), []);
   const todayStart = useMemo(
@@ -237,13 +233,13 @@ export default function DriverEarningsPage() {
     return (
       <LoadingState
         title="Loading driver earnings"
-        description="Preparing earnings, commission balance, subscriptions, and payment history."
+        description="Preparing earnings, commission balance, and payment history."
       />
     );
   }
 
   if (authRequired) {
-    return <DriverAuthRequired description="Sign in to view your earnings, subscription status, and MOOVU commission balance." />;
+    return <DriverAuthRequired description="Sign in to view your earnings and MOOVU commission balance." />;
   }
 
   return (
@@ -254,7 +250,7 @@ export default function DriverEarningsPage() {
         <header className="driver-money-heading">
           <span>MOOVU Driver</span>
           <h1>Earnings and payments</h1>
-          <p>Track your trip earnings, subscription status, and MOOVU commission balance from one clean wallet view.</p>
+          <p>Track your trip earnings and MOOVU commission balance from one clean wallet view.</p>
         </header>
 
         <DriverSectionTabs section="money" />
@@ -329,55 +325,15 @@ export default function DriverEarningsPage() {
           />
         </section>
 
-        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
-          <div className="moovu-card p-5">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Subscription</div>
-            <div className="mt-2"><StatusBadge status={driver?.subscription_status} /></div>
-          </div>
-          <div className="moovu-card p-5">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Current plan</div>
-            <div className="mt-2 text-xl font-black text-slate-950">{displayValue(driver?.subscription_plan)}</div>
-          </div>
-          <div className="moovu-card p-5">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Expires</div>
-            <div className="mt-2 text-sm font-black text-slate-950">
-              {displayDate(driver?.subscription_expires_at)}
-            </div>
-          </div>
-        </section>
-
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Payment areas</h2>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="moovu-card-interactive moovu-driver-payment-card p-5">
-              <div className="moovu-section-title">Subscription Payment</div>
-              <div className="moovu-driver-plan-grid">
-                <button
-                  className={`moovu-driver-plan-button ${selectedPlan === "day" ? "is-selected" : ""}`}
-                  onClick={() => setSelectedPlan("day")}
-                >
-                  <span>{DRIVER_SUBSCRIPTION_PLANS.day.label}</span>
-                  <strong>{money(DRIVER_SUBSCRIPTION_PLANS.day.amount)}</strong>
-                </button>
-                <button
-                  className={`moovu-driver-plan-button ${selectedPlan === "week" ? "is-selected" : ""}`}
-                  onClick={() => setSelectedPlan("week")}
-                >
-                  <span>{DRIVER_SUBSCRIPTION_PLANS.week.label}</span>
-                  <strong>{money(DRIVER_SUBSCRIPTION_PLANS.week.amount)}</strong>
-                </button>
-                <button
-                  className={`moovu-driver-plan-button ${selectedPlan === "month" ? "is-selected" : ""}`}
-                  onClick={() => setSelectedPlan("month")}
-                >
-                  <span>{DRIVER_SUBSCRIPTION_PLANS.month.label}</span>
-                  <strong>{money(DRIVER_SUBSCRIPTION_PLANS.month.amount)}</strong>
-                </button>
-              </div>
-              <div className="text-2xl font-black text-slate-950">{money(subscriptionSelectedPrice)}</div>
-              <Link href="/driver/subscriptions" className="moovu-btn moovu-btn-primary w-full justify-center">
-                Open subscription payments
+              <div className="moovu-section-title">Legacy subscription history</div>
+              <p className="text-sm text-slate-600">Subscriptions are retired. Past records are available for your reference.</p>
+              <Link href="/driver/subscriptions" className="moovu-btn moovu-btn-secondary w-full justify-center">
+                View past records
               </Link>
             </div>
 

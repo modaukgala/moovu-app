@@ -26,3 +26,9 @@ test("thumbnail-sized content cannot satisfy evidence requirements", async () =>
   const tiny = await sharp({ create: { width: 64, height: 64, channels: 3, background: "white" } }).png().toBuffer();
   await assert.rejects(preparePhase6Image(tiny));
 });
+test("full-sized PNG evidence is normalized to a bounded JPEG", async () => {
+  const png = await sharp({ create: { width: 640, height: 480, channels: 3, background: "white" } }).png().toBuffer();
+  const prepared = await preparePhase6Image(png);
+  assert.equal(prepared.mime, "image/jpeg");
+  assert.equal((await sharp(prepared.buffer).metadata()).format, "jpeg");
+});

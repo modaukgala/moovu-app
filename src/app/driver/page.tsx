@@ -19,7 +19,7 @@ import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import DriverDrawer from "@/components/driver/home/DriverDrawer";
 import DriverMapSurface from "@/components/driver/home/DriverMapSurface";
-import { EndOtpBypassDialog, SubscriptionRequiredDialog, TripCompletionOverlay } from "@/components/driver/home/DriverDialogs";
+import { EndOtpBypassDialog, TripCompletionOverlay } from "@/components/driver/home/DriverDialogs";
 import FloatingCustomerChat from "@/components/driver/home/FloatingCustomerChat";
 import NavigationChooser from "@/components/driver/home/NavigationChooser";
 import TripOfferPanel from "@/components/driver/home/TripOfferPanel";
@@ -40,7 +40,6 @@ import { usePageVisibility } from "@/hooks/usePageVisibility";
 import DriverOnboardingEntry from "@/components/driver/DriverOnboardingEntry";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
 import {
-  canReceiveTripOffers,
   DEFAULT_CENTER,
   DRIVER_CANCEL_REASONS,
   END_OTP_BYPASS_REASONS,
@@ -98,14 +97,12 @@ export default function DriverHomePage() {
   const [cancelTripReason, setCancelTripReason] = useState<string>(DRIVER_CANCEL_REASONS[0]);
   const [completedFareSummary, setCompletedFareSummary] = useState<CompletedFareSummary | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
-  const [subscriptionPromptOpen, setSubscriptionPromptOpen] = useState(false);
   const [driverRealtimeConnected, setDriverRealtimeConnected] = useState(false);
   const completionRequestRef = useRef(false);
   const isPageVisible = usePageVisibility();
   const offerRead = useReliableRead(READ_POLICIES.driverOffers, "driver-offers", driverRealtimeConnected);
   const tripRead = useReliableRead(READ_POLICIES.driverTrip, "driver-trip", driverRealtimeConnected);
 
-  const subscriptionAllowsOnline = canReceiveTripOffers(driver);
   const driverLevel = getDriverLevel(earningsSnapshot.completedTrips);
   const otpEntryOpen = showStartOtp || showEndOtp || showEndOtpBypass;
   const canOpenTripChat =
@@ -119,17 +116,6 @@ export default function DriverHomePage() {
   useEffect(() => {
     if (!currentTrip) setTripSheetOpen(false);
   }, [currentTrip]);
-
-  useEffect(() => {
-    if (!driver || subscriptionAllowsOnline) return;
-    if (currentTrip && ["assigned", "arrived", "ongoing"].includes(currentTrip.status)) return;
-
-    const key = `moovu-subscription-reminder:${driver.id}:${driver.subscription_status ?? "inactive"}:${driver.subscription_expires_at ?? "none"}`;
-    if (window.sessionStorage.getItem(key)) return;
-
-    window.sessionStorage.setItem(key, "shown");
-    setSubscriptionPromptOpen(true);
-  }, [currentTrip, driver, subscriptionAllowsOnline]);
 
   const gpsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsCaptureRef = useRef<Promise<boolean> | null>(null);
@@ -308,11 +294,6 @@ export default function DriverHomePage() {
   async function setOnlineServer(wantOnline: boolean) {
     if (wantOnline && !driver?.profile_completed) {
       showDriverActionError("Complete your application before going online.");
-      return;
-    }
-
-    if (wantOnline && !subscriptionAllowsOnline) {
-      showDriverActionError("Your subscription must be active before you can go online and receive trip offers.");
       return;
     }
 
@@ -1164,11 +1145,6 @@ export default function DriverHomePage() {
         />
       )}
 
-      <SubscriptionRequiredDialog
-        open={subscriptionPromptOpen}
-        onClose={() => setSubscriptionPromptOpen(false)}
-        onChoosePlan={() => router.push("/driver/subscriptions")}
-      />
       <EndOtpBypassDialog
         open={showEndOtpBypass}
         trip={currentTrip}
@@ -1262,13 +1238,6 @@ export default function DriverHomePage() {
           <>
           <div className="driver-map-first-layout">
             <section className="moovu-driver-home-stack">
-              {!subscriptionAllowsOnline && (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
-                  <span>Activate a plan to go online and receive trip offers.</span>
-                  <button type="button" className="moovu-btn moovu-btn-secondary" onClick={() => router.push("/driver/subscriptions")}>Choose plan</button>
-                </div>
-              )}
-
               <DriverMapSurface
                 mapRef={mapRef}
                 mapError={mapError}
@@ -1276,7 +1245,6 @@ export default function DriverHomePage() {
                 todayEarnings={earningsSnapshot.todayEarnings}
                 online={Boolean(driver.online)}
                 busy={busy}
-                subscriptionAllowsOnline={subscriptionAllowsOnline}
                 satelliteMap={satelliteMap}
                 onToggleMenu={() => setDriverToolsOpen((value) => !value)}
                 onOpenEarnings={() => router.push("/driver/earnings")}
@@ -1287,7 +1255,6 @@ export default function DriverHomePage() {
                   mapInstanceRef.current?.setMapTypeId(next ? "hybrid" : "roadmap");
                 }}
                 onToggleOnline={() => void setOnlineServer(!driver.online)}
-                onChoosePlan={() => router.push("/driver/subscriptions")}
               />
 
               {currentTrip && (

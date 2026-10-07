@@ -70,8 +70,6 @@ export function scoreDriverForTrip(params: {
   );
 
   const distanceScore = Math.max(0, 60 - distanceKm * 8);
-  const subscriptionScore =
-    driver.subscription_status === "active" || driver.subscription_status === "grace" ? 15 : -20;
 
   const ratingScore = Number(driver.quality?.avg_rating ?? 4) * 4;
   const qualityScore = Number(driver.quality?.quality_score ?? 70) * 0.2;
@@ -80,7 +78,6 @@ export function scoreDriverForTrip(params: {
 
   const score = round2(
     distanceScore +
-      subscriptionScore +
       ratingScore +
       qualityScore +
       acceptanceScore +

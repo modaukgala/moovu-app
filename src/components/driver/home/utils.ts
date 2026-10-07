@@ -89,21 +89,3 @@ export function parseTripStops(value: unknown): TripStop[] {
 
 export function money(value: number | null | undefined) { return `R${Number(value ?? 0).toFixed(2)}`; }
 export function num(value: unknown) { const n = Number(value ?? 0); return Number.isFinite(n) ? n : 0; }
-
-export function subscriptionTone(driver: Driver | null) {
-  if (!driver) return { label: "Inactive", message: "Your subscription must be active to receive trips.", className: "border-red-100 bg-red-50 text-red-700" };
-  const status = String(driver.subscription_status ?? "").toLowerCase();
-  const expiryMs = driver.subscription_expires_at ? new Date(driver.subscription_expires_at).getTime() : NaN;
-  const daysLeft = Number.isFinite(expiryMs) ? Math.ceil((expiryMs - Date.now()) / 86400000) : null;
-  if (status === "active" || status === "grace") {
-    if (daysLeft != null && daysLeft <= 3) return { label: "Expiring soon", message: "Your subscription is expiring soon. Renew to keep receiving trips.", className: "border-amber-200 bg-amber-50 text-amber-800" };
-    return { label: "Active", message: "Only active subscribed drivers receive trips.", className: "border-emerald-100 bg-emerald-50 text-emerald-700" };
-  }
-  return { label: "Inactive", message: "Your subscription must be active to receive trips.", className: "border-red-100 bg-red-50 text-red-700" };
-}
-
-export function canReceiveTripOffers(driver: Driver | null) {
-  if (!driver) return false;
-  const status = String(driver.subscription_status ?? "").toLowerCase();
-  return status === "active" || status === "grace";
-}

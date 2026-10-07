@@ -14,7 +14,7 @@ export async function phase6TransportImage(file: File) {
   if (file.size > 8388608) throw new Error("Choose an image under 8 MB.");
   const url = URL.createObjectURL(file);
   try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => { const node = new Image(); node.onload = () => resolve(node); node.onerror = () => reject(new Error("Image could not be decoded.")); node.src = url; });
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => { const node = new Image(); node.onload = () => resolve(node); node.onerror = () => reject(new Error(/image\/(?:heic|heif)/i.test(file.type) || /\.(?:heic|heif)$/i.test(file.name) ? "This device could not process the HEIC/HEIF photo. Choose JPEG or PNG, or use the camera's Most Compatible format." : "Image could not be decoded. Choose a clear JPEG or PNG photo.")); node.src = url; });
     if (image.naturalWidth * image.naturalHeight > 24000000) throw new Error("Image has too many pixels.");
     const scale = Math.min(1, 2400 / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement("canvas"); canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale);

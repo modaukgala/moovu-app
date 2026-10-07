@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import { scoreDriverForTrip } from "@/lib/dispatch/driverScoring";
 import { rebuildDriverQualityMetrics } from "@/lib/quality/rebuildDriverQualityMetrics";
 import { sendPushSafe } from "@/lib/push-server";
-import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
 import { DISPATCH_CONFIG } from "@/lib/dispatch/config";
 
 const supabaseAdmin = createClient(
@@ -23,8 +22,10 @@ type EligibleDriverRow = {
   lng: number | null;
   online: boolean | null;
   busy: boolean | null;
-  subscription_status: string | null;
-  subscription_expires_at: string | null;
+  status: string | null;
+  verification_status: string | null;
+  profile_completed: boolean | null;
+  is_deleted: boolean | null;
 };
 
 type DriverQualityRow = {
@@ -220,8 +221,6 @@ export async function offerNextEligibleDriver(
   excludedDriverIds: string[] = [],
   options: OfferNextOptions = {}
 ) {
-  await expireDriverSubscriptions().catch(() => {});
-
   const { data: trip, error: tripError } = await supabaseAdmin
     .from("trips")
     .select("*")
@@ -268,8 +267,10 @@ export async function offerNextEligibleDriver(
       lng,
       online,
       busy,
-      subscription_status,
-      subscription_expires_at
+      status,
+      verification_status,
+      profile_completed,
+      is_deleted
     `)
     .eq("online", true);
 
@@ -296,7 +297,6 @@ export async function offerNextEligibleDriver(
   }
   const activeTripDriverIds = new Set((activeTrips ?? []).map((row) => row.driver_id).filter(Boolean));
 
-  const nowMs = Date.now();
   const allowBusyDriverIds = new Set(options.allowBusyDriverIds ?? []);
 
   const filteredDrivers = ((drivers ?? []) as EligibleDriverRow[]).filter((driver) => {
@@ -308,16 +308,8 @@ export async function offerNextEligibleDriver(
       !allowBusyDriverIds.has(driver.id)
     ) return false;
 
-    const expiryMs = driver.subscription_expires_at
-      ? new Date(driver.subscription_expires_at).getTime()
-      : null;
-
-    const subscriptionValid =
-      (driver.subscription_status === "active" || driver.subscription_status === "grace") &&
-      expiryMs != null &&
-      expiryMs > nowMs;
-
-    return subscriptionValid;
+    return !driver.is_deleted && ["approved", "active"].includes(String(driver.status ?? "")) &&
+      driver.profile_completed !== false && (!driver.verification_status || driver.verification_status === "approved");
   });
 
   if (filteredDrivers.length === 0) {

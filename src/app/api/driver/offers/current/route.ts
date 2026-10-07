@@ -46,7 +46,6 @@ export async function GET(req: Request) {
       });
     }
 
-    await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
 
     const { data: driver, error: dErr } = await supabaseAdmin
       .from("drivers")

@@ -39,8 +39,6 @@ export async function POST(req: Request) {
       );
     }
 
-    await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
-
     let tripQuery = await supabaseAdmin
       .from("trips")
       .select(TRIP_SELECT)

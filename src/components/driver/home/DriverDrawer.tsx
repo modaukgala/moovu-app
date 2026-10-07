@@ -71,7 +71,7 @@ export default function DriverDrawer({ open, driver, levelLabel, completedTrips,
           <button type="button" onClick={() => navigate("/driver/history")}><History aria-hidden="true" />Trip history</button>
           <button type="button" onClick={() => navigate("/driver/trip-offers")}><CarFront aria-hidden="true" />Trip offers</button>
           <button type="button" onClick={() => navigate("/driver/commission-payments")}><BadgeDollarSign aria-hidden="true" />Commission payments</button>
-          <button type="button" onClick={() => navigate("/driver/subscriptions")}><ReceiptText aria-hidden="true" />Subscriptions</button>
+          <button type="button" onClick={() => navigate("/driver/subscriptions")}><ReceiptText aria-hidden="true" />Legacy subscription history</button>
           <button type="button" onClick={() => navigate("/driver/complete-profile")}><FileCheck2 aria-hidden="true" />Documents &amp; vehicle</button>
           <button type="button" onClick={() => navigate("/driver/account")}><Settings aria-hidden="true" />Settings</button>
           <button type="button" onClick={() => navigate("/driver/contact")}><Headphones aria-hidden="true" />Help &amp; safety</button>

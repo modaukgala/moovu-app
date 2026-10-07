@@ -10,14 +10,12 @@ type DriverMapSurfaceProps = {
   todayEarnings: number;
   online: boolean;
   busy: boolean;
-  subscriptionAllowsOnline: boolean;
   satelliteMap: boolean;
   onToggleMenu: () => void;
   onOpenEarnings: () => void;
   onRetryGps: () => void;
   onToggleMapType: () => void;
   onToggleOnline: () => void;
-  onChoosePlan: () => void;
 };
 
 export default function DriverMapSurface({
@@ -27,14 +25,12 @@ export default function DriverMapSurface({
   todayEarnings,
   online,
   busy,
-  subscriptionAllowsOnline,
   satelliteMap,
   onToggleMenu,
   onOpenEarnings,
   onRetryGps,
   onToggleMapType,
   onToggleOnline,
-  onChoosePlan,
 }: DriverMapSurfaceProps) {
   return (
     <div className="moovu-driver-map-card">
@@ -80,7 +76,6 @@ export default function DriverMapSurface({
       )}
 
       <div className="moovu-driver-map-sheet">
-        {subscriptionAllowsOnline ? (
           <button
             type="button"
             className={online ? "driver-map-primary-status is-online" : "driver-map-primary-status"}
@@ -89,11 +84,6 @@ export default function DriverMapSurface({
           >
             {busy ? "WORKING..." : online ? "● ONLINE" : "GO ONLINE"}
           </button>
-        ) : (
-          <button type="button" className="driver-map-primary-status" onClick={onChoosePlan}>
-            ACTIVATE SUBSCRIPTION
-          </button>
-        )}
       </div>
     </div>
   );

@@ -42,8 +42,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Not linked" }, { status: 403 });
     }
 
-    await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
-
     const { data: driver, error: dErr } = await supabaseAdmin
       .from("drivers")
       .select("id,status,subscription_status,subscription_expires_at,profile_completed")
@@ -93,9 +91,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             ok: false,
-            error: finance.authority.subscriptionRequired
-              ? "Your subscription must be active before going online."
-              : "Driver eligibility is currently unavailable. Please try again.",
+            error: "Driver finance eligibility is currently unavailable. Please review your commission balance.",
           },
           { status: 402 }
         );

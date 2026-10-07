@@ -7,9 +7,6 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), "u
 const hardenedRoutes = [
   "../../app/api/admin/payment-reviews/route.ts",
   "../../app/api/admin/settlements/record/route.ts",
-  "../../app/api/admin/driver-subscription-payments/route.ts",
-  "../../app/api/admin/driver-subscription-activate/route.ts",
-  "../../app/api/admin/subscriptions/update/route.ts",
   "../../app/api/customer/cancel-trip/route.ts",
   "../../app/api/driver/trips/no-show/route.ts",
   "../../app/api/driver/trips/arrive/route.ts",
@@ -21,6 +18,16 @@ test("hardened routes invoke an authoritative RPC without legacy write fallback"
     const code = source(path);
     assert.match(code, /callHardenedRpc/);
     assert.doesNotMatch(code, /\.from\(["'](?:driver_settlements|driver_subscription_payments|driver_wallet_transactions)["']\)[\s\S]{0,40}\.(?:insert|update|upsert|delete)/);
+  }
+});
+
+test("retired subscription mutations fail closed after authorization", () => {
+  for (const path of ["../../app/api/admin/driver-subscription-payments/route.ts", "../../app/api/admin/driver-subscription-activate/route.ts", "../../app/api/admin/subscriptions/update/route.ts"]) {
+    const code = source(path);
+    assert.match(code, /requireAdminUser/);
+    assert.match(code, /isFinancialAdminRole/);
+    assert.match(code, /status:\s*410/);
+    assert.doesNotMatch(code, /callHardenedRpc|\.insert\(|\.update\(/);
   }
 });
 

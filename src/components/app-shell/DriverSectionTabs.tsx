@@ -27,7 +27,7 @@ const tabs = {
   money: [
     { href: "/driver/earnings", label: "Earnings", icon: WalletCards },
     { href: "/driver/commission-payments", label: "Commission", icon: BadgeDollarSign },
-    { href: "/driver/subscriptions", label: "Plans", icon: ReceiptText },
+    { href: "/driver/subscriptions", label: "Past plans", icon: ReceiptText },
   ],
   account: [
     { href: "/driver/account", label: "Account", icon: UserRound },

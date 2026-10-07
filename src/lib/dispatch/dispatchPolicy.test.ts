@@ -62,6 +62,15 @@ test("new drivers receive neutral rather than perfect quality defaults", () => {
   assert.ok(neutral.score < perfect.score);
 });
 
+test("subscription history does not affect offer scoring", () => {
+  const driver = { id: "approved", lat: -25.1, lng: 29.1, online: true, busy: false };
+  const scores = ["active", "expired", "none"].map(subscription_status =>
+    scoreDriverForTrip({ pickupLat: -25.1, pickupLng: 29.1, driver: { ...driver, subscription_status } }).score,
+  );
+  assert.equal(scores[0], scores[1]);
+  assert.equal(scores[1], scores[2]);
+});
+
 test("dispatch reports incomplete scheduler enqueue results", () => {
   assert.equal(dispatchJobsQueued([{ ok: true }, { ok: true }]), true);
   assert.equal(dispatchJobsQueued([{ ok: true }, { ok: false, error: "queue unavailable" }]), false);

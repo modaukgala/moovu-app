@@ -33,6 +33,7 @@ export default function DriverOnboarding() {
   const [preview, setPreview] = useState<{ title: string; url: string } | null>(null);
   const previewUrl = useRef<string | null>(null);
   const pending = useRef<{ key: string; body: Record<string, unknown> } | null>(null);
+  const pendingEvidence = useRef<{ section: Phase6Section; requirement: string; id: string } | null>(null);
   const dirty = useRef(false);
 
   async function request(url: string, options?: RequestInit) {
@@ -60,10 +61,14 @@ export default function DriverOnboarding() {
       if (pending.current && pending.current.body.action !== action) throw new Error("Retry the pending operation before continuing.");
       pending.current ??= { key: crypto.randomUUID(), body: { action, application: application?.id, revision: application?.revision, payload } };
       const body = await request("/api/driver/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...pending.current.body, key: pending.current.key }) });
-      setApplication(body.application);
+      const refreshed = await request("/api/driver/onboarding");
+      const wasEvidenceSave = !!pendingEvidence.current;
+      if (pendingEvidence.current && (!refreshed.application || phase6Evidence(refreshed.application.draft, pendingEvidence.current.section)[pendingEvidence.current.requirement] !== pendingEvidence.current.id)) throw new Error("Evidence was uploaded but has not been saved to your application. Retry the pending save.");
+      setApplication(refreshed.application);
       pending.current = null;
+      pendingEvidence.current = null;
       dirty.current = false;
-      setMessage(action === "SUBMIT" ? "Submitted for Admin review. Your submitted version is protected." : "Saved to your account.");
+      setMessage(action === "SUBMIT" ? "Submitted for Admin review. Your submitted version is protected." : wasEvidenceSave ? "Image saved to your application." : "Saved to your account.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to continue."); }
     finally { setBusy(false); }
   }
@@ -97,10 +102,19 @@ export default function DriverOnboarding() {
       const prepared = await phase6TransportImage(file);
       form.set("application", application.id); form.set("section", section); form.set("file", prepared); form.set("source", source);
       const result = await request("/api/driver/onboarding/evidence", { method: "POST", body: form });
-      dirty.current = true;
-      setApplication({ ...application, draft: { ...application.draft, [section]: { ...application.draft[section], evidence: { ...phase6Evidence(application.draft, section), [requirement]: result.evidence } } } });
-      setMessage("Capture checked and stored privately. Saving evidence reference…");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Capture failed."); }
+      const nextDraft = { ...application.draft, [section]: { ...application.draft[section], evidence: { ...phase6Evidence(application.draft, section), [requirement]: result.evidence } } };
+      pendingEvidence.current = { section, requirement, id: result.evidence };
+      pending.current = { key: crypto.randomUUID(), body: { action: "SAVE", application: application.id, revision: application.revision, payload: application.status === "CORRECTION_REQUESTED" ? { [section]: nextDraft[section] } : nextDraft } };
+      setMessage("Image uploaded privately. Saving it to your application…");
+      const saved = await request("/api/driver/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...pending.current.body, key: pending.current.key }) });
+      const refreshed = await request("/api/driver/onboarding");
+      if (!refreshed.application || refreshed.application.id !== application.id || phase6Evidence(refreshed.application.draft, section)[requirement] !== result.evidence || saved.application?.id !== application.id) throw new Error("Image upload succeeded, but application confirmation failed. Retry the pending save.");
+      setApplication(refreshed.application);
+      pending.current = null;
+      pendingEvidence.current = null;
+      dirty.current = false;
+      setMessage("Image saved to your application and ready for review.");
+    } catch (error) { setMessage(pendingEvidence.current ? "Image uploaded privately, but the application save was not confirmed. Tap Save / retry pending save before leaving." : error instanceof Error ? error.message : "Capture failed."); }
     finally { setBusy(false); }
   }
   async function showEvidence(requirement: string, evidenceId: string) {
@@ -150,8 +164,8 @@ export default function DriverOnboarding() {
               await upload(section, requirement, new File([blob], "existing-evidence", { type: blob.type }), "file");
             }).catch(() => setMessage("Existing evidence cannot be reused safely. Choose a clear capture or contact support."));
           }}>Reuse approved existing {label(requirement)}</button>)}
-          {native ? <button className="mt-2 rounded border p-3" type="button" onClick={() => void phase6NativeCapture().then(file => upload(section, requirement, file, "camera")).catch(() => setMessage("Capture was cancelled or unavailable. Use the image selector."))}>Take photo</button> : <label className="mt-2 block">Take photo<input className="block max-w-full" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event => void upload(section, requirement, event.target.files?.[0], "unknown")} /></label>}
-          <label className="mt-2 block">Choose existing image<input className="block max-w-full" type="file" accept="image/jpeg,image/png,image/webp" onChange={event => void upload(section, requirement, event.target.files?.[0], "file")} /></label>
+          {native ? <button className="mt-2 rounded border p-3" type="button" onClick={() => void phase6NativeCapture().then(file => upload(section, requirement, file, "camera")).catch(() => setMessage("Capture was cancelled or unavailable. Use the image selector."))}>Take photo</button> : <label className="mt-2 block">Take photo<input className="block max-w-full" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void upload(section, requirement, file, "camera"); }} /></label>}
+          <label className="mt-2 block">Choose existing image<input className="block max-w-full" type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void upload(section, requirement, file, "file"); }} /></label>
           {phase6Evidence(application.draft, section)[requirement] && <div className="mt-3 flex flex-wrap gap-4"><button type="button" className="text-sm font-bold text-blue-700 underline" onClick={() => void showEvidence(requirement, phase6Evidence(application.draft, section)[requirement])}>Preview image</button><button type="button" className="text-sm font-bold text-red-700 underline" onClick={() => { const next = { ...phase6Evidence(application.draft, section) }; delete next[requirement]; change(section, "evidence", next); }}>Remove from application</button></div>}
           {section === "scanner" && <label className="mt-2 block">Reuse an adequate capture<select className="block w-full rounded border p-2" value={phase6Evidence(application.draft, section)[requirement] ?? ""} onChange={event => change(section, "evidence", { ...phase6Evidence(application.draft, section), [requirement]: event.target.value })}><option value="">Select capture</option>{Object.entries(phase6Evidence(application.draft, section)).filter(([, id]) => id).map(([key, id]) => <option key={key} value={id}>{label(key)}</option>)}</select></label>}
         </div>)}

@@ -22,8 +22,6 @@ export async function POST(req: Request) {
     const driverId = mapping?.driver_id ?? null;
     if (!driverId) return NextResponse.json({ ok: false, error: "Not linked" }, { status: 403 });
 
-    // Refresh subscription if expired
-    await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
 
     // Check eligibility
     const { data: driver, error: dErr } = await supabaseAdmin

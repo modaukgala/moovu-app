@@ -23,8 +23,8 @@ const navItems = [
   { href: "/admin/online-payments", label: "Online Payments", group: "Payments" },
   { href: "/admin/moovu-plus", label: "MOOVU+", group: "Payments" },
   { href: "/admin/commission-payments", label: "Commissions", group: "Payments" },
-  { href: "/admin/subscriptions", label: "Subscriptions", group: "Payments" },
-  { href: "/admin/subscriptions/paid", label: "Paid Subscriptions", group: "Payments" },
+  { href: "/admin/subscriptions", label: "Legacy Subscriptions", group: "Payments" },
+  { href: "/admin/subscriptions/paid", label: "Past Subscription Payments", group: "Payments" },
   { href: "/admin/settlements", label: "Settlements", group: "Payments" },
   { href: "/admin/reports", label: "Earnings Report", group: "Reports" },
   { href: "/admin/earnings", label: "Earnings Dashboard", group: "Reports" },
@@ -233,7 +233,7 @@ export default function AdminProtectedLayout({
               </h1>
 
               <p className="mt-2 text-sm leading-6 text-white/76">
-                Manage operations, dispatch, subscriptions and trip movement from one place.
+                Manage operations, dispatch, Driver applications and trip movement from one place.
               </p>
             </div>
 

@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { sendPushSafe } from "@/lib/push-server";
-import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
 import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 
 type DriverRow = {
@@ -57,7 +56,6 @@ export async function offerNextDriver(params: {
   tripId: string;
   excludeDriverIds?: string[];
 }) {
-  await expireDriverSubscriptions().catch(() => {});
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

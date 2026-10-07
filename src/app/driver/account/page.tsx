@@ -6,9 +6,7 @@ import { CarFront, ChevronRight, CircleUserRound, FileCheck2, Headphones, LogOut
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
-import StatusBadge from "@/components/ui/StatusBadge";
 import { ProfileSectionCard, QuickActionGrid } from "@/components/ui/MoovuPrimitives";
-import { DRIVER_SUBSCRIPTION_PLANS, type DriverSubscriptionPlan } from "@/lib/finance/driverPayments";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type DriverProfile = {
@@ -63,17 +61,9 @@ function displayDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "Not available";
 }
 
-function planName(value: string | null | undefined) {
-  if (value && value in DRIVER_SUBSCRIPTION_PLANS) {
-    return DRIVER_SUBSCRIPTION_PLANS[value as DriverSubscriptionPlan].label;
-  }
-  return "No active plan";
-}
-
 export default function DriverAccountPage() {
   const [driver, setDriver] = useState<DriverProfile | null>(null);
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
-  const [loadedAt] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -138,11 +128,6 @@ export default function DriverAccountPage() {
     };
   }, [earnings]);
 
-  const expiry = driver?.subscription_expires_at ?? earnings?.driver?.subscription_expires_at;
-  const remaining = expiry
-    ? Math.max(0, Math.ceil((new Date(expiry).getTime() - loadedAt) / (24 * 60 * 60 * 1000)))
-    : 0;
-
   async function signOut() {
     await supabaseClient.auth.signOut({ scope: "local" });
     window.location.href = "/driver/login";
@@ -166,21 +151,12 @@ export default function DriverAccountPage() {
 
         <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="moovu-card driver-account-subscription p-5 sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="moovu-section-title">Subscription</div>
-                <h2 className="mt-2 text-2xl font-black">{planName(driver?.subscription_plan)}</h2>
-              </div>
-              <StatusBadge status={driver?.subscription_status || "inactive"} />
-            </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <Info label="Started / last paid" value={displayDate(earnings?.driver?.subscription_last_paid_at)} />
-              <Info label="Expires" value={displayDate(expiry)} />
-              <Info label="Time remaining" value={`${remaining} day${remaining === 1 ? "" : "s"}`} />
-              <Info label="Commission owed" value={money(earnings?.wallet?.balance_due)} />
-            </div>
-            <Link href="/driver/subscriptions" className="moovu-btn moovu-btn-primary mt-5">
-              Renew or change plan <ChevronRight aria-hidden="true" />
+            <div className="moovu-section-title">Driver account</div>
+            <h2 className="mt-2 text-2xl font-black">{driver?.status === "approved" || driver?.status === "active" ? "Approved Driver" : "Account review"}</h2>
+            <p className="mt-2 text-sm text-slate-600">Subscriptions are retired and do not determine your eligibility to go online.</p>
+            <div className="mt-5"><Info label="Commission owed" value={money(earnings?.wallet?.balance_due)} /></div>
+            <Link href="/driver/subscriptions" className="moovu-btn moovu-btn-secondary mt-5">
+              Legacy subscription history <ChevronRight aria-hidden="true" />
             </Link>
           </div>
 
@@ -227,7 +203,7 @@ export default function DriverAccountPage() {
 
         <ProfileSectionCard title="Quick actions" description="Open the areas used for daily driving, payments, documents, and support.">
           <QuickActionGrid actions={[
-            { href: "/driver/subscriptions", label: "Subscription", description: "Plan and payment history", icon: WalletCards },
+            { href: "/driver/subscriptions", label: "Legacy subscription history", description: "Past records only", icon: WalletCards },
             { href: "/driver/earnings", label: "Earnings", description: "Trips and totals", icon: WalletCards },
             { href: "/driver/trip-offers", label: "Trip offers", description: "Received requests", icon: CarFront },
             { href: "/driver/commission-payments", label: "Commission", description: "Balance and secure online payment", icon: WalletCards },

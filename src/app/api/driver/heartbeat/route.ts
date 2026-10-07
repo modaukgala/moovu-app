@@ -5,14 +5,11 @@ import { phase2Mode } from "@/lib/finance/phase2Policy";
 
 type DriverReadinessCacheEntry = {
   online: boolean;
-  subscriptionStatus: string | null;
-  subscriptionRequired: boolean;
   checkedAt: number;
 };
 
 type DriverHeartbeatCache = {
   driverIdByUserId: Map<string, string>;
-  subscriptionRefreshAt: Map<string, number>;
   readinessByDriverId: Map<string, DriverReadinessCacheEntry>;
 };
 
@@ -24,7 +21,6 @@ function heartbeatCache() {
   if (!globalThis.__moovuDriverHeartbeatCache) {
     globalThis.__moovuDriverHeartbeatCache = {
       driverIdByUserId: new Map(),
-      subscriptionRefreshAt: new Map(),
       readinessByDriverId: new Map(),
     };
   }
@@ -32,7 +28,6 @@ function heartbeatCache() {
   return globalThis.__moovuDriverHeartbeatCache;
 }
 
-const SUBSCRIPTION_REFRESH_MS = 60_000;
 const READINESS_CACHE_MS = 15_000;
 
 function errorMessage(error: unknown) {
@@ -101,18 +96,11 @@ export async function POST(req: Request) {
     }
 
     const now = Date.now();
-    const lastSubscriptionRefresh = cache.subscriptionRefreshAt.get(driverId) ?? 0;
-    if (now - lastSubscriptionRefresh >= SUBSCRIPTION_REFRESH_MS) {
-      await supabaseAdmin.rpc("refresh_driver_subscription", { did: driverId });
-      cache.subscriptionRefreshAt.set(driverId, now);
-      cache.readinessByDriverId.delete(driverId);
-    }
-
     let readiness = cache.readinessByDriverId.get(driverId) ?? null;
     if (!readiness || now - readiness.checkedAt >= READINESS_CACHE_MS) {
       const { data: driver, error: dErr } = await supabaseAdmin
         .from("drivers")
-        .select("id,online,subscription_status")
+        .select("id,online")
         .eq("id", driverId)
         .maybeSingle();
 
@@ -126,13 +114,8 @@ export async function POST(req: Request) {
         console.error("[driver-heartbeat] finance mode unavailable", policyResult.error);
         return NextResponse.json({ ok: false, error: "Driver account status is temporarily unavailable." }, { status: 503 });
       }
-      const authoritative = policy.mode === "AUTHORITATIVE" && policy.authoritative_effective_from &&
-        new Date(policy.authoritative_effective_from).getTime() <= now;
-
       readiness = {
         online: Boolean(driver.online),
-        subscriptionStatus: driver.subscription_status ?? null,
-        subscriptionRequired: !authoritative,
         checkedAt: now,
       };
       cache.readinessByDriverId.set(driverId, readiness);
@@ -140,12 +123,6 @@ export async function POST(req: Request) {
 
     if (!readiness.online) {
       return NextResponse.json({ ok: false, error: "Driver is offline" }, { status: 400 });
-    }
-
-    // GPS telemetry is not a new-work reservation: an active trip may finish
-    // above the debt limit. Keep the legacy subscription guard only in legacy mode.
-    if (readiness.subscriptionRequired && readiness.subscriptionStatus !== "active" && readiness.subscriptionStatus !== "grace") {
-      return NextResponse.json({ ok: false, error: "Subscription inactive" }, { status: 402 });
     }
 
     const { error: upErr } = await supabaseAdmin

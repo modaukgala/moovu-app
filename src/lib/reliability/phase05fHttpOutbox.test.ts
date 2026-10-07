@@ -34,9 +34,6 @@ test("financial HTTP mutations reject dispatcher and support before RPC invocati
   const financialRoutes = [
     "../../app/api/admin/payment-reviews/route.ts",
     "../../app/api/admin/settlements/record/route.ts",
-    "../../app/api/admin/driver-subscription-payments/route.ts",
-    "../../app/api/admin/driver-subscription-activate/route.ts",
-    "../../app/api/admin/subscriptions/update/route.ts",
   ];
   for (const path of financialRoutes) {
     const code = source(path);

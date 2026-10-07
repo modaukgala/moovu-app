@@ -111,9 +111,9 @@ export default function PaidSubscriptionsPage() {
       <header className="moovu-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div>
           <div className="moovu-section-title">Payment archive</div>
-          <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Paid subscriptions</h1>
+          <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Past subscription payments</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Revisit approved subscription payments, payment dates, references and POPs.
+            Read-only legacy records. Subscriptions no longer determine Driver work eligibility.
           </p>
         </div>
         <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">
