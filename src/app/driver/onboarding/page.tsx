@@ -5,11 +5,13 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import Phase6Auth from "@/components/driver/Phase6Auth";
+import Phase6NotificationList from "@/components/driver/Phase6NotificationList";
 import { Capacitor } from "@capacitor/core";
 import { phase6NativeCapture, phase6TransportImage } from "@/lib/drivers/phase6Capture";
 import { PHASE6_SECTIONS, PHASE6_REQUIRED, phase6Editable, phase6Evidence, phase6MissingRequirements, phase6PdpNotice, type Phase6Application, type Phase6Section } from "@/lib/drivers/phase6Policy";
 import { mergeMissingDriverDetails, reusableLegacyDocument } from "@/lib/drivers/onboardingTransition";
 import type { Phase6Draft } from "@/lib/drivers/phase6Policy";
+import { PHASE6_EVIDENCE_LABELS } from "@/lib/drivers/phase6ReviewPresentation";
 
 const steps = ["Personal", "Driving Information", "Vehicle Details", "Vehicle Check", "Review & Submit"];
 const fields: Record<Phase6Section, string[]> = {
@@ -29,7 +31,7 @@ export default function DriverOnboarding() {
   const [busy, setBusy] = useState(false);
   const [native, setNative] = useState(false);
   const [message, setMessage] = useState("Loading your application…");
-  const [reviews, setReviews] = useState<{ action: string; reason: string; source_version: number }[]>([]);
+  const [reviews, setReviews] = useState<{ action: string; reason: string; source_version: number; target?: { requirement: string; reason_category: string } | null }[]>([]);
   const [preview, setPreview] = useState<{ title: string; url: string } | null>(null);
   const previewUrl = useRef<string | null>(null);
   const pending = useRef<{ key: string; body: Record<string, unknown> } | null>(null);
@@ -49,7 +51,7 @@ export default function DriverOnboarding() {
     let mounted = true;
     void supabaseClient.auth.getSession().then(({ data }) => { if (mounted) setSignedIn(!!data.session); });
     void request("/api/driver/documents").then(body => { if (mounted) setDocuments(body.documents ?? []); }).catch(() => {});
-    request("/api/driver/onboarding").then(body => { if (mounted) { setApplication(body.application); setReviews(body.reviews ?? []); setExistingDetails(body.existingDetails ?? {}); setMessage(body.application ? "Draft restored from your account." : "Start your Driver onboarding or re-registration."); } }).catch(error => { if (mounted) setMessage(error.message); });
+    request("/api/driver/onboarding").then(body => { if (mounted) { setApplication(body.application); setReviews(body.reviews ?? []); setExistingDetails(body.existingDetails ?? {}); setMessage(body.application ? "Draft restored from your account." : "Start your Driver onboarding or re-registration."); const requirement = new URLSearchParams(window.location.search).get("requirement"); const target = [...(body.reviews ?? [])].reverse().find((review: { action: string; target?: { requirement: string } }) => review.action === "CORRECTION_REQUESTED" && review.target?.requirement === requirement); if (body.application?.status === "CORRECTION_REQUESTED" && target && requirement) { const section = PHASE6_SECTIONS.find(key => [...PHASE6_REQUIRED[key], ...(key === "driving" ? ["pdp"] : key === "vehicle" ? ["insurance"] : [])].includes(requirement)); if (section && body.application.correction_sections.includes(section)) setStep(PHASE6_SECTIONS.indexOf(section)); } } }).catch(error => { if (mounted) setMessage(error.message); });
     return () => { mounted = false; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); };
   }, []);
 
@@ -141,9 +143,11 @@ export default function DriverOnboarding() {
     <div className="mb-4 flex items-center justify-between gap-3"><Link href="/driver" className="moovu-btn moovu-btn-secondary">← Driver home</Link><span className="text-xs font-bold uppercase tracking-widest text-blue-700">MOOVU Driver</span></div>
     <header className="moovu-hero-panel p-6 sm:p-8"><p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100">Apply to drive</p><h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Your Driver application</h1><p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-blue-50">Start, save and return when you are ready. Existing Drivers keep the same account, trips and work access during re-registration.</p></header>
     <p role="status" aria-live="polite" className="my-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-900">{busy ? "Working on your application… " : ""}{message}</p>
+    {signedIn && <Phase6NotificationList />}
     {!application ? <>{signedIn ? <button disabled={busy} className="rounded bg-black px-4 py-3 text-white" onClick={() => void command("ENROLL")}>Start / resume</button> : <><Link className="mr-4 underline" href="/driver/login">Existing Driver — Sign In</Link><Phase6Auth /></>}</> : <>
       {application.status === "DRAFT" && Object.values(existingDetails).some(section => Object.keys(section ?? {}).length) && <button className="my-3 rounded border p-3" disabled={busy || dirty.current || !!pending.current} onClick={() => void command("SAVE", mergeMissingDriverDetails(application.draft, existingDetails))}>Reuse existing profile and vehicle details</button>}
       <section className="moovu-card my-4 p-4 sm:p-5"><p className="text-xs font-black uppercase tracking-widest text-blue-700">Application status</p><p className="mt-1 text-lg font-bold">{statusTitle[application.status] ?? label(application.status.toLowerCase())}</p><p className="mt-1 text-sm text-slate-600">Cycle {application.cycle} · Version {application.version}{application.status === "CORRECTION_REQUESTED" ? ` · Update ${application.correction_sections.map(label).join(", ")}` : ""}</p></section>
+      {application.status === "CORRECTION_REQUESTED" && <section className="my-4 rounded-lg border border-amber-300 bg-amber-50 p-4" aria-label="Action required"><p className="font-black uppercase text-amber-900">Action required</p>{reviews.filter(review => review.action === "CORRECTION_REQUESTED" && review.source_version === application.version).map((review, index) => <p key={index} className="mt-2 text-sm text-amber-950"><strong>{review.target?.requirement ? PHASE6_EVIDENCE_LABELS[review.target.requirement] ?? "Evidence" : review.target?.reason_category ?? "Correction"}</strong><br />{review.reason}</p>)}<p className="mt-2 text-sm text-amber-900">Replace the requested image, save, then resubmit. Your other evidence remains in the application.</p></section>}
       <nav aria-label="Onboarding steps" className="my-4 grid grid-cols-2 gap-2 sm:grid-cols-5">{steps.map((name, index) => <button key={name} type="button" aria-current={step === index ? "step" : undefined} disabled={busy || dirty.current || !!pending.current} className={`min-h-12 rounded-2xl border px-3 py-2 text-left text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${step === index ? "border-blue-700 bg-blue-700 text-white" : "border-slate-200 bg-white text-slate-700"}`} onClick={() => setStep(index)}><span className="block text-xs opacity-75">{index + 1} of 5</span>{name}</button>)}</nav>
       <div className="moovu-card p-4 sm:p-6"><p className="text-xs font-bold uppercase tracking-widest text-blue-700">Step {step + 1} of {steps.length}</p><h2 className="mb-4 mt-1 text-2xl font-bold">{steps[step]}</h2>
       {step < 4 ? <fieldset disabled={!editable || busy || !!pending.current} className="space-y-4">

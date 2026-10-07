@@ -48,6 +48,12 @@ test("subscription and document notifications open driver tools", () => {
   );
 });
 
+test("Phase 6 review notifications open the scoped Driver application", () => {
+  const url = "/driver/onboarding?requirement=rear";
+  const data = buildNotificationRoutingData({ role: "driver", title: "Application evidence needs attention", url, data: { type: "phase6_correction_requested" } });
+  assert.equal(resolveNotificationTarget(data), url);
+});
+
 test("server routing data includes stable aliases", () => {
   const data = buildNotificationRoutingData({
     role: "customer",

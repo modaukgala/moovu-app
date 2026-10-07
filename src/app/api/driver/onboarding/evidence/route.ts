@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { phase6Auth, phase6Owned } from "@/lib/drivers/phase6Server";
 import { PHASE6_SECTIONS, phase6Editable, type Phase6Section } from "@/lib/drivers/phase6Policy";
 import { preparePhase6Image } from "@/lib/drivers/phase6Image";
+import sharp from "sharp";
 
 export const runtime = "nodejs";
 export async function POST(req: Request) {
@@ -57,5 +58,9 @@ export async function GET(req: Request) {
   if (audit.error) return NextResponse.json({ error: "Evidence access could not be recorded safely." }, { status: 503 });
   const object = await supabaseAdmin.storage.from("phase6-evidence").download(row.data.object_path);
   if (!object.data) return NextResponse.json({ error: "Evidence unavailable." }, { status: 503 });
-  return new Response(await object.data.arrayBuffer(), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline; filename=capture.jpg" } });
+  const bytes = new Uint8Array(await object.data.arrayBuffer());
+  const output = query.get("thumbnail") === "true"
+    ? await sharp(bytes).resize({ width: 360, height: 270, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 68 }).toBuffer()
+    : bytes;
+  return new Response(new Uint8Array(output), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline; filename=capture.jpg" } });
 }

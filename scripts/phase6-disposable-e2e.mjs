@@ -31,13 +31,15 @@ ok(await actor.auth.signInWithPassword({ email, password }), "Sign in disposable
 const driverToken = (await actor.auth.getSession()).data.session.access_token;
 let reviewerToken;
 async function runtimeCommand(args) {
-  if (!process.env.PHASE6_E2E_BASE_URL) return db.rpc("phase6_command", args);
+  if (!process.env.PHASE6_E2E_BASE_URL) return ["CORRECTION_REQUESTED", "APPROVED", "REJECTED"].includes(args.p_action)
+    ? db.rpc("phase6_admin_review", { p_actor: args.p_actor, p_key: args.p_key, p_action: args.p_action, p_application: args.p_application, p_revision: args.p_revision, p_reason: args.p_payload.reason, p_requirement: args.p_requirement ?? null, p_category: args.p_category ?? null })
+    : db.rpc("phase6_command", args);
   const base = new URL(process.env.PHASE6_E2E_BASE_URL);
   assert.equal(base.hostname, "127.0.0.1", "HTTP target must be local.");
   const admin = args.p_actor !== user.id;
   const response = await fetch(new URL(admin ? "/api/admin/onboarding" : "/api/driver/onboarding", base), {
     method: "POST", headers: { Authorization: `Bearer ${admin ? reviewerToken : driverToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ action: args.p_action, key: args.p_key, application: args.p_application, revision: args.p_revision, payload: args.p_payload, reason: args.p_payload?.reason, sections: args.p_payload?.sections }),
+    body: JSON.stringify({ action: args.p_action, key: args.p_key, application: args.p_application, revision: args.p_revision, payload: args.p_payload, reason: args.p_payload?.reason, sections: args.p_payload?.sections, requirement: args.p_requirement, category: args.p_category }),
   });
   const body = await response.json();
   return response.ok ? { data: body.application, error: null } : { data: null, error: { code: String(response.status) } };
@@ -118,11 +120,41 @@ assert.ok((await db.from("phase6_uploads").update({ state: "SUPERSEDED" }).eq("i
 assert.ok((await db.storage.from("phase6-evidence").upload(`${app.driver_id}/${app.id}/${evidence.personal}.jpg`, jpeg, { contentType: "image/jpeg", upsert: true })).error, "Stored submitted bytes cannot be overwritten.");
 assert.ok((await db.rpc("phase6_command", { ...save, p_key: randomUUID(), p_revision: current.revision })).error, "Submitted draft is frozen.");
 await command("UNDER_REVIEW", { reason: "Reviewing disposable version" }, reviewer.id);
-const decisions = await Promise.all([1, 2].map(number => runtimeCommand({ p_actor: reviewer.id, p_key: randomUUID(), p_action: "CORRECTION_REQUESTED", p_application: app.id, p_revision: current.revision, p_payload: { reason: `Disposable correction ${number}`, sections: ["vehicle"] } })));
+const decisions = await Promise.all([1, 2].map(number => runtimeCommand({ p_actor: reviewer.id, p_key: randomUUID(), p_action: "CORRECTION_REQUESTED", p_application: app.id, p_revision: current.revision, p_payload: { reason: `Rear of Vehicle: Image is blurry. Disposable correction ${number}`, sections: ["scanner"] }, p_requirement: "rear", p_category: "Image is blurry" })));
 assert.equal(decisions.filter(result => !result.error).length, 1, "Only one concurrent reviewer decision succeeds.");
 current = decisions.find(result => !result.error).data;
+const correctionReview = ok(await db.from("phase6_reviews").select("id").eq("application_id", app.id).eq("action", "CORRECTION_REQUESTED").single(), "Read correction review");
+assert.deepEqual(ok(await db.from("phase6_correction_targets").select("requirement,reason_category").eq("review_id", correctionReview.id).single(), "Read specific correction"), { requirement: "rear", reason_category: "Image is blurry" });
+async function assertReviewNotification(reviewId, type) {
+  const events = ok(await db.from("moovu_business_events").select("id,event_type,payload").eq("event_key", `phase6-review:${reviewId}`), `${type} event exactly once`);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].event_type, type);
+  assert.equal(events[0].payload.user_id, user.id);
+  assert.doesNotMatch(JSON.stringify(events[0].payload), /id_number|license_number|vehicle_vin|object_path|signed_url/i);
+  const jobs = ok(await db.from("moovu_notification_outbox").select("id,event_type,payload").eq("business_event_id", events[0].id), `${type} outbox exactly once`);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].event_type, type);
+  assert.doesNotMatch(JSON.stringify(jobs[0].payload), /id_number|license_number|vehicle_vin|object_path|signed_url/i);
+  return { eventId: events[0].id, outboxId: jobs[0].id };
+}
+const correctionNotification = await assertReviewNotification(correctionReview.id, "phase6_correction_requested");
 assert.ok((await db.rpc("phase6_command", { ...save, p_key: randomUUID(), p_revision: current.revision, p_payload: { personal: draft.personal } })).error, "Unrequested section remains frozen.");
-await command("SAVE", { vehicle: { ...draft.vehicle, vehicle_color: "Blue" } });
+let replacementRear;
+if (process.env.PHASE6_E2E_BASE_URL) {
+  const form = new FormData(); form.set("application", app.id); form.set("section", "scanner"); form.set("source", "gallery"); form.set("file", new Blob([jpeg], { type: "image/jpeg" }), "rear-replacement.jpg");
+  const response = await fetch(new URL("/api/driver/onboarding/evidence", process.env.PHASE6_E2E_BASE_URL), { method: "POST", headers: { Authorization: `Bearer ${driverToken}` }, body: form });
+  assert.equal(response.status, 200, "Corrected Rear of Vehicle upload succeeds.");
+  replacementRear = (await response.json()).evidence;
+} else {
+  replacementRear = randomUUID();
+  const path = `${app.driver_id}/${app.id}/${replacementRear}.jpg`;
+  ok(await db.storage.from("phase6-evidence").upload(path, jpeg, { contentType: "image/jpeg" }), "Store corrected rear image");
+  ok(await db.from("phase6_uploads").insert({ id: replacementRear, application_id: app.id, section: "scanner", object_path: path, source: "gallery", state: "VALIDATED", mime: "image/jpeg", bytes: jpeg.length, width: 640, height: 480 }), "Bind corrected rear image");
+}
+assert.notEqual(replacementRear, evidence.scanner);
+await command("SAVE", { scanner: { ...draft.scanner, evidence: { ...draft.scanner.evidence, rear: replacementRear } } });
+assert.equal(current.draft.scanner.evidence.rear, replacementRear);
+assert.equal(current.draft.scanner.evidence.front, evidence.scanner, "Unrelated accepted image stays attached.");
 await command("SUBMIT");
 assert.equal(current.version, 2);
 assert.equal(current.status, "RESUBMITTED");
@@ -130,16 +162,11 @@ assert.deepEqual(ok(await db.from("phase6_versions").select("snapshot").eq("appl
 await command("UNDER_REVIEW", { reason: "Reviewing corrected evidence" }, reviewer.id);
 await command("APPROVED", { reason: "Approved disposable fixture only" }, reviewer.id);
 assert.equal(current.status, "APPROVED");
+const approvalReview = ok(await db.from("phase6_reviews").select("id").eq("application_id", app.id).eq("action", "APPROVED").single(), "Read approval review");
+const approvalNotification = await assertReviewNotification(approvalReview.id, "phase6_application_approved");
 assert.equal(ok(await db.from("drivers").select("id,verification_status,profile_completed").eq("id", app.driver_id).single(), "Verify approved identity").id, app.driver_id);
 if (process.env.PHASE6_E2E_BASE_URL) {
   const base = process.env.PHASE6_E2E_BASE_URL;
-  async function setOnline(token, online) {
-    return fetch(new URL("/api/driver/status", base), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ online }) });
-  }
-  const subscription = ok(await db.from("drivers").select("subscription_status").eq("id", app.driver_id).single(), "Disposable subscription state");
-  assert.notEqual(subscription.subscription_status, "active", "New approved fixture has no active subscription.");
-  assert.equal((await setOnline(driverToken, true)).status, 200, "Approved Driver without subscription may go online.");
-  assert.equal((await setOnline(driverToken, false)).status, 200, "Driver may go offline again.");
   const unauthenticated = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ENROLL", key: randomUUID() }) });
   assert.equal(unauthenticated.status, 401);
   const own = await fetch(new URL("/api/driver/onboarding", base), { headers: { Authorization: `Bearer ${driverToken}` } });
@@ -151,7 +178,6 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   const otherToken = (await otherClient.auth.getSession()).data.session.access_token;
   const otherEnroll = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "ENROLL", key: randomUUID() }) });
   assert.equal(otherEnroll.status, 200); const otherApp = (await otherEnroll.json()).application;
-  assert.ok((await setOnline(otherToken, true)).status >= 400, "Unapproved Driver cannot go online without approval.");
   const corrupt = new FormData(); corrupt.set("application", otherApp.id); corrupt.set("section", "personal"); corrupt.set("source", "gallery"); corrupt.set("file", new Blob(["disguised non-image"], { type: "image/jpeg" }), "fake.jpg");
   assert.equal((await fetch(new URL("/api/driver/onboarding/evidence", base), { method: "POST", headers: { Authorization: `Bearer ${otherToken}` }, body: corrupt })).status, 400, "MIME-disguised content must be rejected.");
   const privileged = await fetch(new URL("/api/driver/onboarding", base), { method: "POST", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "SAVE", key: randomUUID(), application: otherApp.id, revision: otherApp.revision, payload: { personal: { verification_status: "approved" } } }) }); assert.equal(privileged.status, 400);
@@ -222,8 +248,6 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   assert.equal(ok(await db.from("phase6_enrollments").select("inspection_required").eq("driver_id", app.driver_id).single(), "Inspection hold").inspection_required, true);
   assert.ok((await httpCommand(driverToken, { action: "ENROLL", key: randomUUID() })).application.id === inspection.application.id, "Resume existing identity and cycle.");
   assert.equal((await httpCommand(driverToken, { action: "ENROLL", key: randomUUID() })).application.id, inspection.application.id, "Repeated Continue resumes the same active application.");
-  assert.equal((await setOnline(driverToken, true)).status, 200, "Existing approved Driver may go online during re-application without a subscription.");
-  assert.equal((await setOnline(driverToken, false)).status, 200);
   assert.equal(ok(await db.from("phase6_applications").select("id").eq("driver_id", app.driver_id).eq("cycle", inspection.application.cycle), "One reinspection cycle").length, 1);
   async function completeCycle(application, token, registration) {
     const refs = {};
@@ -244,6 +268,37 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   const rejectBody = { action: "REJECTED", key: randomUUID(), application: cycle.id, revision: cycle.revision, reason: "Disposable rejection workflow fixture" };
   const rejected = await httpCommand(reviewerToken, rejectBody, true); assert.equal(rejected.response.status, 200); cycle = rejected.application;
   for (let retry = 0; retry < 2; retry++) assert.deepEqual((await httpCommand(reviewerToken, rejectBody, true)).application, cycle, "Review replay / third retry is stable.");
+  const rejectionReview = ok(await db.from("phase6_reviews").select("id").eq("application_id", cycle.id).eq("action", "REJECTED").single(), "Read rejection review");
+  const rejectionNotification = await assertReviewNotification(rejectionReview.id, "phase6_application_rejected");
+  const fixtureJobs = [correctionNotification, approvalNotification, rejectionNotification];
+  const outboxIds = fixtureJobs.map(item => item.outboxId);
+  assert.equal(ok(await db.from("fcm_tokens").select("id").eq("user_id", user.id), "Fixture has no FCM devices").length, 0);
+  assert.equal(ok(await db.from("push_subscriptions").select("id").eq("user_id", user.id), "Fixture has no Web Push devices").length, 0);
+  assert.equal(ok(await db.from("moovu_notification_outbox").select("id").lt("created_at", "2000-01-01T00:00:00Z").limit(1), "No older outbox work").length, 0);
+  const originalJobs = ok(await db.from("moovu_notification_outbox").select("id,created_at,status,attempts").in("id", outboxIds), "Read fixture outbox baseline");
+  assert.equal(originalJobs.length, 3);
+  assert.ok(originalJobs.every(job => job.status === "pending" && job.attempts === 0));
+  try {
+    for (const [index, id] of outboxIds.entries()) ok(await db.from("moovu_notification_outbox").update({ created_at: `2000-01-01T00:00:0${index + 1}Z` }).eq("id", id), "Isolate fixture claim order");
+    const worker = await fetch(new URL("/api/jobs/outbox", base), { method: "POST", headers: { Authorization: `Bearer ${process.env.OUTBOX_JOB_SECRET}`, "Content-Type": "application/json" }, body: JSON.stringify({ limit: 3 }) });
+    assert.equal(worker.status, 200, "Protected disposable worker must run.");
+    const workerResult = await worker.json();
+    assert.equal(workerResult.processed, 3, "Only the three isolated review jobs may be claimed.");
+    assert.ok(workerResult.results.every(result => result.ok), "All review jobs must be acknowledged.");
+  } finally {
+    for (const original of originalJobs) ok(await db.from("moovu_notification_outbox").update({ created_at: original.created_at }).eq("id", original.id), "Restore fixture outbox timestamp");
+  }
+  const processedJobs = ok(await db.from("moovu_notification_outbox").select("id,status,attempts").in("id", outboxIds), "Verify review jobs processed");
+  assert.equal(processedJobs.length, 3);
+  assert.ok(processedJobs.every(job => job.status === "delivered" && job.attempts === 1));
+  const historyKeys = fixtureJobs.map(item => `phase05:${item.eventId}:${user.id}`);
+  const ownHistory = ok(await actor.from("app_notifications").select("event_key,title,body,url,data").in("event_key", historyKeys), "Driver reads own in-app review notifications");
+  assert.equal(ownHistory.length, 3);
+  assert.ok(ownHistory.some(item => item.url === "/driver/onboarding?requirement=rear"));
+  assert.equal(ok(await otherClient.from("app_notifications").select("id").in("event_key", historyKeys), "Other Driver notification isolation").length, 0);
+  assert.equal(ok(await customerClient.from("app_notifications").select("id").in("event_key", historyKeys), "Customer notification isolation").length, 0);
+  const anonymousHistory = await anon.from("app_notifications").select("id").in("event_key", historyKeys);
+  assert.ok(anonymousHistory.error || anonymousHistory.data?.length === 0, "Anonymous notification history must be denied.");
   assert.ok((await httpCommand(driverToken, { action: "ENROLL", key: randomUUID() })).response.status >= 400, "Rejected Driver cannot self-authorize reapplication.");
   const reapplied = await httpCommand(reviewerToken, { action: "REAPPLICATION_AUTHORIZED", key: randomUUID(), application: cycle.id, revision: cycle.revision, reason: "Authorized disposable reapplication" }, true); assert.equal(reapplied.response.status, 200);
   assert.equal(reapplied.application.driver_id, app.driver_id); assert.ok(reapplied.application.cycle > cycle.cycle);

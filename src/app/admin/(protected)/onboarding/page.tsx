@@ -1,79 +1,114 @@
 "use client";
+
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Check, FileImage, RefreshCw, X } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase/client";
-import { PHASE6_SECTIONS, type Phase6Application } from "@/lib/drivers/phase6Policy";
+import { type Phase6Application, type Phase6Draft, type Phase6Section } from "@/lib/drivers/phase6Policy";
+import { evidenceItems, queueGroup, queueStatus, reviewCompletion, reviewDraft, type EvidenceItem, type QueueGroup, type ReviewUpload } from "@/lib/drivers/phase6ReviewPresentation";
 
 type Review = { id: string; action: string; source_version: number; reason: string; created_at: string };
-type QueueApplication = Phase6Application & { driverName: string; existingDriver: boolean };
-type Detail = { application: Phase6Application; driverName: string; existingDriver: boolean; versions: { version: number; snapshot: unknown; submitted_at: string }[]; reviews: Review[]; uploads: { id: string; section: string; state: string; source: string }[] };
+type QueueItem = { id: string; status: string; cycle: number; updated_at: string; driverName: string; existingDriver: boolean; completion: { received: number; total: number; missing: number } };
+type Detail = { application: Phase6Application; driverName: string; existingDriver: boolean; versions: { version: number; snapshot: unknown; submitted_at: string }[]; reviews: Review[]; uploads: ReviewUpload[] };
+type Modal = { kind: "correct"; item: EvidenceItem } | { kind: "approve" | "reject" } | null;
+const groups: { key: QueueGroup; label: string }[] = [{ key: "review", label: "Needs review" }, { key: "driver", label: "Needs Driver action" }, { key: "draft", label: "Draft" }, { key: "approved", label: "Approved" }, { key: "rejected", label: "Rejected" }];
+const reasons = ["Image is blurry", "Document or photo is cut off", "Information cannot be read", "Wrong document or photo", "Document has expired", "Incorrect angle or view", "Other"];
+const personal: [string, string][] = [["first_name", "First name"], ["last_name", "Surname"], ["id_number", "ID number"], ["phone", "Phone"], ["area_name", "Area"], ["home_address", "Address"], ["emergency_contact_name", "Emergency contact"], ["emergency_contact_phone", "Emergency phone"]];
+const driving: [string, string][] = [["license_number", "Licence number"], ["license_code", "Licence code"], ["license_expiry", "Licence expiry"], ["pdp_number", "PDP number"], ["pdp_expiry", "PDP expiry"]];
+const vehicle: [string, string][] = [["vehicle_registration", "Registration"], ["vehicle_make", "Make"], ["vehicle_model", "Model"], ["vehicle_year", "Year"], ["vehicle_color", "Colour"], ["vehicle_vin", "VIN"], ["vehicle_engine_number", "Engine number"], ["seating_capacity", "Seats"], ["vehicle_license_expiry", "Licence disc expiry"], ["insurance_expiry", "Insurance expiry"]];
+function formatDate(value?: string | null) { return value ? new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "Not submitted"; }
+function Fields({ title, draft, section, fields }: { title: string; draft: Phase6Draft; section: Phase6Section; fields: [string, string][] }) {
+  return <section className="border-b border-slate-200 py-6"><h3 className="font-bold text-slate-950">{title}</h3><dl className="mt-4 grid gap-4 sm:grid-cols-2">{fields.map(([key, label]) => {
+    const raw = String(draft[section]?.[key] ?? "").trim();
+    const value = key === "id_number" && raw ? `${"•".repeat(Math.max(0, raw.length - 4))}${raw.slice(-4)}` : raw || "Not provided";
+    return <div key={key} className="min-w-0"><dt className="text-xs font-semibold text-slate-500">{label}</dt><dd className="mt-1 break-words text-sm font-semibold">{value}</dd></div>;
+  })}</dl></section>;
+}
+
+function EvidenceCard({ applicationId, item, reviewed, opened, onReviewed, onPreview, onCorrect, canReview }: { applicationId: string; item: EvidenceItem; reviewed: boolean; opened: boolean; onReviewed: (id: string) => void; onPreview: (item: EvidenceItem) => void; onCorrect: (item: EvidenceItem) => void; canReview: boolean }) {
+  const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const uploadId = item.upload?.id;
+  useEffect(() => {
+    if (!uploadId) return;
+    let active = true; let url: string | null = null;
+    void (async () => {
+      const { data } = await supabaseClient.auth.getSession(); if (!data.session) return;
+      const response = await fetch(`/api/driver/onboarding/evidence?review=true&thumbnail=true&application=${encodeURIComponent(applicationId)}&evidence=${encodeURIComponent(uploadId)}`, { headers: { Authorization: `Bearer ${data.session.access_token}` }, cache: "no-store" });
+      if (!response.ok) return; url = URL.createObjectURL(await response.blob()); if (active) setThumbnail(url);
+    })().catch(() => {});
+    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+  }, [applicationId, uploadId]);
+  return <article className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex justify-between gap-2"><div><h4 className="font-bold">{item.label}</h4><p className="text-xs text-slate-500">{item.required ? "Required" : "Optional"} · {item.upload ? "Uploaded" : "Not provided"}</p></div>{reviewed && <Check aria-label="Reviewed this session" className="h-5 w-5 text-emerald-600" />}</div>
+    {item.upload ? <button type="button" onClick={() => onPreview(item)} aria-label={`View ${item.label}`} className="mt-3 flex h-36 w-full items-center justify-center overflow-hidden rounded-md bg-slate-100">{thumbnail ? <Image src={thumbnail} alt={`${item.label} thumbnail`} width={360} height={270} unoptimized className="h-full w-full object-contain" /> : <FileImage className="h-8 w-8 text-slate-400" />}</button> : <div className="mt-3 flex h-36 items-center justify-center rounded-md bg-slate-50 text-sm text-slate-500">No image</div>}
+    {item.upload && <p className="mt-2 text-xs text-slate-500">Uploaded {formatDate(item.upload.created_at)}{item.upload.source ? ` · ${item.upload.source}` : ""}</p>}
+    {canReview && <div className="mt-3 flex flex-wrap gap-2">{item.upload && <button type="button" disabled={!opened} onClick={() => onReviewed(item.upload!.id)} className="min-h-11 rounded-md border px-3 text-sm font-semibold disabled:opacity-50" title={opened ? undefined : "Open the full image before marking reviewed"}>{reviewed ? "Reviewed" : "Mark reviewed"}</button>}<button type="button" onClick={() => onCorrect(item)} className="min-h-11 rounded-md border border-amber-300 px-3 text-sm font-semibold text-amber-900">Request re-upload</button></div>}</article>;
+}
+
 export default function OnboardingReview() {
-  const [queue, setQueue] = useState<QueueApplication[]>([]);
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [reason, setReason] = useState("");
-  const [sections, setSections] = useState<string[]>([]);
-  const [message, setMessage] = useState("Loading review queue…");
-  const [busy, setBusy] = useState(false);
-  const pending = useRef<Record<string, unknown> | null>(null);
+  const [queue, setQueue] = useState<QueueItem[]>([]); const [group, setGroup] = useState<QueueGroup>("review"); const [detail, setDetail] = useState<Detail | null>(null);
+  const [message, setMessage] = useState("Loading applications…"); const [busy, setBusy] = useState(false); const [reviewed, setReviewed] = useState<string[]>([]); const [opened, setOpened] = useState<string[]>([]);
+  const [detailsReviewed, setDetailsReviewed] = useState(false); const [vehicleReviewed, setVehicleReviewed] = useState(false);
+  const [preview, setPreview] = useState<{ label: string; url: string; source?: string; created_at?: string } | null>(null);
+  const [modal, setModal] = useState<Modal>(null); const [category, setCategory] = useState(reasons[0]); const [note, setNote] = useState("");
+  const pending = useRef<{ key: string; action: string; application: string; revision: number; reason: string; sections: Phase6Section[]; requirement: string | null; category: string | null } | null>(null);
+  const previewUrl = useRef<string | null>(null);
   const request = useCallback(async (url: string, options?: RequestInit) => {
-    const { data } = await supabaseClient.auth.getSession();
-    if (!data.session) throw new Error("Reviewer sign-in required.");
+    const { data } = await supabaseClient.auth.getSession(); if (!data.session) throw new Error("Reviewer sign-in required.");
     const response = await fetch(url, { ...options, headers: { ...options?.headers, Authorization: `Bearer ${data.session.access_token}` }, cache: "no-store" });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error ?? "Review unavailable.");
-    return body;
+    const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Review unavailable."); return body;
   }, []);
   const load = useCallback(async (id?: string) => {
     setBusy(true);
-    try {
-      const body = await request(`/api/admin/onboarding${id ? `?id=${encodeURIComponent(id)}` : ""}`);
-      if (id) setDetail(body); else setQueue(body.applications);
-      setMessage("Review current immutable version and evidence before deciding.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Review unavailable."); }
-    finally { setBusy(false); }
+    try { const body = await request(`/api/admin/onboarding${id ? `?id=${encodeURIComponent(id)}` : ""}`); if (id) { setDetail(body); setReviewed([]); setOpened([]); setDetailsReviewed(false); setVehicleReviewed(false); } else setQueue(body.applications); setMessage("Applications are up to date."); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "Review unavailable."); } finally { setBusy(false); }
   }, [request]);
   useEffect(() => { void load(); }, [load]);
-  async function decision(action: string) {
-    if (!detail || busy) return;
-    setBusy(true);
+  useEffect(() => () => { if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); }, []);
+  async function decision(action: string, reason: string, sections: Phase6Section[] = [], requirement: string | null = null, reasonCategory: string | null = null) {
+    if (!detail || busy) return; setBusy(true);
     try {
-      if (pending.current && pending.current.action !== action) throw new Error("Retry the pending decision before choosing another.");
-      pending.current ??= { key: crypto.randomUUID(), action, application: detail.application.id, revision: detail.application.revision, reason, sections };
-      const body = await request("/api/admin/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pending.current) });
+      if (pending.current && (pending.current.action !== action || pending.current.application !== detail.application.id)) throw new Error("Retry the pending decision before choosing another.");
+      pending.current ??= { key: crypto.randomUUID(), action, application: detail.application.id, revision: detail.application.revision, reason, sections, requirement, category: reasonCategory };
+      const result = await request("/api/admin/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pending.current) });
       pending.current = null;
-      const refreshed = await request(`/api/admin/onboarding?id=${encodeURIComponent(body.application.id)}`);
-      setDetail(refreshed); setReason(""); setSections([]);
-      setMessage("Decision recorded atomically with actor, reason and source version. Review history refreshed.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Decision unavailable."); }
-    finally { setBusy(false); }
+      const [fresh, listing] = await Promise.all([request(`/api/admin/onboarding?id=${encodeURIComponent(result.application.id)}`), request("/api/admin/onboarding")]);
+      setDetail(fresh); setQueue(listing.applications); setReviewed([]); setOpened([]); setDetailsReviewed(false); setVehicleReviewed(false); setModal(null); setNote("");
+      setMessage(action === "APPROVED" ? "Driver approved." : action === "CORRECTION_REQUESTED" ? "Scoped correction recorded." : "Decision recorded.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Decision unavailable."); } finally { setBusy(false); }
   }
-  async function preview(id: string) {
-    if (!detail) return;
-    try {
-      const { data } = await supabaseClient.auth.getSession();
-      if (!data.session) throw new Error("Reviewer sign-in required.");
-      const response = await fetch(`/api/driver/onboarding/evidence?review=true&application=${detail.application.id}&evidence=${id}`, { headers: { Authorization: `Bearer ${data.session.access_token}` }, cache: "no-store" });
-      if (!response.ok) throw new Error("Evidence unavailable.");
-      const url = URL.createObjectURL(await response.blob());
-      const tab = window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      if (!tab) setMessage("Your browser may have blocked the evidence preview window.");
+  async function showPreview(item: EvidenceItem) {
+    if (!detail || !item.upload) return;
+    try { const { data } = await supabaseClient.auth.getSession(); if (!data.session) throw new Error("Reviewer sign-in required.");
+      const response = await fetch(`/api/driver/onboarding/evidence?review=true&application=${encodeURIComponent(detail.application.id)}&evidence=${encodeURIComponent(item.upload.id)}`, { headers: { Authorization: `Bearer ${data.session.access_token}` }, cache: "no-store" });
+      if (!response.ok) throw new Error("Private evidence unavailable."); const url = URL.createObjectURL(await response.blob());
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); previewUrl.current = url;
+      setPreview({ label: item.label, url, source: item.upload.source, created_at: item.upload.created_at });
+      setOpened(current => current.includes(item.upload!.id) ? current : [...current, item.upload!.id]);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Evidence unavailable."); }
   }
-  const status = detail?.application.status;
-  return <main className="mx-auto max-w-5xl p-4 sm:p-8">
-    <h1 className="text-2xl font-bold">Driver onboarding review</h1>
-    <p role="status" className="my-4 rounded border p-3">{message}</p>
-    <button className="rounded border p-2" disabled={busy || !!pending.current} onClick={() => void load(detail?.application.id)}>Refresh</button>
-    <div className="my-4 flex flex-wrap gap-2">{queue.map(item => <button className="rounded border p-3 text-left" key={item.id} disabled={busy || !!pending.current} onClick={() => void load(item.id)}>{item.driverName || "Driver name pending"}<br />{item.existingDriver ? "Existing Driver re-application" : "New Driver application"} · Cycle {item.cycle} · {item.status}</button>)}</div>
-    {detail && <>
-      <h2 className="text-xl font-semibold">Cycle {detail.application.cycle} · Version {detail.application.version} · {status}</h2>
-      <p className="mt-2 font-medium">{detail.driverName || "Driver name pending"} · {detail.existingDriver ? "Existing Driver re-application" : "New Driver application"}</p>
-      <p className="my-2">Submitted data cannot be edited. Request a scoped correction, or record a reasoned decision against this version.</p>
-      {detail.versions.map(version => <details className="my-3 rounded border p-3" key={version.version} open={version.version === detail.application.version}><summary>Immutable version {version.version} · {new Date(version.submitted_at).toLocaleString()}</summary><pre className="overflow-auto whitespace-pre-wrap break-words text-sm">{JSON.stringify(version.snapshot, null, 2)}</pre></details>)}
-      <section><h3 className="font-semibold">Private evidence</h3><p>Capture source is metadata, not authenticity proof. Vehicle Check is manual evidence, not AI diagnosis.</p><div className="my-3 flex flex-wrap gap-2">{detail.uploads.filter(upload => upload.state === "VALIDATED").map(upload => <button className="rounded border p-2" key={upload.id} onClick={() => void preview(upload.id)}>{upload.section} · {upload.source} · View capture</button>)}</div></section>
-      <fieldset disabled={busy || !!pending.current} className="my-4 space-y-3"><label className="block">Decision reason (8–2,000 characters)<textarea className="block w-full rounded border p-3" value={reason} minLength={8} maxLength={2000} onChange={event => setReason(event.target.value)} /></label><div>Correction sections:{PHASE6_SECTIONS.map(section => <label className="ml-3 inline-block" key={section}><input type="checkbox" checked={sections.includes(section)} onChange={event => setSections(event.target.checked ? [...sections, section] : sections.filter(item => item !== section))} /> {section}</label>)}</div></fieldset>
-      <div className="flex flex-wrap gap-2">{(status === "SUBMITTED" || status === "RESUBMITTED" ? ["UNDER_REVIEW"] : status === "UNDER_REVIEW" ? ["APPROVED", "REJECTED", "CORRECTION_REQUESTED"] : status === "REJECTED" ? ["REAPPLICATION_AUTHORIZED"] : status === "APPROVED" ? ["REINSPECTION_AUTHORIZED"] : []).map(action => <button className="rounded bg-black p-3 text-white" key={action} disabled={busy || reason.trim().length < 8 || action === "CORRECTION_REQUESTED" && !sections.length} onClick={() => void decision(action)}>{action.replaceAll("_", " ")}{pending.current?.action === action ? " — Retry" : ""}</button>)}</div>
-      <section className="mt-5"><h3 className="font-semibold">Review history</h3>{detail.reviews.map(review => <p className="my-2 rounded border p-3" key={review.id}>Version {review.source_version} · {review.action} · {new Date(review.created_at).toLocaleString()}<br />{review.reason}</p>)}</section>
+  const draft = detail ? reviewDraft(detail.application.draft, detail.versions, detail.application.version) : {};
+  const items = detail ? evidenceItems(draft, detail.uploads) : []; const completion = detail ? reviewCompletion(draft, detail.uploads) : null;
+  const required = items.filter(item => item.required); const canReview = detail?.application.status === "UNDER_REVIEW";
+  const approvalReady = canReview && completion?.missing === 0 && detailsReviewed && vehicleReviewed && required.every(item => item.upload && reviewed.includes(item.upload.id));
+  return <main className="mx-auto max-w-6xl px-4 py-6 text-slate-900 sm:px-8">
+    <header className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase text-blue-700">MOOVU operations</p><h1 className="mt-1 text-2xl font-bold sm:text-3xl">Driver application review</h1></div><button type="button" disabled={busy || !!pending.current} onClick={() => void load(detail?.application.id)} className="flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold"><RefreshCw size={16} /> Refresh</button></header>
+    <p role="status" aria-live="polite" className="my-4 text-sm text-slate-600">{busy ? "Loading… " : ""}{message}</p>
+    {!detail ? <><div role="tablist" aria-label="Application status" className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-2">{groups.map(tab => <button type="button" role="tab" aria-selected={group === tab.key} key={tab.key} onClick={() => setGroup(tab.key)} className={`min-h-11 shrink-0 rounded-md px-3 text-sm font-semibold ${group === tab.key ? "bg-blue-700 text-white" : "text-slate-700 hover:bg-slate-100"}`}>{tab.label} <span className="ml-1 opacity-75">{queue.filter(item => queueGroup(item.status) === tab.key).length}</span></button>)}</div><div className="divide-y divide-slate-200">{queue.filter(item => queueGroup(item.status) === group).map(item => <button type="button" key={item.id} disabled={busy} onClick={() => void load(item.id)} className="flex w-full flex-wrap items-center justify-between gap-3 py-5 text-left hover:bg-slate-50"><div><h2 className="font-bold">{item.driverName || "Driver name pending"}</h2><p className="mt-1 text-sm text-slate-600">{item.existingDriver ? "Existing Driver · Re-application" : "New Driver"} · {queueStatus(item.status)}</p><p className="mt-1 text-xs text-slate-500">Updated {formatDate(item.updated_at)} · Application {item.cycle}</p></div><div className="text-right"><p className="text-sm font-bold">{item.completion.received}/{item.completion.total} required items</p><span className="text-sm font-semibold text-blue-700">Review application →</span></div></button>)}</div>{queue.filter(item => queueGroup(item.status) === group).length === 0 && <p className="py-12 text-center text-sm text-slate-500">No applications in this category.</p>}</> : <>
+      <button type="button" onClick={() => { if (pending.current) { setMessage("Retry the pending decision before leaving."); return; } setDetail(null); void load(); }} className="mb-4 flex min-h-11 items-center gap-2 text-sm font-semibold text-blue-700"><ArrowLeft size={17} /> All applications</button>
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5"><div><h2 className="text-2xl font-bold">{detail.driverName || "Driver name pending"}</h2><p className="mt-1 text-sm text-slate-600">{detail.existingDriver ? "Existing Driver · Re-application" : "New Driver application"} · Application {detail.application.cycle}</p><p className="mt-1 text-xs text-slate-500">Submitted {formatDate(detail.versions.find(version => version.version === detail.application.version)?.submitted_at)}</p></div><span className="rounded-md bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800">{queueStatus(detail.application.status)}</span></div>
+      <div className="my-5 rounded-lg bg-slate-50 p-4"><p className="font-bold">{completion?.received}/{completion?.total} required items received</p><p className="text-sm text-slate-600">{completion?.missing === 0 ? "Ready for review. Check every required item before approval." : `${completion?.missing} missing or invalid items.`}</p></div>
+      {detail.application.status === "DRAFT" && <p className="rounded-md bg-amber-50 p-4 text-sm font-semibold text-amber-900">Draft — Driver has not submitted. Do not approve.</p>}
+      <Fields title="Personal information" draft={draft} section="personal" fields={personal} /><Fields title="Driving information" draft={draft} section="driving" fields={driving} />
+      <section className="border-b border-slate-200 py-6"><h3 className="font-bold">Driver documents</h3><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{items.filter(item => ["personal", "driving"].includes(item.section)).map(item => <EvidenceCard key={item.requirement} applicationId={detail.application.id} item={item} reviewed={!!item.upload && reviewed.includes(item.upload.id)} opened={!!item.upload && opened.includes(item.upload.id)} onReviewed={id => setReviewed(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])} onPreview={showPreview} onCorrect={item => setModal({ kind: "correct", item })} canReview={!!canReview} />)}</div></section>
+      <Fields title="Vehicle details" draft={draft} section="vehicle" fields={vehicle} />
+      <section className="border-b border-slate-200 py-6"><h3 className="font-bold">Vehicle photos and documents</h3><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{items.filter(item => ["vehicle", "scanner"].includes(item.section)).map(item => <EvidenceCard key={item.requirement} applicationId={detail.application.id} item={item} reviewed={!!item.upload && reviewed.includes(item.upload.id)} opened={!!item.upload && opened.includes(item.upload.id)} onReviewed={id => setReviewed(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])} onPreview={showPreview} onCorrect={item => setModal({ kind: "correct", item })} canReview={!!canReview} />)}</div></section>
+      {["SUBMITTED", "RESUBMITTED"].includes(detail.application.status) && <button type="button" disabled={busy} onClick={() => void decision("UNDER_REVIEW", "Admin review started.")} className="mt-5 min-h-12 rounded-md bg-blue-700 px-5 font-bold text-white">Start review</button>}
+      {canReview && <section className="py-6"><h3 className="font-bold">Final review</h3><p className="mt-1 text-sm text-slate-600">Session checks prepare the final decision; they do not change database review state.</p><label className="mt-4 flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={detailsReviewed} onChange={event => setDetailsReviewed(event.target.checked)} /> Personal and driving details reviewed</label><label className="mt-3 flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={vehicleReviewed} onChange={event => setVehicleReviewed(event.target.checked)} /> Vehicle details reviewed</label><p className="mt-3 text-sm text-slate-600">{required.filter(item => item.upload && reviewed.includes(item.upload.id)).length}/{required.length} required images marked reviewed.</p><div className="mt-5 flex flex-wrap gap-3"><button type="button" disabled={!approvalReady || busy} onClick={() => setModal({ kind: "approve" })} className="min-h-12 rounded-md bg-emerald-700 px-5 font-bold text-white disabled:opacity-50">Approve Driver</button><button type="button" disabled={busy} onClick={() => setModal({ kind: "reject" })} className="min-h-12 rounded-md border border-red-300 px-5 font-bold text-red-800">Reject application</button></div></section>}
+      {detail.application.status === "REJECTED" && <button type="button" disabled={busy} onClick={() => void decision("REAPPLICATION_AUTHORIZED", "Driver may submit a new application.")} className="mt-5 min-h-12 rounded-md border px-5 font-semibold">Authorize re-application</button>}
+      {detail.application.status === "APPROVED" && <button type="button" disabled={busy} onClick={() => void decision("REINSPECTION_AUTHORIZED", "Admin authorized a new inspection cycle.")} className="mt-5 min-h-12 rounded-md border px-5 font-semibold">Authorize reinspection</button>}
+      <details className="my-6 rounded-lg border p-4"><summary className="cursor-pointer font-semibold">Audit details</summary><p className="mt-3 text-xs">Application {detail.application.id} · Cycle {detail.application.cycle} · Version {detail.application.version}</p>{detail.reviews.map(review => <p key={review.id} className="mt-3 border-t pt-3 text-sm">{formatDate(review.created_at)} · {review.action} · Version {review.source_version}<br />{review.reason}</p>)}{detail.versions.map(version => <details key={version.version} className="mt-3 border-t pt-3"><summary>Immutable version {version.version}</summary><pre className="overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(version.snapshot, null, 2)}</pre></details>)}</details>
     </>}
+    {preview && <div role="dialog" aria-modal="true" aria-label={`${preview.label} preview`} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4"><div className="max-h-[94dvh] w-full max-w-4xl overflow-auto rounded-lg bg-white p-4"><div className="flex justify-between gap-3"><div><h2 className="font-bold">{preview.label}</h2><p className="text-xs text-slate-500">Uploaded {formatDate(preview.created_at)} · {preview.source}</p></div><button type="button" onClick={() => { if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); previewUrl.current = null; setPreview(null); }} className="flex min-h-11 items-center gap-1 rounded-md border px-3"><X size={16} /> Close</button></div><Image src={preview.url} alt={`${preview.label} full image`} width={1200} height={1000} unoptimized className="mt-3 max-h-[75dvh] w-full object-contain" /></div></div>}
+      {modal && <div role="dialog" aria-modal="true" aria-label={modal.kind === "correct" ? `Request new ${modal.item.label}` : modal.kind === "approve" ? "Approve Driver" : "Reject application"} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-md rounded-lg bg-white p-5"><h2 className="text-xl font-bold">{modal.kind === "correct" ? `Request new ${modal.item.label}` : modal.kind === "approve" ? `Approve ${detail?.driverName || "Driver"}?` : "Reject application?"}</h2><p className="mt-2 text-sm text-slate-600">{modal.kind === "correct" ? "This opens the relevant section for correction. Other sections stay protected." : modal.kind === "approve" ? "This records the authoritative Phase 6 approval." : "Rejection is a final application decision, not a re-upload request."}</p>{modal.kind === "correct" && <label className="mt-4 block text-sm font-semibold">Reason<select className="mt-2 min-h-11 w-full rounded-md border p-2" value={category} onChange={event => setCategory(event.target.value)}>{reasons.map(value => <option key={value}>{value}</option>)}</select></label>}{modal.kind !== "approve" && <label className="mt-4 block text-sm font-semibold">{modal.kind === "reject" ? "Reason (at least 8 characters)" : "Admin note (optional)"}<textarea className="mt-2 w-full rounded-md border p-3" maxLength={500} value={note} onChange={event => setNote(event.target.value)} /></label>}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setModal(null)} className="min-h-11 rounded-md border px-4">Cancel</button><button type="button" disabled={busy || modal.kind === "reject" && note.trim().length < 8 || modal.kind === "correct" && category === "Other" && note.trim().length < 8} onClick={() => { if (modal.kind === "correct") void decision("CORRECTION_REQUESTED", `${modal.item.label}: ${category}.${note.trim() ? ` ${note.trim()}` : ""}`, [modal.item.section], modal.item.requirement, category); else if (modal.kind === "approve") void decision("APPROVED", "Required details and evidence reviewed by Admin."); else void decision("REJECTED", note.trim()); }} className="min-h-11 rounded-md bg-blue-700 px-4 font-bold text-white disabled:opacity-50">{modal.kind === "correct" ? "Send request" : modal.kind === "approve" ? "Approve Driver" : "Reject application"}</button></div></div></div>}
   </main>;
 }

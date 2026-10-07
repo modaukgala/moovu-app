@@ -15,13 +15,18 @@ export async function GET(req: Request) {
   if (result.error) return NextResponse.json({ error: "Onboarding is unavailable." }, { status: 503 });
   const application = result.data;
   if (application && !(await phase6Owned(req, application.id))) return NextResponse.json({ error: "Driver enrollment required." }, { status: 403 });
-  const reviews = application ? await supabaseAdmin.from("phase6_reviews").select("action,reason,sections,source_version,created_at").eq("application_id", application.id).order("created_at") : null;
+  const reviews = application ? await supabaseAdmin.from("phase6_reviews").select("id,action,reason,sections,source_version,created_at").eq("application_id", application.id).order("created_at") : null;
+  if (reviews?.error) return NextResponse.json({ error: "Review history unavailable." }, { status: 503 });
+  const reviewIds = (reviews?.data ?? []).map(review => review.id);
+  const targets = reviewIds.length ? await supabaseAdmin.from("phase6_correction_targets").select("review_id,requirement,reason_category").in("review_id", reviewIds) : { data: [], error: null };
+  if (targets.error && !["PGRST205", "42P01"].includes(targets.error.code ?? "")) return NextResponse.json({ error: "Correction details unavailable." }, { status: 503 });
+  const annotatedReviews = (reviews?.data ?? []).map(review => ({ ...review, target: targets.data?.find(target => target.review_id === review.id) ?? null }));
   const [driver, profile] = await Promise.all([
     supabaseAdmin.from("drivers").select("*").eq("id", mapping.data.driver_id).maybeSingle(),
     supabaseAdmin.from("driver_profiles").select("*").eq("driver_id", mapping.data.driver_id).maybeSingle(),
   ]);
   if (driver.error || profile.error) return NextResponse.json({ error: "Existing Driver details unavailable." }, { status: 503 });
-  return NextResponse.json({ application, reviews: reviews?.data ?? [], existingDetails: existingDriverDraft(driver.data ?? {}, profile.data ?? {}) }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ application, reviews: annotatedReviews, existingDetails: existingDriverDraft(driver.data ?? {}, profile.data ?? {}) }, { headers: { "Cache-Control": "no-store" } });
 }
 export async function POST(req: Request) {
   const user = await phase6Auth(req);

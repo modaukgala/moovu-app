@@ -36,6 +36,19 @@ export function outboxNotificationEventKey(businessEventId: string, userId: stri
   return `phase05:${businessEventId}:${userId}`;
 }
 
+export function phase6InAppHistoryRow(intent: OutboxNotificationIntent, eventKey: string) {
+  return {
+    user_id: intent.userId,
+    role: intent.role,
+    title: intent.title,
+    body: intent.body,
+    url: intent.url,
+    data: intent.data,
+    delivery_status: "queued",
+    event_key: eventKey,
+  };
+}
+
 export async function processOutboxJob(
   job: OutboxJob,
   dependencies: {

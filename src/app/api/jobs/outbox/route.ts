@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPushSafe } from "@/lib/push-server";
+import { PHASE6_EVIDENCE_LABELS } from "@/lib/drivers/phase6ReviewPresentation";
 import {
   isOutboxDeliveryEnabled,
   isOutboxWorkerAuthorized,
+  phase6InAppHistoryRow,
   processOutboxJob,
   type OutboxJob,
   type OutboxNotificationIntent,
@@ -57,7 +59,12 @@ async function resolveRecipients(job: OutboxJob): Promise<Recipient[]> {
 function intentFor(job: OutboxJob, recipient: Recipient): OutboxNotificationIntent {
   const tripId = text(job.payload.trip_id);
   const requestId = text(job.payload.request_id);
+  const requirementLabel = PHASE6_EVIDENCE_LABELS[text(job.payload.requirement)] ?? "Driver application evidence";
+  const reasonCategory = ["Image is blurry", "Document or photo is cut off", "Information cannot be read", "Wrong document or photo", "Document has expired", "Incorrect angle or view", "Other"].includes(text(job.payload.reason_category)) ? text(job.payload.reason_category) : "Review requested";
   const templates: Record<string, { title: string; body: string }> = {
+    phase6_correction_requested: { title: "Application evidence needs attention", body: `${requirementLabel}: ${reasonCategory}. Open your application to replace it.` },
+    phase6_application_approved: { title: "Driver application approved", body: "Your MOOVU Driver application is approved. You can go online when otherwise eligible." },
+    phase6_application_rejected: { title: "Driver application decision", body: "Your Driver application was not approved. Open your application for the review reason." },
     driver_application_submitted: { title: "New driver application", body: "A driver application is ready for review." },
     driver_application_approved: { title: "Driver application approved", body: "Your MOOVU driver application was approved." },
     payment_reviewed: { title: "Payment review updated", body: "Your MOOVU payment review has been updated." },
@@ -78,13 +85,18 @@ function intentFor(job: OutboxJob, recipient: Recipient): OutboxNotificationInte
     body: "There is an update to your MOOVU account.",
   };
   const url = recipient.role === "admin" ? "/admin/notifications"
-    : recipient.role === "driver" ? (requestId ? `/driver/payment-receipts/${requestId}` : "/driver")
+    : recipient.role === "driver" ? (job.event_type.startsWith("phase6_") ? `/driver/onboarding${text(job.payload.requirement) ? `?requirement=${encodeURIComponent(text(job.payload.requirement))}` : ""}` : requestId ? `/driver/payment-receipts/${requestId}` : "/driver")
       : tripId ? `/ride/${tripId}` : "/";
   return {
     ...recipient,
     ...template,
     url,
-    data: { eventKey: job.business_event_id, type: job.event_type, tripId: tripId || undefined },
+    data: { eventKey: job.business_event_id, type: job.event_type, tripId: tripId || undefined,
+      applicationId: job.event_type.startsWith("phase6_") ? text(job.payload.application_id) : undefined,
+      reviewId: job.event_type.startsWith("phase6_") ? text(job.payload.review_id) : undefined,
+      requirement: job.event_type.startsWith("phase6_") ? text(job.payload.requirement) : undefined,
+      cycle: job.event_type.startsWith("phase6_") ? text(job.payload.cycle) : undefined,
+      version: job.event_type.startsWith("phase6_") ? text(job.payload.version) : undefined },
   };
 }
 
@@ -104,10 +116,17 @@ export async function POST(req: Request) {
   for (const job of (data ?? []) as OutboxJob[]) {
     results.push(await processOutboxJob(job, {
       resolveIntents: async (claimed) => (await resolveRecipients(claimed)).map((recipient) => intentFor(claimed, recipient)),
-      send: async (intent, eventKey) => sendPushSafe({
-        userIds: [intent.userId], role: intent.role, title: intent.title, body: intent.body,
-        url: intent.url, data: intent.data, notificationEventKey: eventKey,
-      }),
+      send: async (intent, eventKey) => {
+        if (job.event_type.startsWith("phase6_")) {
+          const { error: historyError } = await supabaseAdmin.from("app_notifications")
+            .upsert(phase6InAppHistoryRow(intent, eventKey), { onConflict: "user_id,event_key", ignoreDuplicates: true });
+          if (historyError) throw new Error("Phase 6 in-app notification could not be recorded.");
+        }
+        return sendPushSafe({
+          userIds: [intent.userId], role: intent.role, title: intent.title, body: intent.body,
+          url: intent.url, data: intent.data, notificationEventKey: eventKey,
+        });
+      },
       finish: async (jobId, delivered, finishError) => {
         const { error: rpcError } = await supabaseAdmin.rpc("phase05b_finish_outbox", {
           p_id: jobId, p_delivered: delivered, p_error: finishError,

@@ -2,6 +2,12 @@ export const PHASE6_SECTIONS = ["personal", "driving", "vehicle", "scanner"] as 
 export type Phase6Section = typeof PHASE6_SECTIONS[number];
 export const PHASE6_CHECKLIST = ["front", "rear", "driver_side", "passenger_side", "front_interior", "rear_interior", "odometer", "vin", "engine"] as const;
 export const PHASE6_REQUIRED = { personal: ["id_document"], driving: ["drivers_license"], vehicle: ["vehicle_license_disc"], scanner: [...PHASE6_CHECKLIST] };
+export const PHASE6_REQUIRED_FIELDS: Record<Phase6Section, readonly string[]> = {
+  personal: ["first_name", "last_name", "phone", "id_number", "home_address", "area_name", "emergency_contact_name", "emergency_contact_phone"],
+  driving: ["license_number", "license_code", "license_expiry"],
+  vehicle: ["vehicle_make", "vehicle_model", "vehicle_color", "vehicle_registration", "vehicle_year", "vehicle_vin", "vehicle_engine_number", "seating_capacity"],
+  scanner: [],
+};
 export type Phase6Draft = Partial<Record<Phase6Section, Record<string, unknown>>>;
 export type Phase6Application = { id: string; driver_id: string; cycle: number; revision: number; version: number; status: string; draft: Phase6Draft; correction_sections: string[] };
 export function phase6Editable(application: Phase6Application, section: Phase6Section) {
@@ -28,14 +34,8 @@ export function phase6Evidence(draft: Phase6Draft, section: Phase6Section): Reco
   return evidence && typeof evidence === "object" && !Array.isArray(evidence) ? evidence as Record<string, string> : {};
 }
 export function phase6MissingRequirements(draft: Phase6Draft): Record<Phase6Section, string[]> {
-  const requiredFields: Record<Phase6Section, readonly string[]> = {
-    personal: ["first_name", "last_name", "phone", "id_number", "home_address", "area_name", "emergency_contact_name", "emergency_contact_phone"],
-    driving: ["license_number", "license_code", "license_expiry"],
-    vehicle: ["vehicle_make", "vehicle_model", "vehicle_color", "vehicle_registration", "vehicle_year", "vehicle_vin", "vehicle_engine_number", "seating_capacity"],
-    scanner: [],
-  };
   return Object.fromEntries(PHASE6_SECTIONS.map(section => [section, [
-    ...requiredFields[section].filter(field => !String(draft[section]?.[field] ?? "").trim()),
+    ...PHASE6_REQUIRED_FIELDS[section].filter(field => !String(draft[section]?.[field] ?? "").trim()),
     ...PHASE6_REQUIRED[section].filter(item => !phase6Evidence(draft, section)[item]),
   ]])) as Record<Phase6Section, string[]>;
 }

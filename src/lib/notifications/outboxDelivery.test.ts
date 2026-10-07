@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { OutboxJob } from "./outboxDelivery";
-const { isOutboxWorkerAuthorized, outboxNotificationEventKey, processOutboxJob } = await import(
+const { isOutboxWorkerAuthorized, outboxNotificationEventKey, phase6InAppHistoryRow, processOutboxJob } = await import(
   new URL("./outboxDelivery.ts", import.meta.url).href
 );
 
@@ -90,4 +90,15 @@ test("invalid or exhausted claims are failed without sending", async () => {
 test("event identity is stable per business event and recipient", () => {
   assert.equal(outboxNotificationEventKey("event-a", "user-a"), "phase05:event-a:user-a");
   assert.notEqual(outboxNotificationEventKey("event-a", "user-a"), outboxNotificationEventKey("event-a", "user-b"));
+});
+
+test("Phase 6 in-app history uses the existing per-recipient event identity", () => {
+  const intent = { userId: "driver-1", role: "driver" as const, title: "Application evidence needs attention",
+    body: "Rear of Vehicle: Image is blurry.", url: "/driver/onboarding?requirement=rear",
+    data: { type: "phase6_correction_requested", requirement: "rear" } };
+  const key = outboxNotificationEventKey("review-event", intent.userId);
+  assert.deepEqual(phase6InAppHistoryRow(intent, key), {
+    user_id: "driver-1", role: "driver", title: intent.title, body: intent.body,
+    url: intent.url, data: intent.data, delivery_status: "queued", event_key: key,
+  });
 });
