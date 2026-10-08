@@ -135,9 +135,42 @@ async function assertReviewNotification(reviewId, type) {
   assert.equal(jobs.length, 1);
   assert.equal(jobs[0].event_type, type);
   assert.doesNotMatch(JSON.stringify(jobs[0].payload), /id_number|license_number|vehicle_vin|object_path|signed_url/i);
+  const key = `phase05:${events[0].id}:${user.id}`;
+  assert.equal(ok(await actor.from("app_notifications").select("id").eq("event_key", key), "Atomic Driver inbox record").length, 1,
+    "In-app notification must exist before worker delivery.");
   return { eventId: events[0].id, outboxId: jobs[0].id };
 }
+async function deliverCurrentReviewJob(job, testUncertainHold = false) {
+  if (!process.env.PHASE6_E2E_BASE_URL) return;
+  const base = process.env.PHASE6_E2E_BASE_URL;
+  const headers = { Authorization: `Bearer ${process.env.OUTBOX_JOB_SECRET}`, "Content-Type": "application/json" };
+  if (testUncertainHold) {
+    const before = ok(await db.from("moovu_notification_outbox").select("status,attempts,last_error,next_attempt_at").eq("id", job.outboxId).single(), "Read fixture retry baseline");
+    try {
+      ok(await db.from("moovu_notification_outbox").update({ status: "failed", attempts: 1,
+        last_error: "PROVIDER_DELIVERY_UNCERTAIN: disposable injection",
+        next_attempt_at: new Date(Date.now() - 60_000).toISOString() }).eq("id", job.outboxId), "Inject disposable uncertain provider state");
+      assert.equal(ok(await db.rpc("phase6_claim_review_outbox", { p_ids: [job.outboxId] }), "Uncertain result must remain held").length, 0);
+    } finally {
+      ok(await db.from("moovu_notification_outbox").update(before).eq("id", job.outboxId), "Restore disposable fixture retry state");
+    }
+  }
+  assert.equal((await fetch(new URL("/api/jobs/outbox", base), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobIds: [job.outboxId] }) })).status, 401,
+    "Unauthenticated worker call must be denied.");
+  const requests = await Promise.all([1, 2].map(() => fetch(new URL("/api/jobs/outbox", base), {
+    method: "POST", headers, body: JSON.stringify({ jobIds: [job.outboxId] }),
+  })));
+  assert.ok(requests.every(response => response.status === 200), "Concurrent worker calls succeed safely.");
+  const results = await Promise.all(requests.map(response => response.json()));
+  assert.equal(results.reduce((total, result) => total + result.processed, 0), 1,
+    "Concurrent claims process the reviewed job exactly once.");
+  assert.ok(results.flatMap(result => result.results).every(result => result.ok));
+  const replay = await fetch(new URL("/api/jobs/outbox", base), { method: "POST", headers, body: JSON.stringify({ jobIds: [job.outboxId] }) });
+  assert.equal(replay.status, 200);
+  assert.equal((await replay.json()).processed, 0, "Delivered job cannot be claimed twice.");
+}
 const correctionNotification = await assertReviewNotification(correctionReview.id, "phase6_correction_requested");
+await deliverCurrentReviewJob(correctionNotification);
 assert.ok((await db.rpc("phase6_command", { ...save, p_key: randomUUID(), p_revision: current.revision, p_payload: { personal: draft.personal } })).error, "Unrequested section remains frozen.");
 let replacementRear;
 if (process.env.PHASE6_E2E_BASE_URL) {
@@ -164,6 +197,7 @@ await command("APPROVED", { reason: "Approved disposable fixture only" }, review
 assert.equal(current.status, "APPROVED");
 const approvalReview = ok(await db.from("phase6_reviews").select("id").eq("application_id", app.id).eq("action", "APPROVED").single(), "Read approval review");
 const approvalNotification = await assertReviewNotification(approvalReview.id, "phase6_application_approved");
+await deliverCurrentReviewJob(approvalNotification);
 assert.equal(ok(await db.from("drivers").select("id,verification_status,profile_completed").eq("id", app.driver_id).single(), "Verify approved identity").id, app.driver_id);
 if (process.env.PHASE6_E2E_BASE_URL) {
   const base = process.env.PHASE6_E2E_BASE_URL;
@@ -270,27 +304,17 @@ if (process.env.PHASE6_E2E_BASE_URL) {
   for (let retry = 0; retry < 2; retry++) assert.deepEqual((await httpCommand(reviewerToken, rejectBody, true)).application, cycle, "Review replay / third retry is stable.");
   const rejectionReview = ok(await db.from("phase6_reviews").select("id").eq("application_id", cycle.id).eq("action", "REJECTED").single(), "Read rejection review");
   const rejectionNotification = await assertReviewNotification(rejectionReview.id, "phase6_application_rejected");
+  await deliverCurrentReviewJob(rejectionNotification, true);
   const fixtureJobs = [correctionNotification, approvalNotification, rejectionNotification];
   const outboxIds = fixtureJobs.map(item => item.outboxId);
   assert.equal(ok(await db.from("fcm_tokens").select("id").eq("user_id", user.id), "Fixture has no FCM devices").length, 0);
   assert.equal(ok(await db.from("push_subscriptions").select("id").eq("user_id", user.id), "Fixture has no Web Push devices").length, 0);
-  assert.equal(ok(await db.from("moovu_notification_outbox").select("id").lt("created_at", "2000-01-01T00:00:00Z").limit(1), "No older outbox work").length, 0);
-  const originalJobs = ok(await db.from("moovu_notification_outbox").select("id,created_at,status,attempts").in("id", outboxIds), "Read fixture outbox baseline");
-  assert.equal(originalJobs.length, 3);
-  assert.ok(originalJobs.every(job => job.status === "pending" && job.attempts === 0));
-  try {
-    for (const [index, id] of outboxIds.entries()) ok(await db.from("moovu_notification_outbox").update({ created_at: `2000-01-01T00:00:0${index + 1}Z` }).eq("id", id), "Isolate fixture claim order");
-    const worker = await fetch(new URL("/api/jobs/outbox", base), { method: "POST", headers: { Authorization: `Bearer ${process.env.OUTBOX_JOB_SECRET}`, "Content-Type": "application/json" }, body: JSON.stringify({ limit: 3 }) });
-    assert.equal(worker.status, 200, "Protected disposable worker must run.");
-    const workerResult = await worker.json();
-    assert.equal(workerResult.processed, 3, "Only the three isolated review jobs may be claimed.");
-    assert.ok(workerResult.results.every(result => result.ok), "All review jobs must be acknowledged.");
-  } finally {
-    for (const original of originalJobs) ok(await db.from("moovu_notification_outbox").update({ created_at: original.created_at }).eq("id", original.id), "Restore fixture outbox timestamp");
-  }
   const processedJobs = ok(await db.from("moovu_notification_outbox").select("id,status,attempts").in("id", outboxIds), "Verify review jobs processed");
   assert.equal(processedJobs.length, 3);
   assert.ok(processedJobs.every(job => job.status === "delivered" && job.attempts === 1));
+  const legacyJob = ok(await db.from("moovu_notification_outbox").select("id").eq("event_type", "trip_arrived").eq("status", "pending").limit(1), "Locate historical trip notification")[0];
+  assert.ok(legacyJob, "Disposable historical notification fixture is available.");
+  assert.equal(ok(await db.rpc("phase6_claim_review_outbox", { p_ids: [legacyJob.id] }), "Historical trip job must remain held").length, 0);
   const historyKeys = fixtureJobs.map(item => `phase05:${item.eventId}:${user.id}`);
   const ownHistory = ok(await actor.from("app_notifications").select("event_key,title,body,url,data").in("event_key", historyKeys), "Driver reads own in-app review notifications");
   assert.equal(ownHistory.length, 3);

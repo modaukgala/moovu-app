@@ -107,9 +107,15 @@ export async function POST(req: Request) {
   if (!isOutboxDeliveryEnabled()) {
     return NextResponse.json({ ok: false, error: "Outbox delivery is not activated." }, { status: 503 });
   }
-  const body = await req.json().catch(() => ({})) as { limit?: number };
-  const limit = Math.min(50, Math.max(1, Number(body.limit ?? 20)));
-  const { data, error } = await supabaseAdmin.rpc("phase05b_claim_outbox", { p_limit: limit });
+  const body = await req.json().catch(() => ({})) as { jobIds?: unknown };
+  const jobIds = body.jobIds;
+  if (!Array.isArray(jobIds) || jobIds.length < 1 || jobIds.length > 3 ||
+      jobIds.some((id) => typeof id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+    return NextResponse.json({ ok: false, error: "Reviewed job IDs are required." }, { status: 400 });
+  }
+  // No general backlog claim: each invocation can only take reviewed Phase 6 IDs.
+  const { data, error } = await supabaseAdmin.rpc("phase6_claim_review_outbox", { p_ids: jobIds });
   if (error) return NextResponse.json({ ok: false, error: "Outbox contract is unavailable." }, { status: 503 });
 
   const results = [];
@@ -122,10 +128,22 @@ export async function POST(req: Request) {
             .upsert(phase6InAppHistoryRow(intent, eventKey), { onConflict: "user_id,event_key", ignoreDuplicates: true });
           if (historyError) throw new Error("Phase 6 in-app notification could not be recorded.");
         }
-        return sendPushSafe({
+        const [fcm, web] = await Promise.all([
+          supabaseAdmin.from("fcm_tokens").select("id", { count: "exact", head: true })
+            .eq("user_id", intent.userId).eq("role", intent.role).eq("is_active", true).eq("enabled", true),
+          supabaseAdmin.from("push_subscriptions").select("id", { count: "exact", head: true })
+            .eq("user_id", intent.userId).eq("role", intent.role),
+        ]);
+        if (fcm.error || web.error) throw new Error("Push target inspection failed.");
+        const hasRegisteredTarget = (fcm.count ?? 0) + (web.count ?? 0) > 0;
+        const result = await sendPushSafe({
           userIds: [intent.userId], role: intent.role, title: intent.title, body: intent.body,
           url: intent.url, data: intent.data, notificationEventKey: eventKey,
         });
+        if (hasRegisteredTarget && result.delivered === 0 && result.failed === 0) {
+          return { ok: false, failed: 1, message: "No push provider accepted a registered target." };
+        }
+        return result;
       },
       finish: async (jobId, delivered, finishError) => {
         const { error: rpcError } = await supabaseAdmin.rpc("phase05b_finish_outbox", {

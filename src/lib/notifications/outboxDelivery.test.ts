@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { OutboxJob } from "./outboxDelivery";
-const { isOutboxWorkerAuthorized, outboxNotificationEventKey, phase6InAppHistoryRow, processOutboxJob } = await import(
+const { isOutboxDeliveryEnabled, isOutboxWorkerAuthorized, outboxNotificationEventKey, phase6InAppHistoryRow, processOutboxJob } = await import(
   new URL("./outboxDelivery.ts", import.meta.url).href
 );
 
@@ -19,6 +19,18 @@ test("outbox worker fails closed when its dedicated secret is absent", () => {
   assert.equal(isOutboxWorkerAuthorized(new Request("http://local")), false);
   if (previous === undefined) delete process.env.OUTBOX_JOB_SECRET;
   else process.env.OUTBOX_JOB_SECRET = previous;
+});
+
+test("outbox delivery stays disabled without an exact true flag", () => {
+  const previous = process.env.PHASE05_OUTBOX_ENABLED;
+  delete process.env.PHASE05_OUTBOX_ENABLED;
+  assert.equal(isOutboxDeliveryEnabled(), false);
+  process.env.PHASE05_OUTBOX_ENABLED = "TRUE";
+  assert.equal(isOutboxDeliveryEnabled(), false);
+  process.env.PHASE05_OUTBOX_ENABLED = "true";
+  assert.equal(isOutboxDeliveryEnabled(), true);
+  if (previous === undefined) delete process.env.PHASE05_OUTBOX_ENABLED;
+  else process.env.PHASE05_OUTBOX_ENABLED = previous;
 });
 
 test("outbox worker accepts only the configured bearer or explicit secret", () => {
@@ -52,6 +64,19 @@ test("a retry reuses the same per-user application notification identity", async
   assert.deepEqual(keys, ["phase05:event-1:user-1", "phase05:event-1:user-1"]);
   assert.equal(new Set(keys).size, 1);
   assert.deepEqual(finishes.map(([delivered]) => delivered), [false, true]);
+});
+
+test("partial multi-device provider acceptance is not acknowledged as complete", async () => {
+  const acknowledgements: Array<[boolean, string | null]> = [];
+  const result = await processOutboxJob({ ...job, event_type: "phase6_application_approved" }, {
+    resolveIntents: async () => [{ userId: "driver-1", role: "driver" as const,
+      title: "Approved", body: "Application approved", url: "/driver/onboarding", data: {} }],
+    send: async () => ({ ok: true, delivered: 1, failed: 1, message: "One device failed after another accepted." }),
+    finish: async (_id: string, delivered: boolean, error: string | null) => { acknowledgements.push([delivered, error]); },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(acknowledgements[0][0], false);
+  assert.match(acknowledgements[0][1] ?? "", /^PROVIDER_DELIVERY_UNCERTAIN:/);
 });
 
 test("Phase 4 notification failure retries delivery without rerunning the financial writer", async () => {

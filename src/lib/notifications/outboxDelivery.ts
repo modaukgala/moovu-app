@@ -70,7 +70,9 @@ export async function processOutboxJob(
         outboxNotificationEventKey(job.business_event_id, intent.userId),
       );
       if (!result.ok || result.failed > 0) {
-        throw new Error(result.message || "Push delivery failed.");
+        // A provider may have accepted another device before reporting failure.
+        // Hold this job for review instead of automatically sending it again.
+        throw new Error(`PROVIDER_DELIVERY_UNCERTAIN: ${result.message || "Push delivery failed."}`);
       }
     }
     await dependencies.finish(job.id, true, null);

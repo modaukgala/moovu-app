@@ -62,13 +62,25 @@ test("outbox SQL recovers stale claims, bounds retries, and enforces notificatio
   assert.match(tripAtomicity, /values\(v_event,'trip_arrived'/i);
 });
 
-test("outbox worker is secret protected, activation gated, and acknowledges through RPC", () => {
+test("outbox worker is secret protected, activation gated, and claims only reviewed Phase 6 job IDs", () => {
   const code = source("../../app/api/jobs/outbox/route.ts");
   assert.match(code, /isOutboxWorkerAuthorized/);
   assert.match(code, /isOutboxDeliveryEnabled/);
-  assert.match(code, /phase05b_claim_outbox/);
+  assert.match(code, /phase6_claim_review_outbox/);
+  assert.match(code, /jobIds\.length > 3/);
   assert.match(code, /phase05b_finish_outbox/);
   assert.match(code, /notificationEventKey:\s*eventKey/);
+});
+
+test("Phase 6 claim keeps legacy jobs and uncertain provider results held", () => {
+  const claim = source("../../../supabase/migrations/20261008110010_phase6_review_notification_uncertain_retry_hold.sql");
+  assert.match(claim, /o\.id=any\(p_ids\)/);
+  assert.match(claim, /o\.event_type='phase6_correction_requested'/);
+  assert.match(claim, /o\.event_type='phase6_application_approved'/);
+  assert.match(claim, /o\.event_type='phase6_application_rejected'/);
+  assert.match(claim, /PROVIDER_DELIVERY_UNCERTAIN:/);
+  assert.match(claim, /for update of o skip locked/i);
+  assert.doesNotMatch(claim, /status='processing' and locked_at/);
 });
 
 test("push history uses per-user event-key upsert instead of duplicate inserts", () => {
