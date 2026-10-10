@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { adminPreviewDecision } from "@/lib/preview/adminReadOnly";
 
 function getHost(req: NextRequest) {
   return (req.headers.get("host") || "").toLowerCase();
@@ -18,6 +19,14 @@ function isPublicAsset(pathname: string) {
 export function middleware(req: NextRequest) {
   const host = getHost(req);
   const pathname = req.nextUrl.pathname;
+
+  const previewDecision = adminPreviewDecision({ env: process.env, pathname, method: req.method });
+  if (previewDecision !== "allow") {
+    return NextResponse.json({ error: previewDecision === "configuration_blocked"
+      ? "Admin preview configuration is unavailable." : "Admin preview is read-only." },
+    { status: previewDecision === "configuration_blocked" ? 503 : 403,
+      headers: { "Cache-Control": "no-store" } });
+  }
 
   const retiredMutations = ["/api/driver/apply", "/api/driver/profile/save", "/api/driver/documents/upload", "/api/driver/account/delete", "/api/admin/applications/action", "/api/admin/applications/create-driver", "/api/admin/driver-verification", "/api/admin/driver-corrections", "/api/admin/driver-document-review", "/api/admin/driver-docs/upload", "/api/admin/drivers/create"];
   if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && retiredMutations.includes(pathname)) {
