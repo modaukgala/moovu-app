@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type TripRow = {
   id: string;
@@ -104,8 +105,7 @@ export async function GET(req: Request) {
 
     const driverNameById = new Map<string, string>();
     for (const driver of (drivers ?? []) as DriverRow[]) {
-      const fullName = `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim();
-      driverNameById.set(driver.id, fullName || driver.phone || driver.id);
+      driverNameById.set(driver.id, adminDriverName(driver));
     }
 
     const completedTrips = (trips ?? []) as TripRow[];
@@ -210,7 +210,7 @@ export async function GET(req: Request) {
         total_commission: totalCommission,
         estimated_driver_payout: driverPayoutEstimate,
         commission_rate: null,
-        commission_rate_label: "10% MOOVU Go / 12% MOOVU Go XL",
+        commission_rate_label: "Stored commission for each completed trip; historical rates may differ.",
         total_completed_trips: normalizedTrips.length,
         by_payment_method: byPaymentMethod,
         recent_completed_trips: normalizedTrips.slice(0, 15),

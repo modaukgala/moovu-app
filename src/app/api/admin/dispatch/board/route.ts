@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type DispatchTripRow = {
   id: string;
@@ -139,7 +140,7 @@ export async function GET(req: Request) {
         driver: driver
           ? {
               id: driver.id,
-              name: `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || "Unnamed",
+              name: adminDriverName(driver),
               phone: driver.phone ?? null,
               online: driver.online ?? null,
               busy: driver.busy ?? null,

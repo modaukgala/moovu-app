@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { adminDriverName } from "@/lib/admin/identity";
 
 function num(value: unknown) {
   const n = Number(value ?? 0);
@@ -195,8 +196,7 @@ export async function GET(req: Request) {
 
     const driverNameById = new Map<string, string>();
     for (const d of typedDrivers) {
-      const fullName = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim();
-      driverNameById.set(d.id, fullName || d.phone || d.id);
+      driverNameById.set(d.id, adminDriverName(d));
     }
 
     const decoratedSettlements = typedSettlements.map((row) => ({

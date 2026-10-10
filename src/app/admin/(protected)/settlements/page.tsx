@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type DriverRow = {
   id: string;
@@ -207,10 +208,7 @@ export default function AdminSettlementsPage() {
 
   const driverOptions = useMemo(() => {
     return drivers.map((driver) => {
-      const label =
-        `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() ||
-        driver.phone ||
-        driver.id;
+      const label = adminDriverName(driver);
 
       return {
         id: driver.id,
@@ -223,12 +221,12 @@ export default function AdminSettlementsPage() {
   const selectedDriver = driverOptions.find((d) => d.id === driverId) ?? null;
 
   return (
-    <main className="space-y-6 text-black">
+    <main className="moovu-admin-finance-page space-y-5 text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="moovu-card p-5 sm:p-6">
+      <div className="moovu-card moovu-admin-page-heading p-4 sm:p-5">
           <div className="moovu-section-title">MOOVU Admin</div>
-          <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Driver settlements</h1>
+          <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Driver commission settlements</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Record driver payments and monitor outstanding balances owed to MOOVU.
           </p>
@@ -237,7 +235,9 @@ export default function AdminSettlementsPage() {
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Record settlement</h2>
 
+          <label className="sr-only" htmlFor="settlement-driver">Driver</label>
           <select
+            id="settlement-driver"
             className="moovu-input"
             value={driverId}
             onChange={(e) => setDriverId(e.target.value)}
@@ -272,7 +272,9 @@ export default function AdminSettlementsPage() {
           )}
 
           <div className="grid md:grid-cols-2 gap-4">
+            <label className="sr-only" htmlFor="settlement-amount">Amount paid</label>
             <input
+              id="settlement-amount"
               className="moovu-input"
               placeholder="Amount paid"
               type="number"
@@ -282,7 +284,9 @@ export default function AdminSettlementsPage() {
               onChange={(e) => setAmountPaid(e.target.value)}
             />
 
+            <label className="sr-only" htmlFor="settlement-method">Payment method</label>
             <select
+              id="settlement-method"
               className="moovu-input"
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
@@ -293,14 +297,18 @@ export default function AdminSettlementsPage() {
               <option value="deposit">Deposit</option>
             </select>
 
+            <label className="sr-only" htmlFor="settlement-reference">Payment reference</label>
             <input
+              id="settlement-reference"
               className="moovu-input"
               placeholder="Reference"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
             />
 
+            <label className="sr-only" htmlFor="settlement-note">Settlement note</label>
             <input
+              id="settlement-note"
               className="moovu-input"
               placeholder="Note"
               value={note}

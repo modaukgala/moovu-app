@@ -372,18 +372,18 @@ export default function DispatchBoardPage() {
   }
 
   return (
-    <main className="space-y-6 text-black">
-      <section className="moovu-hero-panel p-5 sm:p-7">
+    <main className="moovu-admin-operations-page space-y-5 text-black">
+      <section className="moovu-hero-panel p-4 sm:p-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
               Dispatch board
             </div>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-5xl">
-              Move every request through the right lane.
+              Dispatch board
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/74">
-              Requested, offered, active, and closed trips refresh automatically so operators can act quickly.
+              Review trip state and offer state in separate lanes. Existing dispatch actions and refresh remain available.
             </p>
           </div>
 

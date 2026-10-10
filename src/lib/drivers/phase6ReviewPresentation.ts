@@ -1,5 +1,7 @@
 // @ts-expect-error Node strip-types tests require the explicit extension.
 import { PHASE6_REQUIRED, PHASE6_REQUIRED_FIELDS, PHASE6_SECTIONS, type Phase6Draft, type Phase6Section } from "./phase6Policy.ts";
+// @ts-expect-error Node strip-types tests require the explicit extension.
+import { PHASE6_NEEDS_REVIEW } from "../admin/applicationSummary.ts";
 
 export const PHASE6_EVIDENCE_LABELS: Record<string, string> = {
   id_document: "SA ID",
@@ -67,7 +69,7 @@ export function reviewCompletion(draft: Phase6Draft, uploads: ReviewUpload[]) {
 
 export type QueueGroup = "review" | "driver" | "draft" | "approved" | "rejected";
 export function queueGroup(status: string): QueueGroup {
-  if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW"].includes(status)) return "review";
+  if (PHASE6_NEEDS_REVIEW.some(value => value === status)) return "review";
   if (status === "CORRECTION_REQUESTED") return "driver";
   if (status === "APPROVED") return "approved";
   if (status === "REJECTED") return "rejected";

@@ -27,6 +27,7 @@ function harness(debt: number, payment: number, options: {
   };
   const dependencies: Record<string, unknown> = {
     "next/server": { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } },
+    "@/lib/admin/identity": { adminDriverName: () => "Fixture Driver" },
     "@/lib/auth/admin": {
       requireAdminUser: async () => ({ ok: true, user: { id: "verified-owner" }, profile: { role: "role" in options ? options.role : "owner" }, supabaseAdmin: supabase }),
       isFinancialAdminRole: (role: string) => ["owner", "admin"].includes(role),

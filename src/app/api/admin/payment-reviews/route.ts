@@ -6,6 +6,7 @@ import { callHardenedRpc } from "@/lib/server/hardenedRpc";
 import { callPhase2Rpc } from "@/lib/server/phase2Rpc";
 import { phase2Mode } from "@/lib/finance/phase2Policy";
 import { isOutboxDeliveryEnabled } from "@/lib/notifications/outboxDelivery";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type PaymentRequestRecord = {
   id: string; driver_id: string; payment_type: string | null; subscription_plan: string | null;
@@ -69,7 +70,7 @@ export async function GET(req: Request) {
     const driverById = new Map<string, { name: string; phone: string | null }>();
     for (const driver of (drivers ?? []) as DriverRecord[]) {
       driverById.set(driver.id, {
-        name: `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || driver.id,
+        name: adminDriverName(driver),
         phone: driver.phone,
       });
     }

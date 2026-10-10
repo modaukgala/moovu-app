@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminDriverName } from "@/lib/admin/identity";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import {
   getDriverDocumentLabel,
   normalizeDriverDocumentType,
 } from "@/lib/driver-documents";
 import { getDriverRideEligibility } from "@/lib/drivers/rideEligibility";
+import { adminApplicationLabel, type DriverAdminSummary } from "@/lib/admin/applicationSummary";
 
 type DriverProfile = {
   id: string;
@@ -185,6 +187,7 @@ export default function AdminDriverProfilePage() {
   const [noteDraft, setNoteDraft] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "documents" | "vehicle" | "notes" | "actions">("overview");
   const [readinessScore, setReadinessScore] = useState(0);
+  const [applicationSummary, setApplicationSummary] = useState<DriverAdminSummary | null>(null);
   const [busy, setBusy] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -225,6 +228,7 @@ export default function AdminDriverProfilePage() {
     }
 
     setProfile(profileJson.profile ?? null);
+    setApplicationSummary(profileJson.applicationSummary ?? null);
     setSubscriptionPayments(profileJson.subscription_payments ?? []);
     setSubscriptionRequests(profileJson.subscription_requests ?? []);
     setDocuments(profileJson.documents ?? []);
@@ -450,7 +454,7 @@ export default function AdminDriverProfilePage() {
   }, [loadAll]);
 
   const driverName = useMemo(() => {
-    return `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() || "Unnamed Driver";
+    return adminDriverName(profile);
   }, [profile]);
   const rideEligibility = useMemo(
     () => getDriverRideEligibility(profile?.seating_capacity),
@@ -524,6 +528,12 @@ export default function AdminDriverProfilePage() {
             Back
           </Link>
         </div>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700" aria-label="Application and work status">
+          <p><strong>Current application:</strong> {adminApplicationLabel(applicationSummary)}</p>
+          {applicationSummary?.application?.source === "phase6" && <p className="mt-1">Cycle {applicationSummary.application.cycle} · <Link className="text-blue-700 underline" href="/admin/onboarding">Open Phase 6 review</Link></p>}
+          <p className="mt-1"><strong>Work presence:</strong> {applicationSummary?.presence.state ?? "Unavailable"}. Operational eligibility is checked separately by the trusted runtime.</p>
+        </section>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type ArchivedTripRow = {
   id: string;
@@ -98,8 +99,7 @@ export async function GET(req: Request) {
         console.error("[admin-archive] failed to resolve driver names", driverError);
       } else {
         for (const driver of driverRows ?? []) {
-          const name = `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim();
-          driverNameById.set(String(driver.id), name || "Driver profile unavailable");
+          driverNameById.set(String(driver.id), adminDriverName(driver));
         }
       }
     }

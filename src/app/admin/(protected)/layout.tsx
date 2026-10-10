@@ -1,49 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { Menu, X } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase/client";
 import AdminTripNotifications from "@/components/AdminTripNotifications";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
-
-const navItems = [
-  { href: "/admin", label: "Dashboard", group: "Operations" },
-  { href: "/admin/trips", label: "Trips", group: "Operations" },
-  { href: "/admin/dispatch/map", label: "Dispatch Map", group: "Operations" },
-  { href: "/admin/receipts", label: "Receipts", group: "Operations" },
-  { href: "/admin/customers", label: "Customers", group: "Customers" },
-  { href: "/admin/drivers", label: "Drivers", group: "Drivers" },
-  { href: "/admin/applications", label: "Applications", group: "Drivers" },
-  { href: "/admin/onboarding", label: "Onboarding Review", group: "Drivers" },
-  { href: "/admin/link-driver", label: "Link Driver", group: "Drivers" },
-  { href: "/admin/payment-reviews", label: "Payments", group: "Payments" },
-  { href: "/admin/online-payments", label: "Online Payments", group: "Payments" },
-  { href: "/admin/moovu-plus", label: "MOOVU+", group: "Payments" },
-  { href: "/admin/commission-payments", label: "Commissions", group: "Payments" },
-  { href: "/admin/subscriptions", label: "Legacy Subscriptions", group: "Payments" },
-  { href: "/admin/subscriptions/paid", label: "Past Subscription Payments", group: "Payments" },
-  { href: "/admin/settlements", label: "Settlements", group: "Payments" },
-  { href: "/admin/reports", label: "Earnings Report", group: "Reports" },
-  { href: "/admin/earnings", label: "Earnings Dashboard", group: "Reports" },
-  { href: "/admin/notifications", label: "Notifications", group: "System" },
-];
+import { ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS, activeAdminNavItem } from "@/lib/admin/navigation";
+import { adminPaymentReviewCounts, type AdminPaymentReviewRow } from "@/lib/admin/paymentReviewCounts";
 
 type PaymentFlagCounts = {
   all: number;
   subscription: number;
   commission: number;
-};
-
-type PaymentFlagRow = {
-  payment_type?: string | null;
-  status?: string | null;
-};
-
-type ApplicationFlagRow = {
-  id: string;
 };
 
 export default function AdminProtectedLayout({
@@ -58,14 +30,17 @@ export default function AdminProtectedLayout({
     subscription: 0,
     commission: 0,
   });
-  const [pendingApplications, setPendingApplications] = useState(0);
-  const [adminAccessToken, setAdminAccessToken] = useState<string | null>(null);
+  const [pendingApplications, setPendingApplications] = useState<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const firstMobileLinkRef = useRef<HTMLAnchorElement>(null);
   const isPageVisible = usePageVisibility();
   const lastPendingApplicationsRef = useRef(0);
 
   useEffect(() => {
     let mounted = true;
     let flagsTimer: number | null = null;
+    let reviewRefresh: (() => void) | null = null;
 
     function loadAdminFlags(accessToken: string) {
       fetch("/api/admin/payment-reviews?status=all", {
@@ -73,29 +48,23 @@ export default function AdminProtectedLayout({
         headers: { Authorization: `Bearer ${accessToken}` },
       })
         .then((res) => res.json())
-        .then((json: { ok?: boolean; requests?: PaymentFlagRow[] }) => {
+        .then((json: { ok?: boolean; requests?: AdminPaymentReviewRow[] }) => {
           if (!mounted || !json?.ok) return;
-          const active = (json.requests ?? []).filter((row) =>
-            ["pending_payment_review", "waiting_confirmation"].includes(String(row.status ?? ""))
-          );
-          setPaymentFlags({
-            all: active.length,
-            subscription: active.filter((row) => row.payment_type === "subscription").length,
-            commission: active.filter((row) => row.payment_type === "commission").length,
-          });
+          setPaymentFlags(adminPaymentReviewCounts(json.requests ?? []));
         })
         .catch(() => {
           if (mounted) setPaymentFlags({ all: 0, subscription: 0, commission: 0 });
         });
 
-      fetch("/api/admin/driver-applications?status=pending_review", {
+      fetch("/api/admin/application-summary", {
         cache: "no-store",
         headers: { Authorization: `Bearer ${accessToken}` },
       })
         .then((res) => res.json())
-        .then((json: { ok?: boolean; applications?: ApplicationFlagRow[] }) => {
-          if (!mounted || !json?.ok) return;
-          const nextCount = (json.applications ?? []).length;
+        .then((json: { ok?: boolean; needsReview?: { count: number } }) => {
+          if (!mounted) return;
+          if (!json?.ok || !Number.isSafeInteger(json.needsReview?.count)) { setPendingApplications(null); return; }
+          const nextCount = json.needsReview!.count;
           if (nextCount > lastPendingApplicationsRef.current) {
             window.dispatchEvent(new CustomEvent("moovu-admin:new-applications", {
               detail: {
@@ -108,7 +77,7 @@ export default function AdminProtectedLayout({
           setPendingApplications(nextCount);
         })
         .catch(() => {
-          if (mounted) setPendingApplications(0);
+          if (mounted) setPendingApplications(null);
         });
     }
 
@@ -137,8 +106,10 @@ export default function AdminProtectedLayout({
         return;
       }
 
-      setAdminAccessToken(session.access_token);
       loadAdminFlags(session.access_token);
+      reviewRefresh = () => loadAdminFlags(session.access_token);
+      window.addEventListener("moovu-admin:application-review-updated", reviewRefresh);
+      window.addEventListener("moovu-admin:payment-review-updated", reviewRefresh);
       flagsTimer = window.setInterval(
         () => {
           if (!document.hidden) loadAdminFlags(session.access_token);
@@ -154,12 +125,16 @@ export default function AdminProtectedLayout({
     return () => {
       mounted = false;
       if (flagsTimer) window.clearInterval(flagsTimer);
+      if (reviewRefresh) {
+        window.removeEventListener("moovu-admin:application-review-updated", reviewRefresh);
+        window.removeEventListener("moovu-admin:payment-review-updated", reviewRefresh);
+      }
     };
   }, [pathname]);
 
   useEffect(() => {
     if (!isPageVisible) return;
-    lastPendingApplicationsRef.current = pendingApplications;
+    if (pendingApplications !== null) lastPendingApplicationsRef.current = pendingApplications;
   }, [isPageVisible, pendingApplications]);
 
   async function handleLogout() {
@@ -179,22 +154,48 @@ export default function AdminProtectedLayout({
     }
   }
 
-  const activeLabel = useMemo(() => {
-    const current = navItems.find((item) =>
-      item.href === "/admin"
-        ? pathname === "/admin"
-        : pathname === item.href || pathname.startsWith(`${item.href}/`)
-    );
-    return current?.label || "Admin";
-  }, [pathname]);
+  const activeItem = activeAdminNavItem(pathname);
 
-  const groupedNavItems = useMemo(() => {
-    return navItems.reduce<Record<string, typeof navItems>>((groups, item) => {
-      groups[item.group] = groups[item.group] ?? [];
-      groups[item.group].push(item);
-      return groups;
-    }, {});
-  }, []);
+  useEffect(() => {
+    if (!menuOpen) return;
+    firstMobileLinkRef.current?.focus();
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [menuOpen]);
+
+  function renderNavigation(mobile = false) {
+    return (
+      <nav aria-label="Admin pages" className="moovu-admin-rail">
+        {ADMIN_NAV_GROUPS.map(group => (
+          <div key={group} className="moovu-admin-nav-group">
+            <div className="moovu-admin-nav-heading">{group}</div>
+            {ADMIN_NAV_ITEMS.filter(item => item.group === group).map(item => (
+              <Link
+                key={item.href}
+                href={item.href}
+                ref={mobile && item.href === "/admin" ? firstMobileLinkRef : undefined}
+                onClick={mobile ? () => setMenuOpen(false) : undefined}
+                aria-current={activeItem.href === item.href ? "page" : undefined}
+                className={`moovu-admin-link ${activeItem.href === item.href ? "moovu-admin-link-active" : ""}`}
+              >
+                <span>{item.label}</span>
+                {item.href === "/admin/payment-reviews" && paymentFlags.all > 0 && <span className="moovu-admin-nav-count">{paymentFlags.all}</span>}
+                {item.href === "/admin/commission-payments" && paymentFlags.commission > 0 && <span className="moovu-admin-nav-count">{paymentFlags.commission}</span>}
+                {item.href === "/admin/subscriptions" && paymentFlags.subscription > 0 && <span className="moovu-admin-nav-count">{paymentFlags.subscription}</span>}
+                {item.href === "/admin/onboarding" && pendingApplications !== null && pendingApplications > 0 && <span className="moovu-admin-nav-count moovu-admin-nav-count-alert">{pendingApplications}</span>}
+              </Link>
+            ))}
+          </div>
+        ))}
+      </nav>
+    );
+  }
 
   if (checking) {
     return (
@@ -219,100 +220,32 @@ export default function AdminProtectedLayout({
     <main className="moovu-admin-shell text-black">
       <AdminTripNotifications />
 
-      <div className="grid min-h-screen lg:grid-cols-[300px_1fr]">
-        <aside className="moovu-admin-sidebar hidden px-5 py-6 lg:block">
-          <div className="sticky top-5 space-y-6">
-            <div className="moovu-hero-panel p-5">
-              <div className="moovu-chip w-fit">
-                <span className="h-2.5 w-2.5 rounded-full bg-[var(--moovu-primary)]" />
-                MOOVU Admin
-              </div>
-
-              <h1 className="mt-4 text-2xl font-black text-white">
-                Control center
-              </h1>
-
-              <p className="mt-2 text-sm leading-6 text-white/76">
-                Manage operations, dispatch, Driver applications and trip movement from one place.
-              </p>
-            </div>
-
-            <nav className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-3 shadow-sm">
-              <div className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Navigation
-              </div>
-
-              <div className="moovu-admin-rail">
-                {Object.entries(groupedNavItems).map(([group, items]) => (
-                  <div key={group} className="space-y-1">
-                    <div className="px-3 pb-1 pt-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
-                      {group}
-                    </div>
-                    {items.map((item) => {
-                      const active =
-                        item.href === "/admin"
-                          ? pathname === "/admin"
-                          : pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={`moovu-admin-link ${
-                            active ? "moovu-admin-link-active" : ""
-                          }`}
-                        >
-                          <span>{item.label}</span>
-                          {item.href === "/admin/payment-reviews" && paymentFlags.all > 0 ? (
-                            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
-                              {paymentFlags.all}
-                            </span>
-                          ) : null}
-                          {item.href === "/admin/commission-payments" && paymentFlags.commission > 0 ? (
-                            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
-                              {paymentFlags.commission}
-                            </span>
-                          ) : null}
-                          {item.href === "/admin/subscriptions" && paymentFlags.subscription > 0 ? (
-                            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
-                              {paymentFlags.subscription}
-                            </span>
-                          ) : null}
-                          {item.href === "/admin/applications" && pendingApplications > 0 ? (
-                            <span className="ml-auto rounded-full bg-red-100 px-2 py-0.5 text-xs font-black text-red-700">
-                              {pendingApplications}
-                            </span>
-                          ) : null}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                ))}
-
-                <button
-                  onClick={handleLogout}
-                  className="moovu-admin-link mt-2 w-full text-left text-red-600 hover:border-red-100 hover:bg-red-50"
-                >
-                  Logout
-                </button>
-              </div>
-            </nav>
+      <div className="moovu-admin-layout">
+        <aside className="moovu-admin-sidebar hidden lg:block" aria-label="Admin sidebar">
+          <div className="moovu-admin-sidebar-inner">
+            <div className="moovu-admin-brand"><span className="moovu-admin-brand-mark">M</span><span><strong>MOOVU</strong><small>Admin workspace</small></span></div>
+            {renderNavigation()}
+            <button type="button" onClick={handleLogout} className="moovu-admin-link moovu-admin-logout">Logout</button>
           </div>
         </aside>
-
+        {menuOpen && <div className="moovu-admin-mobile-layer lg:hidden">
+          <button type="button" className="moovu-admin-backdrop" aria-label="Close Admin navigation" onClick={() => setMenuOpen(false)} />
+          <aside id="admin-mobile-navigation" className="moovu-admin-mobile-drawer" role="dialog" aria-modal="true" aria-label="Admin navigation">
+            <div className="moovu-admin-mobile-drawer-head"><strong>MOOVU Admin</strong><button type="button" aria-label="Close navigation" onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}><X size={20} /></button></div>
+            {renderNavigation(true)}
+            <button type="button" onClick={handleLogout} className="moovu-admin-link moovu-admin-logout">Logout</button>
+          </aside>
+        </div>}
         <section className="min-w-0">
           <div className="moovu-topbar border-b border-[var(--moovu-border)]">
-            <div className="flex items-center justify-between gap-4 px-5 py-4 md:px-7">
-              <div>
-                <div className="moovu-section-title">Operations</div>
-                <div className="mt-2 text-2xl font-semibold text-slate-950">
-                  {activeLabel}
-                </div>
+            <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <button ref={menuButtonRef} type="button" aria-label="Open Admin navigation" aria-controls="admin-mobile-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)} className="moovu-admin-menu-button lg:hidden"><Menu size={21} /></button>
+                <div className="min-w-0"><div className="moovu-section-title">{activeItem.group}</div><div className="hidden truncate text-sm font-bold text-slate-700 sm:block">Admin workspace</div></div>
               </div>
-
-              <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <EnableNotificationsButton role="admin" variant="inline" />
-                <div className="moovu-chip">
+                <div className="moovu-admin-ops-chip moovu-chip hidden sm:inline-flex">
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                   Ops live
                 </div>
@@ -326,29 +259,6 @@ export default function AdminProtectedLayout({
               </div>
             </div>
           </div>
-
-          <nav className="moovu-admin-mobile-nav lg:hidden">
-            {navItems.map((item) => {
-              const active =
-                item.href === "/admin"
-                  ? pathname === "/admin"
-                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                className={active ? "is-active" : ""}
-              >
-                  {item.label}
-                  {item.href === "/admin/applications" && pendingApplications > 0 ? ` (${pendingApplications})` : ""}
-                  {item.href === "/admin/payment-reviews" && paymentFlags.all > 0 ? ` (${paymentFlags.all})` : ""}
-                  {item.href === "/admin/commission-payments" && paymentFlags.commission > 0 ? ` (${paymentFlags.commission})` : ""}
-                  {item.href === "/admin/subscriptions" && paymentFlags.subscription > 0 ? ` (${paymentFlags.subscription})` : ""}
-                </Link>
-              );
-            })}
-          </nav>
 
           <div className="moovu-admin-content p-4 md:p-6">{children}</div>
         </section>

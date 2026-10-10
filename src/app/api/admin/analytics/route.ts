@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { loadAdminReviewMetric } from "@/lib/admin/applicationAuthority";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type DriverDirectoryRow = {
   id: string;
@@ -64,7 +66,9 @@ export async function GET(req: Request) {
         .from("trips")
         .select("id,fare_amount,commission_amount", { count: "exact" })
         .eq("status", "completed")
-        .gte("completed_at", dayStart.toISOString()),
+        .gte("completed_at", dayStart.toISOString())
+        .order("id")
+        .range(0, 999),
       supabaseAdmin
         .from("trips")
         .select("id", { count: "exact", head: true })
@@ -88,10 +92,8 @@ export async function GET(req: Request) {
         .from("drivers")
         .select("id", { count: "exact", head: true })
         .eq("online", true),
-      supabaseAdmin
-        .from("driver_applications")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
+      (isFinancialAdminRole(auth.profile.role) ? loadAdminReviewMetric() : Promise.reject(new Error("Review access required."))).then(metric => ({ count: metric.count, asOf: metric.asOf }))
+        .catch(() => ({ count: null, asOf: null })),
       supabaseAdmin
         .from("drivers")
         .select("id", { count: "exact", head: true })
@@ -141,14 +143,27 @@ export async function GET(req: Request) {
 
     const driverNameById = new Map<string, string>();
     for (const d of (drivers.data ?? []) as DriverDirectoryRow[]) {
-      const fullName = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim();
-      driverNameById.set(d.id, fullName || d.phone || d.id);
+      driverNameById.set(d.id, adminDriverName(d));
     }
 
-    const completedTodayRows = (completedToday.data ?? []) as Array<{
+    if (completedToday.error || completedToday.count === null) throw new Error("Completed-trip metric unavailable.");
+    const completedTodayRows = [...(completedToday.data ?? [])] as Array<{
       fare_amount?: number | string | null;
       commission_amount?: number | string | null;
     }>;
+    while (completedTodayRows.length < completedToday.count) {
+      const start = completedTodayRows.length;
+      const page = await supabaseAdmin.from("trips")
+        .select("id,fare_amount,commission_amount")
+        .eq("status", "completed")
+        .gte("completed_at", dayStart.toISOString())
+        .order("id")
+        .range(start, start + 999);
+      if (page.error || !page.data?.length || completedTodayRows.length + page.data.length > completedToday.count) {
+        throw new Error("Completed-trip metric changed while loading. Refresh to retry.");
+      }
+      completedTodayRows.push(...page.data);
+    }
     const todayGrossRevenue = completedTodayRows.reduce(
       (sum, row) => sum + Number(row.fare_amount ?? 0),
       0
@@ -172,7 +187,9 @@ export async function GET(req: Request) {
         monthly_trips: monthlyCompleted.count ?? 0,
         active_drivers: activeDrivers.count ?? 0,
         online_drivers: onlineDrivers.count ?? 0,
-        pending_driver_applications: pendingApplications.error ? 0 : pendingApplications.count ?? 0,
+        pending_driver_applications: pendingApplications.count,
+        pending_driver_applications_source: "phase6_applications.current_review_queue",
+        pending_driver_applications_as_of: pendingApplications.asOf,
         active_subscriptions: activeSubscriptions.count ?? 0,
         expiring_subscriptions: expiringSubscriptions.count ?? 0,
         average_fare: todayCompletedCount > 0 ? todayGrossRevenue / todayCompletedCount : 0,

@@ -316,7 +316,7 @@ export default function NewTripPage() {
   }
 
   return (
-    <main className="space-y-5">
+    <main className="moovu-admin-operations-page space-y-5">
       <PageHeader
         kicker="Dispatch"
         title="New Trip"

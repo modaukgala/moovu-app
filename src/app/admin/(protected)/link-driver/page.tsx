@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminDriverName } from "@/lib/admin/identity";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -77,7 +78,7 @@ export default function AdminLinkDriverAccountPage() {
   const driverLabel = useMemo(() => {
     const d = drivers.find((x) => x.id === driverId);
     if (!d) return null;
-    const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
+    const name = adminDriverName(d);
     return `${name} - ${d.phone ?? "--"} - ${d.status ?? "--"} ${d.online ? "- online" : ""} ${
       d.busy ? "- busy" : ""
     }`;
@@ -200,7 +201,7 @@ export default function AdminLinkDriverAccountPage() {
                 {loadingDrivers ? "Loading drivers..." : "Select driver..."}
               </option>
               {drivers.map((d) => {
-                const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
+                const name = adminDriverName(d);
                 const label = `${name} - ${d.phone ?? "--"} - ${d.id}`;
                 return (
                   <option key={d.id} value={d.id}>

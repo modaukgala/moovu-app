@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { adminDriverName } from "@/lib/admin/identity";
 
 const ACTIVE_TRIP_STATUSES = ["offered", "assigned", "arrived", "ongoing"];
 
@@ -101,7 +102,7 @@ export async function GET(req: Request) {
 
     const driverRows = ((drivers ?? []) as MapDriverRow[]).map((driver) => ({
       id: driver.id,
-      name: `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || "Unnamed",
+      name: adminDriverName(driver),
       phone: driver.phone ?? null,
       online: driver.online ?? null,
       busy: driver.busy ?? null,
@@ -129,9 +130,7 @@ export async function GET(req: Request) {
         trip.driver_id && tripDriversById[trip.driver_id]
           ? {
               id: tripDriversById[trip.driver_id].id,
-              name:
-                `${tripDriversById[trip.driver_id].first_name ?? ""} ${tripDriversById[trip.driver_id].last_name ?? ""}`.trim() ||
-                "Unnamed",
+              name: adminDriverName(tripDriversById[trip.driver_id]),
               phone: tripDriversById[trip.driver_id].phone ?? null,
               online: tripDriversById[trip.driver_id].online ?? null,
               busy: tripDriversById[trip.driver_id].busy ?? null,

@@ -350,8 +350,8 @@ export default function DispatchMapPage() {
   }, [drivers, trips]);
 
   return (
-    <main className="space-y-6 text-black">
-      <section className="moovu-hero-panel p-5 sm:p-7">
+    <main className="moovu-admin-operations-page space-y-5 text-black">
+      <section className="moovu-hero-panel p-4 sm:p-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">

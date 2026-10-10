@@ -8,6 +8,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type CommissionRequest = {
   id: string;
@@ -85,7 +86,7 @@ function displayDate(value: string | null | undefined) {
 function driverName(row: SettlementDriver) {
   const firstName = row.driver?.first_name ?? row.first_name ?? "";
   const lastName = row.driver?.last_name ?? row.last_name ?? "";
-  return `${firstName} ${lastName}`.trim() || row.driver?.id || row.id || "Driver";
+  return adminDriverName({ first_name: firstName, last_name: lastName });
 }
 
 function driverId(row: SettlementDriver) {
@@ -122,6 +123,7 @@ export default function AdminCommissionPaymentsPage() {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerType, setLedgerType] = useState("all");
   const [ledgerDate, setLedgerDate] = useState("");
+  const [driverSearch, setDriverSearch] = useState("");
   const [reviewDraft, setReviewDraft] = useState<{
     requestId: string;
     action: "approve" | "reject" | "waiting";
@@ -224,6 +226,7 @@ export default function AdminCommissionPaymentsPage() {
 
     setReviewDraft(null);
     setMsg(json?.message || "Commission payment updated.");
+    window.dispatchEvent(new Event("moovu-admin:payment-review-updated"));
     await loadData();
   }
 
@@ -293,6 +296,11 @@ export default function AdminCommissionPaymentsPage() {
     [pendingRequests]
   );
   const driversWithBalances = drivers.filter((row) => Number(wallet(row).balance_due ?? 0) > 0);
+  const searchNeedle = driverSearch.trim().toLocaleLowerCase();
+  const visibleDriversWithBalances = searchNeedle
+    ? driversWithBalances.filter((row) => [driverName(row), driverPhone(row), driverId(row)]
+        .some((value) => String(value ?? "").toLocaleLowerCase().includes(searchNeedle)))
+    : driversWithBalances;
   const totalOwed = drivers.reduce((sum, row) => sum + Number(wallet(row).balance_due ?? 0), 0);
   const totalCommissionEarned = drivers.reduce(
     (sum, row) => sum + Number(wallet(row).total_commission ?? 0),
@@ -320,14 +328,14 @@ export default function AdminCommissionPaymentsPage() {
   }
 
   return (
-    <main className="space-y-6 text-slate-950">
+    <main className="moovu-admin-finance-page space-y-5 text-slate-950">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       {reviewDraft && (
         <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
-          <section className="w-full max-w-lg rounded-[30px] bg-white p-5 shadow-2xl">
+          <section role="dialog" aria-modal="true" aria-labelledby="commission-review-dialog-title" className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
             <div className="moovu-section-title">Commission review</div>
-            <h2 className="mt-2 text-2xl font-black text-slate-950">
+            <h2 id="commission-review-dialog-title" className="mt-2 text-2xl font-black text-slate-950">
               {reviewDraft.action === "approve"
                 ? "Approve commission payment"
                 : reviewDraft.action === "reject"
@@ -335,6 +343,7 @@ export default function AdminCommissionPaymentsPage() {
                   : "Waiting for bank confirmation"}
             </h2>
             <textarea
+              aria-label="Commission review note"
               value={reviewDraft.note}
               onChange={(event) =>
                 setReviewDraft((current) =>
@@ -422,8 +431,8 @@ export default function AdminCommissionPaymentsPage() {
         </div>
       )}
 
-      <section className="moovu-card overflow-hidden p-0">
-        <div className="bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-5 sm:p-7">
+      <section className="moovu-card moovu-admin-page-heading overflow-hidden p-0">
+        <div className="p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="moovu-section-title">MOOVU Admin</div>
@@ -436,7 +445,7 @@ export default function AdminCommissionPaymentsPage() {
           </div>
           <div className="flex flex-wrap gap-3">
             <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">
-              Subscription payments
+              Subscription history
             </Link>
             <button className="moovu-btn moovu-btn-primary" onClick={() => void loadData()}>
               Refresh
@@ -446,7 +455,7 @@ export default function AdminCommissionPaymentsPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         <MetricCard label="Total owed" value={money(totalOwed)} helper="Unpaid MOOVU commission" tone="warning" />
         <MetricCard label="Pending reviews" value={String(pendingRequests.length)} helper="Commission POPs" tone={pendingRequests.length ? "warning" : "default"} />
         <MetricCard label="Drivers owing" value={String(owingDrivers.length)} helper="Outstanding commission" />
@@ -556,11 +565,13 @@ export default function AdminCommissionPaymentsPage() {
           <h2 className="text-xl font-black text-slate-950">Drivers owing commission</h2>
           <div className="text-sm font-bold text-slate-500">{driversWithBalances.length} open balance(s)</div>
         </div>
+        <label className="sr-only" htmlFor="commission-driver-search">Search Drivers owing commission</label>
+        <input id="commission-driver-search" type="search" className="moovu-input mt-4 w-full sm:max-w-sm" value={driverSearch} onChange={(event) => setDriverSearch(event.target.value)} placeholder="Search Driver or phone" />
         <div className="mt-4 space-y-3">
-          {driversWithBalances.length === 0 ? (
-            <EmptyState title="No driver balances found" description="Driver commission balances will appear after completed trips." />
+          {visibleDriversWithBalances.length === 0 ? (
+            <EmptyState title="No matching Driver balances" description={driversWithBalances.length === 0 ? "Driver commission balances will appear after completed trips." : "Try another Driver or phone search."} />
           ) : (
-            driversWithBalances
+            visibleDriversWithBalances
               .map((row) => {
                 const driverWallet = wallet(row);
                 const balance = Number(driverWallet.balance_due ?? 0);

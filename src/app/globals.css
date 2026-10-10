@@ -1572,23 +1572,135 @@ tr:last-child td {
   backdrop-filter: blur(18px);
 }
 
+.moovu-admin-layout {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1024px) {
+  .moovu-admin-layout { grid-template-columns: 252px minmax(0, 1fr); }
+}
+
+.moovu-admin-sidebar-inner {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 12px 12px;
+}
+
+.moovu-admin-brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 12px; color: #102f49; }
+.moovu-admin-brand strong, .moovu-admin-brand small { display: block; }
+.moovu-admin-brand strong { font-size: 15px; letter-spacing: 0.12em; }
+.moovu-admin-brand small { color: #607286; font-size: 11px; }
+.moovu-admin-brand-mark { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: #123a58; color: white; font-weight: 900; }
+.moovu-admin-sidebar .moovu-admin-rail { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding-right: 3px; }
+.moovu-admin-nav-group { display: grid; gap: 2px; }
+.moovu-admin-nav-heading { padding: 10px 12px 3px; color: #6a7a89; font-size: 10px; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+.moovu-admin-nav-count { min-width: 21px; border-radius: 999px; background: #eaf2f9; padding: 2px 6px; color: #174c6e; font-size: 11px; text-align: center; }
+.moovu-admin-nav-count-alert { background: #fef0e9; color: #9a3e17; }
+.moovu-admin-logout { width: 100%; color: #9b3030; text-align: left; }
+.moovu-admin-menu-button, .moovu-admin-mobile-drawer-head button { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border: 1px solid #d6e3eb; border-radius: 12px; background: white; color: #173c57; }
+@media (max-width: 639px) {
+  .moovu-admin-ops-chip { display: none; }
+}
+@media (min-width: 1024px) {
+  .moovu-admin-menu-button { display: none; }
+}
+.moovu-admin-mobile-layer { position: fixed; z-index: 80; inset: 0; }
+
+/* Keep existing operations controls while giving every Admin console a compact header. */
+.moovu-admin-content .moovu-hero-panel {
+  border-radius: 20px;
+  background: #10243e;
+  box-shadow: 0 12px 30px rgba(15, 35, 62, 0.12);
+}
+
+.moovu-admin-content .moovu-hero-panel h1 {
+  max-width: 52rem;
+  color: #fff;
+  font-size: clamp(1.45rem, 2vw, 2.1rem);
+  line-height: 1.16;
+}
+.moovu-admin-backdrop { position: absolute; inset: 0; width: 100%; background: rgba(9, 30, 48, 0.56); }
+.moovu-admin-mobile-drawer { position: relative; display: flex; width: min(84vw, 310px); height: 100%; flex-direction: column; background: #fff; box-shadow: 16px 0 40px rgba(12, 32, 49, 0.16); }
+.moovu-admin-mobile-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 16px; color: #123a58; }
+.moovu-admin-mobile-drawer .moovu-admin-rail { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 12px; }
+.moovu-admin-mobile-drawer .moovu-admin-logout { margin: 8px 12px 16px; width: calc(100% - 24px); }
+
+/* Finance and operations page rhythm. These classes change presentation only. */
+.moovu-admin-finance-page,
+.moovu-admin-operations-page {
+  min-width: 0;
+}
+
+.moovu-admin-content .moovu-admin-page-heading {
+  border: 1px solid #dbe7ec;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 7px 20px rgba(15, 46, 68, 0.045);
+  padding: 16px 20px;
+}
+
+.moovu-admin-content .moovu-admin-page-heading h1 {
+  font-size: clamp(1.4rem, 2vw, 1.75rem);
+  line-height: 1.2;
+}
+
+.moovu-admin-filter-panel {
+  align-items: center;
+  border: 1px solid #dbe7ec;
+  border-radius: 16px;
+  background: #f8fbfd;
+  padding: 12px;
+}
+
+.moovu-admin-finance-page .moovu-data-row,
+.moovu-admin-operations-page .moovu-data-row {
+  min-width: 0;
+}
+
+.moovu-admin-finance-page .moovu-data-row,
+.moovu-admin-operations-page .moovu-data-row,
+.moovu-admin-finance-page td,
+.moovu-admin-operations-page td {
+  overflow-wrap: anywhere;
+}
+
+.moovu-admin-finance-page :is(button, a, input, select, textarea):focus-visible,
+.moovu-admin-operations-page :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #69b5ce;
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .moovu-admin-content .moovu-admin-page-heading { padding: 16px; }
+  .moovu-admin-filter-panel { width: 100%; }
+  .moovu-admin-filter-panel > input,
+  .moovu-admin-filter-panel > select { min-width: 0; max-width: 100%; flex: 1 1 150px; }
+}
+
 .moovu-admin-rail {
   display: grid;
-  gap: 8px;
+  align-content: start;
+  gap: 3px;
 }
 
 .moovu-admin-link {
   display: flex;
-  min-height: 46px;
+  min-height: 39px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-radius: 18px;
+  border-radius: 11px;
   border: 1px solid transparent;
-  padding: 0 14px;
+  padding: 0 11px;
   color: #334155;
-  font-size: 14px;
-  font-weight: 850;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .moovu-admin-link:hover {
@@ -1597,19 +1709,13 @@ tr:last-child td {
 }
 
 .moovu-admin-link-active {
-  border-color: #cfe4ff;
-  background: linear-gradient(135deg, #eef8ff, #f0fffa);
-  color: #0f4fb8;
-  box-shadow: 0 10px 24px rgba(31, 116, 201, 0.09);
+  border-color: #cddfe8;
+  background: #eaf3f7;
+  color: #124663;
+  box-shadow: inset 3px 0 #2187aa;
 }
 
-.moovu-admin-link-active::after {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--moovu-primary);
-}
+.moovu-admin-link:focus-visible, .moovu-admin-menu-button:focus-visible, .moovu-admin-mobile-drawer-head button:focus-visible { outline: 3px solid #6bb3cc; outline-offset: 2px; }
 
 .moovu-admin-mobile-nav {
   display: flex;

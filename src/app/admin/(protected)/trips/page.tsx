@@ -9,6 +9,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type Trip = {
   id: string;
@@ -99,6 +100,7 @@ export default function TripsPage() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
+  const [search, setSearch] = useState("");
   const [pageError, setPageError] = useState<string | null>(null);
 
   const getAccessToken = useCallback(async () => {
@@ -175,7 +177,7 @@ export default function TripsPage() {
   const driverNameById = useMemo(() => {
     const map = new Map<string, string>();
     drivers.forEach((d) => {
-      map.set(d.id, `${d.first_name} ${d.last_name}`);
+      map.set(d.id, adminDriverName(d));
     });
     return map;
   }, [drivers]);
@@ -193,6 +195,14 @@ export default function TripsPage() {
     }),
     [trips],
   );
+  const visibleTrips = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase();
+    if (!needle) return trips;
+    return trips.filter((trip) => [
+      trip.id, trip.rider_name, trip.rider_phone, trip.driver_name,
+      trip.pickup_address, trip.dropoff_address,
+    ].some((value) => String(value ?? "").toLocaleLowerCase().includes(needle)));
+  }, [search, trips]);
 
   async function assignDriver(tripId: string, driverId: string) {
     setActionLoadingId(tripId);
@@ -351,7 +361,7 @@ export default function TripsPage() {
   }
 
   return (
-    <main className="space-y-6 text-black">
+    <main className="moovu-admin-operations-page space-y-5 text-black">
       {pageError && (
         <CenteredMessageBox
           title="Trip action failed"
@@ -360,17 +370,17 @@ export default function TripsPage() {
         />
       )}
 
-      <section className="moovu-hero-panel p-5 sm:p-7">
+      <section className="moovu-hero-panel p-4 sm:p-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
               Trips console
             </div>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-5xl">
-              Track every ride from request to receipt.
+              Trips
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/74">
-              Filter live states, assign drivers, cancel safely, and open trip details without leaving operations flow.
+              Search and filter requests, review fares and payment methods, and open the existing trip actions.
             </p>
           </div>
 
@@ -398,13 +408,18 @@ export default function TripsPage() {
       </section>
 
       <section className="grid gap-3 md:grid-cols-4">
-        <MetricCard label="Visible trips" value={String(tripStats.total)} helper={`Filter: ${status}`} />
+        <MetricCard label="Trips in status" value={String(tripStats.total)} helper={`Filter: ${status}`} />
         <MetricCard label="Requested" value={String(tripStats.requested)} helper="Need dispatch" tone="primary" />
         <MetricCard label="Active" value={String(tripStats.active)} helper="Assigned or moving" tone="success" />
         <MetricCard label="Visible value" value={money(tripStats.revenue)} helper="Fare total in filter" tone="warning" />
       </section>
 
       <section className="moovu-card p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <label className="sr-only" htmlFor="admin-trip-search">Search trips</label>
+          <input id="admin-trip-search" className="moovu-input w-full sm:max-w-sm" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search trip, customer, driver or route" />
+          <span className="text-xs font-semibold text-slate-500" aria-live="polite">{visibleTrips.length} matching trip{visibleTrips.length === 1 ? "" : "s"}</span>
+        </div>
         <div className="moovu-filter-row" aria-label="Trip status filters">
           {STATUSES.map((s) => (
             <button
@@ -418,10 +433,10 @@ export default function TripsPage() {
         </div>
       </section>
 
-      {trips.length === 0 ? (
+      {visibleTrips.length === 0 ? (
         <EmptyState
           title="No trips found"
-          description="Trips matching this status filter will appear here."
+          description="No trips match the current status and search filters."
         />
       ) : (
         <>
@@ -441,7 +456,7 @@ export default function TripsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {trips.map((trip) => (
+                  {visibleTrips.map((trip) => (
                     <tr key={trip.id}>
                       <td className="max-w-[280px]">
                         <Link href={`/admin/trips/${trip.id}`} className="font-black text-slate-950 hover:text-[var(--moovu-primary)]">
@@ -465,7 +480,7 @@ export default function TripsPage() {
                           </div>
                         ) : (
                           <select
-                            className="min-w-[220px] rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm"
+                            className="min-w-[160px] rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm"
                             defaultValue=""
                             disabled={actionLoadingId === trip.id}
                             onChange={(event) => {
@@ -478,14 +493,14 @@ export default function TripsPage() {
                             </option>
                             {drivers.map((driver) => (
                               <option key={driver.id} value={driver.id}>
-                                {driver.first_name} {driver.last_name} ({driver.phone})
+                                {adminDriverName(driver)}{driver.phone ? ` (${driver.phone})` : ""}
                               </option>
                             ))}
                           </select>
                         )}
                       </td>
                       <td className="capitalize">{trip.payment_method}</td>
-                      <td className="font-black">{money(trip.fare_amount)}</td>
+                      <td className="whitespace-nowrap font-black">{money(trip.fare_amount)}</td>
                       <td>
                         <StatusBadge status={trip.status} />
                       </td>
@@ -499,7 +514,7 @@ export default function TripsPage() {
           </section>
 
           <section className="grid gap-3 xl:hidden">
-            {trips.map((trip) => (
+            {visibleTrips.map((trip) => (
               <article key={trip.id} className="admin-trip-mobile-card moovu-card-interactive">
                 <div className="admin-trip-mobile-header">
                   <div className="min-w-0">
@@ -564,7 +579,7 @@ export default function TripsPage() {
                     </option>
                     {drivers.map((driver) => (
                       <option key={driver.id} value={driver.id}>
-                        {driver.first_name} {driver.last_name} ({driver.phone})
+                        {adminDriverName(driver)}{driver.phone ? ` (${driver.phone})` : ""}
                       </option>
                     ))}
                   </select>

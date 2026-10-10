@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import LoadingState from "@/components/ui/LoadingState";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type ReceiptTrip = {
   id: string;
@@ -70,7 +71,7 @@ function buildReceiptNumber(tripId: string, issueAt: string | null | undefined) 
 
 function driverName(driver: ReceiptDriver | null) {
   if (!driver) return "--";
-  return [driver.first_name, driver.last_name].filter(Boolean).join(" ") || "--";
+  return adminDriverName(driver);
 }
 
 function statusLabel(status: string | null) {
@@ -173,7 +174,7 @@ export default function AdminReceiptDetailPage() {
   }
 
   return (
-    <main className="space-y-5 moovu-receipt-screen">
+    <main className="moovu-admin-operations-page space-y-5 moovu-receipt-screen">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-no-print flex flex-wrap items-center justify-between gap-3">

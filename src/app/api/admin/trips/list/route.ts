@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { adminDriverName } from "@/lib/admin/identity";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -17,8 +18,7 @@ function isMissingStopsColumn(error: { code?: string; message?: string } | null 
 }
 
 function driverDisplayName(driver: { first_name?: string | null; last_name?: string | null } | null | undefined) {
-  const name = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim();
-  return name || "Driver profile unavailable";
+  return adminDriverName(driver);
 }
 
 export async function GET(req: Request) {

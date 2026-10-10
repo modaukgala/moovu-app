@@ -65,7 +65,7 @@ export default function OnlinePaymentsPage() {
     setRange(value);setPage(1);
     if(value!=='custom'){setFrom(day(1-Number(value)));setTo(day());}
   };
-  return <main className={styles.report}>
+  return <main className={`${styles.report} moovu-admin-finance-page`}>
     <header className={styles.header}><div><h1>Online Payments</h1><p>Verified online payments processed through Yoco.</p></div>
       <button aria-label="Refresh online payments" title="Refresh" disabled={loading} onClick={()=>void load()}><RefreshCw size={20}/></button></header>
     <div className={styles.filters}>

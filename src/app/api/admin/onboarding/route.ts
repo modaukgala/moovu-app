@@ -3,17 +3,26 @@ import { phase6Auth } from "@/lib/drivers/phase6Server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { reviewCompletion } from "@/lib/drivers/phase6ReviewPresentation";
 import { PHASE6_EVIDENCE_LABELS } from "@/lib/drivers/phase6ReviewPresentation";
-import { PHASE6_REQUIRED, type Phase6Section } from "@/lib/drivers/phase6Policy";
+import { PHASE6_REQUIRED, type Phase6Draft, type Phase6Section } from "@/lib/drivers/phase6Policy";
+import { adminDriverName } from "@/lib/admin/identity";
 const correctionCategories = new Set(["Image is blurry", "Document or photo is cut off", "Information cannot be read", "Wrong document or photo", "Document has expired", "Incorrect angle or view", "Other"]);
 export async function GET(req: Request) {
   const user = await phase6Auth(req, true);
   if (!user) return NextResponse.json({ error: "Reviewer access required." }, { status: 401 });
   const id = new URL(req.url).searchParams.get("id");
   if (!id) {
-    const result = await supabaseAdmin.from("phase6_applications").select("id,driver_id,status,cycle,version,revision,draft,created_at,updated_at").order("updated_at", { ascending: false }).limit(200);
-    if (result.error) return NextResponse.json({ error: "Review queue unavailable." }, { status: 503 });
-    const driverIds = [...new Set((result.data ?? []).map(item => item.driver_id))];
-    const applicationIds = (result.data ?? []).map(item => item.id);
+    const queueRows: { id: string; driver_id: string; status: string; cycle: number; version: number; revision: number; draft: Phase6Draft; created_at: string; updated_at: string }[] = [];
+    for (let offset = 0; offset < 10000; offset += 1000) {
+      const page = await supabaseAdmin.from("phase6_applications")
+        .select("id,driver_id,status,cycle,version,revision,draft,created_at,updated_at")
+        .order("updated_at", { ascending: false }).order("id").range(offset, offset + 999);
+      if (page.error) return NextResponse.json({ error: "Review queue unavailable." }, { status: 503 });
+      queueRows.push(...(page.data ?? []));
+      if ((page.data?.length ?? 0) < 1000) break;
+      if (offset === 9000) return NextResponse.json({ error: "Review queue exceeds safe page limit." }, { status: 503 });
+    }
+    const driverIds = [...new Set(queueRows.map(item => item.driver_id))];
+    const applicationIds = queueRows.map(item => item.id);
     const [drivers, enrollments] = driverIds.length ? await Promise.all([
       supabaseAdmin.from("drivers").select("id,first_name,last_name").in("id", driverIds),
       supabaseAdmin.from("phase6_enrollments").select("driver_id,existing_driver").in("driver_id", driverIds),
@@ -29,9 +38,9 @@ export async function GET(req: Request) {
         if (offset === 9000) return NextResponse.json({ error: "Review queue is too large to summarize safely." }, { status: 503 });
       }
     }
-    const applications = (result.data ?? []).map(item => ({
+    const applications = queueRows.map(item => ({
       id: item.id, driver_id: item.driver_id, status: item.status, cycle: item.cycle, version: item.version, revision: item.revision, created_at: item.created_at, updated_at: item.updated_at,
-      driverName: [drivers.data?.find(driver => driver.id === item.driver_id)?.first_name, drivers.data?.find(driver => driver.id === item.driver_id)?.last_name].filter(Boolean).join(" "),
+      driverName: adminDriverName(drivers.data?.find(driver => driver.id === item.driver_id)),
       existingDriver: item.cycle > 1 || enrollments.data?.find(enrollment => enrollment.driver_id === item.driver_id)?.existing_driver === true,
       completion: reviewCompletion(item.draft, validatedUploads.filter(upload => upload.application_id === item.id)),
     }));
@@ -53,7 +62,7 @@ export async function GET(req: Request) {
   const targets = reviewIds.length ? await supabaseAdmin.from("phase6_correction_targets").select("review_id,requirement,reason_category").in("review_id", reviewIds) : { data: [], error: null };
   if (targets.error && !["PGRST205", "42P01"].includes(targets.error.code ?? "")) return NextResponse.json({ error: "Correction details unavailable." }, { status: 503 });
   const annotatedReviews = (reviews.data ?? []).map(review => ({ ...review, target: targets.data?.find(target => target.review_id === review.id) ?? null }));
-  return NextResponse.json({ application: application.data, driverName: [driver.data?.first_name, driver.data?.last_name].filter(Boolean).join(" "), existingDriver: application.data.cycle > 1 || enrollment.data?.existing_driver === true, versions: versions.data, reviews: annotatedReviews, uploads: uploads.data }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ application: application.data, driverName: adminDriverName(driver.data), existingDriver: application.data.cycle > 1 || enrollment.data?.existing_driver === true, versions: versions.data, reviews: annotatedReviews, uploads: uploads.data }, { headers: { "Cache-Control": "no-store" } });
 }
 export async function POST(req: Request) {
   const user = await phase6Auth(req, true);

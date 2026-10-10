@@ -143,22 +143,27 @@ export default function AdminReportsPage() {
   }, [data]);
 
   return (
-    <main className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold">Driver Earnings Report</h1>
-        <p className="opacity-70 mt-1">
-          Completed trips use service-type MOOVU commission: 10% for MOOVU Go and 12% for MOOVU Go XL. Cancellation and no-show fees are fixed split payouts, not commission debt.
+    <main className="moovu-admin-finance-page space-y-5">
+      <div className="moovu-admin-page-heading">
+        <div className="moovu-section-title">Finance reports</div>
+        <h1 className="mt-1 text-2xl font-black text-slate-950">Trip and fee report</h1>
+        <p className="mt-2 max-w-3xl text-sm text-slate-600">
+          Completed trips use their stored fare and commission amounts. Cancellation and no-show fees are shown separately from trip commission.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="moovu-admin-filter-panel flex flex-wrap gap-3">
+        <label className="sr-only" htmlFor="admin-report-from">From date</label>
         <input
+          id="admin-report-from"
           type="date"
           className="border rounded-xl px-4 py-2"
           value={from}
           onChange={(e) => setFrom(e.target.value)}
         />
+        <label className="sr-only" htmlFor="admin-report-to">To date</label>
         <input
+          id="admin-report-to"
           type="date"
           className="border rounded-xl px-4 py-2"
           value={to}
@@ -178,14 +183,14 @@ export default function AdminReportsPage() {
       <section className="moovu-card space-y-4 p-5 sm:p-6">
         <h2 className="font-semibold">Totals</h2>
 
-        <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           <div className="moovu-data-row">
             <div className="text-sm opacity-70">Completed trips</div>
             <div className="text-2xl font-semibold mt-2">{totals.completedTrips}</div>
           </div>
 
           <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Total earnings (completed)</div>
+            <div className="text-sm opacity-70">Completed trip fare value</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.completedRevenue)}</div>
           </div>
 
@@ -195,7 +200,7 @@ export default function AdminReportsPage() {
           </div>
 
           <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Driver net</div>
+            <div className="text-sm opacity-70">Driver earnings estimate</div>
             <div className="text-2xl font-semibold mt-2">{money(totals.completedDriverNet)}</div>
           </div>
 
@@ -242,7 +247,7 @@ export default function AdminReportsPage() {
               <div key={row.driver_id} className="moovu-data-row">
                 <div className="font-medium">{row.driver_name}</div>
                 <div className="text-sm opacity-70 mt-2">
-                  Trips: {row.completed_trips} - Revenue: {money(row.completed_revenue)} - Commission: {money(row.completed_commission)} - Driver Net: {money(row.completed_driver_net)} - Fee Payouts: {money(row.cancellation_driver_payouts)}
+                  Trips: {row.completed_trips} - Fare value: {money(row.completed_revenue)} - Stored commission: {money(row.completed_commission)} - Driver earnings estimate: {money(row.completed_driver_net)} - Fee payouts: {money(row.cancellation_driver_payouts)}
                 </div>
               </div>
             ))}

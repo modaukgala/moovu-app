@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { adminDriverName } from "@/lib/admin/identity";
 
 const IN_PROGRESS_STATUSES = ["requested", "offered", "assigned", "arrived", "ongoing"];
 
@@ -168,7 +169,7 @@ export async function GET(req: Request) {
     const now = Date.now();
 
     const rows = ((drivers ?? []) as DriverRow[]).map((d) => {
-      const name = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() || "Unnamed";
+      const name = adminDriverName(d);
 
       const comp = completedMap.get(d.id) ?? {
         trips: 0,

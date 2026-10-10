@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, FileImage, RefreshCw, X } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -73,6 +74,7 @@ export default function OnboardingReview() {
       pending.current = null;
       const [fresh, listing] = await Promise.all([request(`/api/admin/onboarding?id=${encodeURIComponent(result.application.id)}`), request("/api/admin/onboarding")]);
       setDetail(fresh); setQueue(listing.applications); setReviewed([]); setOpened([]); setDetailsReviewed(false); setVehicleReviewed(false); setModal(null); setNote("");
+      window.dispatchEvent(new Event("moovu-admin:application-review-updated"));
       setMessage(action === "APPROVED" ? "Driver approved." : action === "CORRECTION_REQUESTED" ? "Scoped correction recorded." : "Decision recorded.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Decision unavailable."); } finally { setBusy(false); }
   }
@@ -92,6 +94,7 @@ export default function OnboardingReview() {
   const approvalReady = canReview && completion?.missing === 0 && detailsReviewed && vehicleReviewed && required.every(item => item.upload && reviewed.includes(item.upload.id));
   return <main className="mx-auto max-w-6xl px-4 py-6 text-slate-900 sm:px-8">
     <header className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase text-blue-700">MOOVU operations</p><h1 className="mt-1 text-2xl font-bold sm:text-3xl">Driver application review</h1></div><button type="button" disabled={busy || !!pending.current} onClick={() => void load(detail?.application.id)} className="flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold"><RefreshCw size={16} /> Refresh</button></header>
+    <nav aria-label="Driver application context" className="mt-3 flex flex-wrap gap-4 text-sm font-semibold text-blue-700"><Link href="/admin/applications">Legacy applications</Link><Link href="/admin/drivers">Drivers</Link><Link href="/admin/link-driver">Link Driver account</Link>{detail && <Link href={`/admin/drivers/${detail.application.driver_id}`}>Canonical Driver profile</Link>}</nav>
     <p role="status" aria-live="polite" className="my-4 text-sm text-slate-600">{busy ? "Loading… " : ""}{message}</p>
     {!detail ? <><div role="tablist" aria-label="Application status" className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-2">{groups.map(tab => <button type="button" role="tab" aria-selected={group === tab.key} key={tab.key} onClick={() => setGroup(tab.key)} className={`min-h-11 shrink-0 rounded-md px-3 text-sm font-semibold ${group === tab.key ? "bg-blue-700 text-white" : "text-slate-700 hover:bg-slate-100"}`}>{tab.label} <span className="ml-1 opacity-75">{queue.filter(item => queueGroup(item.status) === tab.key).length}</span></button>)}</div><div className="divide-y divide-slate-200">{queue.filter(item => queueGroup(item.status) === group).map(item => <button type="button" key={item.id} disabled={busy} onClick={() => void load(item.id)} className="flex w-full flex-wrap items-center justify-between gap-3 py-5 text-left hover:bg-slate-50"><div><h2 className="font-bold">{item.driverName || "Driver name pending"}</h2><p className="mt-1 text-sm text-slate-600">{item.existingDriver ? "Existing Driver · Re-application" : "New Driver"} · {queueStatus(item.status)}</p><p className="mt-1 text-xs text-slate-500">Updated {formatDate(item.updated_at)} · Application {item.cycle}</p></div><div className="text-right"><p className="text-sm font-bold">{item.completion.received}/{item.completion.total} required items</p><span className="text-sm font-semibold text-blue-700">Review application →</span></div></button>)}</div>{queue.filter(item => queueGroup(item.status) === group).length === 0 && <p className="py-12 text-center text-sm text-slate-500">No applications in this category.</p>}</> : <>
       <button type="button" onClick={() => { if (pending.current) { setMessage("Retry the pending decision before leaving."); return; } setDetail(null); void load(); }} className="mb-4 flex min-h-11 items-center gap-2 text-sm font-semibold text-blue-700"><ArrowLeft size={17} /> All applications</button>

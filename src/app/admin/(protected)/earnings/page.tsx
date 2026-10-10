@@ -115,20 +115,20 @@ export default function AdminEarningsPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-3">
+    <main className="moovu-admin-finance-page space-y-5 text-black">
+      <div className="space-y-5">
+        <div className="moovu-admin-page-heading flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm text-gray-500">MOOVU Admin</div>
-            <h1 className="text-3xl font-semibold mt-1">Earnings Dashboard</h1>
+            <div className="moovu-section-title">Finance overview</div>
+            <h1 className="mt-1 text-2xl font-black text-slate-950">Trip earnings</h1>
             <p className="text-gray-700 mt-2">
-              Track revenue, commission, payouts and recent completed trips.
+              Review stored trip revenue, MOOVU commission and estimated Driver earnings. Payables and actual payouts are separate records.
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link href="/admin/trips" className="moovu-btn moovu-btn-secondary">
-              Back to Dispatch
+              View Trips
             </Link>
 
             <button
@@ -148,7 +148,7 @@ export default function AdminEarningsPage() {
           </div>
         ) : (
           <>
-            <section className="grid md:grid-cols-3 xl:grid-cols-6 gap-4">
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
               <div className="border rounded-2xl p-5 bg-white shadow-sm">
                 <div className="text-sm text-gray-600">Today</div>
                 <div className="text-2xl font-semibold mt-2">{money(earnings.today_total)}</div>
@@ -165,7 +165,7 @@ export default function AdminEarningsPage() {
               </div>
 
               <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">Total Revenue</div>
+                <div className="text-sm text-gray-600">Completed trip fare value</div>
                 <div className="text-2xl font-semibold mt-2">{money(earnings.total_revenue)}</div>
               </div>
 
@@ -175,7 +175,7 @@ export default function AdminEarningsPage() {
               </div>
 
               <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">Driver Net</div>
+                <div className="text-sm text-gray-600">Estimated Driver Earnings</div>
                 <div className="text-2xl font-semibold mt-2">
                   {money(earnings.estimated_driver_payout)}
                 </div>
@@ -184,10 +184,10 @@ export default function AdminEarningsPage() {
 
             <section className="grid lg:grid-cols-2 gap-6">
               <div className="moovu-card space-y-4 p-5 sm:p-6">
-                <h2 className="text-xl font-semibold">Payment Methods</h2>
+                <h2 className="text-xl font-semibold">Trip payment methods · fare basis</h2>
 
                 {Object.keys(earnings.by_payment_method).length === 0 ? (
-                  <p className="text-gray-700">No payment data yet.</p>
+                  <p className="text-gray-700">No completed trips with payment methods yet.</p>
                 ) : (
                   <div className="space-y-3">
                     {Object.entries(earnings.by_payment_method).map(([key, value]) => {
@@ -230,9 +230,9 @@ export default function AdminEarningsPage() {
                 </div>
 
                 <div className="moovu-data-row">
-                  <div className="text-sm text-gray-600">Commission Rate</div>
-                  <div className="text-3xl font-semibold mt-2">
-                    {earnings.commission_rate_label ?? "10% / 12%"}
+                  <div className="text-sm text-gray-600">Commission basis</div>
+                  <div className="mt-2 text-sm text-slate-700">
+                    Totals use the commission stored on each completed trip. Historical trips may use different rates.
                   </div>
                 </div>
               </div>
@@ -270,7 +270,7 @@ export default function AdminEarningsPage() {
                           </div>
                         </div>
                         <div>
-                          <div className="text-sm text-gray-600">Driver Net</div>
+                          <div className="text-sm text-gray-600">Driver Earnings</div>
                           <div className="font-semibold">
                             {money(trip.driver_net_earnings)}
                           </div>

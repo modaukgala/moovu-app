@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { loadCurrentPhase6ForDrivers } from "@/lib/admin/applicationAuthority";
+import { driverAdminSummary } from "@/lib/admin/applicationSummary";
 import { buildDriverDocumentChecks } from "@/lib/driver-document-checks";
 import {
   buildDriverReadiness,
@@ -222,12 +224,23 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(30);
 
+    let applicationSummary = null;
+    if (driver && isFinancialAdminRole(auth.profile.role)) {
+      try {
+        const related = await loadCurrentPhase6ForDrivers([driver.id]);
+        applicationSummary = driverAdminSummary({ ...driver,
+          phase6: related.current.get(driver.id), existingDriver: related.existing.has(driver.id),
+        }, new Date().toISOString());
+      } catch { /* Existing Driver detail stays available; the summary is explicitly unavailable. */ }
+    }
+
     return NextResponse.json({
       ok: true,
       profile: {
         ...(driver ?? {}),
         driver_profile: profile ?? null,
       },
+      applicationSummary,
       subscription_payments: subscriptionPayments ?? [],
       subscription_requests: subscriptionRequests ?? [],
       documents: documents ?? [],

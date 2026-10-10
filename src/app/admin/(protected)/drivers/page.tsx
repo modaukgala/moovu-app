@@ -8,6 +8,8 @@ import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminApplicationLabel, type DriverAdminSummary } from "@/lib/admin/applicationSummary";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type Driver = {
   id: string;
@@ -16,10 +18,11 @@ type Driver = {
   phone: string | null;
   email: string | null;
   status: string | null;
+  applicationSummary?: DriverAdminSummary | null;
 };
 
 function driverName(driver: Driver) {
-  return `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || "Unnamed driver";
+  return adminDriverName(driver);
 }
 
 function isSuspendedDriver(status?: string | null) {
@@ -226,6 +229,7 @@ export default function DriversPage() {
                     <th className="px-5 py-4">Phone</th>
                     <th className="px-5 py-4">Email</th>
                     <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4">Application</th>
                     <th className="px-5 py-4">Actions</th>
                   </tr>
                 </thead>
@@ -242,6 +246,7 @@ export default function DriversPage() {
                       <td className="px-5 py-4">
                         <StatusBadge status={adminDriverStatusLabel(driver.status)} />
                       </td>
+                      <td className="px-5 py-4 text-xs text-slate-600">{adminApplicationLabel(driver.applicationSummary)}</td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-2">
                           {driver.status === "pending" && (
@@ -290,6 +295,7 @@ export default function DriversPage() {
                       <div className="mt-2">
                         <StatusBadge status={adminDriverStatusLabel(driver.status)} />
                       </div>
+                      <p className="mt-2 text-xs text-slate-600">{adminApplicationLabel(driver.applicationSummary)}</p>
                     </div>
                   </div>
 

@@ -30,6 +30,7 @@ export default function AdminReceiptsPage() {
   const [trips, setTrips] = useState<ReceiptTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   async function loadReceipts() {
     setLoading(true);
@@ -70,11 +71,16 @@ export default function AdminReceiptsPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const needle = query.trim().toLocaleLowerCase();
+  const visibleTrips = needle ? trips.filter((trip) => [
+    trip.id, trip.rider_name, trip.pickup_address, trip.dropoff_address,
+  ].some((value) => String(value ?? "").toLocaleLowerCase().includes(needle))) : trips;
+
   return (
-    <main className="space-y-5">
+    <main className="moovu-admin-operations-page space-y-5">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="moovu-admin-page-heading flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="moovu-section-title">Receipts</div>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
@@ -91,17 +97,21 @@ export default function AdminReceiptsPage() {
       </div>
 
       <section className="moovu-card overflow-hidden">
+        <div className="border-b border-slate-200 p-4">
+          <label className="sr-only" htmlFor="admin-receipt-search">Search trip receipts</label>
+          <input id="admin-receipt-search" className="moovu-input w-full sm:max-w-sm" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search customer, route or trip ID" />
+        </div>
         {loading ? (
           <div className="space-y-3 p-5">
             <div className="moovu-skeleton h-5 w-44" />
             <div className="moovu-skeleton h-20 w-full" />
             <div className="moovu-skeleton h-20 w-full" />
           </div>
-        ) : trips.length === 0 ? (
-          <div className="p-5 text-sm text-slate-600">No receipts are available yet.</div>
+        ) : visibleTrips.length === 0 ? (
+          <div className="p-5 text-sm text-slate-600">{trips.length === 0 ? "No receipts are available yet." : "No receipts match this search."}</div>
         ) : (
           <div className="divide-y divide-[var(--moovu-border)]">
-            {trips.map((trip) => (
+            {visibleTrips.map((trip) => (
               <div key={trip.id} className="grid gap-4 p-4 md:grid-cols-[1.4fr_1fr_0.7fr_0.7fr_auto] md:items-center">
                 <div className="min-w-0">
                   <div className="text-sm font-black text-slate-950">{trip.rider_name || "Rider"}</div>

@@ -10,6 +10,7 @@ import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { PageHeader } from "@/components/ui/MoovuPrimitives";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminPersonName } from "@/lib/admin/identity";
 
 type CustomerTrip = {
   id: string;
@@ -157,9 +158,7 @@ export default function AdminCustomerProfilePage() {
     );
   }
 
-  const customerName =
-    `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() ||
-    "Unnamed customer";
+  const customerName = adminPersonName(customer, "Unnamed Customer");
 
   return (
     <main className="moovu-page text-slate-950">

@@ -6,6 +6,7 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import MetricCard from "@/components/ui/MetricCard";
 import ManualSurgeControl from "@/components/admin/ManualSurgeControl";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminPaymentReviewCounts, type AdminPaymentReviewRow } from "@/lib/admin/paymentReviewCounts";
 
 type AnalyticsResponse = {
   ok: boolean;
@@ -18,7 +19,8 @@ type AnalyticsResponse = {
     monthly_trips: number;
     active_drivers: number;
     online_drivers: number;
-    pending_driver_applications: number;
+    pending_driver_applications: number | null;
+    pending_driver_applications_as_of: string | null;
     active_subscriptions: number;
     expiring_subscriptions: number;
     average_fare: number;
@@ -52,11 +54,6 @@ type AnalyticsResponse = {
     generated_at: string;
   };
   error?: string;
-};
-
-type PaymentFlagRow = {
-  payment_type?: string | null;
-  status?: string | null;
 };
 
 type PaymentFlags = {
@@ -128,19 +125,12 @@ export default function AdminDashboardPage() {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     const json = (await res.json().catch(() => null)) as
-      | { ok?: boolean; requests?: PaymentFlagRow[] }
+      | { ok?: boolean; requests?: AdminPaymentReviewRow[] }
       | null;
 
     if (!json?.ok) return;
 
-    const active = (json.requests ?? []).filter((row) =>
-      ["pending_payment_review", "waiting_confirmation"].includes(String(row.status ?? ""))
-    );
-    setPaymentFlags({
-      subscription: active.filter((row) => row.payment_type === "subscription").length,
-      commission: active.filter((row) => row.payment_type === "commission").length,
-      waiting: active.filter((row) => row.status === "waiting_confirmation").length,
-    });
+    setPaymentFlags(adminPaymentReviewCounts(json.requests ?? []));
   }
 
   useEffect(() => {
@@ -148,8 +138,15 @@ export default function AdminDashboardPage() {
       void loadAnalytics();
       void loadPaymentFlags();
     }, 0);
-
-    return () => window.clearTimeout(timer);
+    const refresh = () => void loadAnalytics();
+    const refreshPayments = () => void loadPaymentFlags();
+    window.addEventListener("moovu-admin:application-review-updated", refresh);
+    window.addEventListener("moovu-admin:payment-review-updated", refreshPayments);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("moovu-admin:application-review-updated", refresh);
+      window.removeEventListener("moovu-admin:payment-review-updated", refreshPayments);
+    };
   }, []);
 
   const commandCards = useMemo(
@@ -224,11 +221,11 @@ export default function AdminDashboardPage() {
         <MetricCard
           label="Completed today"
           value={String(analytics?.today_completed_trips ?? 0)}
-          helper={`Gross ${money(analytics?.today_gross_revenue)}`}
+          helper={`Completed trip fare value ${money(analytics?.today_gross_revenue)}`}
           tone="success"
         />
         <MetricCard
-          label="Commission today"
+          label="Stored trip commission today"
           value={money(analytics?.today_commission_owed)}
           helper={`Average fare ${money(analytics?.average_fare)}`}
           tone="primary"
@@ -241,13 +238,15 @@ export default function AdminDashboardPage() {
         />
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
         <MetricCard label="Weekly trips" value={String(analytics?.weekly_trips ?? 0)} helper="Completed" />
         <MetricCard label="Monthly trips" value={String(analytics?.monthly_trips ?? 0)} helper="Completed" />
         <MetricCard label="Active drivers" value={String(analytics?.active_drivers ?? 0)} helper="Approved/active" />
         <MetricCard label="Online drivers" value={String(analytics?.online_drivers ?? 0)} helper="Live availability" />
-        <MetricCard label="Applications" value={String(analytics?.pending_driver_applications ?? 0)} helper="Pending review" />
-        <MetricCard label="Expiring subs" value={String(analytics?.expiring_subscriptions ?? 0)} helper={`${analytics?.active_subscriptions ?? 0} active`} />
+        <Link href="/admin/onboarding" aria-label="Open applications needing Admin review">
+          <MetricCard label="Needs review" value={analytics?.pending_driver_applications == null ? "Unavailable" : String(analytics.pending_driver_applications)} helper="Current Phase 6 queue · open review workspace" />
+        </Link>
+        <MetricCard label="Historical plans expiring" value={String(analytics?.expiring_subscriptions ?? 0)} helper={`${analytics?.active_subscriptions ?? 0} historical active plans · not a work gate`} />
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">

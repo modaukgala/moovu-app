@@ -9,6 +9,7 @@ import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { PageHeader } from "@/components/ui/MoovuPrimitives";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminPersonName } from "@/lib/admin/identity";
 
 type CustomerSummary = {
   id: string;
@@ -204,9 +205,7 @@ export default function AdminCustomersPage() {
           ) : (
             <div className="divide-y divide-[var(--moovu-border)]">
               {filteredCustomers.map((customer) => {
-                const name =
-                  `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() ||
-                  "Unnamed customer";
+                const name = adminPersonName(customer, "Unnamed Customer");
 
                 return (
                   <Link

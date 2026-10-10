@@ -99,7 +99,7 @@ export default function PaidSubscriptionsPage() {
   }
 
   return (
-    <main className="space-y-6">
+    <main className="moovu-admin-finance-page space-y-5">
       {error && (
         <CenteredMessageBox
           title="Could not load subscriptions"
@@ -108,12 +108,12 @@ export default function PaidSubscriptionsPage() {
         />
       )}
 
-      <header className="moovu-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <header className="moovu-card moovu-admin-page-heading flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div>
           <div className="moovu-section-title">Payment archive</div>
           <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Past subscription payments</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Read-only legacy records. Subscriptions no longer determine Driver work eligibility.
+            Read-only historical records. Subscriptions no longer gate general Driver online access; manual Admin assignment retains its separate rule.
           </p>
         </div>
         <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">
@@ -126,7 +126,9 @@ export default function PaidSubscriptionsPage() {
           <div className="text-sm font-black text-slate-700">
             {visibleRows.length} approved payment{visibleRows.length === 1 ? "" : "s"}
           </div>
+          <label className="sr-only" htmlFor="past-subscription-search">Search historical subscriptions</label>
           <input
+            id="past-subscription-search"
             className="moovu-input sm:max-w-sm"
             value={query}
             onChange={(event) => setQuery(event.target.value)}

@@ -7,6 +7,7 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import CompactTabs from "@/components/ui/CompactTabs";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type ApplicationRow = {
   id: string;
@@ -263,11 +264,14 @@ export default function AdminDriverApplicationsPage() {
               <div>
                 <h1 className="text-3xl font-black sm:text-4xl">Driver Applications</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Approve, link, review profile details, inspect registered applicants.
+                  Legacy Driver verification and profile history. Phase 6 applications have their own immutable review cycles.
                 </p>
+                <Link href="/admin/onboarding" className="mt-3 inline-flex min-h-11 items-center text-sm font-bold text-blue-700 underline">
+                  Open current Phase 6 review queue →
+                </Link>
               </div>
               <div className="rounded-3xl bg-white/80 px-5 py-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-                <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Queue</div>
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Legacy Driver records</div>
                 <div className="mt-1 text-3xl font-black">{applications.length}</div>
               </div>
             </div>
@@ -320,9 +324,9 @@ export default function AdminDriverApplicationsPage() {
               <div className="mt-4 rounded-2xl bg-slate-50 p-4">
                 <div className="text-sm font-bold text-slate-500">Applicant</div>
                 <div className="mt-1 font-black text-slate-950">
-                  {selected.first_name ?? "--"} {selected.last_name ?? ""}
+                  {adminDriverName(selected)}
                 </div>
-                <div className="mt-1 text-sm text-slate-600">{selected.phone ?? selected.email ?? selected.id}</div>
+                <div className="mt-1 text-sm text-slate-600">{selected.phone ?? selected.email ?? "Contact unavailable"}</div>
               </div>
               <div className="mt-5 flex flex-wrap justify-end gap-3">
                 <button
@@ -362,8 +366,7 @@ export default function AdminDriverApplicationsPage() {
                 <EmptyState title="No applications found" description="Try another status filter or refresh the queue." />
               ) : (
                 filteredApplications.map((app) => {
-                  const name =
-                    `${app.first_name ?? ""} ${app.last_name ?? ""}`.trim() || "Unnamed";
+                  const name = adminDriverName(app);
 
                   return (
                     <button
@@ -376,6 +379,7 @@ export default function AdminDriverApplicationsPage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="font-black text-slate-950">{name}</div>
+                          <div className="mt-1 text-xs font-semibold text-blue-700">Legacy Driver verification</div>
                           <div className="mt-1 text-sm text-slate-600">{app.phone ?? "--"}</div>
                         </div>
                         <StatusBadge status={app.status} />
@@ -418,7 +422,7 @@ export default function AdminDriverApplicationsPage() {
                   <div>
                     <div className="text-sm font-bold text-slate-500">Applicant</div>
                     <div className="mt-1 text-xl font-black">
-                      {selected.first_name ?? "--"} {selected.last_name ?? ""}
+                      {adminDriverName(selected)}
                     </div>
                   </div>
 

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import { adminDriverName } from "@/lib/admin/identity";
 import { isDispatchExpired } from "@/lib/dispatch/config";
 import Phase4FinancePanel from "@/components/admin/Phase4FinancePanel";
 
@@ -164,7 +165,7 @@ export default function TripDetailPage() {
   const driverId = trip?.driver_id ?? null;
   const assignedDriver = driverId ? drivers.find((x) => x.id === driverId) : null;
   const driverLabel = assignedDriver
-    ? `${assignedDriver.first_name} ${assignedDriver.last_name} (${assignedDriver.phone})`
+    ? `${adminDriverName(assignedDriver)}${assignedDriver.phone ? ` (${assignedDriver.phone})` : ""}`
     : driverId
       ? "Driver profile unavailable"
       : "Unassigned";
@@ -373,7 +374,7 @@ export default function TripDetailPage() {
           </section>
         </div>
       )}
-      <header className="moovu-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+      <header className="moovu-card moovu-admin-page-heading flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
         <div>
           <div className="moovu-section-title">Trip control room</div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -612,7 +613,7 @@ export default function TripDetailPage() {
                 <div className="text-sm text-gray-700 mt-2">
                   {drivers.reduce(
                     (message, driver) =>
-                      message.replaceAll(driver.id, `${driver.first_name} ${driver.last_name}`.trim() || "Driver"),
+                      message.replaceAll(driver.id, adminDriverName(driver)),
                     e.message,
                   )}
                 </div>

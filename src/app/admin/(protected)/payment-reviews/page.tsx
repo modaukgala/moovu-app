@@ -45,6 +45,7 @@ export default function AdminPaymentReviewsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("pending_payment_review");
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [rows, setRows] = useState<PaymentRequestRow[]>([]);
   const [reviewDraft, setReviewDraft] = useState<{
     requestId: string;
@@ -127,6 +128,7 @@ export default function AdminPaymentReviewsPage() {
     }
 
     setMsg(json?.message || "Payment request updated.");
+    window.dispatchEvent(new Event("moovu-admin:payment-review-updated"));
     setReviewDraft(null);
     setBusyId(null);
     await loadData(statusFilter);
@@ -141,8 +143,13 @@ export default function AdminPaymentReviewsPage() {
   }, [loadData, statusFilter]);
 
   const visibleRows = useMemo(() => {
-    return rows.filter((row) => paymentTypeFilter === "all" || row.payment_type === paymentTypeFilter);
-  }, [paymentTypeFilter, rows]);
+    const needle = search.trim().toLocaleLowerCase();
+    return rows.filter((row) =>
+      (paymentTypeFilter === "all" || row.payment_type === paymentTypeFilter) &&
+      (!needle || [row.driver_name, row.driver_phone, row.payment_reference]
+        .some((value) => String(value ?? "").toLocaleLowerCase().includes(needle)))
+    );
+  }, [paymentTypeFilter, rows, search]);
 
   const pendingCount = visibleRows.filter((row) => row.status === "pending_payment_review").length;
   const approvedCount = visibleRows.filter((row) => row.status === "approved").length;
@@ -159,14 +166,14 @@ export default function AdminPaymentReviewsPage() {
   }
 
   return (
-    <main className="space-y-6 text-black">
+    <main className="moovu-admin-finance-page space-y-5 text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       {reviewDraft && (
         <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
-          <section className="w-full max-w-lg rounded-[30px] bg-white p-5 shadow-2xl">
+          <section role="dialog" aria-modal="true" aria-labelledby="payment-review-dialog-title" className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
             <div className="moovu-section-title">Payment review</div>
-            <h2 className="mt-2 text-2xl font-black text-slate-950">
+            <h2 id="payment-review-dialog-title" className="mt-2 text-2xl font-black text-slate-950">
               {reviewDraft.action === "approve"
                 ? "Approve payment"
                 : reviewDraft.action === "reject"
@@ -178,6 +185,7 @@ export default function AdminPaymentReviewsPage() {
             </p>
 
             <textarea
+              aria-label="Payment review note"
               value={reviewDraft.note}
               onChange={(event) =>
                 setReviewDraft((current) =>
@@ -217,13 +225,13 @@ export default function AdminPaymentReviewsPage() {
         </div>
       )}
 
-      <div className="moovu-card p-5 sm:p-6">
+      <div className="moovu-card moovu-admin-page-heading p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="moovu-section-title">MOOVU Admin</div>
             <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">Payment reviews</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Review subscription and commission POPs in one place. Legacy combined requests remain visible for compatibility only.
+              Review Driver commission and historical subscription proofs. Legacy combined requests remain visible for compatibility only.
             </p>
           </div>
 
@@ -240,9 +248,11 @@ export default function AdminPaymentReviewsPage() {
         <MetricCard label="Submitted value" value={money(submittedTotal)} helper="Visible requests" tone="primary" />
       </section>
 
-      <section className="moovu-card p-5 sm:p-6">
-          <div className="flex flex-wrap gap-3">
+      <section className="moovu-card p-4 sm:p-5">
+          <div className="moovu-admin-filter-panel flex flex-wrap gap-3">
+            <label className="sr-only" htmlFor="payment-review-status">Review status</label>
             <select
+              id="payment-review-status"
               className="min-h-11 rounded-2xl border border-[var(--moovu-border)] bg-white px-4 py-3 text-sm font-semibold text-slate-950"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -254,7 +264,9 @@ export default function AdminPaymentReviewsPage() {
               <option value="all">All</option>
             </select>
 
+            <label className="sr-only" htmlFor="payment-review-type">Payment purpose</label>
             <select
+              id="payment-review-type"
               className="min-h-11 rounded-2xl border border-[var(--moovu-border)] bg-white px-4 py-3 text-sm font-semibold text-slate-950"
               value={paymentTypeFilter}
               onChange={(e) => setPaymentTypeFilter(e.target.value)}
@@ -264,6 +276,9 @@ export default function AdminPaymentReviewsPage() {
               <option value="commission">Commissions</option>
               <option value="combined">Legacy combined</option>
             </select>
+
+            <label className="sr-only" htmlFor="payment-review-search">Search Driver or reference</label>
+            <input id="payment-review-search" type="search" className="moovu-input w-full sm:max-w-xs" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Driver or reference" />
 
             <button
               onClick={() => void loadData(statusFilter)}
@@ -278,13 +293,13 @@ export default function AdminPaymentReviewsPage() {
           {visibleRows.length === 0 ? (
             <EmptyState
               title="No payment requests found"
-              description="Payment proof submissions matching this filter will appear here."
+              description="No payment proof submissions match the current filters."
             />
           ) : (
             <div className="space-y-4">
               {visibleRows.map((row) => (
                 <div key={row.id} className="moovu-card p-5 space-y-4">
-                  <div className="grid md:grid-cols-6 gap-4">
+                  <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
                     <div>
                       <div className="text-sm text-gray-500">Driver</div>
                       <div className="font-medium">{row.driver_name}</div>

@@ -91,7 +91,7 @@ export default function AdminPaymentReceiptPage() {
   }
 
   return (
-    <main className="space-y-6 text-slate-950">
+    <main className="moovu-admin-finance-page space-y-5 text-slate-950">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       {!payment ? (
@@ -104,7 +104,7 @@ export default function AdminPaymentReceiptPage() {
         </section>
       ) : (
         <section className="moovu-card mx-auto max-w-4xl overflow-hidden p-0 print:shadow-none">
-          <div className="bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-6">
+          <div className="border-b border-slate-200 bg-slate-50 p-5">
             <div className="moovu-section-title">MOOVU admin payment receipt</div>
             <h1 className="mt-2 text-3xl font-black">{payment.payment_reference}</h1>
             <div className="mt-3 flex flex-wrap gap-3">

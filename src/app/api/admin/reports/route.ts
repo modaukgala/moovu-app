@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { adminDriverName } from "@/lib/admin/identity";
 
 type TripRow = {
   id: string;
@@ -149,8 +150,7 @@ export async function GET(req: Request) {
 
     const driverNameById = new Map<string, string>();
     for (const d of (drivers ?? []) as DriverRow[]) {
-      const fullName = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim();
-      driverNameById.set(d.id, fullName || d.phone || d.id);
+      driverNameById.set(d.id, adminDriverName(d));
     }
 
     const completedTrips = ((completed ?? []) as TripRow[]).map((trip) => ({

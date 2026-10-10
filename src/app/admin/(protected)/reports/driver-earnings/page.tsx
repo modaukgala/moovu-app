@@ -80,18 +80,21 @@ export default function DriverEarningsReportPage() {
   const dueCount = useMemo(() => rows.filter((r) => r.subscription_due).length, [rows]);
 
   return (
-    <main className="p-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <main className="moovu-admin-finance-page space-y-5">
+      <div className="moovu-admin-page-heading flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Driver Earnings Report</h1>
-          <p className="opacity-70 mt-1">
-            Completed = cash collected by driver. In-progress = active trips not yet completed. Subscription “due” is based on expiry/active status.
+          <div className="moovu-section-title">Finance reports</div>
+          <h1 className="mt-1 text-2xl font-black text-slate-950">Driver earnings report</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Completed and in-progress trip values are separate. Historical subscription flags are audit data, not general Driver work eligibility.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 items-center">
-          <input className="border rounded-xl px-4 py-2" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <input className="border rounded-xl px-4 py-2" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <div className="moovu-admin-filter-panel flex flex-wrap gap-2 items-center">
+          <label className="sr-only" htmlFor="driver-earnings-from">From date</label>
+          <input id="driver-earnings-from" className="border rounded-xl px-4 py-2" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <label className="sr-only" htmlFor="driver-earnings-to">To date</label>
+          <input id="driver-earnings-to" className="border rounded-xl px-4 py-2" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           <button className="border rounded-xl px-4 py-2" disabled={busy} onClick={load}>
             {busy ? "Loading..." : "Run"}
           </button>
@@ -102,14 +105,14 @@ export default function DriverEarningsReportPage() {
 
       <section className="border rounded-2xl p-5">
         <h2 className="font-semibold">Totals</h2>
-        <div className="grid md:grid-cols-5 gap-4 mt-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           <div className="moovu-data-row">
             <div className="text-sm opacity-70">Completed trips</div>
             <div className="text-2xl font-semibold mt-1">{totTrips}</div>
           </div>
 
           <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Total earnings (completed)</div>
+            <div className="text-sm opacity-70">Completed trip earnings</div>
             <div className="text-2xl font-semibold mt-1">R{totEarnings}</div>
           </div>
 
@@ -120,12 +123,12 @@ export default function DriverEarningsReportPage() {
           </div>
 
           <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Subscriptions due</div>
+            <div className="text-sm opacity-70">Historical subscriptions flagged due</div>
             <div className="text-2xl font-semibold mt-1">{dueCount}</div>
           </div>
 
           <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Total subscription due</div>
+            <div className="text-sm opacity-70">Historical subscription amount flagged</div>
             <div className="text-2xl font-semibold mt-1">R{totSubDue}</div>
           </div>
         </div>
@@ -163,7 +166,7 @@ export default function DriverEarningsReportPage() {
                       </div>
 
                       <div className="text-xs opacity-60 mt-1">
-                        sub: {r.subscription_status ?? "—"}
+                        historical subscription: {r.subscription_status ?? "—"}
                         {plan} • exp: {exp} • <span className="font-semibold">{dueText}</span>
                         {r.subscription_due ? (
                           <>
