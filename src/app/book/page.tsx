@@ -206,6 +206,7 @@ export default function RiderBookingPage() {
   );
 
   const [busy, setBusy] = useState(false);
+  const [bookingConfirmationOpen, setBookingConfirmationOpen] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
@@ -274,6 +275,8 @@ export default function RiderBookingPage() {
   );
   const autoLocationAttemptedRef = useRef(false);
   const bookingKeyRef = useRef(crypto.randomUUID());
+  const bookingSubmissionRef = useRef(false);
+  const bookingConfirmationRef = useRef<HTMLDialogElement | null>(null);
   const pickupMarkerRef = useRef<google.maps.Marker | null>(null);
   const dropoffMarkerRef = useRef<google.maps.Marker | null>(null);
   const stopMarkerRefs = useRef<google.maps.Marker[]>([]);
@@ -285,6 +288,11 @@ export default function RiderBookingPage() {
   const nearbyDriversRequestInFlightRef = useRef(false);
   const lastNearbyDriversQueryRef = useRef("");
   const isPageVisible = usePageVisibility();
+
+  useEffect(() => {
+    const dialog = bookingConfirmationRef.current;
+    if (bookingConfirmationOpen && dialog && !dialog.open) dialog.showModal();
+  }, [bookingConfirmationOpen]);
 
   const bothLocationsSet =
     pickupLat != null &&
@@ -1845,6 +1853,22 @@ export default function RiderBookingPage() {
     }
   }
 
+  function openBookingConfirmation() {
+    if (busy || !canSubmit) return;
+    setMsg(null);
+    setBookingConfirmationOpen(true);
+  }
+
+  async function confirmBooking() {
+    if (!bookingConfirmationOpen || !canSubmit || bookingSubmissionRef.current) return;
+    bookingSubmissionRef.current = true;
+    try {
+      await submitBooking();
+    } finally {
+      bookingSubmissionRef.current = false;
+    }
+  }
+
   async function submitBooking() {
     setMsg(null);
     if (!customer) {
@@ -2856,7 +2880,52 @@ export default function RiderBookingPage() {
   );
   return (
     <main className="mbk-page booking-v3">
-      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {msg && !bookingConfirmationOpen && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {bookingConfirmationOpen && (
+        <dialog
+          ref={bookingConfirmationRef}
+          aria-labelledby="booking-confirmation-title"
+          aria-describedby="booking-confirmation-description"
+          onClose={() => setBookingConfirmationOpen(false)}
+          onCancel={(event) => {
+            if (busy) event.preventDefault();
+            else setBookingConfirmationOpen(false);
+          }}
+          className="fixed inset-0 z-[10000] m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-3xl border border-slate-200 bg-white p-0 text-slate-950 shadow-2xl backdrop:bg-slate-950/60"
+        >
+          <div className="p-5 sm:p-7" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-[var(--moovu-primary)]">MOOVU Rides</div>
+            <h2 id="booking-confirmation-title" className="mt-2 text-2xl font-black">Confirm your booking</h2>
+            <p id="booking-confirmation-description" className="mt-2 text-sm leading-6 text-slate-600">
+              Please check your trip details before confirming. Only request a ride when you&apos;re ready to travel.
+            </p>
+            <dl className="mt-5 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm">
+              <div><dt className="font-bold text-slate-500">Pickup</dt><dd className="mt-0.5 font-semibold break-words">{pickupAddress}</dd></div>
+              {resolvedStops.map((stop, index) => (
+                <div key={`${stop.placeId || stop.address}-${index}`}>
+                  <dt className="font-bold text-slate-500">Stop {index + 1}</dt>
+                  <dd className="mt-0.5 font-semibold break-words">{stop.address}</dd>
+                </div>
+              ))}
+              <div><dt className="font-bold text-slate-500">Destination</dt><dd className="mt-0.5 font-semibold break-words">{dropoffAddress}</dd></div>
+              <div><dt className="font-bold text-slate-500">Ride</dt><dd className="mt-0.5 font-semibold">{selectedRide.name}{rideType === "scheduled" ? " · Scheduled" : ""}</dd></div>
+              <div><dt className="font-bold text-slate-500">Payment</dt><dd className="mt-0.5 font-semibold">{paymentMethod === "online" ? "Pay Online" : "Cash/Transfer"}</dd></div>
+              {phase5Quote && (
+                <div><dt className="font-bold text-slate-500">Disclosed service fee</dt><dd className="mt-0.5 font-semibold">R{(phase5Quote.grossServiceFeeCents / 100).toFixed(2)}{phase5Quote.membershipWaiverCents || phase5Quote.promotionalCreditCents ? " before eligible waivers and credits" : ""}</dd></div>
+              )}
+              <div className="border-t border-slate-200 pt-3"><dt className="font-bold text-slate-500">Quoted total</dt><dd className="mt-0.5 text-xl font-black">{money(displayFare)}</dd></div>
+            </dl>
+            <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+              <strong>Important:</strong> Please book only when you&apos;re ready to travel. Cancelling after a Driver has accepted, or failing to show up, may result in a cancellation or no-show fee under MOOVU&apos;s applicable policy. An outstanding eligible fee may need to be resolved before another booking.
+            </p>
+            {msg && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{msg}</p>}
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row">
+              <button type="button" autoFocus disabled={busy} onClick={() => setBookingConfirmationOpen(false)} className="moovu-btn moovu-btn-secondary sm:flex-1">Go Back</button>
+              <button type="button" disabled={busy || !canSubmit} onClick={() => void confirmBooking()} className="moovu-btn moovu-btn-primary min-h-12 sm:flex-[2]">{busy ? "Booking..." : "Confirm Booking"}</button>
+            </div>
+          </div>
+        </dialog>
+      )}
       {mapPickerKind && (
         <LocationMapPicker
           kind={mapPickerKind}
@@ -3493,7 +3562,7 @@ export default function RiderBookingPage() {
             </div>
             <button
               className="moovu-confirm-button flex-1"
-              onClick={() => void submitBooking()}
+              onClick={openBookingConfirmation}
               disabled={busy || !canSubmit}
             >
               {busy
