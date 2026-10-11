@@ -10398,6 +10398,12 @@ html {
   transform: translateY(0);
 }
 
+/* Keep the booking action above the visible mobile navigation. */
+.booking-v3:has(.booking-scroll-nav.is-visible) .mbk-sheet {
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  border-radius: 28px;
+}
+
 .booking-v3 .customer-ehail-route-card {
   position: relative;
   overflow: visible;

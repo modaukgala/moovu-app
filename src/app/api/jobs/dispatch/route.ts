@@ -6,6 +6,7 @@ import { cancelExpiredDispatch } from "@/lib/dispatch/cancelExpiredDispatch";
 import { isDispatchWorkerAuthorized } from "@/lib/dispatch/dispatchScheduler";
 import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
 import { MAX_DISPATCH_ATTEMPTS, retryDelayMs } from "@/lib/dispatch/reliability";
+import { isNinetySecondDispatchEnabledFor } from "@/lib/dispatch/matchingWindowPolicy";
 
 type ClaimedJob = {
   id: string;
@@ -22,9 +23,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized dispatch worker." }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { limit?: number };
+  const body = (await req.json().catch(() => ({}))) as { limit?: number; disposableTestJobId?: string; disposableTestTripId?: string };
   const limit = Math.min(50, Math.max(1, Number(body.limit ?? 20)));
-  const { data, error } = await supabaseAdmin.rpc("claim_due_dispatch_jobs", { p_limit: limit });
+  const scopedTestJobId = body.disposableTestJobId;
+  const scopedTestTripId = body.disposableTestTripId;
+  if ((scopedTestJobId || scopedTestTripId) && (
+    process.env.NODE_ENV !== "development" ||
+    process.env.MOOVU_DISPATCH_DISPOSABLE_E2E !== "true" ||
+    new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://invalid.local").hostname !==
+      "tangtlmdpnvmoviwrgvd.supabase.co" ||
+    Boolean(scopedTestJobId && scopedTestTripId) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(scopedTestJobId ?? scopedTestTripId ?? "")
+  )) {
+    return NextResponse.json({ ok: false, error: "Disposable scoped worker unavailable." }, { status: 403 });
+  }
+  let scopedJobIds: string[] = [];
+  if (scopedTestTripId) {
+    const { data: due, error: dueError } = await supabaseAdmin.from("dispatch_jobs")
+      .select("id").eq("trip_id", scopedTestTripId).eq("status", "pending")
+      .in("job_type", ["recover", "expire", "escalate"])
+      .lte("run_at", new Date().toISOString()).order("run_at").limit(Math.min(limit, 10));
+    if (dueError) return NextResponse.json({ ok: false, error: "Disposable job lookup failed." }, { status: 503 });
+    scopedJobIds = (due ?? []).map(row => row.id);
+  }
+  const claims = scopedTestTripId
+    ? await Promise.all(scopedJobIds.map(p_job_id => supabaseAdmin.rpc("claim_due_synthetic_dispatch_job", { p_job_id })))
+    : [scopedTestJobId
+      ? await supabaseAdmin.rpc("claim_due_synthetic_dispatch_job", { p_job_id: scopedTestJobId })
+      : await supabaseAdmin.rpc("claim_due_dispatch_jobs", { p_limit: limit })];
+  const error = claims.find(claim => claim.error)?.error;
+  const data = claims.flatMap(claim => claim.data ?? []);
   if (error) {
     return NextResponse.json({ ok: false, error: "Dispatch worker schema is not active." }, { status: 503 });
   }
@@ -102,7 +130,7 @@ export async function POST(req: Request) {
               tripId: job.trip_id,
               nextCycle,
             });
-            if (isDispatchExpired(trip.created_at)) {
+            if (!isNinetySecondDispatchEnabledFor(trip.created_at) && isDispatchExpired(trip.created_at)) {
               await cancelExpiredDispatch(job.trip_id);
             } else {
               const nextRound = await dispatchTrip({

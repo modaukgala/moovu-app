@@ -98,6 +98,7 @@ export async function getDispatchCandidates(params: {
   radiusKm: number;
   cycle: number;
   excludedDriverIds?: string[];
+  ranking?: "nearest";
 }) {
   const { supabase, tripId, pickupLat, pickupLng, rideOption, radiusKm } = params;
   const excluded = new Set(params.excludedDriverIds ?? []);
@@ -106,14 +107,36 @@ export async function getDispatchCandidates(params: {
     now - DISPATCH_CONFIG.backgroundOfferEligibilitySeconds * 1000,
   ).toISOString();
 
-  const { data: drivers, error: driversError } = await supabase
-    .from("drivers")
-    .select("id,status,verification_status,profile_completed,online,busy,lat,lng,last_seen,subscription_status,subscription_expires_at,seating_capacity,is_deleted")
-    .eq("online", true)
-    .gte("last_seen", offerEligibleAfter)
-    .limit(250);
-
-  if (driversError) throw new Error(driversError.message);
+  let drivers: CandidateRow[];
+  if (params.ranking !== "nearest") {
+    // Preserve the established legacy query exactly while the opt-in policy is off.
+    const { data, error } = await supabase
+      .from("drivers")
+      .select("id,status,verification_status,profile_completed,online,busy,lat,lng,last_seen,subscription_status,subscription_expires_at,seating_capacity,is_deleted")
+      .eq("online", true)
+      .gte("last_seen", offerEligibleAfter)
+      .limit(250);
+    if (error) throw new Error(error.message);
+    drivers = (data ?? []) as CandidateRow[];
+  } else {
+    drivers = [];
+    const pageSize = 250;
+    // Nearest-first must examine the complete eligible pool, with an explicit
+    // safety cap instead of claiming a nearest Driver from a truncated result.
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from("drivers")
+        .select("id,status,verification_status,profile_completed,online,busy,lat,lng,last_seen,subscription_status,subscription_expires_at,seating_capacity,is_deleted")
+        .eq("online", true)
+        .gte("last_seen", offerEligibleAfter)
+        .order("id")
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error(error.message);
+      drivers.push(...(data ?? []) as CandidateRow[]);
+      if ((data ?? []).length < pageSize) break;
+      if (drivers.length >= 2000) throw new Error("Nearest-first candidate pool exceeded the safe query bound.");
+    }
+  }
 
   const prelim = ((drivers ?? []) as CandidateRow[]).filter((driver) => {
     if (excluded.has(driver.id) || driver.is_deleted) return false;
@@ -192,7 +215,9 @@ export async function getDispatchCandidates(params: {
         scoreBreakdown,
       };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => params.ranking === "nearest"
+      ? a.distanceKm - b.distanceKm || a.driverId.localeCompare(b.driverId)
+      : b.score - a.score);
   return untriedCandidatesFirst(eligible, history, params.cycle);
 }
 

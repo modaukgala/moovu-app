@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { sendPushSafe } from "@/lib/push-server";
 import { notifyAdmins } from "@/lib/push-notify";
+import { notifyDriverOffer } from "@/lib/dispatch/notifyDriverOffer";
+import { dispatchTrip90s } from "@/lib/dispatch/dispatchTrip90s";
+import { isNinetySecondDispatchEnabledFor } from "@/lib/dispatch/matchingWindowPolicy";
 import { DISPATCH_CONFIG, dispatchRadiusForCycle, isDispatchExpired } from "@/lib/dispatch/config";
 import { getDispatchCandidates, getPreferredDispatchCandidate } from "@/lib/dispatch/dispatchCandidates";
 import { enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
@@ -46,48 +48,6 @@ function isDispatchSchemaHotfixRequired(error: { message?: string } | null | und
   return message.includes("driver_id") && message.includes("ambiguous");
 }
 
-async function notifyDriverOffer(params: {
-  tripId: string;
-  driverId: string;
-  pickup: string | null;
-  destination: string | null;
-}) {
-  const { data: account } = await supabaseAdmin
-    .from("driver_accounts")
-    .select("user_id")
-    .eq("driver_id", params.driverId)
-    .maybeSingle();
-
-  if (!account?.user_id) {
-    console.error("[dispatch] driver offer notification target missing", {
-      tripId: params.tripId,
-      driverId: params.driverId,
-    });
-    throw new Error("Driver offer notification target missing.");
-  }
-  const result = await sendPushSafe({
-    userIds: [account.user_id],
-    role: "driver",
-    title: "New trip nearby",
-    body: `Pickup at ${params.pickup ?? "pickup"} to ${params.destination ?? "destination"}.`,
-    url: `/driver?offerTripId=${params.tripId}`,
-    data: {
-      nativeActionType: "trip_offer",
-      tripId: params.tripId,
-      driverId: params.driverId,
-    },
-  });
-  console.info("[dispatch] driver offer notification result", {
-    tripId: params.tripId,
-    driverId: params.driverId,
-    delivered: result.delivered,
-    failed: result.failed,
-    removed: result.removed,
-    ok: result.ok,
-  });
-  if (!result.ok) throw new Error("Driver offer notification delivery failed.");
-}
-
 export async function dispatchTrip(params: {
   tripId: string;
   cycle?: number;
@@ -95,6 +55,12 @@ export async function dispatchTrip(params: {
   preferredDriverId?: string | null;
   allowAfterAutomaticExhaustion?: boolean;
 }): Promise<DispatchResult> {
+  if (process.env.MOOVU_DISPATCH_90S_ENABLED === "true") {
+    const { data: dispatchAge, error: dispatchAgeError } = await supabaseAdmin.from("trips")
+      .select("created_at").eq("id", params.tripId).maybeSingle();
+    if (dispatchAgeError) return { ok: false, tripId: params.tripId, error: "Dispatch age check failed." };
+    if (isNinetySecondDispatchEnabledFor(dispatchAge?.created_at)) return dispatchTrip90s(params);
+  }
   const operationStarted = Date.now();
   const correlationId = crypto.randomUUID();
   const cycle = Math.max(1, params.cycle ?? 1);

@@ -46,10 +46,11 @@ async function driver(subscribed, offset) {
   const account = await user("driver");
   const id = randomUUID();
   required(await db.from("drivers").insert({ id, first_name: "Booking repair", last_name: run,
+    phone: `+276${String(Date.now()).slice(-7)}${drivers.length}`,
     status: "approved", verification_status: "approved", profile_completed: true,
     online: true, busy: false, is_deleted: false, seating_capacity: 6,
     lat: -25.4800 + offset, lng: 28.6800, last_seen: new Date().toISOString(),
-    subscription_status: subscribed ? "active" : "expired",
+    subscription_status: subscribed ? "active" : "inactive",
     subscription_expires_at: subscribed ? new Date(Date.now() + 86400000).toISOString() : null }), "Driver fixture");
   required(await db.from("driver_accounts").insert({ user_id: account.id, driver_id: id }), "Driver mapping");
   required(await db.from("driver_wallets").insert({ driver_id: id, balance_due: 0 }), "Wallet fixture");
@@ -70,8 +71,9 @@ try {
   const customer = await user("customer");
   const admin = await user("admin");
   const customerId = randomUUID();
+  const customerPhone = `+279${String(Date.now()).slice(-8)}`;
   required(await db.from("customers").insert({ id: customerId, auth_user_id: customer.id, first_name: "Booking", last_name: run,
-    phone: `+279${String(Date.now()).slice(-8)}`, status: "active" }), "Customer fixture");
+    phone: customerPhone, normalized_phone: customerPhone, status: "active" }), "Customer fixture");
   const state = required(await db.rpc("phase5_customer_state", { p_customer_id: customerId }), "Customer benefits");
   assert.equal(state.membership_active, false);
   assert.equal(Number(state.available_credit_cents), 0);
@@ -119,11 +121,13 @@ try {
     priority: trip.dispatch_priority_score, bypass: trip.completed_without_end_otp });
   check("Go 15% locked snapshot", Number(trip.commission_basis_points) === 1500 && Boolean(trip.commission_locked_at));
   let history = await offers(tripId);
-  check("First database offer generated", history.length === 1, history.map(row => ({ id: row.id, driver: row.driver_id, status: row.status })));
+  check("Established initial offer round generated", history.length >= 1 && history.length <= 25,
+    history.map(row => ({ id: row.id, driver: row.driver_id, status: row.status })));
   check("Durable offer expiry job saved", required(await db.from("dispatch_jobs").select("id").eq("trip_id", tripId).eq("job_type", "expire"), "Expiry job").length === 1);
   check("No-subscription nearest driver can receive work", history.some(row => row.driver_id === nearest.driverId));
   check("Attempted driver persisted in offer history", history.length > 0 && history.every(row => Boolean(row.driver_id)));
-  check("Legacy attempted array records offered driver", history.length > 0 && history.every(row => trip.offer_attempted_driver_ids.includes(row.driver_id)));
+  check("Canonical offer history retains attempts without legacy array mutation", history.length > 0 &&
+    Array.isArray(trip.offer_attempted_driver_ids) && trip.offer_attempted_driver_ids.length === 0);
   check("No premature ledger/economic commission", (await financialCount(tripId)).length === 0 &&
     required(await db.from("driver_wallet_transactions").select("id").eq("trip_id", tripId), "Legacy ledger").length === 0 &&
     required(await db.from("moovu_business_events").select("id").eq("event_key", `trip-complete:${tripId}`), "Completion events").length === 0);
@@ -132,9 +136,9 @@ try {
   check("Booking retry duplicates no offer or ledger", (await offers(tripId)).length === history.length && (await financialCount(tripId)).length === 0);
   const failed = await request("/api/customer/book-trip", customer.token, { ...payload, bookingKey: randomUUID(), rideType: "scheduled",
     scheduledFor: new Date(Date.now() + 1800000).toISOString() });
-  check("Constraint failure sanitized", failed.status === 500 && failed.body?.error === "We couldn't create your trip. Please try again.", failed);
-  check("Failure diagnostics remain server-side", /\[book-trip\] trip creation failed/.test(logs) && /23514/.test(logs));
-  console.log("SERVER_FAILURE_DIAGNOSTICS " + logs.split("\n").filter(line => /book-trip.*failed|code: '23514'|check constraint/.test(line)).join(" | "));
+  check("Scheduled rides disabled before database creation", failed.status === 409 &&
+    failed.body?.code === "SCHEDULED_RIDES_DISABLED", failed);
+  check("Scheduled denial exposes no database diagnostic", !/23514|check constraint|postgres/i.test(JSON.stringify(failed.body)));
   if (history.length) {
     required(await db.from("driver_trip_offers").update({ accept_deadline_at: new Date(Date.now() - 1000).toISOString(),
       visible_until: new Date(Date.now() - 1000).toISOString(), escalates_at: new Date(Date.now() - 1000).toISOString() }).eq("id", history[0].id), "Scoped expiry fixture");
@@ -178,7 +182,9 @@ try {
   const activeBeforeDebt = await completedCommission("go", "Pre-existing active trip");
   await finish(await completedCommission("go", "Debt reaches R50", 3333));
   const above = required(await db.rpc("phase2_finance_eligibility", { p_driver_id: nearest.driverId }), "R50 eligibility");
-  check("Exact R50 debt restricted from new work", Number(above.net_owed_cents) === 5000 && above.authoritative_eligible === false, above);
+  check("R50 debt is tracked while the retired operational lock stays off", Number(above.net_owed_cents) === 5000 &&
+    Number(above.debt_limit_cents) === 5000 && above.authoritative_eligible === true &&
+    above.commission_lock_enforced === false, above);
   await finish(activeBeforeDebt);
   check("Existing active trip can finish above debt threshold", true);
   check("No infrastructure scheduler failure", !logs.includes("permission denied for table dispatch_jobs"));

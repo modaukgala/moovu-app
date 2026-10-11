@@ -2916,7 +2916,7 @@ export default function RiderBookingPage() {
               <div className="border-t border-slate-200 pt-3"><dt className="font-bold text-slate-500">Quoted total</dt><dd className="mt-0.5 text-xl font-black">{money(displayFare)}</dd></div>
             </dl>
             <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-              <strong>Important:</strong> Please book only when you&apos;re ready to travel. Cancelling after a Driver has accepted, or failing to show up, may result in a cancellation or no-show fee under MOOVU&apos;s applicable policy. An outstanding eligible fee may need to be resolved before another booking.
+              <strong>Important:</strong> Please book only when you&apos;re ready to travel. Cancelling after a Driver accepts or failing to show up may result in applicable cancellation or no-show fees. Outstanding eligible fees may need to be resolved before another booking.
             </p>
             {msg && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{msg}</p>}
             <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row">
