@@ -10518,6 +10518,66 @@ html {
 .booking-v3 .customer-ehail-route-row .moovu-pickup-help { margin-top: 8px; }
 .booking-v3 .customer-ehail-route-row .moovu-place-menu { left: 28px; right: 0; }
 
+/* Suggestions belong to the field's scroll flow, not the viewport or map. */
+.booking-v3 .customer-ehail-route-row .moovu-place-menu {
+  position: static;
+  inset: auto;
+  width: 100%;
+  max-height: min(28dvh, 224px);
+  margin: 7px 0 3px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(15, 38, 71, 0.1);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.booking-v3 .customer-ehail-route-row .moovu-place-option {
+  min-width: 0;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: left;
+}
+
+.booking-v3 .mbk-sheet-scroll { padding-bottom: 18px; scroll-padding-block: 12px 24px; }
+.booking-v3 .customer-ehail-route-row { min-height: 72px; padding-block: 10px; }
+.booking-v3 .customer-ehail-route-row.is-destination { min-height: 72px; padding-top: 10px; }
+.booking-v3 .customer-ehail-route-row.is-stop { min-height: 64px; }
+
+.booking-v3 .customer-booking-payment {
+  border: 1px solid #dce6f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 11px 12px;
+}
+.booking-v3 .customer-booking-payment-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 7px; }
+.booking-v3 .customer-booking-payment-options button {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #dce6f0;
+  border-radius: 9px;
+  background: #f7faff;
+  color: #14263d;
+  font-size: 13px;
+  font-weight: 800;
+}
+.booking-v3 .customer-booking-payment-options button.is-selected { border-color: #075ee6; background: #eaf3ff; color: #0751bf; }
+.booking-v3 .customer-booking-payment-note { margin-top: 7px; color: #586b82; font-size: 11px; line-height: 1.4; }
+
+@media (max-width: 767px) {
+  .booking-v3 .mbk-sheet.mbk-sheet-editing {
+    bottom: var(--moovu-keyboard-inset, 0px);
+    max-height: calc(100dvh - var(--moovu-keyboard-inset, 0px) - env(safe-area-inset-top) - 10px);
+    height: calc(100dvh - var(--moovu-keyboard-inset, 0px) - env(safe-area-inset-top) - 10px);
+  }
+  .booking-v3 .mbk-sheet-editing .mbk-confirm-bar { display: none; }
+  .booking-v3:has(.mbk-sheet-editing) .booking-scroll-nav { display: none; }
+  .booking-v3:has(.mbk-sheet-editing) .mbk-sheet { bottom: var(--moovu-keyboard-inset, 0px); }
+}
+
 .customer-history-v4 {
   overflow: hidden;
   border: 1px solid #dce6f0;

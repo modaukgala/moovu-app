@@ -2,6 +2,7 @@
 
 import {
   type ClipboardEvent,
+  type PointerEvent,
   useEffect,
   useMemo,
   useRef,
@@ -34,6 +35,7 @@ import {
   type ReverseGeocodeResult,
 } from "@/lib/locationPaste";
 import { MOOVU_LEGAL_VERSION } from "@/lib/legal";
+import { isSuggestionTap } from "@/lib/booking/suggestionGesture";
 import {
   carMarkerIcon,
   createOrMoveMarker,
@@ -250,6 +252,7 @@ export default function RiderBookingPage() {
     "expanded",
   );
   const [showBookingNav, setShowBookingNav] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(false);
   const lastSheetScrollTopRef = useRef(0);
   const [dragY, setDragY] = useState<number | null>(null); // live drag offset in px
   const dragStartYRef = useRef<number>(0);
@@ -265,6 +268,8 @@ export default function RiderBookingPage() {
   const pickupAutocompleteAbortRef = useRef<AbortController | null>(null);
   const dropoffAutocompleteAbortRef = useRef<AbortController | null>(null);
   const stopAutocompleteAbortRefs = useRef<Array<AbortController | null>>([]);
+  const suggestionPointerYRef = useRef<number | null>(null);
+  const skipLocationBlurRef = useRef(false);
   const lastCalculatedKeyRef = useRef("");
   const calculatingKeyRef = useRef("");
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -580,6 +585,7 @@ export default function RiderBookingPage() {
 
   // ── Drag handlers ────────────────────────────────────────────────
   function onDragStart(clientY: number) {
+    if (editingLocation) return;
     isDraggingRef.current = true;
     dragStartYRef.current = clientY;
     dragStartSnapRef.current = sheetSnap;
@@ -604,6 +610,26 @@ export default function RiderBookingPage() {
       setSheetSnap("collapsed");
     }
     // else snap back to current
+  }
+
+  function focusLocation(input: HTMLInputElement) {
+    setEditingLocation(true);
+    setSheetSnap("expanded");
+    window.setTimeout(() => {
+      if (document.activeElement === input)
+        input.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 180);
+  }
+
+  function onSuggestionPointerDown(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    suggestionPointerYRef.current = event.clientY;
+  }
+
+  function onSuggestionPointerUp(event: PointerEvent<HTMLButtonElement>, select: () => void) {
+    const startY = suggestionPointerYRef.current;
+    suggestionPointerYRef.current = null;
+    if (isSuggestionTap(startY, event.clientY)) select();
   }
 
   // Auto-expand when both locations set and fare calculated
@@ -1034,6 +1060,7 @@ export default function RiderBookingPage() {
         signal: controller.signal,
       });
       const json = await res.json().catch(() => null);
+      if (abortRef.current !== controller || controller.signal.aborted) return;
       if (!json?.ok) {
         if (kind === "pickup") {
           setPickupPredictions([]);
@@ -1048,13 +1075,17 @@ export default function RiderBookingPage() {
       if (kind === "pickup") {
         setPickupPredictions(predictions);
         setShowPickupDropdown(predictions.length > 0);
+        setPickupError(predictions.length === 0 ? "No places found. Try a nearby landmark." : null);
       } else {
         setDropoffPredictions(predictions);
         setShowDropoffDropdown(predictions.length > 0);
+        setDropoffError(predictions.length === 0 ? "No places found. Try a nearby landmark." : null);
       }
     } catch (error: unknown) {
-      if (!(error instanceof DOMException && error.name === "AbortError"))
-        throw error;
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        if (kind === "pickup") setPickupError("Suggestions are unavailable. Keep typing or choose on map.");
+        else setDropoffError("Suggestions are unavailable. Keep typing or choose on map.");
+      }
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;
@@ -1067,6 +1098,9 @@ export default function RiderBookingPage() {
   function onPickupInputChange(value: string) {
     setPickupAddress(value);
     clearPickupSelection();
+    pickupAutocompleteAbortRef.current?.abort();
+    setPickupPredictions([]);
+    setShowPickupDropdown(false);
     if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
     pickupTimerRef.current = setTimeout(() => {
       void fetchPredictions("pickup", value);
@@ -1076,6 +1110,9 @@ export default function RiderBookingPage() {
   function onDropoffInputChange(value: string) {
     setDropoffAddress(value);
     clearDropoffSelection();
+    dropoffAutocompleteAbortRef.current?.abort();
+    setDropoffPredictions([]);
+    setShowDropoffDropdown(false);
     if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
     dropoffTimerRef.current = setTimeout(() => {
       void fetchPredictions("dropoff", value);
@@ -1093,6 +1130,10 @@ export default function RiderBookingPage() {
   }
 
   function removeStop(index: number) {
+    stopTimerRefs.current.forEach((timer) => { if (timer) clearTimeout(timer); });
+    stopAutocompleteAbortRefs.current.forEach((controller) => controller?.abort());
+    stopTimerRefs.current = [];
+    stopAutocompleteAbortRefs.current = [];
     setStops((current) => {
       const nextStops = current.filter((_, i) => i !== index);
       if (nextStops.length === 0) setStopsOpen(false);
@@ -1125,13 +1166,18 @@ export default function RiderBookingPage() {
         signal: controller.signal,
       });
       const json = await res.json().catch(() => null);
+      if (stopAutocompleteAbortRefs.current[index] !== controller || controller.signal.aborted) return;
       const predictions = json?.ok
         ? ((json.predictions ?? []) as Prediction[])
         : [];
-      updateStop(index, { predictions, open: predictions.length > 0 });
+      updateStop(index, {
+        predictions,
+        open: predictions.length > 0,
+        error: predictions.length === 0 ? "No places found. Try a nearby landmark." : null,
+      });
     } catch (error: unknown) {
       if (!(error instanceof DOMException && error.name === "AbortError"))
-        throw error;
+        updateStop(index, { error: "Suggestions are unavailable. Keep typing or choose on map." });
     } finally {
       if (stopAutocompleteAbortRefs.current[index] === controller) {
         stopAutocompleteAbortRefs.current[index] = null;
@@ -1141,12 +1187,15 @@ export default function RiderBookingPage() {
   }
 
   function onStopInputChange(index: number, value: string) {
+    stopAutocompleteAbortRefs.current[index]?.abort();
     updateStop(index, {
       address: value,
       placeId: "",
       lat: null,
       lng: null,
       error: null,
+      predictions: [],
+      open: false,
     });
     resetRouteState();
 
@@ -1291,11 +1340,19 @@ export default function RiderBookingPage() {
     placeId: string,
     description: string,
   ) {
-    const res = await fetch("/api/maps/place-details", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ place_id: placeId }),
-    });
+    if (stopTimerRefs.current[index]) clearTimeout(stopTimerRefs.current[index]!);
+    stopAutocompleteAbortRefs.current[index]?.abort();
+    let res: Response;
+    try {
+      res = await fetch("/api/maps/place-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place_id: placeId }),
+      });
+    } catch {
+      updateStop(index, { error: "Could not load this stop. Please try again." });
+      return;
+    }
     const json = await res.json().catch(() => null);
     if (
       !json?.ok ||
@@ -1326,17 +1383,26 @@ export default function RiderBookingPage() {
       open: false,
       error: null,
     });
+    if (document.activeElement instanceof HTMLInputElement && document.activeElement.id === `stop-input-${index}`) {
+      skipLocationBlurRef.current = true;
+      document.activeElement.blur();
+    }
+    setEditingLocation(false);
     resetRouteState();
   }
 
   async function onPickupBlur() {
     setShowPickupDropdown(false);
+    setEditingLocation(false);
+    if (skipLocationBlurRef.current) { skipLocationBlurRef.current = false; return; }
     if (pickupAddress.trim() && pickupLat == null)
       await resolveTypedLocation("pickup", pickupAddress);
   }
 
   async function onDropoffBlur() {
     setShowDropoffDropdown(false);
+    setEditingLocation(false);
+    if (skipLocationBlurRef.current) { skipLocationBlurRef.current = false; return; }
     if (dropoffAddress.trim() && dropoffLat == null)
       await resolveTypedLocation("dropoff", dropoffAddress);
   }
@@ -1347,11 +1413,20 @@ export default function RiderBookingPage() {
     description: string,
   ) {
     setMsg(null);
-    const res = await fetch("/api/maps/place-details", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ place_id: placeId }),
-    });
+    const timerRef = kind === "pickup" ? pickupTimerRef : dropoffTimerRef;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    (kind === "pickup" ? pickupAutocompleteAbortRef : dropoffAutocompleteAbortRef).current?.abort();
+    let res: Response;
+    try {
+      res = await fetch("/api/maps/place-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place_id: placeId }),
+      });
+    } catch {
+      setMsg("Could not load this location. Please try again.");
+      return;
+    }
     const json = await res.json().catch(() => null);
     if (!json?.ok) {
       setMsg(json?.error || "Failed to load place details.");
@@ -1377,6 +1452,11 @@ export default function RiderBookingPage() {
       setShowDropoffDropdown(false);
       setDropoffError(null);
     }
+    if (document.activeElement instanceof HTMLInputElement && document.activeElement.id === `${kind === "pickup" ? "pickup" : "dropoff"}-input`) {
+      skipLocationBlurRef.current = true;
+      document.activeElement.blur();
+    }
+    setEditingLocation(false);
     resetRouteState();
   }
 
@@ -2770,42 +2850,6 @@ export default function RiderBookingPage() {
             </button>
           </div>
         </div>
-        <div className="moovu-control-card">
-          <div className="moovu-field-label">Payment</div>
-
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              className={`min-h-12 rounded-2xl border px-3 text-sm font-bold transition ${
-                paymentMethod === "cash"
-                  ? "border-slate-950 bg-slate-950 text-white"
-                  : "border-slate-200 bg-white text-slate-950"
-              }`}
-              onClick={() => setPaymentMethod("cash")}
-            >
-              Cash
-            </button>
-
-            <button
-              type="button"
-              className={`min-h-12 rounded-2xl border px-3 text-sm font-bold transition ${
-                paymentMethod === "online"
-                  ? "border-slate-950 bg-slate-950 text-white"
-                  : "border-slate-200 bg-white text-slate-950"
-              }`}
-              onClick={() => setPaymentMethod("online")}
-            >
-              Pay Online
-            </button>
-          </div>
-
-          {paymentMethod === "online" && (
-            <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-              You&apos;ll continue to secure online payment before a driver is
-              requested.
-            </p>
-          )}
-        </div>
       </div>
 
       {rideType === "scheduled" && (
@@ -3066,7 +3110,7 @@ export default function RiderBookingPage() {
       {/* ── Bottom sheet ── */}
       <div
         ref={sheetRef}
-        className={`mbk-sheet${sheetSnap === "expanded" ? " mbk-sheet-expanded" : ""}`}
+        className={`mbk-sheet${sheetSnap === "expanded" ? " mbk-sheet-expanded" : ""}${editingLocation ? " mbk-sheet-editing" : ""}`}
         style={{
           top: sheetTopPx,
           transition:
@@ -3147,7 +3191,8 @@ export default function RiderBookingPage() {
                   onChange={(e) => onPickupInputChange(e.target.value)}
                   onPaste={(e) => handleLocationPaste(e, "pickup")}
                   onBlur={() => void onPickupBlur()}
-                  onFocus={() => {
+                  onFocus={(event) => {
+                    focusLocation(event.currentTarget);
                     if (pickupPredictions.length > 0)
                       setShowPickupDropdown(true);
                   }}
@@ -3158,6 +3203,24 @@ export default function RiderBookingPage() {
                     }
                   }}
                 />
+                {showPickupDropdown && pickupPredictions.length > 0 && (
+                  <div className="moovu-place-menu">
+                    {pickupPredictions.map((item) => (
+                      <button key={item.place_id} type="button" className="moovu-place-option"
+                        onPointerDown={onSuggestionPointerDown}
+                        onPointerUp={(event) => onSuggestionPointerUp(event, () => void choosePlace("pickup", item.place_id, item.description))}
+                        onPointerCancel={() => { suggestionPointerYRef.current = null; }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            void choosePlace("pickup", item.place_id, item.description);
+                          }
+                        }}>
+                        {item.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="moovu-location-chip-row customer-ehail-location-actions">
                   <button
                     type="button"
@@ -3222,37 +3285,6 @@ export default function RiderBookingPage() {
                 )}
                 {pickupError && (
                   <div className="moovu-field-error">{pickupError}</div>
-                )}
-                {showPickupDropdown && pickupPredictions.length > 0 && (
-                  <div className="moovu-place-menu">
-                    {pickupPredictions.map((item) => (
-                      <button
-                        key={item.place_id}
-                        type="button"
-                        className="moovu-place-option"
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          void choosePlace(
-                            "pickup",
-                            item.place_id,
-                            item.description,
-                          );
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            void choosePlace(
-                              "pickup",
-                              item.place_id,
-                              item.description,
-                            );
-                          }
-                        }}
-                      >
-                        {item.description}
-                      </button>
-                    ))}
-                  </div>
                 )}
               </div>
             </div>
@@ -3320,11 +3352,14 @@ export default function RiderBookingPage() {
                       onChange={(e) => onStopInputChange(index, e.target.value)}
                       onPaste={(e) => handleLocationPaste(e, "stop", index)}
                       onBlur={() => {
+                        setEditingLocation(false);
                         updateStop(index, { open: false });
+                        if (skipLocationBlurRef.current) { skipLocationBlurRef.current = false; return; }
                         if (stop.address.trim() && !isResolvedStop(stop))
                           void resolveStop(index);
                       }}
-                      onFocus={() => {
+                      onFocus={(event) => {
+                        focusLocation(event.currentTarget);
                         if (stop.predictions.length > 0)
                           updateStop(index, { open: true });
                       }}
@@ -3335,6 +3370,24 @@ export default function RiderBookingPage() {
                         }
                       }}
                     />
+                    {stop.open && stop.predictions.length > 0 && (
+                      <div className="moovu-place-menu">
+                        {stop.predictions.map((item) => (
+                          <button key={item.place_id} type="button" className="moovu-place-option"
+                            onPointerDown={onSuggestionPointerDown}
+                            onPointerUp={(event) => onSuggestionPointerUp(event, () => void chooseStopPlace(index, item.place_id, item.description))}
+                            onPointerCancel={() => { suggestionPointerYRef.current = null; }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                void chooseStopPlace(index, item.place_id, item.description);
+                              }
+                            }}>
+                            {item.description}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {stop.loading && (
                       <div className="moovu-field-hint">Searching...</div>
                     )}
@@ -3343,37 +3396,6 @@ export default function RiderBookingPage() {
                     )}
                     {stop.error && (
                       <div className="moovu-field-error">{stop.error}</div>
-                    )}
-                    {stop.open && stop.predictions.length > 0 && (
-                      <div className="moovu-place-menu">
-                        {stop.predictions.map((item) => (
-                          <button
-                            key={item.place_id}
-                            type="button"
-                            className="moovu-place-option"
-                            onPointerDown={(event) => {
-                              event.preventDefault();
-                              void chooseStopPlace(
-                                index,
-                                item.place_id,
-                                item.description,
-                              );
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                void chooseStopPlace(
-                                  index,
-                                  item.place_id,
-                                  item.description,
-                                );
-                              }
-                            }}
-                          >
-                            {item.description}
-                          </button>
-                        ))}
-                      </div>
                     )}
                   </div>
                 </div>
@@ -3413,7 +3435,8 @@ export default function RiderBookingPage() {
                   onChange={(e) => onDropoffInputChange(e.target.value)}
                   onPaste={(e) => handleLocationPaste(e, "dropoff")}
                   onBlur={() => void onDropoffBlur()}
-                  onFocus={() => {
+                  onFocus={(event) => {
+                    focusLocation(event.currentTarget);
                     if (dropoffPredictions.length > 0)
                       setShowDropoffDropdown(true);
                   }}
@@ -3424,6 +3447,24 @@ export default function RiderBookingPage() {
                     }
                   }}
                 />
+                {showDropoffDropdown && dropoffPredictions.length > 0 && (
+                  <div className="moovu-place-menu">
+                    {dropoffPredictions.map((item) => (
+                      <button key={item.place_id} type="button" className="moovu-place-option"
+                        onPointerDown={onSuggestionPointerDown}
+                        onPointerUp={(event) => onSuggestionPointerUp(event, () => void choosePlace("dropoff", item.place_id, item.description))}
+                        onPointerCancel={() => { suggestionPointerYRef.current = null; }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            void choosePlace("dropoff", item.place_id, item.description);
+                          }
+                        }}>
+                        {item.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {dropoffLoading && (
                   <div className="moovu-field-hint">Searching…</div>
                 )}
@@ -3436,39 +3477,17 @@ export default function RiderBookingPage() {
                 <div className="customer-destination-help">
                   Can&apos;t find the exact place? Use a nearby landmark.
                 </div>
-                {showDropoffDropdown && dropoffPredictions.length > 0 && (
-                  <div className="moovu-place-menu">
-                    {dropoffPredictions.map((item) => (
-                      <button
-                        key={item.place_id}
-                        type="button"
-                        className="moovu-place-option"
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          void choosePlace(
-                            "dropoff",
-                            item.place_id,
-                            item.description,
-                          );
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            void choosePlace(
-                              "dropoff",
-                              item.place_id,
-                              item.description,
-                            );
-                          }
-                        }}
-                      >
-                        {item.description}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
+          </div>
+
+          <div className="customer-booking-payment mx-4 mt-3">
+            <div className="moovu-field-label">Payment method</div>
+            <div className="customer-booking-payment-options" role="group" aria-label="Payment method">
+              <button type="button" aria-pressed={paymentMethod === "cash"} className={paymentMethod === "cash" ? "is-selected" : ""} onClick={() => setPaymentMethod("cash")}>Cash</button>
+              <button type="button" aria-pressed={paymentMethod === "online"} className={paymentMethod === "online" ? "is-selected" : ""} onClick={() => setPaymentMethod("online")}>Pay Online</button>
+            </div>
+            {paymentMethod === "online" && <p className="customer-booking-payment-note">Secure payment is completed before a driver is requested.</p>}
           </div>
 
           <div className="mx-4 mt-3 customer-booking-favorites customer-booking-favorites-compact">
@@ -3505,18 +3524,6 @@ export default function RiderBookingPage() {
 
         {/* ── Confirm bar — always visible at bottom of sheet ── */}
         <div className="mbk-confirm-bar">
-          <div className="customer-booking-payment-strip">
-            <div>
-              <span>Payment</span>
-              <strong>
-                {paymentMethod === "cash" ? "Cash" : paymentMethod}
-              </strong>
-            </div>
-            <div className="text-right">
-              <span>Personal trip</span>
-              <strong>{selectedRide.name}</strong>
-            </div>
-          </div>
           <div className="mbk-confirm-summary">
             <div>
               <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
