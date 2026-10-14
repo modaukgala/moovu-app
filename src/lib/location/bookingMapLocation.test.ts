@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner requires explicit TypeScript extensions.
-import { selectMapPickerInitialLocation } from "./bookingMapLocation.ts";
+import { isVerifiedBookingLocation, selectMapPickerInitialLocation } from "./bookingMapLocation.ts";
+
+test("typed text without selected coordinates cannot be booked", () => {
+  assert.equal(isVerifiedBookingLocation("Siyabuswa Mall", null), false);
+  assert.equal(isVerifiedBookingLocation("Siyabuswa Mall", { lat: Number.NaN, lng: 29.06 }), false);
+  assert.equal(isVerifiedBookingLocation("Siyabuswa Mall", { lat: -25.11, lng: 29.06 }), true);
+  assert.equal(isVerifiedBookingLocation("", { lat: -25.11, lng: 29.06 }), false);
+});
 
 const now = 1_800_000_000_000;
 const pickup = { lat: -25.11, lng: 29.06 };

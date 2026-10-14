@@ -36,6 +36,10 @@ export function isValidMapLocation(
   );
 }
 
+export function isVerifiedBookingLocation(address: string, location: MapLocation | null) {
+  return address.trim().length > 0 && isValidMapLocation(location);
+}
+
 export function isRecentSessionLocation(
   location: SessionMapLocation | null | undefined,
   maxAgeMs: number,

@@ -45,6 +45,8 @@ import {
 import { MOOVU_OPERATING_AREA } from "@/lib/maps/moovuPlaces";
 import {
   isFreshLiveLocation,
+  isValidMapLocation,
+  isVerifiedBookingLocation,
   selectMapPickerInitialLocation,
   type MapLocation,
   type SessionMapLocation,
@@ -160,9 +162,7 @@ function isResolvedStop(
   stop: StopInput,
 ): stop is StopInput & { address: string; lat: number; lng: number } {
   return (
-    !!stop.address.trim() &&
-    typeof stop.lat === "number" &&
-    typeof stop.lng === "number"
+    isVerifiedBookingLocation(stop.address, stop.lat == null || stop.lng == null ? null : { lat: stop.lat, lng: stop.lng })
   );
 }
 
@@ -194,8 +194,6 @@ export default function RiderBookingPage() {
 
   const [pickupError, setPickupError] = useState<string | null>(null);
   const [dropoffError, setDropoffError] = useState<string | null>(null);
-  const [pickupResolving, setPickupResolving] = useState(false);
-  const [dropoffResolving, setDropoffResolving] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [rideType, setRideType] = useState<"now" | "scheduled">("now");
@@ -796,144 +794,6 @@ export default function RiderBookingPage() {
     );
   }
 
-  async function resolveTypedLocation(
-    kind: LocationKind,
-    text: string,
-  ): Promise<ResolvedLocation | null> {
-    const input = text.trim();
-    if (!input) return null;
-
-    if (kind === "pickup" && pickupLat != null && pickupLng != null)
-      return {
-        address: pickupAddress.trim(),
-        placeId: pickupPlaceId,
-        lat: pickupLat,
-        lng: pickupLng,
-      };
-    if (kind === "dropoff" && dropoffLat != null && dropoffLng != null)
-      return {
-        address: dropoffAddress.trim(),
-        placeId: dropoffPlaceId,
-        lat: dropoffLat,
-        lng: dropoffLng,
-      };
-
-    if (kind === "pickup") {
-      setPickupResolving(true);
-      setPickupError(null);
-    } else {
-      setDropoffResolving(true);
-      setDropoffError(null);
-    }
-
-    if (kind === "pickup") {
-      if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
-      setPickupPredictions([]);
-      setShowPickupDropdown(false);
-    } else {
-      if (dropoffTimerRef.current) clearTimeout(dropoffTimerRef.current);
-      setDropoffPredictions([]);
-      setShowDropoffDropdown(false);
-    }
-
-    try {
-      const acRes = await fetch("/api/maps/autocomplete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input }),
-      });
-      const acJson = await acRes.json().catch(() => null);
-
-      if (acJson?.ok && acJson.predictions?.length > 0) {
-        const first = acJson.predictions[0] as Prediction;
-        const detailRes = await fetch("/api/maps/place-details", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ place_id: first.place_id }),
-        });
-        const detail = await detailRes.json().catch(() => null);
-
-        if (
-          detail?.ok &&
-          typeof detail.lat === "number" &&
-          typeof detail.lng === "number"
-        ) {
-          const resolved = {
-            address: selectedPlaceLabel(first.description, detail.name),
-            placeId: detail.place_id || first.place_id,
-            lat: detail.lat,
-            lng: detail.lng,
-          };
-          if (kind === "pickup") {
-            setPickupAddress(resolved.address);
-            setPickupPlaceId(resolved.placeId);
-            setPickupLat(detail.lat);
-            setPickupLng(detail.lng);
-            setPickupPinned(false);
-            setPickupInstruction("");
-            setPickupPredictions([]);
-            setShowPickupDropdown(false);
-          } else {
-            setDropoffAddress(resolved.address);
-            setDropoffPlaceId(resolved.placeId);
-            setDropoffLat(detail.lat);
-            setDropoffLng(detail.lng);
-            setDropoffPredictions([]);
-            setShowDropoffDropdown(false);
-          }
-          resetRouteState();
-          return resolved;
-        }
-      }
-
-      const geoRes = await fetch("/api/maps/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ place: input }),
-      });
-      const geo = await geoRes.json().catch(() => null);
-
-      if (
-        geo?.ok &&
-        typeof geo.lat === "number" &&
-        typeof geo.lng === "number"
-      ) {
-        const resolved = {
-          address: input,
-          placeId: "",
-          lat: geo.lat,
-          lng: geo.lng,
-        };
-        if (kind === "pickup") {
-          setPickupAddress(resolved.address);
-          setPickupPlaceId("");
-          setPickupLat(geo.lat);
-          setPickupLng(geo.lng);
-          setPickupPinned(false);
-          setPickupInstruction("");
-          setPickupPredictions([]);
-          setShowPickupDropdown(false);
-        } else {
-          setDropoffAddress(resolved.address);
-          setDropoffPlaceId("");
-          setDropoffLat(geo.lat);
-          setDropoffLng(geo.lng);
-          setDropoffPredictions([]);
-          setShowDropoffDropdown(false);
-        }
-        resetRouteState();
-        return resolved;
-      }
-
-      if (kind === "pickup")
-        setPickupError("Please choose a valid pickup location.");
-      else setDropoffError("Please choose a valid destination.");
-      return null;
-    } finally {
-      if (kind === "pickup") setPickupResolving(false);
-      else setDropoffResolving(false);
-    }
-  }
 
   async function useCurrentLocation() {
     setMsg(null);
@@ -1062,12 +922,15 @@ export default function RiderBookingPage() {
       const json = await res.json().catch(() => null);
       if (abortRef.current !== controller || controller.signal.aborted) return;
       if (!json?.ok) {
+        const errorMessage = "Location search is unavailable. Retry your search or choose a map pin.";
         if (kind === "pickup") {
           setPickupPredictions([]);
           setShowPickupDropdown(false);
+          setPickupError(errorMessage);
         } else {
           setDropoffPredictions([]);
           setShowDropoffDropdown(false);
+          setDropoffError(errorMessage);
         }
         return;
       }
@@ -1083,8 +946,8 @@ export default function RiderBookingPage() {
       }
     } catch (error: unknown) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
-        if (kind === "pickup") setPickupError("Suggestions are unavailable. Keep typing or choose on map.");
-        else setDropoffError("Suggestions are unavailable. Keep typing or choose on map.");
+        if (kind === "pickup") setPickupError("Suggestions are unavailable. Retry your search or choose on map.");
+        else setDropoffError("Suggestions are unavailable. Retry your search or choose on map.");
       }
     } finally {
       if (abortRef.current === controller) {
@@ -1173,11 +1036,13 @@ export default function RiderBookingPage() {
       updateStop(index, {
         predictions,
         open: predictions.length > 0,
-        error: predictions.length === 0 ? "No places found. Try a nearby landmark." : null,
+        error: predictions.length === 0
+          ? (json?.ok ? "No places found. Try a nearby landmark." : "Stop search is unavailable. Retry or remove this stop.")
+          : null,
       });
     } catch (error: unknown) {
       if (!(error instanceof DOMException && error.name === "AbortError"))
-        updateStop(index, { error: "Suggestions are unavailable. Keep typing or choose on map." });
+        updateStop(index, { error: "Stop search is unavailable. Retry or remove this stop." });
     } finally {
       if (stopAutocompleteAbortRefs.current[index] === controller) {
         stopAutocompleteAbortRefs.current[index] = null;
@@ -1241,99 +1106,6 @@ export default function RiderBookingPage() {
     return null;
   }
 
-  async function resolveStop(index: number): Promise<ResolvedLocation | null> {
-    const stop = stops[index];
-    if (!stop) return null;
-    const input = stop.address.trim();
-    if (!input) return null;
-    if (typeof stop.lat === "number" && typeof stop.lng === "number") {
-      return {
-        address: input,
-        placeId: stop.placeId,
-        lat: stop.lat,
-        lng: stop.lng,
-      };
-    }
-
-    updateStop(index, {
-      resolving: true,
-      error: null,
-      predictions: [],
-      open: false,
-    });
-    try {
-      const acRes = await fetch("/api/maps/autocomplete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input }),
-      });
-      const acJson = await acRes.json().catch(() => null);
-
-      if (acJson?.ok && acJson.predictions?.length > 0) {
-        const first = acJson.predictions[0] as Prediction;
-        const detailRes = await fetch("/api/maps/place-details", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ place_id: first.place_id }),
-        });
-        const detail = await detailRes.json().catch(() => null);
-
-        if (
-          detail?.ok &&
-          typeof detail.lat === "number" &&
-          typeof detail.lng === "number"
-        ) {
-          const resolved = {
-            address: selectedPlaceLabel(first.description, detail.name),
-            placeId: detail.place_id || first.place_id,
-            lat: detail.lat,
-            lng: detail.lng,
-          };
-          const validationError = validateStopLocation(index, resolved);
-          if (validationError) {
-            updateStop(index, { error: validationError });
-            return null;
-          }
-          updateStop(index, { ...resolved, error: null });
-          resetRouteState();
-          return resolved;
-        }
-      }
-
-      const geoRes = await fetch("/api/maps/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ place: input }),
-      });
-      const geo = await geoRes.json().catch(() => null);
-
-      if (
-        geo?.ok &&
-        typeof geo.lat === "number" &&
-        typeof geo.lng === "number"
-      ) {
-        const resolved = {
-          address: input,
-          placeId: "",
-          lat: geo.lat,
-          lng: geo.lng,
-        };
-        const validationError = validateStopLocation(index, resolved);
-        if (validationError) {
-          updateStop(index, { error: validationError });
-          return null;
-        }
-        updateStop(index, { ...resolved, error: null });
-        resetRouteState();
-        return resolved;
-      }
-
-      updateStop(index, { error: "Please choose a valid stop location." });
-      return null;
-    } finally {
-      updateStop(index, { resolving: false });
-    }
-  }
 
   async function chooseStopPlace(
     index: number,
@@ -1354,11 +1126,7 @@ export default function RiderBookingPage() {
       return;
     }
     const json = await res.json().catch(() => null);
-    if (
-      !json?.ok ||
-      typeof json.lat !== "number" ||
-      typeof json.lng !== "number"
-    ) {
+    if (!json?.ok || !isValidMapLocation({ lat: json.lat, lng: json.lng })) {
       updateStop(index, {
         error: json?.error || "Failed to load stop details.",
       });
@@ -1391,20 +1159,14 @@ export default function RiderBookingPage() {
     resetRouteState();
   }
 
-  async function onPickupBlur() {
-    setShowPickupDropdown(false);
+  function onLocationBlur(kind: LocationKind) {
     setEditingLocation(false);
     if (skipLocationBlurRef.current) { skipLocationBlurRef.current = false; return; }
-    if (pickupAddress.trim() && pickupLat == null)
-      await resolveTypedLocation("pickup", pickupAddress);
-  }
-
-  async function onDropoffBlur() {
-    setShowDropoffDropdown(false);
-    setEditingLocation(false);
-    if (skipLocationBlurRef.current) { skipLocationBlurRef.current = false; return; }
-    if (dropoffAddress.trim() && dropoffLat == null)
-      await resolveTypedLocation("dropoff", dropoffAddress);
+    // Touch focus may leave the input before the suggestion's pointer-up event.
+    window.setTimeout(() => {
+      if (kind === "pickup") setShowPickupDropdown(false);
+      else setShowDropoffDropdown(false);
+    }, 180);
   }
 
   async function choosePlace(
@@ -1428,16 +1190,18 @@ export default function RiderBookingPage() {
       return;
     }
     const json = await res.json().catch(() => null);
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to load place details.");
+    if (!json?.ok || !isValidMapLocation({ lat: json.lat, lng: json.lng })) {
+      const message = json?.error || "Could not verify this location. Please choose another result or try again.";
+      if (kind === "pickup") setPickupError(message);
+      else setDropoffError(message);
       return;
     }
 
     if (kind === "pickup") {
       setPickupAddress(selectedPlaceLabel(description, json.name));
       setPickupPlaceId(json.place_id || placeId);
-      setPickupLat(typeof json.lat === "number" ? json.lat : null);
-      setPickupLng(typeof json.lng === "number" ? json.lng : null);
+      setPickupLat(json.lat);
+      setPickupLng(json.lng);
       setPickupPinned(false);
       setPickupInstruction("");
       setPickupPredictions([]);
@@ -1446,8 +1210,8 @@ export default function RiderBookingPage() {
     } else {
       setDropoffAddress(selectedPlaceLabel(description, json.name));
       setDropoffPlaceId(json.place_id || placeId);
-      setDropoffLat(typeof json.lat === "number" ? json.lat : null);
-      setDropoffLng(typeof json.lng === "number" ? json.lng : null);
+      setDropoffLat(json.lat);
+      setDropoffLng(json.lng);
       setDropoffPredictions([]);
       setShowDropoffDropdown(false);
       setDropoffError(null);
@@ -1730,7 +1494,7 @@ export default function RiderBookingPage() {
     kind: LocationKind,
   ): ResolvedLocation | null {
     if (kind === "pickup") {
-      if (pickupLat == null || pickupLng == null) return null;
+      if (pickupLat == null || pickupLng == null || !isVerifiedBookingLocation(pickupAddress, { lat: pickupLat, lng: pickupLng })) return null;
       return {
         address: pickupAddress.trim(),
         placeId: pickupPlaceId,
@@ -1738,7 +1502,7 @@ export default function RiderBookingPage() {
         lng: pickupLng,
       };
     }
-    if (dropoffLat == null || dropoffLng == null) return null;
+    if (dropoffLat == null || dropoffLng == null || !isVerifiedBookingLocation(dropoffAddress, { lat: dropoffLat, lng: dropoffLng })) return null;
     return {
       address: dropoffAddress.trim(),
       placeId: dropoffPlaceId,
@@ -1748,18 +1512,14 @@ export default function RiderBookingPage() {
   }
 
   async function ensureResolvedRoute() {
-    const pickup =
-      currentResolvedLocation("pickup") ??
-      (await resolveTypedLocation("pickup", pickupAddress));
-    const dropoff =
-      currentResolvedLocation("dropoff") ??
-      (await resolveTypedLocation("dropoff", dropoffAddress));
+    const pickup = currentResolvedLocation("pickup");
+    const dropoff = currentResolvedLocation("dropoff");
     if (!pickup) {
-      setPickupError("Please choose a valid pickup location.");
+      setPickupError("Choose a pickup suggestion, use current location, or select a map pin.");
       return null;
     }
     if (!dropoff) {
-      setDropoffError("Please choose a valid destination.");
+      setDropoffError("Choose a destination suggestion or select a map pin.");
       return null;
     }
 
@@ -1774,10 +1534,10 @@ export default function RiderBookingPage() {
             lat: stop.lat,
             lng: stop.lng,
           }
-        : await resolveStop(i);
+        : null;
       if (!resolvedStop) {
         updateStop(i, {
-          error: stop.error || "Please choose a valid stop location.",
+          error: stop.error || "Choose a stop suggestion or remove this stop.",
         });
         return null;
       }
@@ -3190,7 +2950,7 @@ export default function RiderBookingPage() {
                   value={pickupAddress}
                   onChange={(e) => onPickupInputChange(e.target.value)}
                   onPaste={(e) => handleLocationPaste(e, "pickup")}
-                  onBlur={() => void onPickupBlur()}
+                  onBlur={() => onLocationBlur("pickup")}
                   onFocus={(event) => {
                     focusLocation(event.currentTarget);
                     if (pickupPredictions.length > 0)
@@ -3199,7 +2959,9 @@ export default function RiderBookingPage() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      void onPickupBlur();
+                      const first = pickupPredictions[0];
+                      if (first) void choosePlace("pickup", first.place_id, first.description);
+                      else if (pickupAddress.trim()) setPickupError("Choose a suggestion or select a map pin to verify pickup.");
                     }
                   }}
                 />
@@ -3280,9 +3042,6 @@ export default function RiderBookingPage() {
                 {pickupLoading && (
                   <div className="moovu-field-hint">Searching…</div>
                 )}
-                {pickupResolving && (
-                  <div className="moovu-field-hint">Resolving…</div>
-                )}
                 {pickupError && (
                   <div className="moovu-field-error">{pickupError}</div>
                 )}
@@ -3353,10 +3112,8 @@ export default function RiderBookingPage() {
                       onPaste={(e) => handleLocationPaste(e, "stop", index)}
                       onBlur={() => {
                         setEditingLocation(false);
-                        updateStop(index, { open: false });
                         if (skipLocationBlurRef.current) { skipLocationBlurRef.current = false; return; }
-                        if (stop.address.trim() && !isResolvedStop(stop))
-                          void resolveStop(index);
+                        window.setTimeout(() => updateStop(index, { open: false }), 180);
                       }}
                       onFocus={(event) => {
                         focusLocation(event.currentTarget);
@@ -3366,7 +3123,9 @@ export default function RiderBookingPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
-                          void resolveStop(index);
+                          const first = stop.predictions[0];
+                          if (first) void chooseStopPlace(index, first.place_id, first.description);
+                          else if (stop.address.trim()) updateStop(index, { error: "Choose a stop suggestion to verify it." });
                         }
                       }}
                     />
@@ -3434,7 +3193,7 @@ export default function RiderBookingPage() {
                   value={dropoffAddress}
                   onChange={(e) => onDropoffInputChange(e.target.value)}
                   onPaste={(e) => handleLocationPaste(e, "dropoff")}
-                  onBlur={() => void onDropoffBlur()}
+                  onBlur={() => onLocationBlur("dropoff")}
                   onFocus={(event) => {
                     focusLocation(event.currentTarget);
                     if (dropoffPredictions.length > 0)
@@ -3443,7 +3202,9 @@ export default function RiderBookingPage() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      void onDropoffBlur();
+                      const first = dropoffPredictions[0];
+                      if (first) void choosePlace("dropoff", first.place_id, first.description);
+                      else if (dropoffAddress.trim()) setDropoffError("Choose a suggestion or select a map pin to verify destination.");
                     }
                   }}
                 />
@@ -3467,9 +3228,6 @@ export default function RiderBookingPage() {
                 )}
                 {dropoffLoading && (
                   <div className="moovu-field-hint">Searching…</div>
-                )}
-                {dropoffResolving && (
-                  <div className="moovu-field-hint">Resolving…</div>
                 )}
                 {dropoffError && (
                   <div className="moovu-field-error">{dropoffError}</div>
