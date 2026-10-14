@@ -8,6 +8,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import OnlineFulfilmentReviews from "@/components/admin/OnlineFulfilmentReviews";
 
 type PaymentRequestRow = {
   id: string;
@@ -167,6 +168,8 @@ export default function AdminPaymentReviewsPage() {
 
   return (
     <main className="moovu-admin-finance-page space-y-5 text-black">
+      <OnlineFulfilmentReviews />
+      <div className="moovu-admin-page-heading"><h2 className="text-xl font-bold">Driver payment proof reviews</h2><p className="text-sm text-slate-600">Subscription and commission proof of payment approvals remain separate from verified Yoco Customer payments.</p></div>
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       {reviewDraft && (

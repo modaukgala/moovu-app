@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import DriverEarningsReportPage from "./driver-earnings/page";
+import Link from "next/link";
 
 type ReportRow = {
   id: string;
@@ -66,6 +68,7 @@ function weekAgoIso() {
 }
 
 export default function AdminReportsPage() {
+  const [view, setView] = useState<"overview" | "driver-earnings">("overview");
   const [from, setFrom] = useState(weekAgoIso());
   const [to, setTo] = useState(todayIso());
   const [busy, setBusy] = useState(false);
@@ -144,6 +147,13 @@ export default function AdminReportsPage() {
 
   return (
     <main className="moovu-admin-finance-page space-y-5">
+      <nav aria-label="Report sections" className="moovu-admin-filter-panel flex flex-wrap gap-2">
+        <button type="button" aria-current={view === "overview" ? "page" : undefined} className="moovu-btn moovu-btn-secondary" onClick={() => setView("overview")}>Overview, trips and commissions</button>
+        <button type="button" aria-current={view === "driver-earnings" ? "page" : undefined} className="moovu-btn moovu-btn-secondary" onClick={() => setView("driver-earnings")}>Driver earnings</button>
+        <Link className="moovu-btn moovu-btn-secondary" href="/admin/online-payments">Online payments</Link>
+        <Link className="moovu-btn moovu-btn-secondary" href="/admin/subscriptions">Subscriptions</Link>
+      </nav>
+      {view === "driver-earnings" ? <DriverEarningsReportPage /> : <>
       <div className="moovu-admin-page-heading">
         <div className="moovu-section-title">Finance reports</div>
         <h1 className="mt-1 text-2xl font-black text-slate-950">Trip and fee report</h1>
@@ -254,6 +264,7 @@ export default function AdminReportsPage() {
           </div>
         )}
       </section>
+      </>}
     </main>
   );
 }

@@ -49,6 +49,10 @@ export default function AdminEarningsPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [earnings, setEarnings] = useState<AdminEarnings | null>(null);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [driverId, setDriverId] = useState("");
+  const [driverOptions, setDriverOptions] = useState<{ id: string; first_name: string | null; last_name: string | null }[]>([]);
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -69,7 +73,11 @@ export default function AdminEarningsPage() {
       return;
     }
 
-    const res = await fetch("/api/admin/earnings", {
+    const params = new URLSearchParams();
+    if (from) params.set("from", new Date(`${from}T00:00:00+02:00`).toISOString());
+    if (to) params.set("to", new Date(new Date(`${to}T00:00:00+02:00`).getTime() + 86400000).toISOString());
+    if (driverId) params.set("driverId", driverId);
+    const res = await fetch(`/api/admin/earnings?${params}`, {
       method: "GET",
       cache: "no-store",
       headers: {
@@ -94,6 +102,18 @@ export default function AdminEarningsPage() {
 
     setEarnings(json.earnings ?? null);
     setLoading(false);
+  }, [getAccessToken, from, to, driverId]);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const token = await getAccessToken();
+      if (!token) return;
+      const response = await fetch("/api/admin/drivers/options", { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
+      const json = await response.json().catch(() => null);
+      if (active && response.ok && json?.ok) setDriverOptions(json.drivers ?? []);
+    })();
+    return () => { active = false; };
   }, [getAccessToken]);
 
   useEffect(() => {
@@ -142,6 +162,13 @@ export default function AdminEarningsPage() {
         </div>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+        <div className="moovu-admin-filter-panel grid gap-3 sm:grid-cols-3">
+          <label className="text-sm">From<input className="moovu-input mt-1" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
+          <label className="text-sm">To<input className="moovu-input mt-1" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
+          <label className="text-sm">Driver<select className="moovu-input mt-1" value={driverId} onChange={(event) => setDriverId(event.target.value)}>
+            <option value="">All Drivers</option>{driverOptions.map((driver) => <option key={driver.id} value={driver.id}>{`${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || driver.id}</option>)}
+          </select></label>
+        </div>
         {!earnings ? (
           <div className="moovu-card p-5 sm:p-6">
             No earnings data found.
@@ -150,17 +177,17 @@ export default function AdminEarningsPage() {
           <>
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
               <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">Today</div>
+                <div className="text-sm text-gray-600">Today · trip fare value</div>
                 <div className="text-2xl font-semibold mt-2">{money(earnings.today_total)}</div>
               </div>
 
               <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">This Week</div>
+                <div className="text-sm text-gray-600">This week · trip fare value</div>
                 <div className="text-2xl font-semibold mt-2">{money(earnings.week_total)}</div>
               </div>
 
               <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">This Month</div>
+                <div className="text-sm text-gray-600">This month · trip fare value</div>
                 <div className="text-2xl font-semibold mt-2">{money(earnings.month_total)}</div>
               </div>
 
@@ -239,55 +266,23 @@ export default function AdminEarningsPage() {
             </section>
 
             <section className="moovu-card space-y-4 p-5 sm:p-6">
-              <h2 className="text-xl font-semibold">Recent Completed Trips</h2>
+              <h2 className="text-xl font-semibold">Recent completed trips</h2>
 
               {earnings.recent_completed_trips.length === 0 ? (
                 <p className="text-gray-700">No completed trips yet.</p>
               ) : (
-                <div className="space-y-3">
-                  {earnings.recent_completed_trips.map((trip) => (
-                    <div key={trip.id} className="moovu-data-row">
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-sm text-gray-600">Pickup</div>
-                          <div className="font-medium">{trip.pickup_address ?? "—"}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-600">Dropoff</div>
-                          <div className="font-medium">{trip.dropoff_address ?? "—"}</div>
-                        </div>
-                      </div>
-
-                      <div className="grid md:grid-cols-6 gap-4 mt-4">
-                        <div>
-                          <div className="text-sm text-gray-600">Fare</div>
-                          <div className="font-semibold">{money(trip.fare_amount)}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-600">Commission</div>
-                          <div className="font-semibold">
-                            {money(trip.commission_amount)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-600">Driver Earnings</div>
-                          <div className="font-semibold">
-                            {money(trip.driver_net_earnings)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-600">Driver</div>
-                          <div className="font-semibold">{trip.driver_name ?? "—"}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-600">Completed</div>
-                          <div className="font-semibold">
-                            {(trip.completed_at ?? trip.created_at) ? new Date(trip.completed_at ?? trip.created_at!).toLocaleString() : "—"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[740px] text-left text-sm">
+                    <thead className="border-b text-slate-600"><tr><th className="py-2 pr-4">Completed</th><th className="py-2 pr-4">Driver</th><th className="py-2 pr-4">Route</th><th className="py-2 pr-4 text-right">Fare value</th><th className="py-2 pr-4 text-right">MOOVU commission</th><th className="py-2 text-right">Driver earnings</th></tr></thead>
+                    <tbody>{earnings.recent_completed_trips.map((trip) => <tr key={trip.id} className="border-b align-top last:border-0">
+                      <td className="py-3 pr-4 whitespace-nowrap">{trip.completed_at ?? trip.created_at ? new Date(trip.completed_at ?? trip.created_at!).toLocaleString() : "—"}</td>
+                      <td className="py-3 pr-4">{trip.driver_name ?? "Unavailable"}</td>
+                      <td className="py-3 pr-4"><span className="block">{trip.pickup_address ?? "Pickup unavailable"}</span><span className="block text-slate-500">{trip.dropoff_address ?? "Drop-off unavailable"}</span></td>
+                      <td className="py-3 pr-4 text-right whitespace-nowrap">{money(trip.fare_amount)}</td>
+                      <td className="py-3 pr-4 text-right whitespace-nowrap">{money(trip.commission_amount)}</td>
+                      <td className="py-3 text-right whitespace-nowrap">{money(trip.driver_net_earnings)}</td>
+                    </tr>)}</tbody>
+                  </table>
                 </div>
               )}
             </section>

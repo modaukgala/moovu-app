@@ -16,6 +16,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import { commissionDueAmount, type CommissionAuthority } from "@/lib/finance/commissionPresentation";
 
 type Wallet = {
   balance_due: number | null;
@@ -130,6 +131,7 @@ export default function DriverEarningsPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [financeAuthority, setFinanceAuthority] = useState<CommissionAuthority | null>(null);
   const [driver, setDriver] = useState<DriverInfo | null>(null);
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -179,6 +181,7 @@ export default function DriverEarningsPage() {
     }
 
     setWallet(json.earnings?.wallet ?? null);
+    setFinanceAuthority(json.earnings?.finance_authority ?? null);
     setDriver(json.earnings?.driver ?? null);
     setPaymentRequests(json.earnings?.payment_requests ?? []);
     setSettlements(json.earnings?.settlements ?? []);
@@ -200,7 +203,7 @@ export default function DriverEarningsPage() {
     return () => window.clearTimeout(timer);
   }, [loadData]);
 
-  const commissionDue = Number(wallet?.balance_due ?? 0);
+  const commissionDue = commissionDueAmount(financeAuthority, wallet?.balance_due);
 
   const now = useMemo(() => new Date(), []);
   const todayStart = useMemo(

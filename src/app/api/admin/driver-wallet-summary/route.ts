@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { recalculateDriverWalletServer } from "@/lib/finance/driverWalletLedger";
+import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 
 function num(value: unknown) {
   const n = Number(value ?? 0);
@@ -45,6 +45,10 @@ export async function GET(req: Request) {
           .select(`
             id,
             driver_id,
+            balance_due,
+            total_commission,
+            total_driver_net,
+            total_trips_completed,
             last_payment_at,
             last_payment_amount,
             account_status,
@@ -109,30 +113,32 @@ export async function GET(req: Request) {
     const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
     const typedSettlements = (settlements ?? []) as SettlementRow[];
 
-    const totalTripsCompleted = typedCompletedTrips.length;
-    const totalSettled = typedSettlements.reduce((sum, row) => sum + num(row.amount_paid), 0);
-    const recalculated = await recalculateDriverWalletServer(driverId);
-    if (!recalculated.ok) {
-      return NextResponse.json({ ok: false, error: recalculated.error }, { status: 500 });
+    const recentSettled = typedSettlements.reduce((sum, row) => sum + num(row.amount_paid), 0);
+    const finance = await resolveDriverFinanceAuthority(supabaseAdmin, { driverId, legacyBalanceDue: walletRow?.balance_due ?? null });
+    if (!finance.ok) return NextResponse.json({ ok: false, error: finance.error }, { status: 503 });
+    if (finance.authority.mode !== "AUTHORITATIVE" && walletRow?.balance_due == null) {
+      return NextResponse.json({ ok: false, error: "Legacy wallet balance is unavailable." }, { status: 503 });
     }
-    const balanceDue = recalculated.totals.balanceDue;
+    const balanceDue = finance.authority.netOwedCents / 100;
 
     return NextResponse.json({
       ok: true,
       wallet: {
         driver_id: driverId,
         balance_due: balanceDue,
-        total_commission: recalculated.totals.totalCommission,
-        total_driver_net: recalculated.totals.totalDriverNet + recalculated.totals.cancellationCredits,
-        total_trips_completed: totalTripsCompleted,
-        total_paid: totalSettled,
-        cancellation_credits: recalculated.totals.cancellationCredits,
+        total_commission: walletRow?.total_commission ?? null,
+        total_driver_net: walletRow?.total_driver_net ?? null,
+        total_trips_completed: walletRow?.total_trips_completed ?? null,
+        total_paid: null,
+        recent_settled: recentSettled,
+        cancellation_credits: null,
         threshold_percentage: null,
         last_payment_at: walletRow?.last_payment_at ?? null,
         last_payment_amount: walletRow?.last_payment_amount ?? null,
         account_status: balanceDue > 0 ? "due" : "settled",
         updated_at: walletRow?.updated_at ?? null,
       },
+      finance_authority: finance.authority,
       transactions: txns ?? [],
       settlements: settlements ?? [],
       recent_completed_trips: typedCompletedTrips,

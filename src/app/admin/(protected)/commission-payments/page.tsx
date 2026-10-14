@@ -27,6 +27,8 @@ type CommissionRequest = {
 };
 
 type SettlementDriver = {
+  outstanding_cents?: number | null;
+  finance_mode?: string;
   id?: string;
   first_name?: string | null;
   last_name?: string | null;
@@ -40,18 +42,18 @@ type SettlementDriver = {
     phone: string | null;
   };
   wallet?: {
-    balance_due: number;
-    total_commission: number;
-    total_paid: number;
+    balance_due: number | null;
+    total_commission: number | null;
+    total_paid: number | null;
     last_payment_at: string | null;
     last_payment_amount: number | null;
   };
   wallet_summary?: {
-    balance_due: number;
-    total_commission: number;
+    balance_due: number | null;
+    total_commission: number | null;
     total_driver_net?: number;
     total_trips_completed?: number;
-    total_paid: number;
+    total_paid: number | null;
     last_payment_at: string | null;
     last_payment_amount: number | null;
     account_status?: string | null;
@@ -119,6 +121,8 @@ export default function AdminCommissionPaymentsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [requests, setRequests] = useState<CommissionRequest[]>([]);
   const [drivers, setDrivers] = useState<SettlementDriver[]>([]);
+  const [driverPage, setDriverPage] = useState(1);
+  const [totalDrivers, setTotalDrivers] = useState(0);
   const [ledger, setLedger] = useState<CommissionLedger | null>(null);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerType, setLedgerType] = useState("all");
@@ -154,7 +158,7 @@ export default function AdminCommissionPaymentsPage() {
         cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       }),
-      fetch("/api/admin/settlements", {
+      fetch(`/api/admin/commission-balances?page=${driverPage}`, {
         cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       }),
@@ -180,9 +184,19 @@ export default function AdminCommissionPaymentsPage() {
         (row: CommissionRequest) => row.payment_type === "commission"
       )
     );
-    setDrivers(settlementsJson.drivers ?? []);
+    setDrivers((settlementsJson.rows ?? []).map((row: SettlementDriver) => ({
+      ...row,
+      wallet_summary: {
+        balance_due: row.outstanding_cents == null ? null : row.outstanding_cents / 100,
+        total_commission: row.wallet_summary?.total_commission ?? null,
+        total_paid: null,
+        last_payment_at: row.wallet_summary?.last_payment_at ?? null,
+        last_payment_amount: row.wallet_summary?.last_payment_amount ?? null,
+      },
+    })));
+    setTotalDrivers(settlementsJson.total_drivers ?? 0);
     setLoading(false);
-  }, [getToken]);
+  }, [getToken, driverPage]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -295,28 +309,15 @@ export default function AdminCommissionPaymentsPage() {
     () => new Set(pendingRequests.map((row) => row.driver_id)),
     [pendingRequests]
   );
-  const driversWithBalances = drivers.filter((row) => Number(wallet(row).balance_due ?? 0) > 0);
+  const driversWithBalances = drivers;
   const searchNeedle = driverSearch.trim().toLocaleLowerCase();
   const visibleDriversWithBalances = searchNeedle
     ? driversWithBalances.filter((row) => [driverName(row), driverPhone(row), driverId(row)]
         .some((value) => String(value ?? "").toLocaleLowerCase().includes(searchNeedle)))
     : driversWithBalances;
-  const totalOwed = drivers.reduce((sum, row) => sum + Number(wallet(row).balance_due ?? 0), 0);
-  const totalCommissionEarned = drivers.reduce(
-    (sum, row) => sum + Number(wallet(row).total_commission ?? 0),
-    0
-  );
-  const totalPaid = drivers.reduce((sum, row) => sum + Number(wallet(row).total_paid ?? 0), 0);
   const owingDrivers = drivers.filter(
     (row) => Number(wallet(row).balance_due ?? 0) > 0
   );
-  const collectedThisMonth = drivers.reduce((sum, row) => {
-    const driverWallet = wallet(row);
-    const paidAt = driverWallet.last_payment_at ? new Date(driverWallet.last_payment_at) : null;
-    const now = new Date();
-    const inMonth = paidAt && paidAt.getMonth() === now.getMonth() && paidAt.getFullYear() === now.getFullYear();
-    return sum + (inMonth ? Number(driverWallet.last_payment_amount ?? 0) : 0);
-  }, 0);
 
   if (loading) {
     return (
@@ -455,12 +456,10 @@ export default function AdminCommissionPaymentsPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-        <MetricCard label="Total owed" value={money(totalOwed)} helper="Unpaid MOOVU commission" tone="warning" />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <MetricCard label="Total outstanding commission" value="Unavailable" helper="A complete authoritative aggregate is not available; individual Driver balances below use the finance authority." tone="warning" />
         <MetricCard label="Pending reviews" value={String(pendingRequests.length)} helper="Commission POPs" tone={pendingRequests.length ? "warning" : "default"} />
-        <MetricCard label="Drivers owing" value={String(owingDrivers.length)} helper="Outstanding commission" />
-        <MetricCard label="Collected this month" value={money(collectedThisMonth)} helper="From latest wallet records" tone="success" />
-        <MetricCard label="All-time collected" value={money(totalPaid)} helper={`${money(totalCommissionEarned)} generated`} tone="primary" />
+        <MetricCard label="Drivers owing on this page" value={String(owingDrivers.length)} helper={`${totalDrivers} Drivers across all pages`} />
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
@@ -562,11 +561,12 @@ export default function AdminCommissionPaymentsPage() {
 
       <section className="moovu-card p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-black text-slate-950">Drivers owing commission</h2>
-          <div className="text-sm font-bold text-slate-500">{driversWithBalances.length} open balance(s)</div>
+          <h2 className="text-xl font-black text-slate-950">Driver commission balances</h2>
+          <div className="text-sm font-bold text-slate-500">{driversWithBalances.length} Driver(s) on page {driverPage}</div>
         </div>
         <label className="sr-only" htmlFor="commission-driver-search">Search Drivers owing commission</label>
         <input id="commission-driver-search" type="search" className="moovu-input mt-4 w-full sm:max-w-sm" value={driverSearch} onChange={(event) => setDriverSearch(event.target.value)} placeholder="Search Driver or phone" />
+        <p className="mt-2 text-xs text-slate-500">Searches this page of 20 Drivers. Use the page controls to review other Drivers.</p>
         <div className="mt-4 space-y-3">
           {visibleDriversWithBalances.length === 0 ? (
             <EmptyState title="No matching Driver balances" description={driversWithBalances.length === 0 ? "Driver commission balances will appear after completed trips." : "Try another Driver or phone search."} />
@@ -574,7 +574,7 @@ export default function AdminCommissionPaymentsPage() {
             visibleDriversWithBalances
               .map((row) => {
                 const driverWallet = wallet(row);
-                const balance = Number(driverWallet.balance_due ?? 0);
+                const balance = driverWallet.balance_due == null ? null : Number(driverWallet.balance_due);
                 const hasPending = pendingByDriver.has(driverId(row));
                 return (
                   <div key={driverId(row)} className="rounded-3xl border border-[var(--moovu-border)] bg-gradient-to-br from-white to-slate-50 p-4">
@@ -585,12 +585,12 @@ export default function AdminCommissionPaymentsPage() {
                         <div className="mt-1 text-xs text-slate-500">{driverPhone(row) || "Phone unavailable"}</div>
                       </div>
                       <div>
-                        <div className="text-sm text-slate-500">Balance owed</div>
-                        <div className="font-semibold">{money(balance)}</div>
+                        <div className="text-sm text-slate-500">Outstanding commission due</div>
+                        <div className="font-semibold">{balance == null ? "Unavailable" : money(balance)}</div>
                       </div>
                       <div>
-                        <div className="text-sm text-slate-500">Paid</div>
-                        <div className="font-semibold">{money(driverWallet.total_paid)}</div>
+                        <div className="text-sm text-slate-500">Legacy accrued snapshot</div>
+                        <div className="font-semibold">{driverWallet.total_commission == null ? "Unavailable" : money(driverWallet.total_commission)}</div>
                       </div>
                       <div>
                         <div className="text-sm text-slate-500">Last payment</div>
@@ -598,7 +598,7 @@ export default function AdminCommissionPaymentsPage() {
                       </div>
                       <div>
                         <div className="text-sm text-slate-500">Status</div>
-                        <StatusBadge status={standing(balance, hasPending)} />
+                        <StatusBadge status={balance == null ? "unavailable" : standing(balance, hasPending)} />
                         <button
                           type="button"
                           className="mt-3 text-sm font-black text-blue-700 underline"
@@ -614,6 +614,11 @@ export default function AdminCommissionPaymentsPage() {
               })
           )}
         </div>
+        <nav aria-label="Commission Driver pages" className="mt-5 flex items-center gap-3">
+          <button type="button" className="moovu-btn moovu-btn-secondary" disabled={driverPage === 1} onClick={() => setDriverPage((page) => page - 1)}>Previous</button>
+          <span className="text-sm">Page {driverPage} of {Math.max(1, Math.ceil(totalDrivers / 20))}</span>
+          <button type="button" className="moovu-btn moovu-btn-secondary" disabled={driverPage * 20 >= totalDrivers} onClick={() => setDriverPage((page) => page + 1)}>Next</button>
+        </nav>
       </section>
     </main>
   );

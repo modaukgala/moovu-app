@@ -18,13 +18,10 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
   { href: "/admin/payment-reviews", label: "Payment Reviews", group: "Finance" },
   { href: "/admin/online-payments", label: "Online Payments", group: "Finance" },
   { href: "/admin/commission-payments", label: "Commissions", group: "Finance" },
-  { href: "/admin/settlements", label: "Settlements", group: "Finance" },
   { href: "/admin/earnings", label: "Earnings", group: "Finance" },
   { href: "/admin/reports", label: "Reports", group: "Finance" },
-  { href: "/admin/reports/driver-earnings", label: "Driver Earnings Report", group: "Finance" },
   { href: "/admin/moovu-plus", label: "MOOVU+", group: "Finance" },
-  { href: "/admin/subscriptions", label: "Subscription History", group: "Finance" },
-  { href: "/admin/subscriptions/paid", label: "Past Subscription Payments", group: "Finance" },
+  { href: "/admin/subscriptions", label: "Subscriptions", group: "Finance" },
   { href: "/admin/notifications", label: "Notifications", group: "Notifications" },
   { href: "/admin/archive", label: "Archive", group: "Archive" },
 ];
@@ -35,6 +32,7 @@ export const ADMIN_NAV_GROUPS = [
 
 export function activeAdminNavItem(pathname: string): AdminNavItem {
   const path = pathname.split("?")[0].replace(/\/$/, "") || "/admin";
+  if (path === "/admin/settlements") return ADMIN_NAV_ITEMS.find(item => item.href === "/admin/commission-payments")!;
   const direct = [...ADMIN_NAV_ITEMS]
     .sort((a, b) => b.href.length - a.href.length)
     .find(item => path === item.href || path.startsWith(`${item.href}/`));

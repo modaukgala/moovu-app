@@ -18,12 +18,7 @@ type DriverRow = {
   verification_status: string | null;
 };
 
-type CompletedTripRow = {
-  driver_id: string | null;
-  commission_amount: number | null;
-  driver_net_earnings: number | null;
-  fare_amount: number | null;
-};
+type WalletRow = { driver_id: string; balance_due: number | null; total_commission: number | null; total_driver_net: number | null; total_trips_completed: number | null; last_payment_at: string | null; last_payment_amount: number | null; account_status: string | null };
 
 type SettlementRow = {
   driver_id: string | null;
@@ -40,7 +35,7 @@ export async function GET(req: Request) {
 
     const { supabaseAdmin } = auth;
 
-    const [{ data: drivers, error: driverError }, { data: completedTrips, error: tripError }, { data: settlements, error: settlementError }] =
+    const [{ data: drivers, error: driverError }, { data: wallets, error: walletError }, { data: settlements, error: settlementError }] =
       await Promise.all([
         supabaseAdmin
           .from("drivers")
@@ -56,17 +51,8 @@ export async function GET(req: Request) {
           `)
           .order("first_name"),
         supabaseAdmin
-          .from("trips")
-          .select(`
-            id,
-            driver_id,
-            commission_amount,
-            driver_net_earnings,
-            fare_amount,
-            status,
-            created_at
-          `)
-          .eq("status", "completed"),
+          .from("driver_wallets")
+          .select("driver_id,balance_due,total_commission,total_driver_net,total_trips_completed,last_payment_at,last_payment_amount,account_status"),
         supabaseAdmin
           .from("driver_settlements")
           .select(`
@@ -87,51 +73,21 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: driverError.message }, { status: 500 });
     }
 
-    if (tripError) {
-      return NextResponse.json({ ok: false, error: tripError.message }, { status: 500 });
+    if (walletError) {
+      return NextResponse.json({ ok: false, error: walletError.message }, { status: 500 });
     }
 
     if (settlementError) {
       return NextResponse.json({ ok: false, error: settlementError.message }, { status: 500 });
     }
 
-    const tripsByDriver = new Map<
-      string,
-      {
-        total_commission: number;
-        total_driver_net: number;
-        total_trips_completed: number;
-      }
-    >();
-
     const typedDrivers = (drivers ?? []) as DriverRow[];
-    const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
+    const walletByDriver = new Map(((wallets ?? []) as WalletRow[]).map((wallet) => [wallet.driver_id, wallet]));
     const typedSettlements = (settlements ?? []) as SettlementRow[];
-
-    for (const trip of typedCompletedTrips) {
-      const driverId = String(trip.driver_id ?? "").trim();
-      if (!driverId) continue;
-
-      const curr = tripsByDriver.get(driverId) ?? {
-        total_commission: 0,
-        total_driver_net: 0,
-        total_trips_completed: 0,
-      };
-
-      curr.total_commission += num(trip.commission_amount);
-      curr.total_driver_net +=
-        trip.driver_net_earnings != null
-          ? num(trip.driver_net_earnings)
-          : num(trip.fare_amount) - num(trip.commission_amount);
-      curr.total_trips_completed += 1;
-
-      tripsByDriver.set(driverId, curr);
-    }
 
     const settlementsByDriver = new Map<
       string,
       {
-        total_paid: number;
         last_payment_at: string | null;
         last_payment_amount: number | null;
       }
@@ -142,12 +98,9 @@ export async function GET(req: Request) {
       if (!driverId) continue;
 
       const curr = settlementsByDriver.get(driverId) ?? {
-        total_paid: 0,
         last_payment_at: null,
         last_payment_amount: null,
       };
-
-      curr.total_paid += num(row.amount_paid);
 
       if (!curr.last_payment_at) {
         curr.last_payment_at = row.created_at ?? null;
@@ -158,19 +111,14 @@ export async function GET(req: Request) {
     }
 
     const driverRows = typedDrivers.map((driver) => {
-      const tripTotals = tripsByDriver.get(driver.id) ?? {
-        total_commission: 0,
-        total_driver_net: 0,
-        total_trips_completed: 0,
-      };
+      const wallet = walletByDriver.get(driver.id);
 
       const settlementTotals = settlementsByDriver.get(driver.id) ?? {
-        total_paid: 0,
         last_payment_at: null,
         last_payment_amount: null,
       };
 
-      const balanceDue = Math.max(0, tripTotals.total_commission - settlementTotals.total_paid);
+      const balanceDue = num(wallet?.balance_due);
 
       return {
         id: driver.id,
@@ -183,13 +131,13 @@ export async function GET(req: Request) {
         verification_status: driver.verification_status ?? null,
         wallet_summary: {
           balance_due: balanceDue,
-          total_commission: tripTotals.total_commission,
-          total_driver_net: tripTotals.total_driver_net,
-          total_trips_completed: tripTotals.total_trips_completed,
-          total_paid: settlementTotals.total_paid,
-          last_payment_at: settlementTotals.last_payment_at,
-          last_payment_amount: settlementTotals.last_payment_amount,
-          account_status: balanceDue > 0 ? "due" : "settled",
+          total_commission: num(wallet?.total_commission),
+          total_driver_net: num(wallet?.total_driver_net),
+          total_trips_completed: num(wallet?.total_trips_completed),
+          total_paid: null,
+          last_payment_at: wallet?.last_payment_at ?? settlementTotals.last_payment_at,
+          last_payment_amount: wallet?.last_payment_amount ?? settlementTotals.last_payment_amount,
+          account_status: wallet?.account_status ?? (balanceDue > 0 ? "due" : "settled"),
         },
       };
     });

@@ -12,6 +12,7 @@ import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { openHostedPaymentCheckout } from "@/lib/payments/checkoutNavigation";
 import { supabaseClient } from "@/lib/supabase/client";
+import { commissionDueAmount } from "@/lib/finance/commissionPresentation";
 
 type Wallet = {
   balance_due: number | null;
@@ -143,7 +144,7 @@ export default function DriverCommissionPaymentsPage() {
     return () => window.clearTimeout(timer);
   }, [loadData]);
 
-  const balanceDue = finance ? Number(finance.netOwedCents ?? 0) / 100 : Number(wallet?.balance_due ?? 0);
+  const balanceDue = commissionDueAmount(finance, wallet?.balance_due);
 
   const pendingCommission = useMemo(
     () =>

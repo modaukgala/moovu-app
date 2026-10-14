@@ -57,6 +57,7 @@ export async function recalculateDriverWalletServer(driverId: string) {
     totals: {
       totalCommission: Number(totals.total_commission),
       totalDriverNet: Number(totals.total_driver_net),
+      totalTripsCompleted: Number(totals.total_trips_completed),
       totalSettled: Number(totals.total_settled),
       cancellationCredits: Number(totals.cancellation_credits),
       balanceDue: Number(totals.balance_due),

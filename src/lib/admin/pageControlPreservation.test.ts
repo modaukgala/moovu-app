@@ -9,7 +9,6 @@ const controls: Record<string, string[]> = {
   "payment-reviews": ["/api/admin/payment-reviews", "reviewRequest(", "View POP", "Open receipt", "payment-review-search"],
   "online-payments": ["/api/admin/online-payments", "changeRange(", "setSelected(row)", "role=\"dialog\""],
   "commission-payments": ["/api/admin/driver-wallet-summary", "reviewRequest(", "openLedger(row)", "commission-driver-search"],
-  settlements: ["/api/admin/settlements/record", "recordSettlement", "clearFullBalance", "settlement-reference"],
   earnings: ["/api/admin/earnings", "loadEarnings", "commission_amount", "Driver earnings"],
   reports: ["/api/admin/reports?from", "runReport", "admin-report-from", "completedCommission"],
   "reports/driver-earnings": ["/api/admin/reports/driver-earnings?from", "onClick={load}", "Historical subscription"],
@@ -41,4 +40,13 @@ test("every Group B and C page has a compact page heading or preserved receipt p
     assert.match(source, /<h1\b|<PageHeader\b/, `${route}: missing page heading`);
     assert.ok(source.includes("moovu-admin-") || source.includes("styles.report"), `${route}: missing shared Admin presentation`);
   }
+});
+
+test("manual settlement entry is retired without deleting settlement history", () => {
+  const route = readFileSync(join(process.cwd(), "src/app/api/admin/settlements/record/route.ts"), "utf8");
+  assert.match(route, /requireAdminUser/);
+  assert.match(route, /status:\s*410/);
+  assert.doesNotMatch(route, /callHardenedRpc|phase05b_record_settlement/);
+  const page = readFileSync(join(root, "settlements/page.tsx"), "utf8");
+  assert.match(page, /redirect\("\/admin\/commission-payments"\)/);
 });

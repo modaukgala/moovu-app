@@ -7,7 +7,6 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), "u
 const routeContracts = [
   ["../../app/api/driver/apply/route.ts", "phase05b_submit_driver_application"],
   ["../../app/api/admin/payment-reviews/route.ts", "phase05b_review_driver_payment"],
-  ["../../app/api/admin/settlements/record/route.ts", "phase05b_record_settlement"],
   ["../../app/api/driver/trips/arrive/route.ts", "phase05b_mark_arrived"],
   ["../trips/completeTripServer.ts", "phase05b_complete_trip"],
   ["../../app/api/customer/cancel-trip/route.ts", "phase05b_cancel_trip"],
@@ -31,16 +30,20 @@ test("hardened route notifications defer to outbox only under explicit activatio
 });
 
 test("financial HTTP mutations reject dispatcher and support before RPC invocation", () => {
-  const financialRoutes = [
-    "../../app/api/admin/payment-reviews/route.ts",
-    "../../app/api/admin/settlements/record/route.ts",
-  ];
+  const financialRoutes = ["../../app/api/admin/payment-reviews/route.ts"];
   for (const path of financialRoutes) {
     const code = source(path);
     assert.match(code, /isFinancialAdminRole\(auth\.profile\.role\)/);
     assert.match(code, /status:\s*403/);
     assert.ok(code.indexOf("isFinancialAdminRole") < code.indexOf("callHardenedRpc<"));
   }
+});
+
+test("retired Admin settlement route cannot call the settlement RPC", () => {
+  const code = source("../../app/api/admin/settlements/record/route.ts");
+  assert.match(code, /requireAdminUser/);
+  assert.match(code, /status:\s*410/);
+  assert.doesNotMatch(code, /callHardenedRpc|phase05b_record_settlement/);
 });
 
 test("legacy trip-status mutation remains disabled", () => {

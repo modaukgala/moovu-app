@@ -6,7 +6,6 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), "u
 
 const hardenedRoutes = [
   "../../app/api/admin/payment-reviews/route.ts",
-  "../../app/api/admin/settlements/record/route.ts",
   "../../app/api/customer/cancel-trip/route.ts",
   "../../app/api/driver/trips/no-show/route.ts",
   "../../app/api/driver/trips/arrive/route.ts",

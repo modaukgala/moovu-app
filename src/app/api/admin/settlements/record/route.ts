@@ -1,38 +1,11 @@
 import { NextResponse } from "next/server";
-import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
-import { callHardenedRpc } from "@/lib/server/hardenedRpc";
-
-type SettlementResult = { driver_id: string; amount_applied: number; balance_due: number; replayed: boolean };
+import { requireAdminUser } from "@/lib/auth/admin";
 
 export async function POST(req: Request) {
   try {
     const auth = await requireAdminUser(req);
     if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
-    if (!isFinancialAdminRole(auth.profile.role)) {
-      return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
-    }
-    const body = await req.json().catch(() => null);
-    const driverId = String(body?.driverId ?? "").trim();
-    const operationKey = String(body?.operationKey ?? "").trim();
-    const amountPaid = Number(body?.amountPaid ?? 0);
-    if (!driverId) return NextResponse.json({ ok: false, error: "Driver ID is required." }, { status: 400 });
-    if (!operationKey) return NextResponse.json({ ok: false, error: "Stable operation key is required." }, { status: 400 });
-    if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
-      return NextResponse.json({ ok: false, error: "Amount paid must be greater than zero." }, { status: 400 });
-    }
-    const result = await callHardenedRpc<SettlementResult>(auth.supabaseAdmin, "phase05b_record_settlement", {
-      p_operation_key: `manual-settlement:${operationKey}`,
-      p_driver_id: driverId,
-      p_amount: amountPaid,
-      p_method: String(body?.paymentMethod ?? "cash").trim(),
-      p_reference: String(body?.reference ?? "").trim() || null,
-      p_note: String(body?.note ?? "").trim() || null,
-      p_actor_id: auth.user.id,
-    });
-    if (!result.ok) return NextResponse.json({ ok: false, error: result.error, code: result.code }, { status: result.status });
-    return NextResponse.json({ ok: true, replayed: result.result.replayed,
-      message: result.result.replayed ? "This settlement was already recorded." : "Driver settlement recorded successfully.",
-      balanceDue: result.result.balance_due });
+    return NextResponse.json({ ok: false, error: "Manual settlements are retired. Review driver payment requests instead." }, { status: 410 });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error." }, { status: 500 });
   }

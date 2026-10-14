@@ -31,8 +31,8 @@ test("every protected Admin page has a sidebar destination or preserved deep-lin
 
 test("specific routes win over their parent and Group A destinations remain distinct", () => {
   assert.equal(activeAdminNavItem("/admin/dispatch/map").href, "/admin/dispatch/map");
-  assert.equal(activeAdminNavItem("/admin/subscriptions/paid").href, "/admin/subscriptions/paid");
-  assert.equal(activeAdminNavItem("/admin/reports/driver-earnings").href, "/admin/reports/driver-earnings");
+  assert.equal(activeAdminNavItem("/admin/subscriptions/paid").href, "/admin/subscriptions");
+  assert.equal(activeAdminNavItem("/admin/reports/driver-earnings").href, "/admin/reports");
   assert.equal(activeAdminNavItem("/admin/onboarding").href, "/admin/onboarding");
   assert.equal(activeAdminNavItem("/admin/applications").href, "/admin/applications");
   assert.equal(activeAdminNavItem("/admin/drivers/fixture-id").href, "/admin/drivers");
