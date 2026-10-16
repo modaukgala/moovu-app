@@ -38,6 +38,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import DriverOnboardingEntry from "@/components/driver/DriverOnboardingEntry";
+import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
 import {
   DEFAULT_CENTER,
@@ -1845,6 +1846,10 @@ export default function DriverHomePage() {
       />
 
       <DriverBottomNav />
+      <NotificationPermissionReminder
+        role="driver"
+        active={Boolean(driver) && !driver?.online && !offer && !currentTrip && !otpEntryOpen && !busy && !offerResponding && !driverToolsOpen && !tripSheetOpen}
+      />
     </main>
   );
 }

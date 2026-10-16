@@ -11293,3 +11293,99 @@ body {
     grid-template-columns: 1fr;
   }
 }
+.moovu-permission-reminder-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(8, 18, 38, .48);
+  animation: moovu-permission-fade .22s ease-out;
+}
+
+.moovu-permission-reminder {
+  position: relative;
+  width: min(100%, 520px);
+  max-height: calc(100dvh - env(safe-area-inset-top) - 16px);
+  overflow-y: auto;
+  border-radius: 30px 30px 0 0;
+  padding: 22px 24px calc(22px + env(safe-area-inset-bottom));
+  background: #fff;
+  color: #17233b;
+  text-align: center;
+  box-shadow: 0 -20px 60px rgba(5, 17, 38, .22);
+  animation: moovu-permission-rise .28s cubic-bezier(.2,.8,.2,1);
+}
+
+.moovu-permission-reminder.is-driver { --moovu-reminder-accent: #092d65; }
+.moovu-permission-reminder:not(.is-driver) { --moovu-reminder-accent: #0b5fff; }
+.moovu-permission-reminder-close {
+  position: absolute;
+  top: 17px;
+  right: 18px;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: #f1f5fb;
+  color: #263a59;
+}
+.moovu-permission-reminder-art {
+  position: relative;
+  display: grid;
+  width: 112px;
+  height: 112px;
+  margin: 10px auto 19px;
+  place-items: center;
+  border: 1px solid #d7e7ff;
+  border-radius: 31px;
+  background: linear-gradient(145deg, #f3f8ff, #dcecff);
+  color: var(--moovu-reminder-accent);
+  transform: rotate(-7deg);
+}
+.moovu-permission-reminder-art svg { transform: rotate(7deg); }
+.moovu-permission-reminder-dot {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  width: 15px;
+  height: 15px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #43c798;
+}
+.moovu-permission-reminder-brand {
+  color: var(--moovu-reminder-accent);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .18em;
+}
+.moovu-permission-reminder h2 { margin: 10px 0 9px; font-size: clamp(24px, 5vw, 29px); font-weight: 850; line-height: 1.13; }
+.moovu-permission-reminder p { max-width: 390px; margin: 0 auto 20px; color: #52627a; font-size: 14px; line-height: 1.55; }
+.moovu-permission-reminder .moovu-permission-reminder-message { margin-bottom: 12px; color: #8b3b1f; }
+.moovu-permission-reminder-primary {
+  width: 100%;
+  min-height: 54px;
+  border-radius: 16px;
+  background: var(--moovu-reminder-accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: 0 10px 22px rgba(11, 95, 255, .18);
+}
+.moovu-permission-reminder-primary:disabled { opacity: .65; }
+.moovu-permission-reminder-later { min-height: 46px; margin-top: 5px; padding: 0 16px; color: #52627a; font-size: 14px; font-weight: 700; }
+.moovu-permission-reminder button:focus-visible { outline: 3px solid #75b8ff; outline-offset: 3px; }
+.moovu-permission-reminder.is-driver { padding-top: 12px; }
+.moovu-permission-reminder.is-driver .moovu-permission-reminder-art { width: 78px; height: 78px; margin-bottom: 11px; border-radius: 24px; }
+.moovu-permission-reminder.is-driver h2 { font-size: 23px; }
+@keyframes moovu-permission-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes moovu-permission-rise { from { transform: translateY(34px); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .moovu-permission-reminder-backdrop, .moovu-permission-reminder { animation: none; }
+}
+@media (min-width: 600px) {
+  .moovu-permission-reminder { margin-bottom: 20px; border-radius: 30px; }
+}

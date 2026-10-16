@@ -8,6 +8,7 @@ import CustomerBottomSheet from "@/components/customer/CustomerBottomSheet";
 import CustomerDrawer from "@/components/customer/CustomerDrawer";
 import CustomerMapHome from "@/components/customer/CustomerMapHome";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
+import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
 import { supabaseClient } from "@/lib/supabase/client";
 
 export default function HomePage() {
@@ -76,6 +77,7 @@ export default function HomePage() {
         )}
       </CustomerBottomSheet>
       <CustomerDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} loggedIn={loggedIn} name={customerName} contact={customerContact} onLogout={logout} />
+      <NotificationPermissionReminder role="customer" active={!checking && loggedIn && !driverSession && !drawerOpen} />
     </CustomerAppShell>
   );
 }
