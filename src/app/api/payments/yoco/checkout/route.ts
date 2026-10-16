@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { createYocoCheckout } from "@/lib/payments/yoco/client";
+import { ADMISSION_CLOSED_CODE, ADMISSION_CLOSED_MESSAGE, isAdmissionClosed } from "@/lib/maintenance/admission";
 
 type CheckoutBody = {
   tripId?: string;
@@ -203,6 +204,10 @@ export async function POST(req: Request) {
           .single();
 
       if (createAttemptError || !createdAttempt) {
+        if (isAdmissionClosed(createAttemptError)) {
+          return NextResponse.json({ ok: false, code: ADMISSION_CLOSED_CODE,
+            error: ADMISSION_CLOSED_MESSAGE }, { status: 503 });
+        }
         console.error("[yoco-checkout] attempt creation failed", {
           code: createAttemptError?.code,
           message: createAttemptError?.message,

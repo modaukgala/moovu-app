@@ -6,7 +6,7 @@ import test from "node:test";
 import { parsePaymentReviewFilters } from "./paymentReview.ts";
 
 const root = new URL("../../../", import.meta.url);
-const read = (path: string) => readFile(new URL(path, root), "utf8");
+const read = async (path: string) => (await readFile(new URL(path, root), "utf8")).replace(/\r\n/g, "\n");
 
 test("review filter parsing keeps date, state, search and page on the server", () => {
   const filters = parsePaymentReviewFilters(new URLSearchParams({

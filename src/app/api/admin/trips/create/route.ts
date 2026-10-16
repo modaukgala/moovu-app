@@ -7,6 +7,7 @@ import { calculateDrivingRoute } from "@/lib/maps/routeService";
 import { isValidLatitude, isValidLongitude } from "@/lib/maps/mapRequestPolicy";
 import { callHardenedRpc } from "@/lib/server/hardenedRpc";
 import { isAdminTripPaymentMethod } from "@/lib/trips/adminTripPaymentMethod";
+import { ADMISSION_CLOSED_CODE, ADMISSION_CLOSED_MESSAGE, isAdmissionClosed } from "@/lib/maintenance/admission";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -179,6 +180,10 @@ export async function POST(req: Request) {
       .single();
 
     if (insertError || !trip) {
+      if (isAdmissionClosed(insertError)) {
+        return NextResponse.json({ ok: false, code: ADMISSION_CLOSED_CODE,
+          error: ADMISSION_CLOSED_MESSAGE }, { status: 503 });
+      }
       console.error("[admin-trip-create] failed to create trip", insertError);
       return NextResponse.json(
         { ok: false, error: "Could not create trip. Please check the details and try again." },

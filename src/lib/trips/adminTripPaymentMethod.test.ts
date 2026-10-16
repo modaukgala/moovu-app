@@ -33,6 +33,7 @@ test("Admin create-trip API rejects online before any route or database work", a
     "@/lib/maps/mapRequestPolicy": { isValidLatitude: () => true, isValidLongitude: () => true },
     "@/lib/server/hardenedRpc": {},
     "@/lib/trips/adminTripPaymentMethod": { isAdminTripPaymentMethod },
+    "@/lib/maintenance/admission": { isAdmissionClosed: () => false },
   };
   vm.runInNewContext(compiled, {
     exports,
@@ -80,6 +81,7 @@ test("customer booking accepts cash and online while rejecting unknown payment m
     "@/lib/maps/routeService": {},
     "@/lib/maps/mapRequestPolicy": {},
     "@/lib/maps/routeQuote": {},
+    "@/lib/maintenance/admission": { isAdmissionClosed: () => false },
   };
   vm.runInNewContext(compiled, {
     exports,

@@ -20,6 +20,7 @@ import { callPhase4Rpc } from "@/lib/server/phase4Rpc";
 import { calculatePhase5Fare } from "@/lib/finance/phase5Fare";
 import { normalizeCustomerPaymentMethod } from "@/lib/payments/customerPaymentMethod";
 import { SCHEDULED_RIDES_ENABLED } from "@/lib/release/releaseFlags";
+import { ADMISSION_CLOSED_CODE, ADMISSION_CLOSED_MESSAGE, isAdmissionClosed } from "@/lib/maintenance/admission";
 
 function generateOtp() {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -698,6 +699,10 @@ export async function POST(req: Request) {
         code: tripErr?.code ?? "NO_TRIP_RETURNED",
         message: tripErr?.message ?? "No trip returned by booking authority",
       });
+      if (isAdmissionClosed(tripErr)) {
+        return NextResponse.json({ ok: false, code: ADMISSION_CLOSED_CODE,
+          error: ADMISSION_CLOSED_MESSAGE }, { status: 503 });
+      }
       if (String(tripErr?.message ?? "").includes("PHASE4_BOOKING_BLOCKED")) {
         return NextResponse.json(
           {

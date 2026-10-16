@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedDriver } from "@/lib/payments/driverServer";
 import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 import { createYocoCheckout } from "@/lib/payments/yoco/client";
+import { ADMISSION_CLOSED_CODE, ADMISSION_CLOSED_MESSAGE, isAdmissionClosed } from "@/lib/maintenance/admission";
 
 function sha256(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function baseUrl(req: Request) {
@@ -71,6 +72,10 @@ export async function POST(req: Request) {
         currency: "ZAR", state: "CREATED", idempotency_key: idempotencyKey, payload_hash: payloadHash,
       }).select("id").single();
       if (createError || !created) {
+        if (isAdmissionClosed(createError)) {
+          return NextResponse.json({ ok: false, code: ADMISSION_CLOSED_CODE,
+            error: ADMISSION_CLOSED_MESSAGE }, { status: 503 });
+        }
         const { data: raced } = await auth.supabaseAdmin.from("driver_online_payment_attempts")
           .select("id,state,provider_checkout_id,provider_redirect_url")
           .eq("driver_id", auth.driverId).eq("obligation_type", "COMMISSION_DEBT")
