@@ -6,6 +6,21 @@ $taskRef = 'mvazbszenqahgqpznhhq'
 $taskDirectory = Join-Path $env:USERPROFILE 'MOOVU Secure Backups'
 $taskImage = 'public.ecr.aws/supabase/postgres:17.11.0.004'
 
+function Get-SchemaExportFailureCategory([string]$diagnostic) {
+  switch -Regex ($diagnostic) {
+    '(?i)password authentication failed|no password supplied|fe_sendauth|SASL authentication failed' { return 'DATABASE_AUTH_FAILED' }
+    '(?i)certificate verify failed|root certificate|server certificate|hostname .*does not match|SSL error' { return 'TLS_VERIFICATION_FAILED' }
+    '(?i)could not translate host name|name or service not known|temporary failure in name resolution' { return 'DNS_FAILED' }
+    '(?i)connection refused|connection timed out|timeout expired|network is unreachable|no route to host|could not connect to server' { return 'NETWORK_FAILED' }
+    '(?i)server version mismatch|server version:.*pg_dump version' { return 'CLIENT_VERSION_FAILED' }
+    '(?i)permission denied for schema|permission denied for table|must be member of role' { return 'DATABASE_PERMISSION_FAILED' }
+    '(?i)no matching schemas were found|no matching tables were found' { return 'SCHEMA_SELECTION_FAILED' }
+    '(?i)invalid mount config|mount denied|read-only file system|permission denied|not a directory' { return 'DOCKER_MOUNT_OR_FILE_FAILED' }
+    '(?i)cannot connect to the docker daemon|error during connect|docker: error|pull access denied' { return 'DOCKER_RUNTIME_FAILED' }
+    default { return 'UNCLASSIFIED_NATIVE_FAILURE' }
+  }
+}
+
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'SCHEMA_EXPORT_PREFLIGHT_FAILED: Docker CLI is unavailable.' }
 $null = & docker image inspect $taskImage 2>$null
 if ($LASTEXITCODE -ne 0) { throw 'SCHEMA_EXPORT_PREFLIGHT_FAILED: local PostgreSQL 17 image is unavailable.' }
@@ -59,6 +74,8 @@ try {
     $taskStart.ArgumentList.Add($taskArg)
   }
   $taskProcess = [Diagnostics.Process]::Start($taskStart)
+  # Linux read removes LF, but leaves the CR from PowerShell's default Windows CRLF.
+  $taskProcess.StandardInput.NewLine = "`n"
   $taskProcess.StandardInput.WriteLine([Runtime.InteropServices.Marshal]::PtrToStringBSTR($taskPointer))
   $taskProcess.StandardInput.Close()
   $taskOutput = $taskProcess.StandardOutput.ReadToEndAsync()
@@ -66,8 +83,11 @@ try {
   $taskProcess.WaitForExit()
   # Never surface raw pg_dump output. The owner only receives this sanitized result.
   $null = $taskOutput.GetAwaiter().GetResult()
-  $null = $taskError.GetAwaiter().GetResult()
-  if ($taskProcess.ExitCode -ne 0) { throw 'SCHEMA_EXPORT_FAILED: read-only pg_dump did not complete.' }
+  $taskDiagnostic = $taskError.GetAwaiter().GetResult()
+  if ($taskProcess.ExitCode -ne 0) {
+    $taskCategory = Get-SchemaExportFailureCategory $taskDiagnostic
+    throw ('SCHEMA_EXPORT_FAILED: ' + $taskCategory)
+  }
   $taskItem = Get-Item -LiteralPath $taskPartial -ErrorAction Stop
   if ($taskItem.Length -eq 0) { throw 'SCHEMA_EXPORT_FAILED: empty schema archive.' }
   Move-Item -LiteralPath $taskPartial -Destination $taskFinal
