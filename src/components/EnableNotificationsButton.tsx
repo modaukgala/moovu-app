@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { Capacitor } from "@capacitor/core";
 import { getPushDeviceId, registerForPushNotifications, type NotificationRole } from "@/lib/notifications/registration";
+import { boundedNotificationOperation, boundedNotificationRequest } from "@/lib/notifications/boundedRequest";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -114,6 +115,7 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
   }, [markSaved, role]);
 
   async function handleClick() {
+    let tokenSaved = false;
     setBusy(true);
     setMessage("");
     setStatusLabel("Enabling...");
@@ -121,7 +123,7 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
     try {
       const {
         data: { session },
-      } = await supabaseClient.auth.getSession();
+      } = await boundedNotificationOperation(() => supabaseClient.auth.getSession(), 15000);
 
       if (!session?.user?.id) {
         setStatusLabel("Token Missing");
@@ -168,8 +170,9 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
       }
 
       markSaved(session.user.id, "Notifications enabled on this device.");
+      tokenSaved = true;
 
-      const testResponse = await fetch("/api/push/test-self", {
+      const testResponse = await boundedNotificationRequest("/api/push/test-self", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -178,14 +181,19 @@ export default function EnableNotificationsButton({ role, onEnabled, variant = "
         body: JSON.stringify({ role }),
       });
 
-      const testJson = await testResponse.json().catch(() => null);
+      const testJson = await boundedNotificationOperation(() => testResponse.json(), 15000).catch(() => null);
       if (!testResponse.ok || !testJson?.ok) {
         console.warn("[push-registration] self-test did not deliver", {
           role,
           error: testJson?.error || "Token saved, but the test notification did not deliver.",
         });
+        setMessage("Notifications are enabled, but the test message could not be confirmed.");
         return;
       }
+    } catch {
+      setMessage(tokenSaved
+        ? "Notifications are enabled, but the test message could not be confirmed."
+        : "Could not enable notifications. Check your connection and try again.");
     } finally {
       setBusy(false);
       setStatusLabel((current) => current === "Enabling..." ? "Enable Notifications" : current);

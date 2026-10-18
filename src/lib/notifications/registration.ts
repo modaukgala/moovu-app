@@ -5,6 +5,7 @@ import { PushNotifications } from "@capacitor/push-notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getToken as getFcmToken } from "firebase/messaging";
 import { getFirebaseMessaging, hasFirebaseClientConfig } from "@/lib/firebase/client";
+import { boundedNotificationOperation, boundedNotificationRequest } from "@/lib/notifications/boundedRequest";
 
 export type NotificationRole = "customer" | "driver" | "admin";
 
@@ -128,7 +129,7 @@ async function saveToken(params: {
     throw new Error("APNs token rejected, waiting for FCM token.");
   }
   const currentDeviceId = getPushDeviceId();
-  const response = await fetch("/api/push/fcm/register", {
+  const response = await boundedNotificationRequest("/api/push/fcm/register", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -146,7 +147,7 @@ async function saveToken(params: {
     }),
   });
 
-  const json = await response.json().catch(() => null);
+  const json = await boundedNotificationOperation(() => response.json(), 15000).catch(() => null);
   if (!response.ok || !json?.ok) {
     console.error("[push-registration] token API rejected", {
       role: params.role,
@@ -448,7 +449,7 @@ export async function registerForPushNotifications({
     const {
       data: { session },
       error,
-    } = await supabase.auth.getSession();
+    } = await boundedNotificationOperation(() => supabase.auth.getSession(), 15000);
 
     if (error) {
       return { ok: false, status: "missing-session", message: `Session error: ${error.message}` };
@@ -461,9 +462,10 @@ export async function registerForPushNotifications({
     const platform = platformName();
     devLog("requesting token", { role, platform, appSource: appSource(role) });
 
-    const token = Capacitor.isNativePlatform()
-      ? await requestNativeToken()
-      : await requestWebToken();
+    const token = await boundedNotificationOperation(
+      () => Capacitor.isNativePlatform() ? requestNativeToken() : requestWebToken(),
+      75000,
+    );
 
     if (!token) {
       return {

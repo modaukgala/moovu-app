@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { BellRing, X } from "lucide-react";
 import { registerForPushNotifications, type NotificationRole } from "@/lib/notifications/registration";
+import { boundedNotificationOperation } from "@/lib/notifications/boundedRequest";
 import { classifyNotificationPermission, shouldShowNotificationReminder, type ReminderPermission } from "@/lib/notifications/permissionReminder";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -149,7 +150,7 @@ export default function NotificationPermissionReminder({ role, active }: Props) 
     setBusy(true);
     setMessage("");
     try {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const { data: { session } } = await boundedNotificationOperation(() => supabaseClient.auth.getSession(), 15000);
       if (!session?.user?.id || session.user.id !== sessionId) {
         setMessage("Please sign in again before enabling notifications.");
         return;
@@ -164,6 +165,9 @@ export default function NotificationPermissionReminder({ role, active }: Props) 
         setMessage(result.message);
         setPermission(await readPermission());
       }
+    } catch {
+      setRegistrationFailed(true);
+      setMessage("Could not enable notifications. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
