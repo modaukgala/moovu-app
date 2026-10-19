@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Menu, Navigation, Search } from "lucide-react";
+import { Bell, Menu, Navigation } from "lucide-react";
 import CustomerAppShell from "@/components/customer/CustomerAppShell";
 import CustomerBottomSheet from "@/components/customer/CustomerBottomSheet";
 import CustomerDrawer from "@/components/customer/CustomerDrawer";
@@ -70,8 +70,14 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            <div className="customer-sheet-heading"><div><span>{loggedIn ? "Ready when you are" : "Welcome to MOOVU"}</span><h1>{loggedIn ? "Where to?" : "Your local ride starts here"}</h1></div><Navigation aria-hidden="true" /></div>
-            <Link href={bookingHref} className="customer-where-to"><Search aria-hidden="true" /><span><strong>{loggedIn ? "Where are you going?" : "Start booking"}</strong><small>Pickup, destination and ride options</small></span></Link>
+            <div className="customer-sheet-heading"><div><span>{loggedIn ? "Ready when you are" : "Welcome to MOOVU"}</span><h1>Where are you going?</h1></div><Navigation aria-hidden="true" /></div>
+            <Link href={bookingHref} className="customer-where-to">
+              <span className="customer-home-route-preview">
+                <span><small>Pickup</small><strong>Use your location or choose a place</strong></span>
+                <span><small>Destination</small><strong>Where would you like to go?</strong></span>
+              </span>
+              <span className="customer-home-continue">Continue to booking</span>
+            </Link>
             {!loggedIn && !checking ? <Link href="/driver/apply" className="customer-become-driver">Become a Driver</Link> : null}
           </>
         )}

@@ -2725,7 +2725,7 @@ export default function RiderBookingPage() {
             {msg && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{msg}</p>}
             <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row">
               <button type="button" autoFocus disabled={busy} onClick={() => setBookingConfirmationOpen(false)} className="moovu-btn moovu-btn-secondary sm:flex-1">Go Back</button>
-              <button type="button" disabled={busy || !canSubmit} onClick={() => void confirmBooking()} className="moovu-btn moovu-btn-primary min-h-12 sm:flex-[2]">{busy ? "Booking..." : "Confirm Booking"}</button>
+              <button type="button" disabled={busy || !canSubmit} onClick={() => void confirmBooking()} className="moovu-btn moovu-btn-primary min-h-12 sm:flex-[2]">{busy ? "Booking..." : "Confirm Ride"}</button>
             </div>
           </div>
         </dialog>
@@ -2914,9 +2914,9 @@ export default function RiderBookingPage() {
             <div>
               <div className="moovu-kicker">MOOVU Rider</div>
               <h1 className="text-xl font-black tracking-tight text-slate-950">
-                Where to?
+                Book a ride
               </h1>
-              <p className="mt-0.5 text-xs text-slate-500">{progressText}</p>
+              <p className="mt-0.5 text-xs text-slate-500" aria-live="polite">{progressText}</p>
             </div>
             <div className="moovu-account-pill">
               <span className="moovu-account-dot" />
@@ -2927,6 +2927,21 @@ export default function RiderBookingPage() {
           <div className="flex justify-end px-4 pb-2">
             <EnableNotificationsButton role="customer" variant="chip" />
           </div>
+
+          <ol className="mx-4 mb-3 grid grid-cols-3 gap-2" aria-label="Booking steps">
+            {["Where", "Ride", "Confirm"].map((label, index) => {
+              const currentStep = bookingStep <= 2 ? 1 : bookingStep === 3 ? 2 : 3;
+              return (
+                <li
+                  key={label}
+                  aria-current={currentStep === index + 1 ? "step" : undefined}
+                  className={`rounded-xl px-2 py-2 text-center text-xs font-bold ${currentStep === index + 1 ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600"}`}
+                >
+                  {index + 1}. {label}
+                </li>
+              );
+            })}
+          </ol>
 
           {/* Route inputs box */}
           <div className="customer-floating-route-card customer-ehail-route-card mx-4">
@@ -3239,6 +3254,8 @@ export default function RiderBookingPage() {
             </div>
           </div>
 
+          <div className="px-4 pb-2">{expandedDetails}</div>
+
           <div className="customer-booking-payment mx-4 mt-3">
             <div className="moovu-field-label">Payment method</div>
             <div className="customer-booking-payment-options" role="group" aria-label="Payment method">
@@ -3248,16 +3265,8 @@ export default function RiderBookingPage() {
             {paymentMethod === "online" && <p className="customer-booking-payment-note">Secure payment is completed before a driver is requested.</p>}
           </div>
 
-          <div className="mx-4 mt-3 customer-booking-favorites customer-booking-favorites-compact">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="moovu-field-label">Favourite places</div>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  Quick places are being prepared for your account.
-                </p>
-              </div>
-              <span className="moovu-mini-pill">Local shortcuts</span>
-            </div>
+          <details className="mx-4 mt-3 customer-booking-favorites customer-booking-favorites-compact">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-600">Favourite places (coming soon)</summary>
             <div className="customer-favorite-grid mt-3">
               {FAVORITE_PLACE_SHORTCUTS.map((favorite) => (
                 <button
@@ -3275,9 +3284,8 @@ export default function RiderBookingPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </details>
 
-          <div className="px-4 pb-4">{expandedDetails}</div>
         </div>
 
         {/* ── Confirm bar — always visible at bottom of sheet ── */}
@@ -3335,10 +3343,10 @@ export default function RiderBookingPage() {
                   ? "Scheduling..."
                   : "Booking..."
                 : displayFare == null
-                  ? "Book trip"
+                  ? "Review ride"
                   : rideType === "scheduled"
                     ? `Schedule ${selectedRide.name}`
-                    : `Book ${selectedRide.name}`}
+                    : `Review ${selectedRide.name} ride`}
             </button>
           </div>
         </div>

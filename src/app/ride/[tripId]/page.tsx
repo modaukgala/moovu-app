@@ -1236,35 +1236,35 @@ export default function RideTrackingPage() {
       case "offered":
         return {
           eyebrow: "Live request",
-          title: "Looking for nearby MOOVU drivers",
+          title: "Finding your Driver",
           body: "Your request is being sent to available drivers near you.",
           eta: "Checking availability",
         };
       case "assigned":
         return {
           eyebrow: "Driver assigned",
-          title: "Driver on the way",
+          title: "Your Driver is on the way",
           body: "Watch the map and confirm the vehicle, plate and driver before getting in.",
           eta: displayDuration(trip.duration_min),
         };
       case "arrived":
         return {
           eyebrow: "Pickup",
-          title: "Driver has arrived",
+          title: "Your Driver has arrived",
           body: "Give the start OTP only when you are ready to begin the ride.",
           eta: "At pickup",
         };
       case "ongoing":
         return {
           eyebrow: "On trip",
-          title: "Trip started",
+          title: "Your trip has started",
           body: "Your ride is in progress. Keep trip details visible until completion.",
           eta: displayDuration(trip.duration_min),
         };
       case "completed":
         return {
           eyebrow: "Receipt ready",
-          title: "Trip completed",
+          title: "You’ve arrived",
           body: "Your trip is complete. You can open the receipt or rate the ride.",
           eta: "Done",
         };
@@ -2210,8 +2210,8 @@ export default function RideTrackingPage() {
             <div className="customer-trip-current-card">
               <div className="min-w-0">
                 <div className="customer-trip-compact-kicker">Current status</div>
-                <h3>{statusLabel(trip.status)}</h3>
-                <p>{statusCta}</p>
+                <h3>{stageDetail.title}</h3>
+                <p>{stageDetail.body}</p>
               </div>
               <div className={statusChipClass(trip.status)}>
                 <span className="moovu-chip-dot" />

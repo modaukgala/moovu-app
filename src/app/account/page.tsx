@@ -174,7 +174,7 @@ export default function CustomerAccountPage() {
           <CustomerSettingsRow href="/account/security" icon={ShieldCheck} label="Security" detail="Email and cellphone verification" />
           <CustomerSettingsRow href="/account/payment-methods" icon={CreditCard} label="Payment methods" detail="Cash/Transfer is currently available" />
           <CustomerSettingsRow href="/account/moovu-plus" icon={Gift} label="MOOVU+ and credits" detail="Membership, promotional credit and referrals" />
-          <CustomerSettingsRow href="/book" icon={Bell} label="Notifications" detail="Manage trip updates on this device" />
+          <CustomerSettingsRow href="/" icon={Bell} label="Notifications" detail="Manage trip updates from Home" />
         </section>
 
         <section className="customer-settings-section">

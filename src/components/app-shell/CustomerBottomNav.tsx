@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { CalendarCheck2, Home, MapPinned, UserRound } from "lucide-react";
+import { CalendarCheck2, Headphones, Home, UserRound } from "lucide-react";
 
 const items = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/book", label: "Book", icon: MapPinned },
-  { href: "/ride/history", label: "Trips", icon: CalendarCheck2 },
+  { href: "/ride/history", label: "My Trips", icon: CalendarCheck2 },
   { href: "/account", label: "Account", icon: UserRound },
+  { href: "/contact", label: "Help", icon: Headphones },
 ] as const;
 
 function isActive(pathname: string, href: string) {

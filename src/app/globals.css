@@ -5336,6 +5336,8 @@ tr:last-child td {
 .customer-map-status span { width: 8px; height: 8px; border-radius: 50%; background: #16a66a; box-shadow: 0 0 0 5px rgba(22,166,106,.12); }
 .customer-map-controls { position: absolute; z-index: 12; right: 16px; top: 38%; display: grid; gap: 10px; }
 .customer-map-controls button { width: 46px; height: 46px; border-radius: 50%; }
+.customer-map-controls .customer-map-location-button { width: auto; min-width: 46px; padding: 0 12px; display: flex; gap: 7px; border-radius: 24px; font-size: 12px; font-weight: 850; }
+.customer-map-location-button span { white-space: nowrap; }
 .customer-home-sheet {
   position: absolute; z-index: 30; right: 12px; bottom: calc(82px + env(safe-area-inset-bottom)); left: 12px;
   margin: 0 auto; width: min(calc(100% - 24px), 620px); border: 1px solid rgba(203,216,228,.95); border-radius: 30px;
@@ -5347,7 +5349,7 @@ tr:last-child td {
 .customer-sheet-heading h1,.customer-role-mismatch h1 { margin-top: 3px; color: #07152e; font-size: 22px; font-weight: 950; line-height: 1.12; }
 .customer-sheet-heading > svg { width: 34px; height: 34px; color: #1672d4; }
 .customer-where-to {
-  display: flex; min-height: 68px; align-items: center; gap: 13px; margin-top: 14px; border: 1px solid #d6e3ee; border-radius: 21px;
+  display: grid; min-height: 68px; gap: 13px; margin-top: 14px; border: 1px solid #d6e3ee; border-radius: 21px;
   background: #f7fafc; padding: 11px 14px; color: #07152e; transition: transform 150ms ease, border-color 150ms ease;
 }
 .customer-where-to:hover { border-color: #8bc5f1; }
@@ -5356,6 +5358,12 @@ tr:last-child td {
 .customer-where-to span,.customer-where-to strong,.customer-where-to small { display: block; min-width: 0; }
 .customer-where-to strong { font-size: 16px; font-weight: 950; }
 .customer-where-to small { margin-top: 3px; color: #64748b; font-size: 11px; font-weight: 750; }
+.customer-home-route-preview { display: grid !important; gap: 10px; }
+.customer-home-route-preview > span { padding: 2px 0 8px 13px; border-left: 3px solid #1672d4; }
+.customer-home-route-preview > span + span { border-color: #0f172a; }
+.customer-home-route-preview small { margin: 0 0 2px; font-size: 11px; }
+.customer-home-route-preview strong { font-size: 14px; line-height: 1.3; }
+.customer-home-continue { display: grid !important; min-height: 48px; place-items: center; border-radius: 15px; background: #1672d4; color: #fff; font-size: 14px; font-weight: 900; }
 .customer-become-driver { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; margin-top: 8px; padding: 0 8px; color: #31516d; font-size: 12px; font-weight: 900; }
 .customer-role-mismatch p { margin-top: 8px; color: #526477; font-size: 13px; line-height: 1.5; }
 .customer-role-mismatch > div { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }

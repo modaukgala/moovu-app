@@ -43,7 +43,7 @@ export default function ContactPage() {
 
         <section className="legal-hero" aria-labelledby="contact-title">
           <p className="legal-kicker">MOOVU Help</p>
-          <h1 className="legal-title" id="contact-title">Contact MOOVU</h1>
+          <h1 className="legal-title" id="contact-title">Help and support</h1>
           <p className="legal-meta">Support email: {MOOVU_SUPPORT_EMAIL}</p>
         </section>
 

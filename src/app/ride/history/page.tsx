@@ -203,7 +203,7 @@ export default function RiderHistoryPage() {
         <header className="customer-history-header customer-history-v4-header">
           <div>
             <div className="moovu-kicker">MOOVU Customer</div>
-            <h1>Trip history</h1>
+            <h1>My Trips</h1>
             <p>Every ride, fare and receipt in one place.</p>
           </div>
         </header>
@@ -260,8 +260,8 @@ export default function RiderHistoryPage() {
           {filteredTrips.length === 0 ? (
             <div className="customer-history-empty">
               <EmptyState
-                title="No MOOVU trips yet"
-                description="Your completed, cancelled and active rides will appear here after your first booking."
+                title={filter === "all" ? "No trips yet" : "No trips in this category"}
+                description={filter === "all" ? "Your rides will appear here after your first booking." : "Try another status to see your rides."}
                 action={
                   <Link href="/book" className="moovu-btn moovu-btn-primary">
                     Book a ride
