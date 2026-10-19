@@ -7,7 +7,7 @@ const path = require("node:path");
 const baseUrl = process.env.MOOVU_VISUAL_BASE_URL || "http://localhost:3596";
 const browserPath = process.env.MOOVU_VISUAL_BROWSER;
 const parsedBase = new URL(baseUrl);
-const outputDir = path.join(__dirname, "..", "docs", "customer-uiux-pass2-screenshots");
+const outputDir = path.join(__dirname, "..", "docs", "customer-uiux-pass2-1-screenshots");
 const tripId = "00000000-0000-4000-8000-000000000301";
 const viewports = [
   { name: "android-small", width: 360, height: 740 },
@@ -56,6 +56,15 @@ async function main() {
         for (const key of ["sb-127-auth-token", "sb-localhost-auth-token", "sb-127.0.0.1-auth-token"]) {
           localStorage.setItem(key, JSON.stringify(value));
         }
+        // The Next.js development badge is tooling chrome, not part of the Customer UI.
+        const hideDevBadge = () => {
+          if (document.getElementById("visual-preview-hide-dev-badge")) return;
+          const style = document.createElement("style");
+          style.id = "visual-preview-hide-dev-badge";
+          style.textContent = "nextjs-portal { display: none !important; }";
+          document.head.appendChild(style);
+        };
+        document.addEventListener("DOMContentLoaded", hideDevBadge, { once: true });
       }, session);
       let tripStatus = "offered";
       await context.route("**/*", async (route) => {
@@ -107,6 +116,14 @@ async function main() {
         return route.continue();
       });
       const page = await context.newPage();
+      const waitForOrReload = async (locator) => {
+        try {
+          await locator.waitFor({ timeout: 12000 });
+        } catch {
+          await page.reload({ waitUntil: "domcontentloaded" });
+          await locator.waitFor({ timeout: 20000 });
+        }
+      };
       const capture = async (name) => {
         await page.waitForTimeout(450);
         const file = path.join(outputDir, `${name}-${viewport.name}.png`);
@@ -133,11 +150,11 @@ async function main() {
         console.log(JSON.stringify({ screen: name, viewport: viewport.name, finalPath: new URL(page.url()).pathname, ...metrics }));
       };
       await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-      await page.getByRole("heading", { name: "Book a ride" }).waitFor();
+      await waitForOrReload(page.getByRole("heading", { name: "Book a ride" }));
       await capture("01-home");
 
       await page.goto(`${baseUrl}/book`, { waitUntil: "domcontentloaded" });
-      await page.getByRole("heading", { name: "Book a ride" }).waitFor();
+      await waitForOrReload(page.getByRole("heading", { name: "Book a ride" }));
       await capture("02-pickup-destination");
       await page.locator("#pickup-input").fill("Preview Pickup");
       await page.locator(".moovu-place-option").first().click();
@@ -147,9 +164,31 @@ async function main() {
       await page.locator(".moovu-ride-option-card").last().click();
       await capture("03-go-and-go-xl");
       await page.getByRole("button", { name: "Pay Online" }).click();
+      await page.locator(".customer-booking-payment").evaluate((element) => element.scrollIntoView({ block: "end" }));
+      const paymentLayout = await page.evaluate(() => {
+        const scroller = document.querySelector(".mbk-sheet-scroll")?.getBoundingClientRect();
+        const bar = document.querySelector(".mbk-confirm-bar")?.getBoundingClientRect();
+        const payment = document.querySelector(".customer-booking-payment")?.getBoundingClientRect();
+        const buttons = Array.from(document.querySelectorAll(".customer-booking-payment-options button")).map((button) => button.getBoundingClientRect());
+        const note = document.querySelector(".customer-booking-payment-note")?.getBoundingClientRect();
+        return { scrollerBottom: scroller?.bottom, barTop: bar?.top, paymentBottom: payment?.bottom, buttons: buttons.map((box) => ({ top: box.top, bottom: box.bottom, height: box.height })), noteBottom: note?.bottom };
+      });
+      if (paymentLayout.buttons.length !== 2 || !paymentLayout.buttons.every((box) => box.height >= 44 && box.top >= 0 && box.bottom <= paymentLayout.barTop) || paymentLayout.noteBottom == null || paymentLayout.noteBottom > paymentLayout.barTop || paymentLayout.scrollerBottom > paymentLayout.barTop + 1) {
+        throw new Error(`Payment controls or guidance are obstructed at ${viewport.name}: ${JSON.stringify(paymentLayout)}`);
+      }
       await capture("04-payment");
       await page.locator(".mbk-confirm-bar button").click();
       await page.getByRole("dialog").waitFor();
+      const noticeReachable = await page.evaluate(() => {
+        const scroll = document.querySelector(".customer-confirm-scroll");
+        const notice = scroll?.querySelector("p.rounded-2xl.border-amber-200");
+        if (!scroll || !notice) return false;
+        scroll.scrollTop = scroll.scrollHeight;
+        const reachable = notice.getBoundingClientRect().bottom <= scroll.getBoundingClientRect().bottom + 1;
+        scroll.scrollTop = 0;
+        return reachable;
+      });
+      if (!noticeReachable) throw new Error(`Confirmation fee notice is not fully reachable at ${viewport.name}`);
       await capture("05-confirm-ride");
       if (process.env.MOOVU_VISUAL_ONLY_BOOKING === "1") {
         await context.close();
@@ -159,15 +198,28 @@ async function main() {
       for (const [name, status] of [["06-finding-driver", "offered"], ["07-driver-assigned", "assigned"], ["08-driver-arrived", "arrived"], ["09-trip-in-progress", "ongoing"], ["10-trip-completed", "completed"]]) {
         tripStatus = status;
         await page.goto(`${baseUrl}/ride/${tripId}`, { waitUntil: "domcontentloaded" });
-        await page.locator(".customer-trip-compact-card").waitFor();
+        try {
+          await page.locator(".customer-trip-compact-card").waitFor({ timeout: 12000 });
+        } catch (error) {
+          // A local dev navigation can race the previous polling request; reload the
+          // same synthetic state once before treating it as a rendering defect.
+          await page.reload({ waitUntil: "domcontentloaded" });
+          try {
+            await page.locator(".customer-trip-compact-card").waitFor({ timeout: 20000 });
+          } catch {
+            const state = await page.evaluate(() => ({ path: location.pathname, heading: document.querySelector("h1")?.textContent, excerpt: document.body.innerText.slice(0, 260) }));
+            throw new Error(`Synthetic trip fixture did not render ${status}: ${JSON.stringify(state)}; ${error.message}`);
+          }
+        }
         await capture(name);
       }
       for (const [name, pathname, heading] of [["11-my-trips", "/ride/history", "My Trips"], ["12-account", "/account", "Preview Customer"], ["13-help", "/contact", "Help and support"]]) {
         await page.goto(`${baseUrl}${pathname}`, { waitUntil: "domcontentloaded" });
-        await page.getByRole("heading", { name: heading }).waitFor();
+        await waitForOrReload(page.getByRole("heading", { name: heading }));
         await capture(name);
       }
       await page.goto(`${baseUrl}/book`, { waitUntil: "domcontentloaded" });
+      await waitForOrReload(page.locator("#dropoff-input"));
       await page.locator("#dropoff-input").focus();
       await page.setViewportSize({ width: viewport.width, height: Math.max(420, viewport.height - 320) });
       await page.waitForTimeout(350);

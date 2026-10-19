@@ -10767,6 +10767,82 @@ html {
   .booking-v3 .booking-scroll-nav { transition: none; }
 }
 
+/* Customer Pass 2.1: consistent mobile type, touch targets and reserved sheet space. */
+.customer-home-screen,
+.booking-v3,
+.customer-trip-v3 {
+  --customer-radius: 16px;
+  --customer-action-height: 52px;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.customer-home-screen .customer-sheet-heading h1 {
+  font-size: clamp(21px, 6vw, 24px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.customer-home-screen .customer-home-route-preview strong {
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.customer-home-screen .customer-home-route-preview > span + span strong {
+  font-size: 18px;
+}
+
+.customer-home-screen .customer-home-continue,
+.booking-v3 .moovu-confirm-button {
+  min-height: var(--customer-action-height);
+  border-radius: var(--customer-radius);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.moovu-customer-bottom-nav {
+  min-height: 66px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(10, 35, 76, 0.12);
+}
+
+.moovu-customer-bottom-nav .moovu-customer-nav-item {
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.moovu-customer-bottom-nav .moovu-customer-nav-icon { width: 22px; height: 22px; }
+.moovu-customer-bottom-nav .moovu-customer-nav-item.active { background: #edf4ff; }
+
+.booking-v3 .moovu-ride-option-card { border-radius: var(--customer-radius); }
+.booking-v3 .moovu-ride-price { font-size: 22px; font-weight: 750; }
+.booking-v3 .customer-booking-payment { border-radius: var(--customer-radius); }
+.booking-v3 .customer-booking-payment-options button { font-size: 14px; font-weight: 700; }
+.booking-v3 .customer-booking-payment-note { font-size: 12px; line-height: 1.45; }
+.booking-v3 .mbk-footer-fare { font-size: 26px; font-weight: 750; }
+
+.booking-v3 .customer-booking-confirmation { max-height: calc(100dvh - 24px); }
+.booking-v3 .customer-confirm-scroll { padding: 16px; scroll-padding-bottom: 20px; }
+.booking-v3 .customer-confirm-scroll h2 { font-size: 22px; line-height: 1.2; }
+.booking-v3 .customer-confirm-scroll dl { padding: 12px; }
+.booking-v3 .customer-confirm-scroll dl > div + div { margin-top: 6px; }
+.booking-v3 .customer-confirm-actions .moovu-btn { min-height: 50px; font-size: 15px; font-weight: 700; }
+
+.customer-trip-v3 .customer-trip-hero h1 { font-size: clamp(21px, 6vw, 24px); line-height: 1.15; }
+.customer-trip-v3 .customer-trip-compact-stack { border-radius: 22px; box-shadow: 0 12px 28px rgba(15, 38, 71, 0.12); }
+.customer-trip-v3 .customer-trip-compact-card h2 { font-size: clamp(21px, 6vw, 25px); line-height: 1.16; }
+.customer-trip-v3 .customer-trip-compact-kicker { font-size: 11px; font-weight: 700; }
+
+@media (max-width: 767px) {
+  .booking-v3 .mbk-sheet,
+  .booking-v3 .mbk-sheet-expanded { max-height: min(68svh, calc(100svh - 142px)); }
+  .booking-v3 .mbk-sheet-scroll { padding-bottom: 30px; scroll-padding-bottom: 30px; }
+  .booking-v3 .customer-booking-payment { scroll-margin-bottom: 30px; }
+  .booking-v3 .mbk-confirm-bar { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .booking-v3 .customer-confirm-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 10px; }
+}
+
 body {
   min-height: 100vh;
   background:
