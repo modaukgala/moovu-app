@@ -16,6 +16,11 @@ const contactCards = [
     subject: "Customer Support",
   },
   {
+    label: "Privacy and safety",
+    title: "Data requests, safety concerns, and policy questions",
+    subject: "Privacy or Safety Request",
+  },
+  {
     label: "Driver support",
     title: "Applications, driver portal, trips, subscriptions, and payments",
     subject: "Driver Support",
@@ -24,11 +29,6 @@ const contactCards = [
     label: "Admin and business",
     title: "Operations, partnerships, reporting, and business support",
     subject: "Business Support",
-  },
-  {
-    label: "Privacy and safety",
-    title: "Data requests, safety concerns, and policy questions",
-    subject: "Privacy or Safety Request",
   },
 ] as const;
 
@@ -44,15 +44,15 @@ export default function ContactPage() {
         <section className="legal-hero" aria-labelledby="contact-title">
           <p className="legal-kicker">MOOVU Help</p>
           <h1 className="legal-title" id="contact-title">Help and support</h1>
-          <p className="legal-meta">Support email: {MOOVU_SUPPORT_EMAIL}</p>
+          <p className="legal-meta">Need help with a ride or your account? Email us below.</p>
         </section>
 
         <nav className="legal-toc legal-toc-compact" aria-label="MOOVU legal pages">
-          <Link href="/privacy-policy">Privacy Policy</Link>
-          <Link href="/terms">Terms of Service</Link>
           <a href={`mailto:${MOOVU_SUPPORT_EMAIL}?subject=${encodeURIComponent("MOOVU Support")}`}>
             Email Support
           </a>
+          <Link href="/privacy-policy">Privacy Policy</Link>
+          <Link href="/terms">Terms of Service</Link>
         </nav>
 
         <div className="legal-body">

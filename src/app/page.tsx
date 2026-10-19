@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Menu, Navigation } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import CustomerAppShell from "@/components/customer/CustomerAppShell";
 import CustomerBottomSheet from "@/components/customer/CustomerBottomSheet";
 import CustomerDrawer from "@/components/customer/CustomerDrawer";
@@ -70,13 +70,13 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            <div className="customer-sheet-heading"><div><span>{loggedIn ? "Ready when you are" : "Welcome to MOOVU"}</span><h1>Where are you going?</h1></div><Navigation aria-hidden="true" /></div>
+            <div className="customer-sheet-heading"><div><span>{loggedIn ? "Ready when you are" : "Welcome to MOOVU"}</span><h1>Book a ride</h1></div></div>
             <Link href={bookingHref} className="customer-where-to">
               <span className="customer-home-route-preview">
-                <span><small>Pickup</small><strong>Use your location or choose a place</strong></span>
-                <span><small>Destination</small><strong>Where would you like to go?</strong></span>
+                <span><small>Pickup location</small><strong>Use your location or choose a place</strong></span>
+                <span><small>Destination</small><strong>Where are you going?</strong></span>
               </span>
-              <span className="customer-home-continue">Continue to booking</span>
+              <span className="customer-home-continue">Choose destination</span>
             </Link>
             {!loggedIn && !checking ? <Link href="/driver/apply" className="customer-become-driver">Become a Driver</Link> : null}
           </>

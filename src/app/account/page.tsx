@@ -172,7 +172,7 @@ export default function CustomerAccountPage() {
           <div className="customer-settings-title"><span>Account</span><strong>Profile and security</strong></div>
           <CustomerSettingsRow icon={Pencil} label={editing ? "Close personal details" : "Personal details"} detail={loading ? "Loading your profile" : "Name and verified contact details"} onClick={() => setEditing((value) => !value)} />
           <CustomerSettingsRow href="/account/security" icon={ShieldCheck} label="Security" detail="Email and cellphone verification" />
-          <CustomerSettingsRow href="/account/payment-methods" icon={CreditCard} label="Payment methods" detail="Cash/Transfer is currently available" />
+          <CustomerSettingsRow href="/account/payment-methods" icon={CreditCard} label="Payment methods" detail="Cash and Pay Online" />
           <CustomerSettingsRow href="/account/moovu-plus" icon={Gift} label="MOOVU+ and credits" detail="Membership, promotional credit and referrals" />
           <CustomerSettingsRow href="/" icon={Bell} label="Notifications" detail="Manage trip updates from Home" />
         </section>

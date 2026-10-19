@@ -2101,7 +2101,7 @@ export default function RiderBookingPage() {
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY ||
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
-      setMapError("Google Maps API key is missing.");
+      setMapError("Map unavailable right now. You can still search for an address.");
       return;
     }
     if (window.google?.maps) {
@@ -2118,7 +2118,7 @@ export default function RiderBookingPage() {
       setMapError(null);
     };
     const onErr = () => {
-      setMapError("Google Maps failed to load.");
+      setMapError("Map unavailable right now. You can still search for an address.");
     };
 
     if (existing) {
@@ -2480,10 +2480,6 @@ export default function RiderBookingPage() {
                 routeDistanceKm: distanceKm,
                 addStopIncrease: optionStopIncrease,
               }).totalFare;
-              const description =
-                opt.id === "group"
-                  ? "More space for groups"
-                  : "Everyday local trips";
               return (
                 <button
                   key={opt.id}
@@ -2516,26 +2512,8 @@ export default function RiderBookingPage() {
                       <div className="mt-1 text-xs font-black text-slate-700">
                         {opt.capacity}
                       </div>
-                      <div className="mt-0.5 text-[11px] font-semibold leading-4 text-slate-500">
-                        {description}
-                      </div>
-                      <div className="mt-1 text-[11px] font-bold text-[var(--moovu-primary)]">
-                        {durationMin != null
-                          ? `${fmtDur(durationMin)} trip`
-                          : "Fare ready after route"}
-                      </div>
                     </div>
                     <div className="moovu-ride-price">{money(optionFare)}</div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="moovu-mini-pill">
-                      From {money(opt.baseFare)}
-                    </span>
-                    {active && (
-                      <span className="moovu-mini-pill moovu-mini-pill-selected">
-                        Selected
-                      </span>
-                    )}
                   </div>
                 </button>
               );
@@ -2705,10 +2683,10 @@ export default function RiderBookingPage() {
           <div className="customer-confirm-scroll p-5 sm:p-7">
             <div className="text-xs font-black uppercase tracking-[0.16em] text-[var(--moovu-primary)]">MOOVU Rides</div>
             <h2 id="booking-confirmation-title" className="mt-2 text-2xl font-black">Confirm your booking</h2>
-            <p id="booking-confirmation-description" className="mt-2 text-sm leading-6 text-slate-600">
-              Please check your trip details before confirming. Only request a ride when you&apos;re ready to travel.
+            <p id="booking-confirmation-description" className="mt-1 text-sm leading-5 text-slate-600">
+              Check the route, payment and fare before you book.
             </p>
-            <dl className="mt-5 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm">
+            <dl className="mt-3 space-y-2 rounded-2xl bg-slate-50 p-3 text-sm">
               <div><dt className="font-bold text-slate-500">Pickup</dt><dd className="mt-0.5 font-semibold break-words">{pickupAddress}</dd></div>
               {resolvedStops.map((stop, index) => (
                 <div key={`${stop.placeId || stop.address}-${index}`}>
@@ -2718,14 +2696,14 @@ export default function RiderBookingPage() {
               ))}
               <div><dt className="font-bold text-slate-500">Destination</dt><dd className="mt-0.5 font-semibold break-words">{dropoffAddress}</dd></div>
               <div><dt className="font-bold text-slate-500">Ride</dt><dd className="mt-0.5 font-semibold">{selectedRide.name}{rideType === "scheduled" ? " · Scheduled" : ""}</dd></div>
-              <div><dt className="font-bold text-slate-500">Payment</dt><dd className="mt-0.5 font-semibold">{paymentMethod === "online" ? "Pay Online" : "Cash/Transfer"}</dd></div>
+              <div><dt className="font-bold text-slate-500">Payment</dt><dd className="mt-0.5 font-semibold">{paymentMethod === "online" ? "Pay Online" : "Cash"}</dd></div>
               {phase5Quote && (
                 <div><dt className="font-bold text-slate-500">Disclosed service fee</dt><dd className="mt-0.5 font-semibold">R{(phase5Quote.grossServiceFeeCents / 100).toFixed(2)}{phase5Quote.membershipWaiverCents || phase5Quote.promotionalCreditCents ? " before eligible waivers and credits" : ""}</dd></div>
               )}
               <div className="border-t border-slate-200 pt-3"><dt className="font-bold text-slate-500">Quoted total</dt><dd className="mt-0.5 text-xl font-black">{money(displayFare)}</dd></div>
             </dl>
-            <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-              <strong>Important:</strong> Please book only when you&apos;re ready to travel. Cancelling after a Driver accepts or failing to show up may result in applicable cancellation or no-show fees. Outstanding eligible fees may need to be resolved before another booking.
+            <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-950">
+              <strong>Only book when ready.</strong> Cancellation or no-show fees may apply after a Driver accepts. Outstanding eligible fees may need to be resolved before another booking.
             </p>
             {msg && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{msg}</p>}
           </div>
@@ -3262,7 +3240,7 @@ export default function RiderBookingPage() {
           <div className="px-4 pb-2">{expandedDetails}</div>
 
           <div className="customer-booking-payment mx-4 mt-3">
-            <div className="moovu-field-label">Payment method</div>
+            <div className="moovu-field-label">How will you pay?</div>
             <div className="customer-booking-payment-options" role="group" aria-label="Payment method">
               <button type="button" aria-pressed={paymentMethod === "cash"} className={paymentMethod === "cash" ? "is-selected" : ""} onClick={() => setPaymentMethod("cash")}>Cash</button>
               <button type="button" aria-pressed={paymentMethod === "online"} className={paymentMethod === "online" ? "is-selected" : ""} onClick={() => setPaymentMethod("online")}>Pay Online</button>
@@ -3347,11 +3325,9 @@ export default function RiderBookingPage() {
                 ? rideType === "scheduled"
                   ? "Scheduling..."
                   : "Booking..."
-                : displayFare == null
-                  ? "Review ride"
-                  : rideType === "scheduled"
-                    ? `Schedule ${selectedRide.name}`
-                    : `Review ${selectedRide.name} ride`}
+                : rideType === "scheduled"
+                  ? "Review schedule"
+                  : "Review ride"}
             </button>
           </div>
         </div>

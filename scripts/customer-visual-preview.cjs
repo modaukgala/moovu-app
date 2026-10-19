@@ -7,7 +7,7 @@ const path = require("node:path");
 const baseUrl = process.env.MOOVU_VISUAL_BASE_URL || "http://localhost:3596";
 const browserPath = process.env.MOOVU_VISUAL_BROWSER;
 const parsedBase = new URL(baseUrl);
-const outputDir = path.join(__dirname, "..", "docs", "customer-uiux-screenshots");
+const outputDir = path.join(__dirname, "..", "docs", "customer-uiux-pass2-screenshots");
 const tripId = "00000000-0000-4000-8000-000000000301";
 const viewports = [
   { name: "android-small", width: 360, height: 740 },
@@ -133,7 +133,7 @@ async function main() {
         console.log(JSON.stringify({ screen: name, viewport: viewport.name, finalPath: new URL(page.url()).pathname, ...metrics }));
       };
       await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-      await page.getByRole("heading", { name: "Where are you going?" }).waitFor();
+      await page.getByRole("heading", { name: "Book a ride" }).waitFor();
       await capture("01-home");
 
       await page.goto(`${baseUrl}/book`, { waitUntil: "domcontentloaded" });
@@ -159,7 +159,7 @@ async function main() {
       for (const [name, status] of [["06-finding-driver", "offered"], ["07-driver-assigned", "assigned"], ["08-driver-arrived", "arrived"], ["09-trip-in-progress", "ongoing"], ["10-trip-completed", "completed"]]) {
         tripStatus = status;
         await page.goto(`${baseUrl}/ride/${tripId}`, { waitUntil: "domcontentloaded" });
-        await page.locator(".customer-trip-current-card").waitFor();
+        await page.locator(".customer-trip-compact-card").waitFor();
         await capture(name);
       }
       for (const [name, pathname, heading] of [["11-my-trips", "/ride/history", "My Trips"], ["12-account", "/account", "Preview Customer"], ["13-help", "/contact", "Help and support"]]) {
@@ -167,6 +167,19 @@ async function main() {
         await page.getByRole("heading", { name: heading }).waitFor();
         await capture(name);
       }
+      await page.goto(`${baseUrl}/book`, { waitUntil: "domcontentloaded" });
+      await page.locator("#dropoff-input").focus();
+      await page.setViewportSize({ width: viewport.width, height: Math.max(420, viewport.height - 320) });
+      await page.waitForTimeout(350);
+      const keyboardLayout = await page.locator("#dropoff-input").evaluate((input) => {
+        const box = input.getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom, viewportHeight: window.innerHeight, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth };
+      });
+      if (keyboardLayout.scrollWidth > keyboardLayout.clientWidth || keyboardLayout.top < 0 || keyboardLayout.bottom > keyboardLayout.viewportHeight) {
+        throw new Error(`Focused destination is obstructed in compact viewport at ${viewport.name}: ${JSON.stringify(keyboardLayout)}`);
+      }
+      await page.screenshot({ path: path.join(outputDir, `14-keyboard-compact-${viewport.name}.png`) });
+      console.log(JSON.stringify({ screen: "14-keyboard-compact", viewport: viewport.name, ...keyboardLayout }));
       await context.close();
     }
   } finally {

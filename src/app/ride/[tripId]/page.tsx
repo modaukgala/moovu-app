@@ -942,7 +942,7 @@ export default function RideTrackingPage() {
       || "";
     if (!apiKey) {
       const timer = window.setTimeout(() => {
-        setMapError("Google Maps API key is missing.");
+        setMapError("Map unavailable right now. Trip details are still below.");
       }, 0);
 
       return () => window.clearTimeout(timer);
@@ -972,7 +972,7 @@ export default function RideTrackingPage() {
     script.async = true;
     script.defer = true;
     script.onload = ready;
-    script.onerror = () => setMapError("Failed to load Google Maps.");
+    script.onerror = () => setMapError("Map unavailable right now. Trip details are still below.");
     document.body.appendChild(script);
   }, [updateMap]);
 
@@ -2096,31 +2096,12 @@ export default function RideTrackingPage() {
             <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
               {stageDetail.title}
             </h1>
-            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
+            <p className="mt-1 max-w-2xl text-sm font-semibold leading-5 text-slate-600">
               {stageDetail.body}
             </p>
-            <div className="customer-trip-progress mt-5" aria-label="Trip progress">
-              {progressSteps.map((step) => (
-                <div
-                  key={step.label}
-                  className={[
-                    "customer-trip-progress-step",
-                    step.active ? "is-active" : "",
-                    step.current ? "is-current" : "",
-                  ].join(" ")}
-                >
-                  <span />
-                  <strong>{step.label}</strong>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="customer-trip-hero-side">
-            <div className={statusChipClass(trip.status)}>
-              <span className="moovu-chip-dot" />
-              {statusLabel(trip.status)}
-            </div>
             <div className="customer-trip-eta">
               <span>ETA</span>
               <strong>{stageDetail.eta}</strong>
@@ -2133,10 +2114,6 @@ export default function RideTrackingPage() {
             <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-black text-slate-700 shadow">
               Live route
             </div>
-            <div className="absolute right-4 top-4 z-10 max-w-[60%] rounded-full bg-white/95 px-4 py-2 text-right text-xs font-bold leading-tight text-blue-700 shadow">
-              {statusLabel(trip.status)}
-            </div>
-
             {mapError ? (
               <div className="flex min-h-[52svh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700 sm:min-h-[60vh] xl:min-h-[68vh]">
                 {mapError}
@@ -2189,33 +2166,16 @@ export default function RideTrackingPage() {
           <section id="customer-driver-card" className="customer-trip-compact-stack">
             <div className="customer-trip-compact-card">
               <div className="min-w-0">
-                <div className="customer-trip-compact-kicker">
-                  {rideTypeLabel(trip.ride_type)} {canShowDriverDetails ? `with ${driverName}` : ""}
-                </div>
+                <div className="customer-trip-compact-kicker">{canShowDriverDetails ? "Your Driver" : rideTypeLabel(trip.ride_type)}</div>
                 <h2>{canShowDriverDetails ? driverName : searchingForDriver ? "Looking for nearby MOOVU drivers" : "MOOVU trip"}</h2>
-                <p>{trip.created_at ? new Date(trip.created_at).toLocaleString() : "Live trip"}</p>
-                <strong>
-                  {money(displayTotal)}
-                  {canShowDriverDetails ? ` · ${carText}` : " · Driver details after acceptance"}
-                </strong>
+                <p>{canShowDriverDetails ? carText : "Driver details appear after acceptance"}</p>
+                <strong>{tripTotalLabel}: {money(displayTotal)}</strong>
                 {canShowDriverDetails && (
-                  <span>{displayValue(driver?.vehicle_registration)}</span>
+                  <span>Plate {displayValue(driver?.vehicle_registration)}</span>
                 )}
               </div>
               <div className={canShowDriverDetails ? "customer-driver-avatar is-live" : "customer-driver-avatar"}>
                 {canShowDriverDetails ? driverInitials(driver) : <span />}
-              </div>
-            </div>
-
-            <div className="customer-trip-current-card">
-              <div className="min-w-0">
-                <div className="customer-trip-compact-kicker">Current status</div>
-                <h3>{stageDetail.title}</h3>
-                <p>{stageDetail.body}</p>
-              </div>
-              <div className={statusChipClass(trip.status)}>
-                <span className="moovu-chip-dot" />
-                {statusLabel(trip.status)}
               </div>
             </div>
 
@@ -2236,14 +2196,6 @@ export default function RideTrackingPage() {
                 >
                   Cancel trip
                 </button>
-              </div>
-            )}
-
-            {trip.status === "ongoing" && (
-              <div className="rounded-[22px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Trip fare</div>
-                <div className="mt-1 text-4xl font-black">{money(displayTotal)}</div>
-                <div className="mt-1 text-xs font-semibold text-blue-100">Initial fare plus any stop you add. GPS distance, traffic and trip time do not change it.</div>
               </div>
             )}
 

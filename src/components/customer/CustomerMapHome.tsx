@@ -13,7 +13,7 @@ export default function CustomerMapHome() {
   const [status, setStatus] = useState(() =>
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
       ? "Finding your location..."
-      : "Map preview",
+      : "Map unavailable right now",
   );
   useEffect(() => {
     let cancelled = false;
@@ -34,11 +34,12 @@ export default function CustomerMapHome() {
     else if (apiKey) {
       const existing = document.getElementById("google-maps-script-customer-home") as HTMLScriptElement | null;
       if (existing) existing.addEventListener("load", initialise, { once: true });
-      else { const script = document.createElement("script"); script.id = "google-maps-script-customer-home"; script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`; script.async = true; script.addEventListener("load", initialise, { once: true }); script.addEventListener("error", () => setStatus("Map unavailable"), { once: true }); document.head.appendChild(script); }
+      else { const script = document.createElement("script"); script.id = "google-maps-script-customer-home"; script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`; script.async = true; script.addEventListener("load", initialise, { once: true }); script.addEventListener("error", () => setStatus("Map unavailable right now"), { once: true }); document.head.appendChild(script); }
     }
     return () => { cancelled = true; marker.current?.setMap(null); };
   }, []);
   function centreLocation() { navigator.geolocation?.getCurrentPosition(({ coords }) => { const position = { lat: coords.latitude, lng: coords.longitude }; map.current?.panTo(position); map.current?.setZoom(15); marker.current?.setPosition(position); setStatus("Your area"); }); }
   function toggleMapType() { const next = mapType === "roadmap" ? "satellite" : "roadmap"; setMapType(next); map.current?.setMapTypeId(next); }
-  return <div className="customer-home-map-wrap"><div ref={mapNode} className="customer-home-map" aria-label="MOOVU customer map" /><div className="customer-map-fallback" aria-hidden="true" /><div className="customer-map-status"><span />{status}</div><div className="customer-map-controls"><button type="button" onClick={centreLocation} aria-label="Centre your location" className="customer-map-location-button"><LocateFixed aria-hidden="true" /><span>My location</span></button><button type="button" onClick={toggleMapType} aria-label="Change map style"><Layers3 /></button></div></div>;
+  const mapUnavailable = status.includes("unavailable");
+  return <div className="customer-home-map-wrap"><div ref={mapNode} className="customer-home-map" aria-label="MOOVU customer map" /><div className="customer-map-fallback" aria-hidden="true" /><div className={`customer-map-status${mapUnavailable ? " is-unavailable" : ""}`}><span />{status}</div>{!mapUnavailable && <div className="customer-map-controls"><button type="button" onClick={centreLocation} aria-label="Centre your location" className="customer-map-location-button"><LocateFixed aria-hidden="true" /><span>My location</span></button><button type="button" onClick={toggleMapType} aria-label="Change map style"><Layers3 /></button></div>}</div>;
 }

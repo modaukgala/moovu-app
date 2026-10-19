@@ -209,7 +209,7 @@ export default function RiderHistoryPage() {
         </header>
 
         <section className="customer-history-v4">
-          <div className="customer-history-summary-tabs" role="tablist" aria-label="Trip summary">
+          {trips.length > 0 && <div className="customer-history-summary-tabs" role="tablist" aria-label="Trip summary">
             {primaryFilters.map((value) => {
               const count = value === "all"
                 ? tripSummary.all
@@ -234,9 +234,9 @@ export default function RiderHistoryPage() {
                 </button>
               );
             })}
-          </div>
+          </div>}
 
-          <div className="customer-history-toolbar">
+          {trips.length > 0 && <div className="customer-history-toolbar">
             <div>
               <span>{filterLabel(filter)}</span>
               <strong>{filteredTrips.length} {filteredTrips.length === 1 ? "ride" : "rides"}</strong>
@@ -255,7 +255,7 @@ export default function RiderHistoryPage() {
                 <option value="requested">Requested</option>
               </select>
             </label>
-          </div>
+          </div>}
 
           {filteredTrips.length === 0 ? (
             <div className="customer-history-empty">
