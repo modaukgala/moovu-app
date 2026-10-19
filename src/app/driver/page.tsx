@@ -1114,6 +1114,9 @@ export default function DriverHomePage() {
   }, [currentTrip?.no_show_eligible_at, nowMs]);
   const offerStops = useMemo(() => parseTripStops(offer?.stops), [offer?.stops]);
   const currentTripStops = useMemo(() => parseTripStops(currentTrip?.stops), [currentTrip?.stops]);
+  useEffect(() => {
+    if (currentTrip?.id) setTripSheetOpen(true);
+  }, [currentTrip?.id]);
   const pickupInstruction =
     typeof currentTrip?.fare_breakdown?.pickupInstruction === "string"
       ? currentTrip.fare_breakdown.pickupInstruction.trim()
@@ -1267,7 +1270,7 @@ export default function DriverHomePage() {
                     aria-expanded={tripSheetOpen}
                   >
                     {tripSheetOpen ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
-                    <span>{tripSheetOpen ? "Hide trip status" : `${tripStatusLabel(currentTrip.status)} · ${money(currentTrip.final_fare ?? currentTrip.fare_amount)}`}</span>
+                    <span>{tripSheetOpen ? "Trip details" : `${tripStatusLabel(currentTrip.status)} · ${money(currentTrip.final_fare ?? currentTrip.fare_amount)} · Show actions`}</span>
                   </button>
                   <div className="driver-trip-sheet-content">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1357,7 +1360,7 @@ export default function DriverHomePage() {
                     </div>
                   )}
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 driver-trip-navigation-actions">
                     {currentTrip.status === "assigned" && (pickupGoogle || pickupWaze) && (
                       <button
                         type="button"
@@ -1387,7 +1390,7 @@ export default function DriverHomePage() {
                     )}
                   </div>
 
-                  <div className="mt-5">
+                  <div className="mt-5 driver-trip-primary-actions">
                     {currentTrip.status === "assigned" && (
                       <div className="flex flex-wrap gap-3">
                         <button

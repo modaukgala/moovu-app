@@ -76,13 +76,21 @@ export default function DriverMapSurface({
       )}
 
       <div className="moovu-driver-map-sheet">
+        <div className="driver-availability-copy" role="status" aria-live="polite">
+          <span className={online ? "driver-availability-dot is-online" : "driver-availability-dot"} aria-hidden="true" />
+          <span>
+            <strong>{online ? "You're online" : "You're offline"}</strong>
+            <small>{online ? "Ready for nearby trip requests" : "Go online when you're ready to drive"}</small>
+          </span>
+        </div>
           <button
             type="button"
             className={online ? "driver-map-primary-status is-online" : "driver-map-primary-status"}
             disabled={busy}
+            aria-pressed={online}
             onClick={onToggleOnline}
           >
-            {busy ? "WORKING..." : online ? "● ONLINE" : "GO ONLINE"}
+            {busy ? "Updating status…" : online ? "Go offline" : "Go online"}
           </button>
       </div>
     </div>

@@ -293,20 +293,6 @@ export default function DriverEarningsPage() {
           </Link>
         </section>
 
-        {commissionDue > 0 && (
-          <section className="rounded-[24px] border border-sky-100 bg-sky-50 p-5">
-            <div className="text-lg font-black text-slate-950">
-              Commission due
-            </div>
-            <p className="mt-2 text-sm font-semibold text-slate-700">
-              {money(commissionDue)} owed
-            </p>
-            <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary mt-4">
-              View Commission / Pay Commission
-            </Link>
-          </section>
-        )}
-
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <MetricCard
             label="Cancellation amounts"

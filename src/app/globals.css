@@ -10834,6 +10834,86 @@ html {
 .customer-trip-v3 .customer-trip-compact-card h2 { font-size: clamp(21px, 6vw, 25px); line-height: 1.16; }
 .customer-trip-v3 .customer-trip-compact-kicker { font-size: 11px; font-weight: 700; }
 
+/* Driver premium simplicity: scoped to Driver surfaces so Customer styling stays intact. */
+.moovu-driver-shell .moovu-driver-map-sheet {
+  display: grid;
+  gap: 10px;
+  width: min(100% - 28px, 420px);
+  margin-inline: auto;
+}
+.driver-availability-copy {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 16px;
+  border: 1px solid #dce8f5;
+  border-radius: 18px;
+  background: rgb(255 255 255 / .97);
+  box-shadow: 0 10px 30px rgb(15 38 71 / .12);
+}
+.driver-availability-copy > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.driver-availability-copy strong { color: #11243d; font-size: 15px; line-height: 1.2; }
+.driver-availability-copy small { color: #52647a; font-size: 12px; line-height: 1.25; }
+.driver-availability-dot { width: 11px; height: 11px; flex: 0 0 auto; border-radius: 50%; background: #94a3b8; }
+.driver-availability-dot.is-online { background: #08a456; box-shadow: 0 0 0 5px #ddf8e9; }
+.moovu-driver-shell .driver-map-primary-status {
+  width: 100%; min-height: 54px; border-radius: 18px;
+  font-size: 15px; font-weight: 800; letter-spacing: 0;
+}
+.moovu-driver-shell .driver-map-primary-status:focus-visible,
+.moovu-driver-offer-drop button:focus-visible,
+.moovu-driver-active-trip button:focus-visible {
+  outline: 3px solid #0b76e0; outline-offset: 3px;
+}
+.moovu-driver-offer-drop {
+  top: auto;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  width: min(calc(100vw - 24px), 490px);
+  max-height: min(76dvh, 690px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: none;
+}
+.moovu-driver-offer-drop-inner { display: grid; gap: 16px; padding: 19px; border-radius: 24px; }
+.driver-offer-heading { display: flex; align-items: center; gap: 10px; color: #0750aa; font-size: 14px; }
+.driver-offer-heading strong { flex: 1; font-size: 15px; }
+.driver-offer-countdown { flex: 0 0 auto; border-radius: 999px; padding: 7px 10px; background: #e9f3ff; font-size: 12px; font-weight: 850; }
+.driver-offer-fare { display: grid; gap: 2px; }
+.driver-offer-fare span { color: #52647a; font-size: 12px; font-weight: 700; }
+.driver-offer-fare strong { color: #10243d; font-size: clamp(30px, 9vw, 38px); line-height: 1.08; letter-spacing: -.04em; }
+.driver-offer-meta { color: #52647a; font-size: 13px; font-weight: 650; }
+.moovu-driver-offer-drop .driver-offer-route { display: grid; gap: 10px; }
+.moovu-driver-offer-drop .driver-offer-route > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; min-width: 0; }
+.moovu-driver-offer-drop .driver-offer-route span { color: #64748b; font-size: 11px; font-weight: 750; }
+.moovu-driver-offer-drop .driver-offer-route strong { overflow-wrap: anywhere; color: #17243a; font-size: 14px; line-height: 1.35; }
+.moovu-driver-offer-drop .moovu-driver-accept,
+.moovu-driver-offer-drop .moovu-driver-decline { min-height: 54px; border-radius: 16px; font-size: 14px; font-weight: 850; }
+.moovu-driver-offer-drop .moovu-driver-decline { background: #f2f6fa; color: #28435d; border: 1px solid #d6e0eb; }
+.moovu-driver-active-trip.is-open { max-height: min(58dvh, 600px); }
+.moovu-driver-active-trip .driver-trip-sheet-content { display: flex; flex-direction: column; gap: 12px; }
+.moovu-driver-active-trip .driver-trip-sheet-content > * { margin-top: 0; margin-bottom: 0; }
+.moovu-driver-active-trip .driver-trip-sheet-content > :first-child { order: 0; }
+.moovu-driver-active-trip .driver-trip-sheet-content > .driver-trip-navigation-actions { order: 1; }
+.moovu-driver-active-trip .driver-trip-sheet-content > .driver-trip-primary-actions { order: 2; }
+.moovu-driver-active-trip .driver-trip-sheet-content > :not(:first-child):not(.driver-trip-navigation-actions):not(.driver-trip-primary-actions) { order: 3; }
+.moovu-driver-active-trip .driver-trip-primary-actions .moovu-btn { min-height: 52px; }
+.moovu-driver-active-trip .moovu-otp-input { min-height: 54px; font-size: 24px; letter-spacing: .22em; }
+@media (max-width: 430px) {
+  .moovu-driver-offer-drop { bottom: calc(76px + env(safe-area-inset-bottom)); max-height: min(78dvh, 670px); }
+  .moovu-driver-offer-drop-inner { padding: 16px; }
+  .driver-availability-copy { min-height: 54px; }
+  .moovu-driver-shell .moovu-driver-map-sheet { bottom: calc(82px + env(safe-area-inset-bottom)); }
+}
+@media (max-height: 740px) {
+  .moovu-driver-offer-drop { max-height: calc(100dvh - 136px - env(safe-area-inset-bottom)); }
+  .moovu-driver-active-trip.is-open { max-height: min(58dvh, calc(100dvh - 132px - env(safe-area-inset-bottom))); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moovu-driver-active-trip,
+  .driver-drawer { transition: none; animation: none; }
+}
+
 @media (max-width: 767px) {
   .booking-v3 .mbk-sheet,
   .booking-v3 .mbk-sheet-expanded { max-height: min(68svh, calc(100svh - 142px)); }
@@ -11496,4 +11576,35 @@ body {
 }
 @media (min-width: 600px) {
   .moovu-permission-reminder { margin-bottom: 20px; border-radius: 30px; }
+}
+
+/* Driver secondary screens: quieter hierarchy and consistent tap targets. */
+.driver-mobile-page .driver-mobile-container { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+.driver-mobile-page .driver-money-heading h1,
+.driver-mobile-page .driver-page-heading h1,
+.driver-mobile-page .driver-account-heading h1 {
+  font-size: clamp(22px, 6vw, 26px);
+  line-height: 1.16;
+  letter-spacing: -.025em;
+}
+.driver-mobile-page .driver-money-heading p,
+.driver-mobile-page .driver-page-heading p,
+.driver-mobile-page .driver-account-heading p { font-size: 13px; line-height: 1.5; }
+.driver-mobile-page .driver-context-tabs a { min-height: 48px; }
+.driver-mobile-page .driver-context-tabs a:focus-visible,
+.driver-mobile-page a:focus-visible,
+.driver-mobile-page button:focus-visible { outline: 3px solid #0b76e0; outline-offset: 2px; }
+.driver-mobile-page .driver-money-grid { gap: 10px; }
+.driver-mobile-page .driver-money-grid article { min-height: 116px; border-radius: 18px; box-shadow: 0 6px 20px rgb(15 38 71 / .06); }
+.driver-mobile-page .driver-money-grid strong { font-size: clamp(19px, 5vw, 24px); }
+.driver-mobile-page .driver-wallet-summary { border-radius: 18px; }
+.driver-mobile-page .driver-history-stats article { border-radius: 16px; box-shadow: 0 6px 20px rgb(15 38 71 / .05); }
+.driver-mobile-page .driver-trip-row { border-radius: 18px; }
+.driver-mobile-page .driver-account-subscription,
+.driver-mobile-page .driver-account-readiness { border-radius: 18px; box-shadow: 0 6px 20px rgb(15 38 71 / .05); }
+.driver-mobile-page .moovu-btn { min-height: 48px; }
+@media (max-width: 430px) {
+  .driver-mobile-page .driver-money-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .driver-mobile-page .driver-history-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .driver-mobile-page .driver-history-stats article:last-child { grid-column: 1 / -1; }
 }
