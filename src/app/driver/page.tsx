@@ -1262,7 +1262,7 @@ export default function DriverHomePage() {
               />
 
               {currentTrip && (
-                <div className={tripSheetOpen ? "moovu-driver-active-trip is-open p-5" : "moovu-driver-active-trip p-5"}>
+                <div className={`moovu-driver-active-trip ${tripSheetOpen ? "is-open" : ""} ${["arrived", "ongoing"].includes(currentTrip.status) ? "is-otp-stage" : ""} ${showStartOtp || showEndOtp ? "is-otp-entry" : ""}`}>
                   <button
                     type="button"
                     className="driver-trip-sheet-toggle"
@@ -1273,34 +1273,26 @@ export default function DriverHomePage() {
                     <span>{tripSheetOpen ? "Trip details" : `${tripStatusLabel(currentTrip.status)} · ${money(currentTrip.final_fare ?? currentTrip.fare_amount)} · Show actions`}</span>
                   </button>
                   <div className="driver-trip-sheet-content">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="driver-trip-summary">
                     <div>
-                      <div className="moovu-section-title">Active trip</div>
-                      <div className="mt-1 text-2xl font-black text-slate-950">
+                      <div className="moovu-section-title">Current trip</div>
+                      <div className="driver-trip-current-status">
                         {tripStatusLabel(currentTrip.status)}
                       </div>
-                      <p className="mt-2 text-sm font-semibold text-slate-600">
-                        {rideTypeLabel(currentTrip.ride_option)} - {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
+                      <p className="driver-trip-ride-type">
+                        {rideTypeLabel(currentTrip.ride_option)}
                       </p>
                     </div>
-
-                    <div className="moovu-chip moovu-chip-primary">
-                      <span className="moovu-chip-dot" />
-                      Trip fare: {money(currentTrip.final_fare ?? currentTrip.fare_amount)}
+                    <div className="driver-trip-fare">
+                      <span>Trip fare</span>
+                      <strong>{money(currentTrip.final_fare ?? currentTrip.fare_amount)}</strong>
                     </div>
                   </div>
 
-                  {currentTrip.status === "ongoing" && (
-                    <div className="mb-4 rounded-[24px] bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-4 text-white shadow-lg shadow-blue-900/15">
-                      <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Trip fare</div>
-                      <div className="mt-1 text-4xl font-black">{money(currentTrip.final_fare ?? currentTrip.fare_amount)}</div>
-                      <div className="mt-1 text-xs font-semibold text-blue-100">Booking fare plus customer-added stops. GPS and trip time do not change it.</div>
-                      {Number(currentTrip.fare_adjustment_amount ?? 0) > 0 && (
-                        <div className="mt-3 text-sm font-black text-white">
-                          {money(currentTrip.estimated_fare ?? currentTrip.fare_amount)} initial + {money(currentTrip.fare_adjustment_amount)} stop
-                        </div>
-                      )}
-                    </div>
+                  {currentTrip.status === "ongoing" && Number(currentTrip.fare_adjustment_amount ?? 0) > 0 && (
+                    <p className="driver-trip-fare-detail">
+                      Fare includes {money(currentTrip.estimated_fare ?? currentTrip.fare_amount)} initial + {money(currentTrip.fare_adjustment_amount)} added stop.
+                    </p>
                   )}
 
                   <div className="grid gap-3 md:grid-cols-2">
@@ -1383,11 +1375,6 @@ export default function DriverHomePage() {
                       </button>
                     )}
 
-                    {canOpenTripChat && (
-                      <div className="rounded-[22px] border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
-                        Chat is open for this trip. Use the floating chat button.
-                      </div>
-                    )}
                   </div>
 
                   <div className="mt-5 driver-trip-primary-actions">
@@ -1413,18 +1400,8 @@ export default function DriverHomePage() {
 
                     {currentTrip.status === "arrived" && (
                       <div className="moovu-driver-otp-card">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="moovu-section-title">Start trip</div>
-                            <div className="mt-1 text-xl font-black text-slate-950">
-                              Passenger start OTP
-                            </div>
-                            <p className="mt-1 text-sm leading-6 text-slate-600">
-                              Ask the customer for the start code before moving the trip to active.
-                            </p>
-                          </div>
-                          <span className="moovu-chip moovu-chip-warning">OTP required</span>
-                        </div>
+                        <h3 className="driver-trip-otp-title">Start trip</h3>
+                        <p className="driver-trip-otp-instruction">Ask the customer for their 4-digit start code before driving.</p>
 
                         {!showStartOtp ? (
                           <button
@@ -1435,10 +1412,12 @@ export default function DriverHomePage() {
                             Enter start OTP
                           </button>
                         ) : (
-                          <div className="mt-4 max-w-md space-y-3">
+                          <div className="driver-trip-otp-form">
                             <input
                               type="text"
                               inputMode="numeric"
+                              autoComplete="one-time-code"
+                              aria-label="Customer start code"
                               maxLength={4}
                               value={startOtp}
                               onChange={(e) => setStartOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
@@ -1446,7 +1425,7 @@ export default function DriverHomePage() {
                               className="moovu-otp-input"
                             />
 
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="driver-trip-otp-actions grid gap-3 sm:grid-cols-2">
                               <button
                                 onClick={async () => {
                                   await startTrip(currentTrip.id, startOtp);
@@ -1512,18 +1491,8 @@ export default function DriverHomePage() {
 
                     {currentTrip.status === "ongoing" && (
                       <div className="moovu-driver-otp-card is-complete">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="moovu-section-title">Complete trip</div>
-                            <div className="mt-1 text-xl font-black text-slate-950">
-                              Passenger end OTP
-                            </div>
-                            <p className="mt-1 text-sm leading-6 text-slate-600">
-                              Confirm the customer end code before closing this ride.
-                            </p>
-                          </div>
-                          <span className="moovu-chip moovu-chip-success">Ready to finish</span>
-                        </div>
+                        <h3 className="driver-trip-otp-title">End trip</h3>
+                        <p className="driver-trip-otp-instruction">Ask the customer for their 4-digit end code before completing the trip.</p>
 
                         {!showEndOtp && !showEndOtpBypass && (
                           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1544,10 +1513,12 @@ export default function DriverHomePage() {
                           </div>
                         )}
                         {showEndOtp && (
-                          <div className="mt-4 max-w-md space-y-3">
+                          <div className="driver-trip-otp-form">
                             <input
                               type="text"
                               inputMode="numeric"
+                              autoComplete="one-time-code"
+                              aria-label="Customer end code"
                               maxLength={4}
                               value={endOtp}
                               onChange={(e) => setEndOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
@@ -1555,7 +1526,7 @@ export default function DriverHomePage() {
                               className="moovu-otp-input"
                             />
 
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="driver-trip-otp-actions grid gap-3 sm:grid-cols-2">
                               <button
                                 onClick={async () => {
                                   await completeTrip(currentTrip.id, {

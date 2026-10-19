@@ -8,11 +8,12 @@ const baseUrl = process.env.MOOVU_VISUAL_BASE_URL || "http://localhost:3598";
 const browserPath = process.env.MOOVU_VISUAL_BROWSER;
 const origin = new URL(baseUrl);
 if (!["localhost", "127.0.0.1"].includes(origin.hostname)) throw new Error("Local visual preview only");
-const outputDir = path.join(__dirname, "..", "docs", "driver-premium-simple-screenshots");
+const outputDir = path.join(__dirname, "..", "docs", process.env.MOOVU_VISUAL_OUTPUT_NAME || "driver-pass1-1-after-screenshots");
 const viewports = [
   { name: "android-small", width: 360, height: 740 },
   { name: "android-standard", width: 412, height: 915 },
   { name: "iphone", width: 390, height: 844 },
+  { name: "android-compact", width: 360, height: 560 },
 ];
 const driverId = "00000000-0000-4000-8000-000000000201";
 const tripId = "00000000-0000-4000-8000-000000000301";
@@ -87,7 +88,7 @@ async function main() {
       });
       const page = await context.newPage();
       async function open(name, pathname, marker) {
-        await page.goto(`${baseUrl}${pathname}`, { waitUntil: "domcontentloaded" });
+        await page.goto(`${baseUrl}${pathname}`, { waitUntil: "domcontentloaded", timeout: 120000 });
         await page.locator(marker).waitFor({ timeout: 20000 });
         await page.waitForTimeout(250);
         const reminderDismiss = page.getByRole("button", { name: "Not now" });
@@ -118,10 +119,36 @@ async function main() {
         if (status === "arrived") {
           await page.getByRole("button", { name: "Enter start OTP" }).click();
           await page.screenshot({ path: path.join(outputDir, `09-start-otp-${viewport.name}.png`) });
+          if (viewport.name === "android-small" && !process.env.MOOVU_VISUAL_BEFORE) {
+            await page.setViewportSize({ width: 360, height: 420 });
+            await page.getByRole("textbox", { name: "Customer start code" }).focus();
+            await page.getByRole("textbox", { name: "Customer start code" }).fill("1234");
+            await page.getByRole("button", { name: "Verify and start" }).scrollIntoViewIfNeeded();
+            const visible = await page.getByRole("button", { name: "Verify and start" }).evaluate((button) => {
+              const rect = button.getBoundingClientRect();
+              return rect.top >= 0 && rect.bottom <= innerHeight;
+            });
+            if (!visible) throw new Error("Start OTP action outside compact keyboard viewport");
+            await page.screenshot({ path: path.join(outputDir, "09-start-otp-keyboard-emulated.png") });
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+          }
         }
         if (status === "ongoing") {
           await page.getByRole("button", { name: "Complete with End OTP" }).click();
           await page.screenshot({ path: path.join(outputDir, `11-end-otp-${viewport.name}.png`) });
+          if (viewport.name === "android-small" && !process.env.MOOVU_VISUAL_BEFORE) {
+            await page.setViewportSize({ width: 360, height: 420 });
+            await page.getByRole("textbox", { name: "Customer end code" }).focus();
+            await page.getByRole("textbox", { name: "Customer end code" }).fill("1234");
+            await page.getByRole("button", { name: "Verify and complete" }).scrollIntoViewIfNeeded();
+            const visible = await page.getByRole("button", { name: "Verify and complete" }).evaluate((button) => {
+              const rect = button.getBoundingClientRect();
+              return rect.top >= 0 && rect.bottom <= innerHeight;
+            });
+            if (!visible) throw new Error("End OTP action outside compact keyboard viewport");
+            await page.screenshot({ path: path.join(outputDir, "11-end-otp-keyboard-emulated.png") });
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+          }
         }
       }
       activeStatus = null;
