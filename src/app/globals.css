@@ -5339,7 +5339,7 @@ tr:last-child td {
 .customer-map-controls .customer-map-location-button { width: auto; min-width: 46px; padding: 0 12px; display: flex; gap: 7px; border-radius: 24px; font-size: 12px; font-weight: 850; }
 .customer-map-location-button span { white-space: nowrap; }
 .customer-home-sheet {
-  position: absolute; z-index: 30; right: 12px; bottom: calc(82px + env(safe-area-inset-bottom)); left: 12px;
+  position: absolute; z-index: 30; right: 12px; bottom: calc(94px + env(safe-area-inset-bottom)); left: 12px;
   margin: 0 auto; width: min(calc(100% - 24px), 620px); border: 1px solid rgba(203,216,228,.95); border-radius: 30px;
   background: rgba(255,255,255,.98); padding: 12px 18px 18px; box-shadow: 0 24px 56px rgba(15,23,42,.2); backdrop-filter: blur(20px);
 }
@@ -5364,6 +5364,10 @@ tr:last-child td {
 .customer-home-route-preview small { margin: 0 0 2px; font-size: 11px; }
 .customer-home-route-preview strong { font-size: 14px; line-height: 1.3; }
 .customer-home-continue { display: grid !important; min-height: 48px; place-items: center; border-radius: 15px; background: #1672d4; color: #fff; font-size: 14px; font-weight: 900; }
+.customer-booking-confirmation[open] { display: flex; flex-direction: column; }
+.customer-confirm-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.customer-confirm-actions { flex: none; padding: 12px 20px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid #e2e8f0; background: #fff; box-shadow: 0 -10px 22px rgba(15, 23, 42, .08); }
+@media (min-width: 640px) { .customer-confirm-actions { padding-right: 28px; padding-left: 28px; } }
 .customer-become-driver { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; margin-top: 8px; padding: 0 8px; color: #31516d; font-size: 12px; font-weight: 900; }
 .customer-role-mismatch p { margin-top: 8px; color: #526477; font-size: 13px; line-height: 1.5; }
 .customer-role-mismatch > div { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
@@ -5427,6 +5431,7 @@ tr:last-child td {
 }
 
 @media (max-width: 420px) {
+  .customer-map-controls { top: calc(max(14px, env(safe-area-inset-top)) + 116px); }
   .customer-home-topbar { left:12px; right:12px; grid-template-columns:46px minmax(0,1fr) 46px; }
   .customer-floating-icon,.customer-home-notification { width:46px; height:46px; }
   .customer-home-brand { padding:8px 12px; }
@@ -10151,6 +10156,11 @@ tr:last-child td {
 
   .customer-trip-v3 .customer-trip-map-card {
     border-radius: 0;
+    min-height: clamp(230px, 34svh, 320px);
+  }
+
+  .customer-trip-v3 .customer-trip-map-card > .min-h-\[52svh\] {
+    min-height: clamp(230px, 34svh, 320px);
   }
 
   .customer-trip-v3 .customer-trip-compact-stack {

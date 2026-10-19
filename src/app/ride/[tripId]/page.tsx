@@ -2133,8 +2133,8 @@ export default function RideTrackingPage() {
             <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-black text-slate-700 shadow">
               Live route
             </div>
-            <div className="absolute right-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700 shadow">
-              {tracking?.liveState?.replace(/_/g, " ") || statusLabel(trip.status)}
+            <div className="absolute right-4 top-4 z-10 max-w-[60%] rounded-full bg-white/95 px-4 py-2 text-right text-xs font-bold leading-tight text-blue-700 shadow">
+              {statusLabel(trip.status)}
             </div>
 
             {mapError ? (

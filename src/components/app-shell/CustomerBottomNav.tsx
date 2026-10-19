@@ -25,7 +25,7 @@ type CustomerBottomNavProps = {
 
 export default function CustomerBottomNav({
   className = "",
-  visibilityMode = "auto",
+  visibilityMode = "always",
   visible = true,
 }: CustomerBottomNavProps) {
   const pathname = usePathname();

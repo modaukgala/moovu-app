@@ -294,7 +294,11 @@ export default function RiderBookingPage() {
 
   useEffect(() => {
     const dialog = bookingConfirmationRef.current;
-    if (bookingConfirmationOpen && dialog && !dialog.open) dialog.showModal();
+    if (bookingConfirmationOpen && dialog && !dialog.open) {
+      dialog.showModal();
+      dialog.focus({ preventScroll: true });
+      dialog.querySelector<HTMLElement>(".customer-confirm-scroll")?.scrollTo(0, 0);
+    }
   }, [bookingConfirmationOpen]);
 
   const bothLocationsSet =
@@ -2688,6 +2692,7 @@ export default function RiderBookingPage() {
       {bookingConfirmationOpen && (
         <dialog
           ref={bookingConfirmationRef}
+          tabIndex={-1}
           aria-labelledby="booking-confirmation-title"
           aria-describedby="booking-confirmation-description"
           onClose={() => setBookingConfirmationOpen(false)}
@@ -2695,9 +2700,9 @@ export default function RiderBookingPage() {
             if (busy) event.preventDefault();
             else setBookingConfirmationOpen(false);
           }}
-          className="fixed inset-0 z-[10000] m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-3xl border border-slate-200 bg-white p-0 text-slate-950 shadow-2xl backdrop:bg-slate-950/60"
+          className="customer-booking-confirmation fixed inset-0 z-[10000] m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white p-0 text-slate-950 shadow-2xl backdrop:bg-slate-950/60"
         >
-          <div className="p-5 sm:p-7" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+          <div className="customer-confirm-scroll p-5 sm:p-7">
             <div className="text-xs font-black uppercase tracking-[0.16em] text-[var(--moovu-primary)]">MOOVU Rides</div>
             <h2 id="booking-confirmation-title" className="mt-2 text-2xl font-black">Confirm your booking</h2>
             <p id="booking-confirmation-description" className="mt-2 text-sm leading-6 text-slate-600">
@@ -2723,10 +2728,10 @@ export default function RiderBookingPage() {
               <strong>Important:</strong> Please book only when you&apos;re ready to travel. Cancelling after a Driver accepts or failing to show up may result in applicable cancellation or no-show fees. Outstanding eligible fees may need to be resolved before another booking.
             </p>
             {msg && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{msg}</p>}
-            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row">
-              <button type="button" autoFocus disabled={busy} onClick={() => setBookingConfirmationOpen(false)} className="moovu-btn moovu-btn-secondary sm:flex-1">Go Back</button>
-              <button type="button" disabled={busy || !canSubmit} onClick={() => void confirmBooking()} className="moovu-btn moovu-btn-primary min-h-12 sm:flex-[2]">{busy ? "Booking..." : "Confirm Ride"}</button>
-            </div>
+          </div>
+          <div className="customer-confirm-actions flex flex-col-reverse gap-3 sm:flex-row">
+            <button type="button" disabled={busy} onClick={() => setBookingConfirmationOpen(false)} className="moovu-btn moovu-btn-secondary sm:flex-1">Go Back</button>
+            <button type="button" disabled={busy || !canSubmit} onClick={() => void confirmBooking()} className="moovu-btn moovu-btn-primary min-h-12 sm:flex-[2]">{busy ? "Booking..." : "Confirm Ride"}</button>
           </div>
         </dialog>
       )}
