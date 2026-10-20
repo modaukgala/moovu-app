@@ -4,8 +4,9 @@ import { isPerformanceMetric, type PerformanceMetric } from "./metrics";
 
 const SAMPLE_RATE = 0.05;
 const MAX_EVENTS = 8;
-const sessionId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "";
-const sampled = Math.random() < SAMPLE_RATE;
+const telemetryEnabled = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_MOOVU_PERFORMANCE_TELEMETRY === "true";
+const sessionId = telemetryEnabled && typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "";
+const sampled = telemetryEnabled && Math.random() < SAMPLE_RATE;
 let eventCount = 0;
 
 export function recordPerformanceMetric(metric: PerformanceMetric, durationMs: number, outcome: "ok" | "error" | "timeout" = "ok") {

@@ -4,6 +4,9 @@ let windowStart = 0;
 let windowCount = 0;
 
 export async function POST(request: Request) {
+  if (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_MOOVU_PERFORMANCE_TELEMETRY !== "true") {
+    return new Response(null, { status: 404 });
+  }
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) return new Response(null, { status: 403 });
   if (Number(request.headers.get("content-length") || 0) > 1024) return new Response(null, { status: 413 });

@@ -4,7 +4,7 @@ The candidate starts from `a04e32a72f0002fc44d16e9c9dfeb68846bb33f2`. Do not dep
 
 ## Client measurements
 
-Driver startup sends at most eight allowlisted timing events per tab in a random 5% sample to `/api/performance/client`. The route accepts same-origin requests only, bounds the request stream to 1 KB, and logs only a random tab identifier, metric name, bounded duration, and outcome. It writes no database rows. Its 100-request/minute limit is per function instance, not a distributed abuse-control guarantee; an Origin header can be spoofed by non-browser clients. Review Vercel firewall, log retention and access controls before deployment. These logs are not a substitute for authenticated device timing.
+Driver startup telemetry is disabled in production at build and route level. In non-production, it requires `NEXT_PUBLIC_MOOVU_PERFORMANCE_TELEMETRY=true`, samples at most 5% of tabs and eight events per tab, accepts same-origin requests only, bounds request bodies to 1 KB, and writes no database rows. The 100-request/minute limit is per function instance; review shared rate limiting and log retention before enabling telemetry outside local development. Production startup behavior is independent of telemetry.
 
 ## Isolated concurrency test
 
