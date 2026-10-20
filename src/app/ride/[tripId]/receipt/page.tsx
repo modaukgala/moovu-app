@@ -8,7 +8,7 @@ import { Download } from "lucide-react";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
-import LoadingState from "@/components/ui/LoadingState";
+import MoovuLoadingScreen from "@/components/customer/MoovuLoadingScreen";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Trip = {
@@ -205,7 +205,7 @@ export default function TripReceiptPage() {
   }
 
   if (loading) {
-    return <LoadingState title="Loading receipt" description="Preparing your MOOVU trip receipt." />;
+    return <MoovuLoadingScreen message="Preparing your receipt..." />;
   }
 
   if (!trip) {

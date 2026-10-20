@@ -55,6 +55,22 @@ export async function GET(req: Request) {
     const auth = await requireAdminUser(req);
     if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     const url = new URL(req.url);
+    if (url.searchParams.get("summary") === "1") {
+      const activeStatuses = ["pending_payment_review", "waiting_confirmation"];
+      const count = async (type?: string, status?: string) => {
+        let query = auth.supabaseAdmin.from("driver_payment_requests")
+          .select("id", { count: "exact", head: true });
+        query = status ? query.eq("status", status) : query.in("status", activeStatuses);
+        if (type) query = query.eq("payment_type", type);
+        const result = await query;
+        if (result.error) throw result.error;
+        return result.count ?? 0;
+      };
+      const [all, subscription, commission, waiting] = await Promise.all([
+        count(), count("subscription"), count("commission"), count(undefined, "waiting_confirmation"),
+      ]);
+      return NextResponse.json({ ok: true, counts: { all, subscription, commission, waiting } });
+    }
     const status = String(url.searchParams.get("status") ?? "pending_payment_review").trim();
     let query = auth.supabaseAdmin.from("driver_payment_requests").select(`
       id,driver_id,payment_type,subscription_plan,amount_expected,amount_submitted,payment_reference,

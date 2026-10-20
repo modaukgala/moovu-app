@@ -8,7 +8,7 @@ import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
-import LoadingState from "@/components/ui/LoadingState";
+import MoovuLoadingScreen from "@/components/customer/MoovuLoadingScreen";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -177,7 +177,7 @@ export default function RiderHistoryPage() {
   }, [trips]);
 
   if (loading) {
-    return <LoadingState title="Loading your trips" description="Building your MOOVU ride history." />;
+    return <MoovuLoadingScreen message="Loading your trips..." />;
   }
 
   async function signInAsCustomer() {

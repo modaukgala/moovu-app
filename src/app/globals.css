@@ -36,6 +36,92 @@
   --radius-xl: 34px;
 }
 
+.moovu-customer-loading {
+  --moovu-loading-track: min(84vw, 340px);
+  display: grid;
+  place-items: center;
+  width: 100%;
+  padding: calc(env(safe-area-inset-top) + 24px) 20px calc(env(safe-area-inset-bottom) + 28px);
+  background: #f9fbfd;
+  color: #12314d;
+}
+
+.moovu-customer-loading--full { min-height: 100dvh; }
+.moovu-customer-loading--contained { min-height: 320px; }
+.moovu-customer-loading--dark { background: #112438; color: #f5fbff; }
+.moovu-customer-loading__content {
+  display: flex;
+  width: min(100%, 420px);
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(-3vh);
+  text-align: center;
+}
+.moovu-customer-loading__logo {
+  width: clamp(164px, 48vw, 208px);
+  height: auto;
+  object-fit: contain;
+}
+.moovu-customer-loading__road-scene {
+  position: relative;
+  width: var(--moovu-loading-track);
+  height: 126px;
+  overflow: hidden;
+  margin-top: -8px;
+}
+.moovu-customer-loading__car {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  left: -185px;
+  width: 178px;
+  height: 82px;
+  animation: moovu-car-travel 3.2s linear infinite;
+  will-change: transform;
+}
+.moovu-customer-loading__road {
+  position: absolute;
+  right: 0;
+  bottom: 24px;
+  left: 0;
+  height: 2px;
+  background: #ccdce5;
+}
+.moovu-customer-loading__road::after {
+  position: absolute;
+  inset: 9px 0 auto;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #b6cbd8 0 22px, transparent 22px 34px);
+  content: "";
+}
+.moovu-customer-loading__slogan {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.moovu-customer-loading__message {
+  max-width: 32ch;
+  margin: 9px 0 0;
+  color: #52697b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.moovu-customer-loading--dark .moovu-customer-loading__message { color: #c6d8e5; }
+
+@keyframes moovu-car-travel {
+  to { transform: translateX(calc(var(--moovu-loading-track) + 190px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moovu-customer-loading__car {
+    left: 50%;
+    animation: none;
+    transform: translateX(-50%);
+    will-change: auto;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

@@ -8,7 +8,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Headphones, ReceiptText, Route, ShieldCheck, Tag } from "lucide-react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
-import LoadingState from "@/components/ui/LoadingState";
+import MoovuLoadingScreen from "@/components/customer/MoovuLoadingScreen";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import { notifyInApp } from "@/lib/in-app-notifications";
 import {
@@ -1373,10 +1373,7 @@ export default function RideTrackingPage() {
 
   if (loading) {
     return (
-      <LoadingState
-        title="Loading your live trip"
-        description="Preparing the map, driver details, route status, and trip controls."
-      />
+      <MoovuLoadingScreen message="Loading your journey..." />
     );
   }
 

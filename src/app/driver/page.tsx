@@ -144,9 +144,11 @@ export default function DriverHomePage() {
   }
 
   useEffect(() => {
+    if (!offer?.offer_expires_at && !currentTrip?.no_show_eligible_at) return;
+    setNowMs(Date.now());
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [offer?.offer_expires_at, currentTrip?.no_show_eligible_at]);
 
   const safeGetSession = useCallback(async () => {
     try {
@@ -893,10 +895,9 @@ export default function DriverHomePage() {
 
   useEffect(() => {
     (async () => {
-      await loadDriverProfile(false);
-      await loadCurrentOffer();
-      await loadCurrentTrip();
-      await loadEarningsSnapshot();
+      const profile = await loadDriverProfile(false);
+      if (!profile) return;
+      await Promise.all([loadCurrentOffer(), loadCurrentTrip(), loadEarningsSnapshot()]);
     })();
     // Initial dashboard load only; polling effects below refresh offer/trip state.
     // eslint-disable-next-line react-hooks/exhaustive-deps

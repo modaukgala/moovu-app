@@ -6,7 +6,7 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import MetricCard from "@/components/ui/MetricCard";
 import ManualSurgeControl from "@/components/admin/ManualSurgeControl";
 import { supabaseClient } from "@/lib/supabase/client";
-import { adminPaymentReviewCounts, type AdminPaymentReviewRow } from "@/lib/admin/paymentReviewCounts";
+import type { AdminPaymentReviewCounts } from "@/lib/admin/paymentReviewCounts";
 
 type AnalyticsResponse = {
   ok: boolean;
@@ -120,17 +120,17 @@ export default function AdminDashboardPage() {
 
     if (!session) return;
 
-    const res = await fetch("/api/admin/payment-reviews?status=all", {
+    const res = await fetch("/api/admin/payment-reviews?summary=1", {
       cache: "no-store",
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     const json = (await res.json().catch(() => null)) as
-      | { ok?: boolean; requests?: AdminPaymentReviewRow[] }
+      | { ok?: boolean; counts?: AdminPaymentReviewCounts }
       | null;
 
     if (!json?.ok) return;
 
-    setPaymentFlags(adminPaymentReviewCounts(json.requests ?? []));
+    if (json.counts) setPaymentFlags(json.counts);
   }
 
   useEffect(() => {

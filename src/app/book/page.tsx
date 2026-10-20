@@ -266,6 +266,7 @@ export default function RiderBookingPage() {
   const pickupAutocompleteAbortRef = useRef<AbortController | null>(null);
   const dropoffAutocompleteAbortRef = useRef<AbortController | null>(null);
   const stopAutocompleteAbortRefs = useRef<Array<AbortController | null>>([]);
+  const surgeFetchInFlightRef = useRef(false);
   const suggestionPointerYRef = useRef<number | null>(null);
   const skipLocationBlurRef = useRef(false);
   const lastCalculatedKeyRef = useRef("");
@@ -675,16 +676,22 @@ export default function RiderBookingPage() {
   }
 
   async function loadActiveSurge() {
-    const res = await fetch(`/api/pricing/surge?ts=${Date.now()}`, {
-      cache: "no-store",
-    });
-    const json = (await res.json().catch(() => null)) as {
-      ok?: boolean;
-      surge?: SurgeModeConfig;
-    } | null;
+    if (surgeFetchInFlightRef.current) return;
+    surgeFetchInFlightRef.current = true;
+    try {
+      const res = await fetch(`/api/pricing/surge?ts=${Date.now()}`, {
+        cache: "no-store",
+      });
+      const json = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        surge?: SurgeModeConfig;
+      } | null;
 
-    if (json?.ok && json.surge) {
-      setActiveSurge(json.surge);
+      if (json?.ok && json.surge) {
+        setActiveSurge(json.surge);
+      }
+    } finally {
+      surgeFetchInFlightRef.current = false;
     }
   }
 
@@ -2031,10 +2038,10 @@ export default function RiderBookingPage() {
       setActiveSurge(SURGE_MODES.normal);
     });
     const surgeTimer = window.setInterval(() => {
-      void loadActiveSurge().catch(() => undefined);
+      if (!document.hidden) void loadActiveSurge().catch(() => undefined);
     }, 15000);
     const handleFocus = () => {
-      void loadActiveSurge().catch(() => undefined);
+      if (!document.hidden) void loadActiveSurge().catch(() => undefined);
     };
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleFocus);

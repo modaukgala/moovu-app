@@ -3,6 +3,8 @@ export type AdminPaymentReviewRow = {
   status?: string | null;
 };
 
+export type AdminPaymentReviewCounts = ReturnType<typeof adminPaymentReviewCounts>;
+
 export function adminPaymentReviewCounts(rows: AdminPaymentReviewRow[]) {
   const active = rows.filter(row =>
     row.status === "pending_payment_review" || row.status === "waiting_confirmation");
