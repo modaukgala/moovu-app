@@ -37,6 +37,7 @@ import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
+import { recordPerformanceMetric } from "@/lib/performance/client";
 import DriverOnboardingEntry from "@/components/driver/DriverOnboardingEntry";
 import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
@@ -80,6 +81,7 @@ export default function DriverHomePage() {
   const [driverActionError, setDriverActionError] = useState<string | null>(null);
   const [gpsInfo, setGpsInfo] = useState<GpsNotice | string | null>(null);
   const [loadingDriver, setLoadingDriver] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [mapError, setMapError] = useState<string | null>(null);
   const [satelliteMap, setSatelliteMap] = useState(false);
@@ -130,6 +132,7 @@ export default function DriverHomePage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const mapInitializedRef = useRef(false);
+  const mapStartRef = useRef(0);
   const mapContainerNodeRef = useRef<HTMLDivElement | null>(null);
 
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
@@ -169,42 +172,53 @@ export default function DriverHomePage() {
     return session?.access_token ?? null;
   }, [safeGetSession]);
 
-  async function loadDriverProfile(silent = false) {
+  async function loadDriverProfile(silent = false, accessToken?: string) {
     if (!silent) {
       setLoadingDriver(true);
       setInfo(null);
     }
 
-    const session = await safeGetSession();
-    if (!session) {
+    const token = accessToken ?? (await safeGetSession())?.access_token;
+    if (!token) {
       if (!silent) setLoadingDriver(false);
       return null;
     }
-
-    const res = await fetch("/api/driver/me", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      cache: "no-store",
-    });
-
-    const json = await res.json().catch(() => null);
-
-    if (!json?.ok || !json?.driver) {
-      if (!silent) {
-        setDriver(null);
-        setInfo(json?.error || "Driver record not found.");
+    const started = performance.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+    try {
+      const res = await fetch("/api/driver/me", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok || !json?.driver) {
+        if (!silent) {
+          setDriver(null);
+          setProfileLoadError(json?.error || "Driver profile is unavailable. Try again.");
+        }
+        recordPerformanceMetric("driver_profile", performance.now() - started, "error");
+        return null;
       }
-      if (!silent) setLoadingDriver(false);
+      setDriver(json.driver as Driver);
+      setProfileLoadError(null);
+      recordPerformanceMetric("driver_profile", performance.now() - started);
+      return json.driver as Driver;
+    } catch {
+      if (!silent) setProfileLoadError("Connection interrupted while loading your profile. Try again.");
+      recordPerformanceMetric("driver_profile", performance.now() - started, controller.signal.aborted ? "timeout" : "error");
       return null;
+    } finally {
+      clearTimeout(timeout);
+      if (!silent) setLoadingDriver(false);
     }
-
-    setDriver(json.driver as Driver);
-    if (!silent) setLoadingDriver(false);
-    return json.driver as Driver;
   }
 
-  const loadCurrentOffer = useCallback(() => offerRead.run(async (signal) => {
-    const token = await getAccessToken();
+  const loadCurrentOffer = useCallback((accessToken?: string) => offerRead.run(async (signal) => {
+    const started = performance.now();
+    const token = accessToken ?? await getAccessToken();
     if (!token) return readFailure(401);
 
     const res = await fetch("/api/driver/offers/current", {
@@ -219,10 +233,12 @@ export default function DriverHomePage() {
     if (!res.ok || !json?.ok) return readFailure(res.status);
 
     setOffer(json.offer ?? null);
+    recordPerformanceMetric("driver_offer_restore", performance.now() - started);
   }), [getAccessToken, offerRead]);
 
-  const loadCurrentTrip = useCallback(() => tripRead.run(async (signal) => {
-    const token = await getAccessToken();
+  const loadCurrentTrip = useCallback((accessToken?: string) => tripRead.run(async (signal) => {
+    const started = performance.now();
+    const token = accessToken ?? await getAccessToken();
     if (!token) return readFailure(401);
 
     const res = await fetch("/api/driver/current-trip", {
@@ -237,9 +253,11 @@ export default function DriverHomePage() {
     if (!res.ok || !json?.ok) return readFailure(res.status);
 
     setCurrentTrip(json.trip ?? null);
+    recordPerformanceMetric("driver_trip_restore", performance.now() - started);
   }), [getAccessToken, tripRead]);
 
   async function loadEarningsSnapshot() {
+    const started = performance.now();
     const token = await getAccessToken();
     if (!token) return;
 
@@ -250,7 +268,8 @@ export default function DriverHomePage() {
     })
       .then((res) => res.json())
       .catch(() => null);
-    if (!json?.ok) return;
+    if (!json?.ok) { recordPerformanceMetric("driver_earnings", performance.now() - started, "error"); return; }
+    recordPerformanceMetric("driver_earnings", performance.now() - started);
 
     const earnings = (json.earnings ?? {}) as {
       wallet?: { balance_due?: number | string | null } | null;
@@ -888,6 +907,7 @@ export default function DriverHomePage() {
       mapContainerNodeRef.current = currentNode;
       mapInitializedRef.current = true;
       setMapError(null);
+      if (mapStartRef.current) recordPerformanceMetric("driver_map_ready", performance.now() - mapStartRef.current);
     }
 
     return true;
@@ -895,9 +915,17 @@ export default function DriverHomePage() {
 
   useEffect(() => {
     (async () => {
-      const profile = await loadDriverProfile(false);
-      if (!profile) return;
-      await Promise.all([loadCurrentOffer(), loadCurrentTrip(), loadEarningsSnapshot()]);
+      const started = performance.now();
+      const session = await safeGetSession();
+      recordPerformanceMetric("driver_auth_restore", performance.now() - started, session ? "ok" : "error");
+      if (!session) { setLoadingDriver(false); return; }
+      const [profile] = await Promise.all([
+        loadDriverProfile(false, session.access_token),
+        loadCurrentOffer(session.access_token),
+        loadCurrentTrip(session.access_token),
+      ]);
+      recordPerformanceMetric("driver_dashboard_ready", performance.now() - started, profile ? "ok" : "error");
+      if (profile) void loadEarningsSnapshot();
     })();
     // Initial dashboard load only; polling effects below refresh offer/trip state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -970,6 +998,7 @@ export default function DriverHomePage() {
 
   useEffect(() => {
     if (!driver?.id) return;
+    const realtimeStarted = performance.now();
 
     const channel = supabaseClient
       .channel(`driver-live-${driver.id}`)
@@ -1000,6 +1029,7 @@ export default function DriverHomePage() {
       )
       .subscribe((status) => {
         setDriverRealtimeConnected(status === "SUBSCRIBED");
+        if (status === "SUBSCRIBED") recordPerformanceMetric("driver_realtime_connect", performance.now() - realtimeStarted);
       });
 
     return () => {
@@ -1013,6 +1043,7 @@ export default function DriverHomePage() {
   useEffect(() => {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    mapStartRef.current = performance.now();
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY
       || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -1237,7 +1268,12 @@ export default function DriverHomePage() {
 
         {!driver ? (
           <div className="moovu-card p-6 text-slate-700">
-            Driver record not found.
+            <p>{profileLoadError || "Driver record not found."}</p>
+            {profileLoadError && (
+              <button type="button" className="moovu-btn moovu-btn-primary mt-4" onClick={() => void loadDriverProfile(false)}>
+                Try again
+              </button>
+            )}
           </div>
         ) : (
           <>
