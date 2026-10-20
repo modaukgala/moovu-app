@@ -102,6 +102,7 @@ export default function DriverHomePage() {
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [driverRealtimeConnected, setDriverRealtimeConnected] = useState(false);
   const completionRequestRef = useRef(false);
+  const profileRequestRef = useRef<Promise<Driver | null> | null>(null);
   const isPageVisible = usePageVisibility();
   const offerRead = useReliableRead(READ_POLICIES.driverOffers, "driver-offers", driverRealtimeConnected);
   const tripRead = useReliableRead(READ_POLICIES.driverTrip, "driver-trip", driverRealtimeConnected);
@@ -172,48 +173,53 @@ export default function DriverHomePage() {
     return session?.access_token ?? null;
   }, [safeGetSession]);
 
-  async function loadDriverProfile(silent = false, accessToken?: string) {
-    if (!silent) {
-      setLoadingDriver(true);
-      setInfo(null);
-    }
+  function loadDriverProfile(silent = false, accessToken?: string): Promise<Driver | null> {
+    if (profileRequestRef.current) return profileRequestRef.current;
+    const pending = (async () => {
+      if (!silent) {
+        setLoadingDriver(true);
+        setInfo(null);
+      }
 
-    const token = accessToken ?? (await safeGetSession())?.access_token;
-    if (!token) {
-      if (!silent) setLoadingDriver(false);
-      return null;
-    }
-    const started = performance.now();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12_000);
-    try {
-      const res = await fetch("/api/driver/me", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok || !json?.driver) {
-        if (!silent) {
-          setDriver(null);
-          setProfileLoadError(json?.error || "Driver profile is unavailable. Try again.");
-        }
-        recordPerformanceMetric("driver_profile", performance.now() - started, "error");
+      const token = accessToken ?? (await safeGetSession())?.access_token;
+      if (!token) {
+        if (!silent) setLoadingDriver(false);
         return null;
       }
-      setDriver(json.driver as Driver);
-      setProfileLoadError(null);
-      recordPerformanceMetric("driver_profile", performance.now() - started);
-      return json.driver as Driver;
-    } catch {
-      if (!silent) setProfileLoadError("Connection interrupted while loading your profile. Try again.");
-      recordPerformanceMetric("driver_profile", performance.now() - started, controller.signal.aborted ? "timeout" : "error");
-      return null;
-    } finally {
-      clearTimeout(timeout);
-      if (!silent) setLoadingDriver(false);
-    }
+      const started = performance.now();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12_000);
+      try {
+        const res = await fetch("/api/driver/me", {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok || !json?.driver) {
+          if (!silent) {
+            setDriver(null);
+            setProfileLoadError(json?.error || "Driver profile is unavailable. Try again.");
+          }
+          recordPerformanceMetric("driver_profile", performance.now() - started, "error");
+          return null;
+        }
+        setDriver(json.driver as Driver);
+        setProfileLoadError(null);
+        recordPerformanceMetric("driver_profile", performance.now() - started);
+        return json.driver as Driver;
+      } catch {
+        if (!silent) setProfileLoadError("Connection interrupted while loading your profile. Try again.");
+        recordPerformanceMetric("driver_profile", performance.now() - started, controller.signal.aborted ? "timeout" : "error");
+        return null;
+      } finally {
+        clearTimeout(timeout);
+        if (!silent) setLoadingDriver(false);
+      }
+    })().finally(() => { profileRequestRef.current = null; });
+    profileRequestRef.current = pending;
+    return pending;
   }
 
   const loadCurrentOffer = useCallback((accessToken?: string) => offerRead.run(async (signal) => {

@@ -4,7 +4,7 @@ The candidate starts from `a04e32a72f0002fc44d16e9c9dfeb68846bb33f2`. Do not dep
 
 ## Client measurements
 
-Driver startup sends at most eight allowlisted timing events per tab in a random 5% sample to `/api/performance/client`. The route accepts same-origin requests only, rejects oversized or non-allowlisted payloads, and logs only a random tab identifier, metric name, bounded duration, and outcome. It writes no database rows. Vercel log retention and access controls must be reviewed before deployment; the code cannot enforce provider-side retention. These logs are not a substitute for authenticated device timing.
+Driver startup sends at most eight allowlisted timing events per tab in a random 5% sample to `/api/performance/client`. The route accepts same-origin requests only, bounds the request stream to 1 KB, and logs only a random tab identifier, metric name, bounded duration, and outcome. It writes no database rows. Its 100-request/minute limit is per function instance, not a distributed abuse-control guarantee; an Origin header can be spoofed by non-browser clients. Review Vercel firewall, log retention and access controls before deployment. These logs are not a substitute for authenticated device timing.
 
 ## Isolated concurrency test
 
