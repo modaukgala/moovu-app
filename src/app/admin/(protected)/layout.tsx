@@ -241,7 +241,7 @@ export default function AdminProtectedLayout({
             <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-6">
               <div className="flex min-w-0 items-center gap-3">
                 <button ref={menuButtonRef} type="button" aria-label="Open Admin navigation" aria-controls="admin-mobile-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)} className="moovu-admin-menu-button lg:hidden"><Menu size={21} /></button>
-                <div className="min-w-0"><div className="moovu-section-title">{activeItem.group}</div><div className="hidden truncate text-sm font-bold text-slate-700 sm:block">Admin workspace</div></div>
+                <div className="min-w-0"><div className="moovu-section-title">{activeItem.group}</div><div className="truncate text-sm font-bold text-slate-700">{activeItem.label}</div></div>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <EnableNotificationsButton role="admin" variant="inline" />

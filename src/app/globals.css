@@ -1566,6 +1566,53 @@ tr:last-child td {
     linear-gradient(180deg, #fbfdff 0%, #f5fafd 48%, #eef6fa 100%);
 }
 
+/* Keep wide operational tables inside their own scroll region on narrow screens. */
+.moovu-admin-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.moovu-admin-content :is(main, section, article, form, .moovu-card, .moovu-card-interactive) {
+  min-width: 0;
+}
+
+.moovu-admin-content .moovu-card-interactive {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.moovu-admin-content :is(.overflow-x-auto, .overflow-auto) {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+
+.moovu-admin-content :is(.overflow-x-auto, .overflow-auto):focus-visible {
+  outline: 3px solid #69b5ce;
+  outline-offset: 2px;
+}
+
+.moovu-admin-content :is(.moovu-admin-page-heading, .moovu-admin-filter-panel) {
+  min-width: 0;
+}
+
+.moovu-admin-content :is(.moovu-admin-page-heading, .moovu-admin-filter-panel) :is(h1, h2, p, label) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .moovu-admin-content {
+    padding-inline: 16px;
+  }
+
+  .moovu-admin-content :is(.moovu-admin-page-heading, .moovu-admin-filter-panel) {
+    max-width: 100%;
+  }
+
+  .moovu-admin-content :is(.moovu-admin-page-heading, .moovu-admin-filter-panel) :is(input, select) {
+    max-width: 100%;
+  }
+}
+
 .moovu-admin-sidebar {
   border-right: 1px solid rgba(215, 226, 234, 0.9);
   background: rgba(255, 255, 255, 0.88);
