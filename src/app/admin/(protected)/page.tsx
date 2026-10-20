@@ -194,7 +194,7 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <main className="space-y-6 text-black">
+    <main className="admin-mobile-dashboard space-y-6 text-black">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <section className="moovu-hero-panel p-5 sm:p-7">
@@ -217,7 +217,7 @@ export default function AdminDashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="admin-mobile-metrics grid gap-3 md:grid-cols-3">
         <MetricCard
           label="Completed today"
           value={String(analytics?.today_completed_trips ?? 0)}
@@ -238,7 +238,7 @@ export default function AdminDashboardPage() {
         />
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+      <section className="admin-mobile-metrics grid gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
         <MetricCard label="Weekly trips" value={String(analytics?.weekly_trips ?? 0)} helper="Completed" />
         <MetricCard label="Monthly trips" value={String(analytics?.monthly_trips ?? 0)} helper="Completed" />
         <MetricCard label="Active drivers" value={String(analytics?.active_drivers ?? 0)} helper="Approved/active" />
@@ -249,7 +249,7 @@ export default function AdminDashboardPage() {
         <MetricCard label="Historical plans expiring" value={String(analytics?.expiring_subscriptions ?? 0)} helper={`${analytics?.active_subscriptions ?? 0} historical active plans · not a work gate`} />
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="admin-mobile-metrics grid gap-3 md:grid-cols-3">
         <MetricCard
           label="Due next hour"
           value={String(analytics?.scheduled_due_next_hour ?? 0)}

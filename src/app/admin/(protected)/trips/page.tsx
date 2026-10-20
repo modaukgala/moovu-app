@@ -361,7 +361,7 @@ export default function TripsPage() {
   }
 
   return (
-    <main className="moovu-admin-operations-page space-y-5 text-black">
+    <main className="admin-mobile-trips moovu-admin-operations-page space-y-5 text-black">
       {pageError && (
         <CenteredMessageBox
           title="Trip action failed"
@@ -407,7 +407,7 @@ export default function TripsPage() {
         )}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-4">
+      <section className="admin-mobile-metrics grid gap-3 md:grid-cols-4">
         <MetricCard label="Trips in status" value={String(tripStats.total)} helper={`Filter: ${status}`} />
         <MetricCard label="Requested" value={String(tripStats.requested)} helper="Need dispatch" tone="primary" />
         <MetricCard label="Active" value={String(tripStats.active)} helper="Assigned or moving" tone="success" />

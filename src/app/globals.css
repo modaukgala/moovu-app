@@ -11709,3 +11709,85 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
   .moovu-driver-active-trip.is-otp-entry.is-open { max-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .moovu-driver-active-trip.is-otp-entry:focus-within { bottom: calc(4px + env(safe-area-inset-bottom)); }
 }
+
+/* Admin Pass 1.1: phone-density changes only; tablet and desktop retain their approved layout. */
+@media (max-width: 639px) {
+  .moovu-admin-content .admin-mobile-dashboard,
+  .moovu-admin-content .admin-mobile-drivers {
+    gap: 14px;
+  }
+
+  .moovu-admin-content .admin-mobile-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .moovu-admin-content .admin-mobile-metrics > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .moovu-admin-content .admin-mobile-metrics .moovu-app-metric {
+    min-height: 100px;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .moovu-admin-content .admin-mobile-metrics .moovu-app-metric-value {
+    font-size: clamp(18px, 5vw, 24px);
+  }
+
+  .moovu-admin-content .admin-mobile-metrics .moovu-app-metric-label {
+    line-height: 1.25;
+  }
+
+  .moovu-admin-content .admin-mobile-metrics .moovu-app-metric > div:last-child {
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+
+  .moovu-admin-content .admin-mobile-dashboard > .moovu-hero-panel,
+  .moovu-admin-content .admin-mobile-trips > .moovu-hero-panel {
+    padding: 16px;
+  }
+
+  .moovu-admin-content .admin-mobile-dashboard > .moovu-hero-panel h1,
+  .moovu-admin-content .admin-mobile-trips > .moovu-hero-panel h1 {
+    margin-top: 6px;
+    font-size: 26px;
+    line-height: 1.15;
+  }
+
+  .moovu-admin-content .admin-mobile-dashboard > .moovu-hero-panel p,
+  .moovu-admin-content .admin-mobile-trips > .moovu-hero-panel p {
+    margin-top: 8px;
+    line-height: 1.4;
+  }
+
+  .moovu-admin-content .admin-mobile-drivers > .moovu-card:first-of-type {
+    padding: 16px;
+  }
+
+  .admin-mobile-topbar-inner {
+    gap: 6px;
+    padding-block: 8px;
+  }
+
+  .admin-mobile-topbar-actions {
+    justify-content: space-between;
+    flex-wrap: nowrap;
+  }
+
+  .admin-mobile-topbar-actions > :first-child {
+    min-width: 0;
+  }
+
+  .admin-mobile-topbar-actions button {
+    min-height: 44px;
+  }
+
+  .admin-mobile-topbar-actions > button:last-child {
+    flex: none;
+    padding-inline: 12px;
+  }
+}

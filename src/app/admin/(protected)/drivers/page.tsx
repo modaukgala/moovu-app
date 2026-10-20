@@ -139,7 +139,7 @@ export default function DriversPage() {
   }
 
   return (
-    <main className="space-y-6 text-black">
+    <main className="admin-mobile-drivers space-y-6 text-black">
       {pageError && (
         <CenteredMessageBox
           title="Driver action failed"
@@ -169,7 +169,7 @@ export default function DriversPage() {
         </div>
       </div>
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="admin-mobile-metrics grid gap-3 md:grid-cols-3">
         <MetricCard label="Total drivers" value={String(drivers.length)} helper="All profiles" />
         <MetricCard
           label="Approved"
@@ -191,16 +191,17 @@ export default function DriversPage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search driver, phone, or email"
-            className="min-h-11 rounded-2xl border border-[var(--moovu-border)] bg-white px-4 text-sm font-semibold text-slate-950 outline-none focus:border-[var(--moovu-blue)]"
+            className="min-h-11 rounded-2xl border border-[var(--moovu-border)] bg-white px-4 text-sm font-semibold text-slate-950 outline-none focus:border-[var(--moovu-primary)]"
           />
           <div className="flex flex-wrap gap-2">
             {["all", "pending", "approved", "active", "suspended"].map((status) => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
+                aria-pressed={statusFilter === status}
                 className={`rounded-xl border px-4 py-2 text-sm font-black capitalize transition ${
                   statusFilter === status
-                    ? "border-[var(--moovu-blue)] bg-[var(--moovu-blue)] text-white"
+                    ? "border-[var(--moovu-primary)] bg-[var(--moovu-primary)] text-white"
                     : "border-[var(--moovu-border)] bg-white text-slate-700"
                 }`}
               >

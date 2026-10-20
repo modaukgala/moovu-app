@@ -8,7 +8,9 @@ const { spawnSync } = require("node:child_process");
 const baseUrl = process.env.MOOVU_VISUAL_BASE_URL || "http://localhost:3599";
 const origin = new URL(baseUrl);
 if (!["localhost", "127.0.0.1"].includes(origin.hostname)) throw new Error("Local preview only");
-const output = path.join(__dirname, "..", "docs", "admin-premium-preview-screenshots");
+const output = process.env.MOOVU_VISUAL_OUTPUT_DIR
+  ? path.resolve(process.env.MOOVU_VISUAL_OUTPUT_DIR)
+  : path.join(__dirname, "..", "docs", "admin-premium-preview-screenshots");
 const sizes = [[360, 740], [390, 844], [412, 915], [768, 1024], [1280, 800], [1440, 900]];
 const adminId = "00000000-0000-4000-8000-000000000111";
 const driverId = "00000000-0000-4000-8000-000000000201";
