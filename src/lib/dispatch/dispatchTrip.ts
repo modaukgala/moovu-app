@@ -50,11 +50,15 @@ function isDispatchSchemaHotfixRequired(error: { message?: string } | null | und
 
 export async function dispatchTrip(params: {
   tripId: string;
+  paymentDispatch?: { attemptId: string; claimToken: string };
   cycle?: number;
   sequenceNumber?: number;
   preferredDriverId?: string | null;
   allowAfterAutomaticExhaustion?: boolean;
 }): Promise<DispatchResult> {
+  if (params.paymentDispatch && process.env.MOOVU_DISPATCH_90S_ENABLED === "true") {
+    return { ok: false, tripId: params.tripId, error: "Paid dispatch claim is not wired to the 90-second engine." };
+  }
   if (process.env.MOOVU_DISPATCH_90S_ENABLED === "true") {
     const { data: dispatchAge, error: dispatchAgeError } = await supabaseAdmin.from("trips")
       .select("created_at").eq("id", params.tripId).maybeSingle();
@@ -222,7 +226,7 @@ export async function dispatchTrip(params: {
   const rows: AtomicOfferRow[] = [];
   const reservationErrors: string[] = [];
   for (const [candidateIndex, candidate] of candidatesToTry.entries()) {
-    const { data, error } = await supabaseAdmin.rpc("reserve_trip_offer", {
+    const reservation = {
       p_trip_id: trip.id,
       p_driver_id: candidate.driverId,
       p_dispatch_cycle: cycle,
@@ -234,9 +238,19 @@ export async function dispatchTrip(params: {
       p_escalation_seconds: DISPATCH_CONFIG.escalationSeconds,
       p_accept_window_seconds: DISPATCH_CONFIG.acceptWindowSeconds,
       p_search_radius_km: radiusKm,
-    });
+    };
+    const { data, error } = params.paymentDispatch
+      ? await supabaseAdmin.rpc("reserve_paid_trip_offer", {
+          ...reservation,
+          p_attempt_id: params.paymentDispatch.attemptId,
+          p_claim_token: params.paymentDispatch.claimToken,
+        })
+      : await supabaseAdmin.rpc("reserve_trip_offer", reservation);
 
     if (error) {
+      if (error.code === "P0D01") {
+        return { ok: false, tripId: trip.id, error: "Payment dispatch ownership lost." };
+      }
       if (isMissingAtomicDispatch(error)) {
         console.error("[dispatch] atomic offer reservation unavailable", {
           tripId: trip.id,

@@ -213,7 +213,8 @@ export async function POST(req: Request) {
   let dispatchPending = false;
   if (customerAttempt && ["SUCCEEDED", "REPLAYED"].includes(String(processingResult?.result ?? ""))) {
     try {
-      await dispatchVerifiedOnlineTrip(customerAttempt.id);
+      const dispatch = await dispatchVerifiedOnlineTrip(customerAttempt.id);
+      dispatchPending = !dispatch.ok || dispatch.reason === "ALREADY_IN_PROGRESS";
     } catch (error) {
       dispatchPending = true;
       console.error("[yoco-webhook] verified payment dispatch deferred", {
