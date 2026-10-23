@@ -7,7 +7,6 @@
 .landscape { width: 100%; height: 100%; animation: scenery-in .6s .25s ease-out both; }
 .vehicleEntry { position: absolute; width: 76%; left: 15%; bottom: 5%; animation: arrive 1.1s .45s cubic-bezier(.17,.65,.25,1) both; }
 .vehicle { display: block; width: 100%; height: auto; }
-.wheel { transform-box: view-box; transform-origin: 0 0; animation: wheel-forward 1.1s .45s cubic-bezier(.17,.65,.25,1) both; }
 .route { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1s .35s ease-out forwards; }
 .routeLight { stroke-dasharray: .08 .92; stroke-dashoffset: 1; animation: route-forward 2.4s 1.5s linear infinite; }
 .destination { animation: destination-pulse 2.4s 1.5s ease-in-out infinite; }
@@ -30,6 +29,5 @@
 @keyframes destination-pulse { 50% { opacity: .65; } }
 @keyframes progress { 0% { transform: translateX(-50%); } 100% { transform: translateX(240%); } }
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes wheel-forward { to { transform: rotate(180deg); } }
 @media (max-width: 360px), (max-height: 660px) { .logoCrop { width: min(68%, 240px); } .heading { font-size: 26px; margin-top: 18px; } .message { font-size: 14px; margin-bottom: 12px; } .scene { max-width: 430px; } }
 @media (prefers-reduced-motion: reduce) { .screen *, .spinner { animation: none !important; } .route { stroke-dashoffset: 0; } .routeLight { display: none; } .track span { transform: none; } }

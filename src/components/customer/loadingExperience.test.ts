@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import test from "node:test";
 
 const base = new URL("../ui/", import.meta.url);
@@ -16,12 +19,14 @@ test("brand artwork is preserved and the separate sedan has no taxi sign", () =>
   assert.match(component, /\/Moovu-Black.png/);
   assert.match(component, /Your Kasi Ride\./);
   assert.doesNotMatch(scene, /taxi|toyota|emoji|49cfad/i);
-  assert.match(scene, /useId\(\)/);
+  assert.match(scene, /\/loading\/moovu-premium-sedan.webp/);
+  assert.match(scene, /width=\{1320\} height=\{580\}/);
+  assert.doesNotMatch(scene, /linearGradient|styles.wheel/);
 });
 test("vehicle enters forward once and stays still; only route loops", () => {
   assert.match(css, /@keyframes arrive \{ from \{ opacity: 0; transform: translateX\(-65%\); \} to \{ opacity: 1; transform: translateX\(0\); \} \}/);
   assert.doesNotMatch(css, /alternate|reverse|scaleX\(-1\)/);
-  assert.match(css, /@keyframes wheel-forward.*rotate\(180deg\)/);
+  assert.doesNotMatch(css, /wheel-forward/);
   assert.doesNotMatch(css.match(/\.vehicleEntry \{[^}]+\}/)?.[0] ?? "", /infinite/);
 });
 test("status semantics, safe areas and reduced motion are supported", () => {
@@ -52,4 +57,18 @@ test("Driver startup and Admin authorization keep existing loading gates", () =>
   assert.match(admin, /if \(checking\) \{\s*return <MoovuLoadingScreen/);
   assert.match(driver, /useReliableRead/);
   assert.match(admin, /supabaseClient.auth.getSession/);
+});
+
+test("rendered vehicle is a bounded WebP with genuine alpha and reserved dimensions", async () => {
+  const asset = fileURLToPath(new URL("../../../public/loading/moovu-premium-sedan.webp", import.meta.url));
+  const metadata = await sharp(asset).metadata();
+  const statistics = await sharp(asset).stats();
+  assert.equal(metadata.format, "webp");
+  assert.equal(metadata.width, 1320);
+  assert.equal(metadata.height, 580);
+  assert.equal(metadata.hasAlpha, true);
+  assert.equal(statistics.isOpaque, false);
+  assert.equal(statistics.channels[3].min, 0);
+  assert.equal(statistics.channels[3].max, 255);
+  assert.ok(statSync(asset).size < 180_000, "Vehicle asset exceeds its 180 KB budget");
 });
