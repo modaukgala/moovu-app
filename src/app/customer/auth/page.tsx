@@ -6,6 +6,7 @@ import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import TimedPasswordField from "@/components/ui/TimedPasswordField";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
+import { MoovuInlineLoader } from "@/components/customer/MoovuLoadingScreen";
 import { supabaseClient } from "@/lib/supabase/client";
 import {
   customerEmailFromPhone,
@@ -300,7 +301,7 @@ export default function CustomerAuthPage() {
                 disabled={busy || !canCheck}
                 onClick={checkPhone}
               >
-                {busy ? "Checking..." : "Continue"}
+                {busy ? <MoovuInlineLoader message="Checking..." /> : "Continue"}
               </button>
             </>
           )}
@@ -329,7 +330,7 @@ export default function CustomerAuthPage() {
                   disabled={busy}
                   onClick={login}
                 >
-                  {busy ? "Logging in..." : "Login"}
+                  {busy ? <MoovuInlineLoader message="Logging in..." /> : "Login"}
                 </button>
 
                 <button
@@ -397,7 +398,7 @@ export default function CustomerAuthPage() {
                           onClick={() => void requestPasswordRecovery()}
                           disabled={busy}
                         >
-                          {busy ? "Sending..." : "Send recovery instructions"}
+                          {busy ? <MoovuInlineLoader message="Sending..." /> : "Send recovery instructions"}
                         </button>
                         <Link className="moovu-btn moovu-btn-secondary" href="/contact">
                           No access to email?
@@ -486,7 +487,7 @@ export default function CustomerAuthPage() {
                   disabled={busy || !legalAccepted}
                   onClick={register}
                 >
-                  {busy ? "Creating..." : "Create account"}
+                  {busy ? <MoovuInlineLoader message="Creating..." /> : "Create account"}
                 </button>
 
                 <button

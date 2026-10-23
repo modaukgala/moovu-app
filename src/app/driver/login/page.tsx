@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { MoovuInlineLoader } from "@/components/ui/MoovuLoadingScreen";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import TimedPasswordField from "@/components/ui/TimedPasswordField";
@@ -125,7 +126,7 @@ export default function DriverLoginPage() {
               disabled={busy}
               onClick={login}
             >
-              {busy ? "Signing in..." : "Driver Sign In"}
+              {busy ? <MoovuInlineLoader message="Signing in..." /> : "Driver Sign In"}
             </button>
           </section>
 

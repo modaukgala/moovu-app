@@ -1,4 +1,5 @@
 "use client";
+import { MoovuInlineLoader } from "@/components/ui/MoovuLoadingScreen";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -103,9 +104,7 @@ export default function AdminReceiptsPage() {
         </div>
         {loading ? (
           <div className="space-y-3 p-5">
-            <div className="moovu-skeleton h-5 w-44" />
-            <div className="moovu-skeleton h-20 w-full" />
-            <div className="moovu-skeleton h-20 w-full" />
+            <MoovuInlineLoader message="Loading receipts..." />
           </div>
         ) : visibleTrips.length === 0 ? (
           <div className="p-5 text-sm text-slate-600">{trips.length === 0 ? "No receipts are available yet." : "No receipts match this search."}</div>

@@ -1,4 +1,5 @@
 "use client";
+import LoadingState from "@/components/ui/LoadingState";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -176,21 +177,7 @@ export default function AdminDashboardPage() {
   );
 
   if (loading) {
-    return (
-      <main className="space-y-5">
-        <div className="moovu-hero-panel p-6">
-          <div className="moovu-section-title text-white/70">MOOVU Admin</div>
-          <div className="mt-4 space-y-3">
-            <div className="moovu-skeleton h-7 w-64" />
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="moovu-skeleton h-28 w-full" />
-              <div className="moovu-skeleton h-28 w-full" />
-              <div className="moovu-skeleton h-28 w-full" />
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <LoadingState title="Preparing your operations dashboard..." />;
   }
 
   return (

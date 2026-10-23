@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import LoadingState from "@/components/ui/LoadingState";
 
 export default function ViewDocPage() {
   const sp = useSearchParams();
@@ -35,7 +36,7 @@ export default function ViewDocPage() {
   }, [path]);
 
   if (err) return <main className="p-6">{err}</main>;
-  if (!url) return <main className="p-6">Loading file...</main>;
+  if (!url) return <LoadingState title="Preparing your document..." />;
 
   return (
     <main className="space-y-5">

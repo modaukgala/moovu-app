@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MoovuInlineLoader } from "@/components/ui/MoovuLoadingScreen";
 import Link from "next/link";
 import { CarFront, ChevronRight, CircleUserRound, FileCheck2, Headphones, LogOut, ShieldCheck, WalletCards } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
@@ -177,7 +178,7 @@ export default function DriverAccountPage() {
 
         <ProfileSectionCard title="Earnings and trips" description="Totals are calculated from your existing completed-trip and wallet records.">
           {loading ? (
-            <div className="moovu-premium-skeleton-stack" aria-hidden="true"><div className="moovu-skeleton h-24 w-full" /></div>
+            <MoovuInlineLoader message="Loading earnings and trips..." />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Info label="Today" value={money(snapshot.today)} />

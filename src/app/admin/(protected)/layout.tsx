@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import MoovuLoadingScreen from "@/components/ui/MoovuLoadingScreen";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
@@ -198,22 +199,7 @@ export default function AdminProtectedLayout({
   }
 
   if (checking) {
-    return (
-      <main className="moovu-auth-shell text-black">
-        <div className="moovu-auth-card text-center">
-          <div className="moovu-chip mx-auto w-fit">
-            <span className="moovu-chip-dot" />
-            MOOVU Admin
-          </div>
-          <h1 className="mt-4 text-2xl font-black text-slate-950">
-            Checking admin access...
-          </h1>
-          <p className="mt-3 text-sm text-slate-600">
-            Verifying your session before loading the control center.
-          </p>
-        </div>
-      </main>
-    );
+    return <MoovuLoadingScreen message="Checking admin access..." />;
   }
 
   return (

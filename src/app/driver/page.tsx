@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MoovuLoadingScreen from "@/components/ui/MoovuLoadingScreen";
 import { useReliableRead, useReadLoop } from "@/hooks/useReliableRead";
 import { READ_POLICIES, readFailure, pollDelay } from "@/lib/reliability/readPolling";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1160,20 +1161,7 @@ export default function DriverHomePage() {
       ? currentTrip.fare_breakdown.pickupInstruction.trim()
       : "";
   if (loadingDriver) {
-    return (
-      <main className="moovu-page text-black">
-        <div className="moovu-shell p-6">
-          <div className="moovu-card p-6">
-            <div className="moovu-section-title">MOOVU Driver</div>
-            <div className="mt-4 space-y-3">
-              <div className="moovu-skeleton h-6 w-48" />
-              <div className="moovu-skeleton h-28 w-full" />
-              <div className="moovu-skeleton h-48 w-full" />
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <MoovuLoadingScreen message="Getting your Driver app ready..." />;
   }
 
   return (

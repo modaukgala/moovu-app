@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MoovuInlineLoader } from "@/components/ui/MoovuLoadingScreen";
 import { useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -88,7 +89,7 @@ export default function AdminLoginPage() {
           )}
 
           <button disabled={loading} className="moovu-btn moovu-btn-primary w-full">
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? <MoovuInlineLoader message="Signing in..." /> : "Sign in"}
           </button>
         </div>
 

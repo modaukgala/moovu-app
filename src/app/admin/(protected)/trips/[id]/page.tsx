@@ -1,4 +1,5 @@
 "use client";
+import LoadingState from "@/components/ui/LoadingState";
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -269,13 +270,7 @@ export default function TripDetailPage() {
   }
 
   if (loading) {
-    return (
-      <main className="space-y-6 text-black">
-        <section className="moovu-card p-5 sm:p-6">
-          <p className="text-gray-700">Loading trip.</p>
-        </section>
-      </main>
-    );
+    return <LoadingState title="Getting your trip ready..." />;
   }
 
   if (!trip) {

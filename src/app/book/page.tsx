@@ -1,4 +1,5 @@
 "use client";
+import MoovuLoadingScreen, { MoovuInlineLoader } from "@/components/customer/MoovuLoadingScreen";
 
 import {
   type ClipboardEvent,
@@ -2349,15 +2350,7 @@ export default function RiderBookingPage() {
 
   // ── Loading screen ───────────────────────────────────────────────
   if (authLoading) {
-    return (
-      <main className="mbk-loading">
-        <Image src="/logo.png" alt="MOOVU" width={120} height={72} priority />
-        <div className="mbk-loading-card">
-          <div className="moovu-skeleton h-4 w-36" />
-          <div className="moovu-skeleton h-10 w-full" />
-        </div>
-      </main>
-    );
+    return <MoovuLoadingScreen message="Preparing your ride..." />;
   }
 
   const selectedRide =
@@ -3013,7 +3006,7 @@ export default function RiderBookingPage() {
                       />
                     </svg>
                     <span>
-                      {locationLoading ? "Locating..." : "Current location"}
+                      {locationLoading ? <MoovuInlineLoader message="Locating..." /> : "Current location"}
                     </span>
                   </button>
                   <button

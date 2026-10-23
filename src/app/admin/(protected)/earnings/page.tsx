@@ -1,4 +1,5 @@
 "use client";
+import LoadingState from "@/components/ui/LoadingState";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -125,13 +126,7 @@ export default function AdminEarningsPage() {
   }, [loadEarnings]);
 
   if (loading) {
-    return (
-      <main className="min-h-screen px-6 py-10 text-black">
-        <div className="max-w-6xl mx-auto moovu-card p-5 sm:p-6">
-          Loading admin earnings...
-        </div>
-      </main>
-    );
+    return <LoadingState title="Loading admin earnings..." />;
   }
 
   return (
