@@ -16,7 +16,7 @@ function collectPages(dir: string, prefix = "/admin"): string[] {
 
 test("every protected Admin page has a sidebar destination or preserved deep-link parent", () => {
   const pages = collectPages(pagesRoot).filter(path => path !== "/admin/logout");
-  assert.equal(pages.length, 31);
+  assert.equal(pages.length, 32);
   const destinations = new Set(ADMIN_NAV_ITEMS.map(item => item.href));
   for (const page of pages) {
     const concretePath = page.replace(/\[id\]/g, "fixture-id");

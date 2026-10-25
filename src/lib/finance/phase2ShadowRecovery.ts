@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { callPhase2Rpc, type Phase2RpcResult } from "@/lib/server/phase2Rpc";
+import { manualPayoutsAvailable, onlinePayoutsAvailable } from "@/lib/finance/onlinePayoutAvailability";
 
 export const PHASE2_SHADOW_RECOVERY_MAX_ATTEMPTS = 8;
 
@@ -35,6 +36,18 @@ export async function processPhase2ShadowRecoveryJob(
       const failure = phase2RecoveryFailure(posting);
       await finish(client, job.id, false, failure.retryable, failure.code, failure.message);
       return { ok: false as const, ...failure };
+    }
+    if (onlinePayoutsAvailable() || manualPayoutsAvailable()) {
+      // The reviewed payable migration must be installed before this flag is enabled.
+      // A failed reclassification leaves the durable job retryable; commission replay is idempotent.
+      const { error: payableError } = await client.rpc("phase3_post_completed_online_driver_payable", {
+        p_trip_id: job.trip_id,
+      });
+      if (payableError) {
+        await finish(client, job.id, false, true, "online_payable_unavailable", "Online payable posting did not complete.");
+        return { ok: false as const, retryable: true, code: "online_payable_unavailable",
+          message: "Online payable posting did not complete." };
+      }
     }
     await finish(client, job.id, true, false, null, null);
     return {

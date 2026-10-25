@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore Node's strip-types test runner requires explicit TypeScript extensions.
-import { commissionDueAmount } from "./commissionPresentation.ts";
+import { commissionDebtNotice, commissionDueAmount } from "./commissionPresentation.ts";
 
 test("uses authoritative cents over the legacy wallet snapshot", () => {
   assert.equal(commissionDueAmount({ mode: "AUTHORITATIVE", netOwedCents: 12550 }, 90), 125.5);
@@ -13,4 +13,10 @@ test("uses the wallet only when no valid authority is returned", () => {
   assert.equal(commissionDueAmount(null, 90), 90);
   assert.equal(commissionDueAmount(undefined, null), 0);
   assert.equal(commissionDueAmount({ mode: "AUTHORITATIVE", netOwedCents: Number.NaN }, 90), 90);
+});
+
+test("R40 warning and R50 informational threshold never imply dispatch blocking", () => {
+  assert.equal(commissionDebtNotice(39.99), null);
+  assert.match(commissionDebtNotice(40) ?? "", /reached R40/);
+  assert.match(commissionDebtNotice(50) ?? "", /does not automatically block trips/);
 });

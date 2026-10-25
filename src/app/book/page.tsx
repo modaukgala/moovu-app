@@ -103,6 +103,11 @@ type Phase5Quote = {
   customerTotalCents: number;
   driverFareBasisCents: number;
 };
+type StandardPricingQuote = {
+  version: string;
+  rideFareCents: number;
+  customerTotalCents: number;
+};
 type StopInput = Omit<ResolvedLocation, "lat" | "lng"> & {
   lat: number | null;
   lng: number | null;
@@ -217,6 +222,8 @@ export default function RiderBookingPage() {
   );
   const [routeQuote, setRouteQuote] = useState<string | null>(null);
   const [phase5Quote, setPhase5Quote] = useState<Phase5Quote | null>(null);
+  const [standardPricingQuote, setStandardPricingQuote] = useState<StandardPricingQuote | null>(null);
+  const [quoteRefreshNonce, setQuoteRefreshNonce] = useState(0);
   const [phase5QuoteLoading, setPhase5QuoteLoading] = useState(false);
   const [phase5QuoteError, setPhase5QuoteError] = useState<string | null>(null);
   const [originalDurationMin, setOriginalDurationMin] = useState<number | null>(
@@ -386,12 +393,9 @@ export default function RiderBookingPage() {
       addStopIncrease: addStopBreakdown?.finalAddStopIncrease ?? 0,
     }).totalFare;
   }, [addStopBreakdown?.finalAddStopIncrease, distanceKm, journeyBaseFare]);
-  const displayFare = useMemo(() => {
-    if (phase5Quote) return phase5Quote.customerTotalCents / 100;
-    if (fare != null) return fare;
-    if (baseFare != null) return Math.round(baseFare + addStopIncrease);
-    return null;
-  }, [addStopIncrease, baseFare, fare, phase5Quote]);
+  const displayFare = standardPricingQuote
+    ? standardPricingQuote.customerTotalCents / 100
+    : null;
 
   useEffect(() => {
     if (
@@ -402,10 +406,13 @@ export default function RiderBookingPage() {
       dropoffLng == null
     ) {
       setPhase5Quote(null);
+      setStandardPricingQuote(null);
       setPhase5QuoteError(null);
       return;
     }
     let cancelled = false;
+    setStandardPricingQuote(null);
+    setPhase5Quote(null);
     setPhase5QuoteLoading(true);
     setPhase5QuoteError(null);
     void supabaseClient.auth
@@ -433,11 +440,13 @@ export default function RiderBookingPage() {
         if (cancelled) return;
         if (!response.ok) {
           setPhase5Quote(null);
+          setStandardPricingQuote(null);
           setPhase5QuoteError(
             json?.error || "Authoritative price unavailable.",
           );
         } else {
           setPhase5Quote(json?.authority === "PHASE5" ? json.quote : null);
+          setStandardPricingQuote(json?.pricing ?? null);
           bookingKeyRef.current = crypto.randomUUID();
         }
       })
@@ -457,6 +466,7 @@ export default function RiderBookingPage() {
     pickupLng,
     resolvedStops,
     routeQuote,
+    quoteRefreshNonce,
     selectedRideOption,
   ]);
 
@@ -512,6 +522,7 @@ export default function RiderBookingPage() {
       distanceKm != null &&
       durationMin != null &&
       displayFare != null &&
+      standardPricingQuote != null &&
       !legalAcceptanceRequired &&
       !phase5QuoteLoading &&
       !phase5QuoteError &&
@@ -522,6 +533,7 @@ export default function RiderBookingPage() {
       distanceKm,
       durationMin,
       displayFare,
+      standardPricingQuote,
       legalAcceptanceRequired,
       phase5QuoteError,
       phase5QuoteLoading,
@@ -1837,6 +1849,8 @@ export default function RiderBookingPage() {
           scheduledFor: rideType === "scheduled" ? scheduledFor : null,
           pickupInstruction: pickupInstruction.trim() || null,
           phase5ExpectedTotalCents: phase5Quote?.customerTotalCents ?? null,
+          expectedRideFareCents: standardPricingQuote?.rideFareCents ?? null,
+          expectedPricingVersion: standardPricingQuote?.version ?? null,
           bookingKey: bookingKeyRef.current,
           fare_amount: finalFare,
           notes: `Ride option: ${rideOptionLabel}`,
@@ -1848,6 +1862,11 @@ export default function RiderBookingPage() {
         if (json?.code === "PHASE5_QUOTE_CHANGED" && json?.quote) {
           setPhase5Quote(json.quote as Phase5Quote);
           bookingKeyRef.current = crypto.randomUUID();
+        }
+        if (json?.code === "FARE_QUOTE_CHANGED") {
+          setBookingConfirmationOpen(false);
+          setStandardPricingQuote(null);
+          setQuoteRefreshNonce((current) => current + 1);
         }
         setMsg(json?.error || "Could not create trip.");
         setBusy(false);
@@ -2536,6 +2555,11 @@ export default function RiderBookingPage() {
             Extra route cost discounted by 40%. First 3 minutes waiting at each
             stop are free.
           </div>
+          {standardPricingQuote && standardPricingQuote.rideFareCents !== Math.round((fare ?? 0) * 100) && (
+            <div className="mt-1 text-xs font-semibold text-emerald-800">
+              The final quoted trip fare includes updated standard pricing.
+            </div>
+          )}
           <div className="mt-3 grid grid-cols-3 gap-2">
             <div className="moovu-fare-mini-card">
               <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">

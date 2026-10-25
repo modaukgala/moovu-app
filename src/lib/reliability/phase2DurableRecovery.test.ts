@@ -46,9 +46,13 @@ test("runtime claims durable work before posting and cron is secret protected", 
   ]);
 });
 
-function recoveryHarness(posting: Record<string, unknown> | Error) {
+function recoveryHarness(posting: Record<string, unknown> | Error, options: { payoutEnabled?: boolean; manualEnabled?: boolean; payableError?: boolean } = {}) {
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const dependencies: Record<string, unknown> = {
+    "@/lib/finance/onlinePayoutAvailability": {
+      onlinePayoutsAvailable: () => options.payoutEnabled ?? false,
+      manualPayoutsAvailable: () => options.manualEnabled ?? false,
+    },
     "@/lib/server/phase2Rpc": {
       callPhase2Rpc: async (_client: unknown, name: string, args: Record<string, unknown>) => {
         calls.push({ name, args });
@@ -68,6 +72,10 @@ function recoveryHarness(posting: Record<string, unknown> | Error) {
   return {
     calls,
     process: exports.processPhase2ShadowRecoveryJob as (client: unknown, job: Record<string, unknown>) => Promise<Record<string, unknown>>,
+    client: { rpc: async (name: string, args: Record<string, unknown>) => {
+      calls.push({ name, args });
+      return { data: null, error: options.payableError ? { code: "P0001" } : null };
+    } },
   };
 }
 
@@ -107,4 +115,30 @@ test("successful and already-posted recovery acknowledge one durable job", async
     assert.deepEqual(h.calls.map((call) => call.name), ["phase2_post_trip_commission", "phase2_finish_shadow_recovery_job"]);
     assert.equal(h.calls.at(-1)?.args.p_succeeded, true);
   }
+});
+
+test("default-off payable posting preserves prior worker behavior", async () => {
+  const h = recoveryHarness({ ok: true, result: { contract_version: "phase-2-v1", replayed: false } });
+  assert.equal((await h.process(h.client, job)).ok, true);
+  assert.equal(h.calls.some((call) => call.name === "phase3_post_completed_online_driver_payable"), false);
+});
+
+test("enabled payable posting finishes only after the idempotent database RPC", async () => {
+  const posted = { ok: true, result: { contract_version: "phase-2-v1", replayed: true } };
+  const success = recoveryHarness(posted, { payoutEnabled: true });
+  assert.equal((await success.process(success.client, job)).ok, true);
+  assert.deepEqual(success.calls.map((call) => call.name), [
+    "phase2_post_trip_commission", "phase3_post_completed_online_driver_payable",
+    "phase2_finish_shadow_recovery_job",
+  ]);
+  const failure = recoveryHarness(posted, { payoutEnabled: true, payableError: true });
+  assert.equal((await failure.process(failure.client, job)).ok, false);
+  assert.equal(failure.calls.at(-1)?.args.p_retryable, true);
+  assert.equal(failure.calls.at(-1)?.args.p_succeeded, false);
+});
+
+test("manual payout visibility enables payable calculation without the legacy payout flag", async () => {
+  const h = recoveryHarness({ ok: true, result: { contract_version: "phase-2-v1" } }, { manualEnabled: true });
+  assert.equal((await h.process(h.client, job)).ok, true);
+  assert.equal(h.calls.filter(call => call.name === "phase3_post_completed_online_driver_payable").length, 1);
 });

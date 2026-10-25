@@ -23,7 +23,7 @@ test("commission debt remains payable without an operational ceiling", () => {
     assert.equal(state.debtCents, BigInt(amount));
     assert.equal(state.eligible, true);
     assert.equal(state.restricted, false);
-    assert.equal(state.warning, false);
+    assert.equal(state.warning, amount >= 4000);
     assert.equal(state.remainingCents, null);
   }
 });

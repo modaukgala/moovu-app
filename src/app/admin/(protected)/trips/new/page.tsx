@@ -278,13 +278,7 @@ export default function NewTripPage() {
       return;
     }
 
-    const res = await fetch("/api/admin/trips/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
+    const bookingPayload = {
         riderName,
         riderPhone,
         pickup: pickup.trim(),
@@ -301,6 +295,34 @@ export default function NewTripPage() {
         durationMin,
         driverId,
         rideOptionId,
+    };
+    const quoteResponse = await fetch("/api/admin/trips/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ...bookingPayload, quoteOnly: true }),
+    });
+    const quote = await quoteResponse.json().catch(() => null);
+    if (!quoteResponse.ok || !quote?.ok) {
+      setBusy(false);
+      setErr(quote?.error || "Could not verify the current fare.");
+      return;
+    }
+    if (!fareOverride && Number(fare) !== quote.fareAmount) {
+      setAutoFare(quote.fareAmount);
+      setFare(String(quote.fareAmount));
+      setBusy(false);
+      setErr("The fare has changed. Review the updated fare, then create the trip.");
+      return;
+    }
+    const res = await fetch("/api/admin/trips/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ ...bookingPayload,
+        expectedPricingVersion: quote.pricing?.version,
+        expectedFareCents: quote.pricing?.rideFareCents,
       }),
     });
     const json = await res.json().catch(() => null);

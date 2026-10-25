@@ -15,8 +15,9 @@ import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
+import OnlinePayoutsPanel from "@/components/finance/OnlinePayoutsPanel";
 import { supabaseClient } from "@/lib/supabase/client";
-import { commissionDueAmount, type CommissionAuthority } from "@/lib/finance/commissionPresentation";
+import { commissionDebtNotice, commissionDueAmount, type CommissionAuthority } from "@/lib/finance/commissionPresentation";
 
 type Wallet = {
   balance_due: number | null;
@@ -258,6 +259,8 @@ export default function DriverEarningsPage() {
 
         <DriverSectionTabs section="money" />
 
+        <OnlinePayoutsPanel role="driver" />
+
         <section className="driver-money-grid" aria-label="Earnings summary">
           <article className="is-blue">
             <span className="driver-money-icon"><CalendarDays aria-hidden="true" /></span>
@@ -286,6 +289,7 @@ export default function DriverEarningsPage() {
             <small>Commission balance</small>
             <strong>{money(commissionDue)}</strong>
             <p>{commissionDue > 0 ? "Outstanding amount owed to MOOVU" : "Your MOOVU balance is clear"}</p>
+            {commissionDebtNotice(commissionDue) && <p role="status">{commissionDebtNotice(commissionDue)}</p>}
           </div>
           <Link href="/driver/commission-payments">
             View commission

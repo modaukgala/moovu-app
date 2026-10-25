@@ -3,6 +3,7 @@ import { requireAdminUser } from "@/lib/auth/admin";
 import { calculateFare } from "@/lib/fare/calculateFare";
 import { normalizeRideOptionId, resolveAdminTripFare } from "@/lib/domain/fare";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
+import { fareQuoteMatches, priceStandardFare, universalFareIncreaseEnabled } from "@/lib/pricing/universalFare";
 import { calculateDrivingRoute } from "@/lib/maps/routeService";
 import { isValidLatitude, isValidLongitude } from "@/lib/maps/mapRequestPolicy";
 import { callHardenedRpc } from "@/lib/server/hardenedRpc";
@@ -85,11 +86,12 @@ export async function POST(req: Request) {
       surgeLabel: activeSurge.mode,
       surgeMultiplier: activeSurge.multiplier,
     });
+    const pricing = priceStandardFare(calculatedFare.totalFare, universalFareIncreaseEnabled());
 
     let fareDecision;
     try {
       fareDecision = resolveAdminTripFare({
-        calculatedFare: calculatedFare.totalFare,
+        calculatedFare: pricing.rideFareCents / 100,
         overrideRequested: fareOverrideRequested,
         overrideFare: requestedFare,
         overrideReason: fareOverrideReason,
@@ -101,6 +103,14 @@ export async function POST(req: Request) {
       );
     }
     const fareAmount = fareDecision.amount;
+    if (body?.quoteOnly === true) {
+      return NextResponse.json({ ok: true, fareAmount, pricing });
+    }
+    if (!fareOverrideRequested && !fareQuoteMatches(pricing,
+      body?.expectedPricingVersion, body?.expectedFareCents)) {
+      return NextResponse.json({ ok: false, code: "FARE_QUOTE_CHANGED",
+        error: "The fare changed. Review the updated fare before creating this trip." }, { status: 409 });
+    }
 
     const startOtp = generateOtp();
     const endOtp = generateOtp();
@@ -159,6 +169,7 @@ export async function POST(req: Request) {
           ...calculatedFare,
           serverCalculatedFare: calculatedFare.totalFare,
           finalFare: fareAmount,
+          pricing,
           adminOverride: fareOverrideRequested
             ? {
                 amount: fareAmount,
@@ -168,11 +179,11 @@ export async function POST(req: Request) {
               }
             : null,
         },
-        estimated_fare: calculatedFare.totalFare,
+        estimated_fare: pricing.rideFareCents / 100,
         final_fare: fareAmount,
-        original_fare: calculatedFare.totalFare,
+        original_fare: pricing.rideFareCents / 100,
         fare_adjustment_amount: fareOverrideRequested
-          ? Math.round((fareAmount - calculatedFare.totalFare) * 100) / 100
+          ? Math.round((fareAmount - pricing.rideFareCents / 100) * 100) / 100
           : 0,
         fare_adjustment_reason: fareOverrideRequested ? "admin_fare_override" : "admin_booking_confirmed",
       })

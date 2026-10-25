@@ -18,6 +18,7 @@ import { createRouteSignature } from "@/lib/maps/mapRequestPolicy";
 import { verifyRouteQuote } from "@/lib/maps/routeQuote";
 import { callPhase4Rpc } from "@/lib/server/phase4Rpc";
 import { calculatePhase5Fare } from "@/lib/finance/phase5Fare";
+import { fareQuoteMatches, priceStandardFare, universalFareIncreaseEnabled } from "@/lib/pricing/universalFare";
 import { normalizeCustomerPaymentMethod } from "@/lib/payments/customerPaymentMethod";
 import { SCHEDULED_RIDES_ENABLED } from "@/lib/release/releaseFlags";
 import { ADMISSION_CLOSED_CODE, ADMISSION_CLOSED_MESSAGE, isAdmissionClosed } from "@/lib/maintenance/admission";
@@ -123,6 +124,8 @@ type BookTripBody = {
   notes?: string | null;
   routeQuote?: string | null;
   phase5ExpectedTotalCents?: number | null;
+  expectedRideFareCents?: number | null;
+  expectedPricingVersion?: string | null;
   bookingKey?: string | null;
 };
 
@@ -519,9 +522,16 @@ export async function POST(req: Request) {
       stopWaitingFee: stopWaiting.stopWaitingFee,
     });
     const finalFare = journeyFare.totalFare;
+    const fareIncreaseEnabled = universalFareIncreaseEnabled();
+    const pricedFare = priceStandardFare(finalFare, fareIncreaseEnabled);
+    if ((fareIncreaseEnabled || body.expectedPricingVersion != null) &&
+      !fareQuoteMatches(pricedFare, body.expectedPricingVersion, body.expectedRideFareCents)) {
+      return NextResponse.json({ ok: false, code: "FARE_QUOTE_CHANGED",
+        error: "Your fare changed. Review the updated quote before booking." }, { status: 409 });
+    }
     const phase5Pricing = phase5Active
       ? calculatePhase5Fare({
-          rideFareCents: Math.round(finalFare * 100),
+          rideFareCents: pricedFare.rideFareCents,
           rideOptionId,
           activeMember: phase5StateResult.data?.membership_active === true,
           availableCreditCents: Number(
@@ -585,7 +595,7 @@ export async function POST(req: Request) {
       duration_min: durationMin,
       fare_amount: phase5Pricing
         ? phase5Pricing.customerTotalCents / 100
-        : finalFare,
+        : pricedFare.rideFareCents / 100,
       ride_option: rideOptionId,
       status: initialStatus,
       ride_type: rideType,
@@ -615,13 +625,14 @@ export async function POST(req: Request) {
         pickupInstruction: pickupInstruction || null,
         finalFare: phase5Pricing
           ? phase5Pricing.customerTotalCents / 100
-          : finalFare,
+          : pricedFare.rideFareCents / 100,
         phase5: phase5Pricing,
+        pricing: pricedFare,
       },
       stops,
       original_distance_km: originalDistanceKm,
       original_duration_min: originalDurationMin,
-      original_fare: fare.totalFare,
+      original_fare: priceStandardFare(fare.totalFare, fareIncreaseEnabled).rideFareCents / 100,
       route_distance_km: distanceKm,
       route_duration_min: durationMin,
       extra_stop_distance_km: addStop.extraDistanceKm,
@@ -632,10 +643,10 @@ export async function POST(req: Request) {
       stop_waiting_fee: stopWaiting.stopWaitingFee,
       final_fare: phase5Pricing
         ? phase5Pricing.customerTotalCents / 100
-        : finalFare,
+        : pricedFare.rideFareCents / 100,
       estimated_fare: phase5Pricing
         ? phase5Pricing.customerTotalCents / 100
-        : finalFare,
+        : pricedFare.rideFareCents / 100,
       fare_adjustment_amount: 0,
       fare_adjustment_reason: "booking_confirmed",
     };
