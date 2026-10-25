@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
-import { normalizePhoneZA } from "@/lib/customer/auth";
+import { findRegistrationIdentity, normalizeRegistrationPhone, registrationFailure, isMissingCustomerEmail } from "@/lib/customer/registration";
 import { createServiceSupabase } from "@/lib/customer/server";
 import {
   buildLegalAcceptanceMetadata,
   legalVersionMatches,
 } from "@/lib/legal";
 
-function isMissingEmailColumn(error: { message?: string } | null | undefined) {
-  return !!error?.message?.toLowerCase().includes("email");
-}
-
 function accountCreationFailure(error: unknown) {
-  console.error("[customer-register] account persistence failed", error);
-  return NextResponse.json({ ok: false, error: "We couldn't create your account. Please try again or contact MOOVU support." }, { status: 500 });
+  const failure = registrationFailure(error);
+  const internalCode = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+  console.error("[customer-register] registration failed", JSON.stringify({ correlationId: crypto.randomUUID(), code: internalCode.slice(0, 64), category: failure.code }));
+  return NextResponse.json({ ok: false, code: failure.code, error: failure.error }, { status: failure.status });
 }
 
 export async function POST(req: Request) {
@@ -22,7 +20,7 @@ export async function POST(req: Request) {
     const firstName = String(body?.first_name ?? "").trim();
     const lastName = String(body?.last_name ?? "").trim();
     const customerEmail = String(body?.email ?? "").trim().toLowerCase();
-    const normalizedPhone = normalizePhoneZA(body?.phone);
+    const normalizedPhone = normalizeRegistrationPhone(body?.phone);
     const password = String(body?.password ?? "");
     const acceptedTerms = body?.acceptedTerms === true;
     const acceptedPrivacy = body?.acceptedPrivacy === true;
@@ -73,11 +71,13 @@ export async function POST(req: Request) {
     const supabase = createServiceSupabase();
     const legalMetadata = buildLegalAcceptanceMetadata("customer_signup");
 
-    const { data: existingCustomer } = await supabase
+    const { data: existingCustomer, error: customerLookupError } = await supabase
       .from("customers")
       .select("id,auth_user_id")
       .eq("normalized_phone", normalizedPhone)
       .maybeSingle();
+
+    if (customerLookupError) return accountCreationFailure(customerLookupError);
 
     if (existingCustomer?.id) {
       return NextResponse.json(
@@ -86,76 +86,40 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: existingUsers, error: listError } =
-      await supabase.auth.admin.listUsers();
+    const { user: existingCustomerEmailUser, error: listError } =
+      await findRegistrationIdentity(options => supabase.auth.admin.listUsers(options), customerEmail);
 
     if (listError) {
       return accountCreationFailure(listError);
     }
 
-    const existingCustomerEmailUser = existingUsers.users.find((u) => {
-      const authEmail = String(u.email ?? "").toLowerCase();
-      const metadataEmail = String(u.user_metadata?.customer_email ?? "").toLowerCase();
-      return authEmail === customerEmail || metadataEmail === customerEmail;
-    });
-
     if (existingCustomerEmailUser) {
       return NextResponse.json(
-        { ok: false, error: "A customer account already exists for this email address." },
+        { ok: false, code: "ACCOUNT_EXISTS", error: "An account already exists for this email address. Sign in or reset your password to continue." },
         { status: 409 }
       );
     }
 
-    const existingAuthUser = existingUsers.users.find(
-      (u) => (u.email || "").toLowerCase() === email.toLowerCase()
-    );
+    const { data: createdAuth, error: authError } =
+      await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          role: "customer",
+          phone: normalizedPhone,
+          customer_email: customerEmail,
+          first_name: firstName,
+          last_name: lastName,
+          ...legalMetadata,
+        },
+      });
 
-    let authUserId: string | null = null;
-
-    if (existingAuthUser) {
-      authUserId = existingAuthUser.id;
-
-      const { error: updateError } = await supabase.auth.admin.updateUserById(
-        existingAuthUser.id,
-        {
-          password,
-          user_metadata: {
-            ...(existingAuthUser.user_metadata || {}),
-            role: "customer",
-            phone: normalizedPhone,
-            customer_email: customerEmail,
-            first_name: firstName,
-            last_name: lastName,
-            ...legalMetadata,
-          },
-        }
-      );
-
-      if (updateError) {
-        return accountCreationFailure(updateError);
-      }
-    } else {
-      const { data: createdAuth, error: authError } =
-        await supabase.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            role: "customer",
-            phone: normalizedPhone,
-            customer_email: customerEmail,
-            first_name: firstName,
-            last_name: lastName,
-            ...legalMetadata,
-          },
-        });
-
-      if (authError || !createdAuth?.user) {
-        return accountCreationFailure(authError);
-      }
-
-      authUserId = createdAuth.user.id;
+    if (authError || !createdAuth?.user) {
+      return accountCreationFailure(authError);
     }
+
+    const authUserId = createdAuth.user.id;
 
     if (!authUserId) {
       return NextResponse.json(
@@ -178,7 +142,7 @@ export async function POST(req: Request) {
       onConflict: "auth_user_id",
     });
 
-    if (customerError && isMissingEmailColumn(customerError)) {
+    if (customerError && isMissingCustomerEmail(customerError)) {
       const legacyPayload = {
         auth_user_id: customerPayload.auth_user_id,
         first_name: customerPayload.first_name,

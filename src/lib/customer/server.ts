@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { normalizePhoneZA } from "@/lib/customer/auth";
+import { isMissingCustomerEmail } from "@/lib/customer/registration";
 
 export function createServiceSupabase() {
   return createClient(
@@ -31,10 +32,6 @@ export function readBearerToken(req: Request) {
   return authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
 }
 
-function isMissingEmailColumn(error: { message?: string } | null | undefined) {
-  return !!error?.message?.toLowerCase().includes("email");
-}
-
 async function ensureCustomerProfile(params: {
   supabaseAdmin: ReturnType<typeof createServiceSupabase>;
   user: {
@@ -62,7 +59,7 @@ async function ensureCustomerProfile(params: {
     return {
       ok: false as const,
       error:
-        "Customer profile not found and could not be rebuilt automatically. Please log out and create your customer account again.",
+        "Your account is signed in, but setup is incomplete. Please contact MOOVU support to complete your profile.",
     };
   }
 
@@ -87,7 +84,7 @@ async function ensureCustomerProfile(params: {
     .select("*")
     .single();
 
-  if (insertError && isMissingEmailColumn(insertError)) {
+  if (insertError && isMissingCustomerEmail(insertError)) {
     const legacyProfilePayload = {
       auth_user_id: profilePayload.auth_user_id,
       first_name: profilePayload.first_name,
@@ -108,7 +105,7 @@ async function ensureCustomerProfile(params: {
       .single();
 
     if (legacyInsertError || !legacyInserted) {
-      console.error("[customer-identity] legacy persistence failed", legacyInsertError);
+      console.error("[customer-identity] legacy persistence failed", { code: legacyInsertError?.code ?? "unknown" });
       return {
         ok: false as const,
         error: "We couldn't restore your account details. Please try again or contact MOOVU support.",
@@ -122,7 +119,7 @@ async function ensureCustomerProfile(params: {
   }
 
   if (insertError || !inserted) {
-    console.error("[customer-identity] persistence failed", insertError);
+    console.error("[customer-identity] persistence failed", { code: insertError?.code ?? "unknown" });
     return {
       ok: false as const,
       error: "We couldn't restore your account details. Please try again or contact MOOVU support.",
@@ -168,6 +165,16 @@ export async function getAuthenticatedCustomer(req: Request) {
   let customer = existingCustomer;
 
   if (!customer) {
+    const [actor, driver] = await Promise.all([
+      supabaseAdmin.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+      supabaseAdmin.from("driver_accounts").select("driver_id").eq("user_id", user.id).maybeSingle(),
+    ]);
+    if (actor.error || driver.error) {
+      return { ok: false as const, status: 503, error: "Account setup is temporarily unavailable. Please try again." };
+    }
+    if (driver.data || (actor.data?.role && actor.data.role !== "customer")) {
+      return { ok: false as const, status: 403, error: "Use the portal associated with your existing account." };
+    }
     const repaired = await ensureCustomerProfile({
       supabaseAdmin,
       user: {

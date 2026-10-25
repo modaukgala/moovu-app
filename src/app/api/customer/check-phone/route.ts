@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { customerEmailFromPhone, normalizePhoneZA } from "@/lib/customer/auth";
+import { customerEmailFromPhone } from "@/lib/customer/auth";
 import { createServiceSupabase } from "@/lib/customer/server";
+import { findRegistrationIdentity, normalizeRegistrationPhone } from "@/lib/customer/registration";
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -10,7 +11,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const identifier = String(body?.identifier ?? body?.phone ?? "").trim().toLowerCase();
-    const normalizedPhone = normalizePhoneZA(identifier);
+    const normalizedPhone = normalizeRegistrationPhone(identifier);
     const identifierIsEmail = isEmail(identifier);
 
     if (!normalizedPhone && !identifierIsEmail) {
@@ -23,17 +24,12 @@ export async function POST(req: Request) {
     const supabase = createServiceSupabase();
 
     if (identifierIsEmail) {
-      const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+      const { user: authUser, error: listError } = await findRegistrationIdentity(
+        options => supabase.auth.admin.listUsers(options), identifier);
 
       if (listError) {
-        return NextResponse.json({ ok: false, error: listError.message }, { status: 500 });
+        return NextResponse.json({ ok: false, error: "Account lookup is temporarily unavailable. Please try again." }, { status: 503 });
       }
-
-      const authUser = existingUsers.users.find((user) => {
-        const authEmail = String(user.email ?? "").toLowerCase();
-        const customerEmail = String(user.user_metadata?.customer_email ?? "").toLowerCase();
-        return authEmail === identifier || customerEmail === identifier;
-      });
 
       if (!authUser) {
         return NextResponse.json({
@@ -51,14 +47,14 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (error) {
-        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ ok: false, error: "Account lookup is temporarily unavailable. Please try again." }, { status: 503 });
       }
 
       return NextResponse.json({
         ok: true,
-        exists: !!customer,
-        first_name: customer?.first_name ?? (String(authUser.user_metadata?.first_name ?? "") || null),
-        last_name: customer?.last_name ?? (String(authUser.user_metadata?.last_name ?? "") || null),
+        exists: true,
+        first_name: customer?.first_name ?? null,
+        last_name: customer?.last_name ?? null,
         normalized_phone: customer?.normalized_phone ?? null,
         login_email: authUser.email ?? null,
       });
@@ -71,7 +67,7 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Account lookup is temporarily unavailable. Please try again." }, { status: 503 });
     }
 
     let loginEmail = normalizedPhone ? customerEmailFromPhone(normalizedPhone) : null;
@@ -88,10 +84,10 @@ export async function POST(req: Request) {
       normalized_phone: normalizedPhone,
       login_email: loginEmail,
     });
-  } catch (e: unknown) {
+  } catch {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Server error." },
-      { status: 500 }
+      { ok: false, error: "Account lookup is temporarily unavailable. Please try again." },
+      { status: 503 }
     );
   }
 }

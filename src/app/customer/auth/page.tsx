@@ -73,8 +73,8 @@ export default function CustomerAuthPage() {
 
   async function checkPhone() {
     const identifier = phone.trim();
-    const normalized = normalizePhoneZA(identifier);
     const identifierIsEmail = isEmail(identifier);
+    const normalized = identifierIsEmail ? null : normalizePhoneZA(identifier);
 
     if (!normalized && !identifierIsEmail) {
       setMsg("Enter a valid email address or cellphone number.");
