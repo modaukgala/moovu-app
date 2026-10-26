@@ -4,7 +4,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {Readable} from 'node:stream';
 import {createHash,randomBytes,scryptSync} from 'node:crypto';
-import {encryptObject,decryptObject,sealManifest,certifyStorageBackup} from './release4-storage-backup.mjs';
+import {encryptObject,decryptObject,sealManifest,certifyStorageBackup,classifyStorageFailure} from './release4-storage-backup.mjs';
+
+test('Storage failure categories expose no provider diagnostics',()=>{
+  assert.equal(classifyStorageFailure({status:400,statusCode:'403',message:'private value'},'STORAGE_BUCKET_LIST'),'STORAGE_BUCKET_LIST_AUTH_FAILED');
+  assert.equal(classifyStorageFailure({status:402,message:'private value'},'STORAGE_BUCKET_LIST'),'STORAGE_BUCKET_LIST_LIMITED');
+  assert.equal(classifyStorageFailure({name:'StorageUnknownError',message:'private value'},'STORAGE_BUCKET_LIST'),'STORAGE_BUCKET_LIST_NETWORK_FAILED');
+});
 
 const parent='D:\\MOOVU Backup Tooling Test';
 const withFixture=async callback=>{

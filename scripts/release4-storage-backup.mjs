@@ -17,6 +17,16 @@ const restoreRoot='D:\\MOOVU Secure Backups\\Storage Restore Certification';
 const objectMagic=Buffer.from('MOOVUOBJ1');
 const kdf={N:32768,r:8,p:1,maxmem:64*1024*1024};
 const fail=category=>{throw Error(category);};
+export const classifyStorageFailure=(error,operation)=>{
+  const status=Number(error?.status);
+  const serviceCode=String(error?.statusCode??'');
+  if(status===401||status===403||serviceCode==='401'||serviceCode==='403')return `${operation}_AUTH_FAILED`;
+  if(status===400)return `${operation}_REQUEST_REJECTED`;
+  if(status===402||status===429)return `${operation}_LIMITED`;
+  if(status>=500&&status<600)return `${operation}_SERVER_FAILED`;
+  if(error?.name==='StorageUnknownError')return `${operation}_NETWORK_FAILED`;
+  return `${operation}_FAILED`;
+};
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
 const isBackupName=name=>/^storage-backup-\d{8}T\d{6}Z-[a-f0-9]{12}$/.test(name);
 const objectFile=index=>`${String(index).padStart(6,'0')}.enc`;
@@ -26,7 +36,8 @@ const derive=(passphrase,salt)=>{
 };
 const currentInventory=async client=>{
   const {data:buckets,error:bucketError}=await client.storage.listBuckets();
-  if(bucketError||!Array.isArray(buckets))fail('STORAGE_BUCKET_LIST_FAILED');
+  if(bucketError)fail(classifyStorageFailure(bucketError,'STORAGE_BUCKET_LIST'));
+  if(!Array.isArray(buckets))fail('STORAGE_BUCKET_LIST_RESPONSE_INVALID');
   const records=[];
   const bucketInfo=buckets.map(bucket=>({id:bucket.id,public:bucket.public})).sort((a,b)=>a.id.localeCompare(b.id));
   if(bucketInfo.some(bucket=>bucket.public))fail('UNEXPECTED_PUBLIC_BUCKET');
@@ -38,7 +49,8 @@ const currentInventory=async client=>{
       for(let offset=0;;offset+=100){
         const {data,error}=await client.storage.from(bucket.id).list(prefix,
           {limit:100,offset,sortBy:{column:'name',order:'asc'}});
-        if(error||!Array.isArray(data))fail('STORAGE_OBJECT_LIST_FAILED');
+        if(error)fail(classifyStorageFailure(error,'STORAGE_OBJECT_LIST'));
+        if(!Array.isArray(data))fail('STORAGE_OBJECT_LIST_RESPONSE_INVALID');
         for(const entry of data){
           const name=prefix?`${prefix}/${entry.name}`:entry.name;
           if(!entry.name||entry.name==='.'||entry.name==='..'||entry.name.includes('/')||name.startsWith('/'))fail('STORAGE_OBJECT_PATH_INVALID');
