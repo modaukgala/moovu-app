@@ -4,7 +4,6 @@ import path from 'node:path';
 import {Readable,Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {createCipheriv,createDecipheriv,createHash,randomBytes,scryptSync} from 'node:crypto';
-import {createClient} from '@supabase/supabase-js';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -17,15 +16,45 @@ const restoreRoot='D:\\MOOVU Secure Backups\\Storage Restore Certification';
 const objectMagic=Buffer.from('MOOVUOBJ1');
 const kdf={N:32768,r:8,p:1,maxmem:64*1024*1024};
 const fail=category=>{throw Error(category);};
-export const classifyStorageFailure=(error,operation)=>{
-  const status=Number(error?.status);
-  const serviceCode=String(error?.statusCode??'');
-  if(status===401||status===403||serviceCode==='401'||serviceCode==='403')return `${operation}_AUTH_FAILED`;
-  if(status===400)return `${operation}_REQUEST_REJECTED`;
-  if(status===402||status===429)return `${operation}_LIMITED`;
+export const credentialType=secret=>{
+  if(typeof secret!=='string'||!secret)fail('STORAGE_CREDENTIAL_MISSING');
+  if(secret!==secret.trim()||/[\r\n]/.test(secret))fail('STORAGE_CREDENTIAL_WHITESPACE');
+  if(secret.startsWith('sb_publishable_'))fail('STORAGE_CREDENTIAL_UNSUPPORTED_PUBLIC');
+  if(secret.startsWith('sb_secret_'))return 'secret';
+  if(secret.split('.').length!==3)fail('STORAGE_CREDENTIAL_UNSUPPORTED_TYPE');
+  try {
+    const claims=JSON.parse(Buffer.from(secret.split('.')[1],'base64url').toString('utf8'));
+    if(claims.role!=='service_role')fail('STORAGE_CREDENTIAL_INSUFFICIENT_ROLE');
+    if(claims.ref&&claims.ref!==project)fail('STORAGE_CREDENTIAL_PROJECT_MISMATCH');
+  } catch(error) {
+    if(error.message?.startsWith('STORAGE_CREDENTIAL_'))throw error;
+    fail('STORAGE_CREDENTIAL_INVALID_FORMAT');
+  }
+  return 'legacy-service-role';
+};
+export const storageHeaders=(secret,type)=>type==='secret'
+  ?{apikey:secret}
+  :{apikey:secret,Authorization:`Bearer ${secret}`};
+export const classifyStorageStatus=(status,operation)=>{
+  if(status===401)return `${operation}_HTTP_401`;
+  if(status===403)return `${operation}_HTTP_403`;
+  if(status===402||status===429)return `${operation}_HTTP_${status}`;
+  if(status===404)return `${operation}_PROJECT_OR_ENDPOINT_NOT_FOUND`;
   if(status>=500&&status<600)return `${operation}_SERVER_FAILED`;
-  if(error?.name==='StorageUnknownError')return `${operation}_NETWORK_FAILED`;
-  return `${operation}_FAILED`;
+  if(status===400)return `${operation}_REQUEST_REJECTED`;
+  return `${operation}_HTTP_FAILED`;
+};
+export const storageRequest=async({endpoint,method='GET',secret,type,body,operation,fetchImpl=fetch})=>{
+  const url=new URL(endpoint,baseUrl);
+  if(url.origin!==baseUrl||!url.pathname.startsWith('/storage/v1/'))fail('STORAGE_PROJECT_URL_INVALID');
+  const headers=storageHeaders(secret,type);
+  if(body!==undefined)headers['Content-Type']='application/json';
+  let response;
+  try{response=await fetchImpl(url,{method,headers,body:body===undefined?undefined:JSON.stringify(body),
+    redirect:'manual',signal:AbortSignal.timeout(120000)});}
+  catch{fail(`${operation}_NETWORK_FAILED`);}
+  if(response.status!==200)fail(classifyStorageStatus(response.status,operation));
+  return response;
 };
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
 const isBackupName=name=>/^storage-backup-\d{8}T\d{6}Z-[a-f0-9]{12}$/.test(name);
@@ -34,9 +63,10 @@ const derive=(passphrase,salt)=>{
   if(typeof passphrase!=='string'||passphrase.length<20)fail('ENCRYPTION_PASSPHRASE_TOO_SHORT');
   return scryptSync(passphrase,salt,32,kdf);
 };
-const currentInventory=async client=>{
-  const {data:buckets,error:bucketError}=await client.storage.listBuckets();
-  if(bucketError)fail(classifyStorageFailure(bucketError,'STORAGE_BUCKET_LIST'));
+const currentInventory=async(secret,type)=>{
+  const bucketResponse=await storageRequest({endpoint:'/storage/v1/bucket',secret,type,operation:'STORAGE_BUCKET_LIST'});
+  let buckets;
+  try{buckets=await bucketResponse.json();}catch{fail('STORAGE_BUCKET_LIST_RESPONSE_INVALID');}
   if(!Array.isArray(buckets))fail('STORAGE_BUCKET_LIST_RESPONSE_INVALID');
   const records=[];
   const bucketInfo=buckets.map(bucket=>({id:bucket.id,public:bucket.public})).sort((a,b)=>a.id.localeCompare(b.id));
@@ -47,9 +77,11 @@ const currentInventory=async client=>{
       if(visited.has(prefix))fail('STORAGE_FOLDER_CYCLE');
       visited.add(prefix);
       for(let offset=0;;offset+=100){
-        const {data,error}=await client.storage.from(bucket.id).list(prefix,
-          {limit:100,offset,sortBy:{column:'name',order:'asc'}});
-        if(error)fail(classifyStorageFailure(error,'STORAGE_OBJECT_LIST'));
+        const response=await storageRequest({endpoint:`/storage/v1/object/list/${encodeURIComponent(bucket.id)}`,
+          method:'POST',secret,type,body:{prefix,limit:100,offset,sortBy:{column:'name',order:'asc'}},
+          operation:'STORAGE_OBJECT_LIST'});
+        let data;
+        try{data=await response.json();}catch{fail('STORAGE_OBJECT_LIST_RESPONSE_INVALID');}
         if(!Array.isArray(data))fail('STORAGE_OBJECT_LIST_RESPONSE_INVALID');
         for(const entry of data){
           const name=prefix?`${prefix}/${entry.name}`:entry.name;
@@ -157,7 +189,7 @@ export async function certifyStorageBackup(directory,passphrase){
 
 async function main(){
   const mode=process.argv[2]??'--preflight';
-  if(!['--preflight','--backup','--certify'].includes(mode)||process.argv.length>(mode==='--backup'?5:4))fail('INVALID_MODE');
+  if(!['--preflight','--backup','--certify','--auth-check'].includes(mode)||process.argv.length>(mode==='--backup'?5:4))fail('INVALID_MODE');
   if(!fs.existsSync('D:\\'))fail('BACKUP_D_DRIVE_UNAVAILABLE');
   fs.mkdirSync(backupRoot,{recursive:true,mode:0o700});
   protectRecoveryDirectory(backupRoot);
@@ -176,13 +208,21 @@ async function main(){
   const passphrase=process.env.MOOVU_STORAGE_BACKUP_PASSPHRASE;
   delete process.env.MOOVU_STORAGE_SERVICE_ROLE_KEY;
   delete process.env.MOOVU_STORAGE_BACKUP_PASSPHRASE;
-  if(!secret||!passphrase)fail('PRIVATE_SECRETS_REQUIRED');
+  if(!secret||(mode==='--backup'&&!passphrase))fail('PRIVATE_SECRETS_REQUIRED');
+  const type=credentialType(secret);
+  if(mode==='--auth-check'){
+    const response=await storageRequest({endpoint:'/storage/v1/bucket',secret,type,operation:'STORAGE_BUCKET_LIST'});
+    let buckets;
+    try{buckets=await response.json();}catch{fail('STORAGE_BUCKET_LIST_RESPONSE_INVALID');}
+    if(!Array.isArray(buckets)||!buckets.some(bucket=>bucket.id==='driver-docs'))fail('STORAGE_BUCKET_LIST_RESPONSE_INVALID');
+    return {status:'STORAGE_CREDENTIAL_VERIFIED',project,credentialType:type,bucketCount:buckets.length,
+      productionMutated:false,objectsDownloaded:false};
+  }
   const expectedCount=Number(process.argv.find(value=>value.startsWith('--expected-count='))?.slice(17));
   const expectedBytes=Number(process.argv.find(value=>value.startsWith('--expected-bytes='))?.slice(17));
   if(!Number.isSafeInteger(expectedCount)||expectedCount<1||!Number.isSafeInteger(expectedBytes)||expectedBytes<1)fail('STORAGE_EXPECTED_INVENTORY_REQUIRED');
   const keySalt=randomBytes(16),key=derive(passphrase,keySalt);
-  const client=createClient(baseUrl,secret,{auth:{persistSession:false,autoRefreshToken:false}});
-  const before=await currentInventory(client);
+  const before=await currentInventory(secret,type);
   const totalBytes=before.records.reduce((sum,item)=>sum+item.size,0);
   if(before.records.length!==expectedCount||totalBytes!==expectedBytes)fail('STORAGE_LIVE_INVENTORY_DIFFERS_FROM_READONLY_CATALOG');
   const backupName=`storage-backup-${new Date().toISOString().replace(/[-:]/g,'').slice(0,15)}Z-${randomBytes(6).toString('hex')}`;
@@ -198,20 +238,14 @@ async function main(){
       const index=offset+1;
       const encodedPath=item.name.split('/').map(encodeURIComponent).join('/');
       const url=`${baseUrl}/storage/v1/object/authenticated/${encodeURIComponent(item.bucket)}/${encodedPath}`;
-      let response;
-      try{response=await fetch(url,{method:'GET',redirect:'manual',headers:{apikey:secret,Authorization:`Bearer ${secret}`,'Accept-Encoding':'identity'},signal:AbortSignal.timeout(120000)});}
-      catch{fail('STORAGE_NETWORK_OR_TIMEOUT_FAILED');}
-      if(response.status===401||response.status===403)fail('STORAGE_READ_AUTH_FAILED');
-      if(response.status===404)fail('STORAGE_OBJECT_MISSING');
-      if(response.status===429)fail('STORAGE_RATE_LIMITED');
-      if(response.status>=500)fail('STORAGE_SERVER_ERROR');
-      if(response.status!==200||!response.body)fail('STORAGE_DOWNLOAD_FAILED');
+      const response=await storageRequest({endpoint:url,secret,type,operation:'STORAGE_OBJECT_DOWNLOAD'});
+      if(!response.body)fail('STORAGE_DOWNLOAD_BODY_MISSING');
       const aad=Buffer.from(`${project}:${index}:${sha256(header)}`);
       const downloaded=await encryptObject({source:Readable.fromWeb(response.body),
         destination:path.join(directory,objectFile(index)),key,aad,expectedSize:item.size});
       objects.push({...item,index,sha256:downloaded.sha256});
     }
-    const after=await currentInventory(client);
+    const after=await currentInventory(secret,type);
     if(JSON.stringify(before.buckets)!==JSON.stringify(after.buckets)||
        JSON.stringify(before.records.map(stableIdentity))!==JSON.stringify(after.records.map(stableIdentity)))fail('STORAGE_INVENTORY_CHANGED_DURING_BACKUP');
     fs.writeFileSync(path.join(directory,'header.json'),header,{flag:'wx',mode:0o600});

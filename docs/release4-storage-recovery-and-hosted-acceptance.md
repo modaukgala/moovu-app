@@ -12,6 +12,14 @@ Run the credential-free check first:
 pwsh -NoProfile -File ".\scripts\release4-storage-backup.ps1"
 ```
 
+Before starting a download, verify the existing production key through the private read-only bucket-list request:
+
+```powershell
+pwsh -NoProfile -File ".\scripts\release4-storage-backup.ps1" -VerifyCredential
+```
+
+Use an existing `service_role` JWT or `sb_secret_` key from project `mvazbszenqahgqpznhhq`. The launcher rejects public keys and malformed credentials. Opaque secret keys are sent on `apikey`; legacy service-role JWTs use `apikey` and Bearer authorization. Only a sanitized status is printed. A 400/401/403 response is not proof of a valid key; confirm the key's project and type in Supabase Dashboard > Settings > API Keys before retrying. No key rotation is required.
+
 After a fresh read-only inventory confirms the current count and bytes, the owner can run from this repository:
 
 ```powershell
@@ -28,7 +36,7 @@ pwsh -NoProfile -File ".\scripts\release4-storage-backup.ps1" -CertifyArchiveNam
 
 The backup set itself is retained outside Git. No object is restored to production. A changed or missing object, failed authenticated download, size mismatch or failed restore must yield BLOCKED; do not count a partial set as certified. The documented procedure backs up current object bytes and paths. It does not make an October 26 database snapshot a zero-loss recovery point for later database writes.
 
-The cryptographic path passed three synthetic checks: exact byte/count restoration, wrong-context and tamper rejection, and a two-object encrypted-set restore. The credential-free launcher preflight passed. **Live object-byte backup and restore are pending the owner's private credentialed run.**
+The cryptographic path passed synthetic exact byte/count restoration, wrong-context and tamper rejection, and a two-object encrypted-set restore. Credential handling and sanitized HTTP failure categories passed focused synthetic checks. The credential-free launcher preflight passed. **Live object-byte backup and restore remain pending the owner's private credentialed run.**
 
 ## Hosted payout acceptance
 

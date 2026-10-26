@@ -4,12 +4,54 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {Readable} from 'node:stream';
 import {createHash,randomBytes,scryptSync} from 'node:crypto';
-import {encryptObject,decryptObject,sealManifest,certifyStorageBackup,classifyStorageFailure} from './release4-storage-backup.mjs';
+import {encryptObject,decryptObject,sealManifest,certifyStorageBackup,
+  credentialType,storageHeaders,classifyStorageStatus,storageRequest} from './release4-storage-backup.mjs';
 
-test('Storage failure categories expose no provider diagnostics',()=>{
-  assert.equal(classifyStorageFailure({status:400,statusCode:'403',message:'private value'},'STORAGE_BUCKET_LIST'),'STORAGE_BUCKET_LIST_AUTH_FAILED');
-  assert.equal(classifyStorageFailure({status:402,message:'private value'},'STORAGE_BUCKET_LIST'),'STORAGE_BUCKET_LIST_LIMITED');
-  assert.equal(classifyStorageFailure({name:'StorageUnknownError',message:'private value'},'STORAGE_BUCKET_LIST'),'STORAGE_BUCKET_LIST_NETWORK_FAILED');
+const legacyKey=()=>{
+  const payload=Buffer.from(JSON.stringify({role:'service_role',ref:'mvazbszenqahgqpznhhq'})).toString('base64url');
+  return `eyJhbGciOiJIUzI1NiJ9.${payload}.synthetic-signature`;
+};
+test('credential types use documented headers and reject public or malformed input',()=>{
+  const jwt=legacyKey(),secret='sb_secret_synthetic-only';
+  assert.equal(credentialType(jwt),'legacy-service-role');
+  assert.equal(credentialType(secret),'secret');
+  assert.deepEqual(storageHeaders(secret,'secret'),{apikey:secret});
+  assert.deepEqual(storageHeaders(jwt,'legacy-service-role'),{apikey:jwt,Authorization:`Bearer ${jwt}`});
+  assert.throws(()=>credentialType('sb_publishable_test'),/STORAGE_CREDENTIAL_UNSUPPORTED_PUBLIC/);
+  assert.throws(()=>credentialType(' '+secret),/STORAGE_CREDENTIAL_WHITESPACE/);
+  assert.throws(()=>credentialType('invalid'),/STORAGE_CREDENTIAL_UNSUPPORTED_TYPE/);
+  const wrongProject=Buffer.from(JSON.stringify({role:'service_role',ref:'anotherproject'})).toString('base64url');
+  assert.throws(()=>credentialType(`e30.${wrongProject}.signature`),/STORAGE_CREDENTIAL_PROJECT_MISMATCH/);
+});
+test('read-only credential request uses the pinned project and never prints a key',async()=>{
+  const secret='sb_secret_synthetic-only';
+  let calls=0;
+  const fetchImpl=async(url,options)=>{
+    calls++;
+    assert.equal(url.origin,'https://mvazbszenqahgqpznhhq.supabase.co');
+    assert.equal(url.pathname,'/storage/v1/bucket');
+    assert.equal(options.method,'GET');
+    assert.equal(options.headers.apikey,secret);
+    assert.equal(options.headers.Authorization,undefined);
+    return {status:200};
+  };
+  await storageRequest({endpoint:'/storage/v1/bucket',secret,type:'secret',operation:'STORAGE_BUCKET_LIST',fetchImpl});
+  assert.equal(calls,1);
+  await assert.rejects(storageRequest({endpoint:'https://otherproject.supabase.co/storage/v1/bucket',
+    secret,type:'secret',operation:'STORAGE_BUCKET_LIST',fetchImpl}),/STORAGE_PROJECT_URL_INVALID/);
+  assert.equal(calls,1);
+});
+test('HTTP and network categories remain distinct and redact all provider diagnostics',async()=>{
+  const secret='sb_secret_synthetic-only';
+  for(const [status,category] of [[401,'HTTP_401'],[403,'HTTP_403'],[402,'HTTP_402'],[500,'SERVER_FAILED']]){
+    assert.equal(classifyStorageStatus(status,'STORAGE_BUCKET_LIST'),`STORAGE_BUCKET_LIST_${category}`);
+    await assert.rejects(storageRequest({endpoint:'/storage/v1/bucket',secret,type:'secret',
+      operation:'STORAGE_BUCKET_LIST',fetchImpl:async()=>({status,privateError:'sensitive'})}),
+      error=>error.message===`STORAGE_BUCKET_LIST_${category}`);
+  }
+  await assert.rejects(storageRequest({endpoint:'/storage/v1/bucket',secret,type:'secret',
+    operation:'STORAGE_BUCKET_LIST',fetchImpl:async()=>{throw Error('private token');}}),
+    error=>error.message==='STORAGE_BUCKET_LIST_NETWORK_FAILED');
 });
 
 const parent='D:\\MOOVU Backup Tooling Test';
