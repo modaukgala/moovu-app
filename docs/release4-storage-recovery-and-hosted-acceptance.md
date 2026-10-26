@@ -46,7 +46,9 @@ pwsh -NoProfile -File ".\scripts\release4-storage-backup.ps1" -CertifyArchiveNam
 
 The backup set itself is retained outside Git. No object is restored to production. A changed or missing object, failed authenticated download, size mismatch or failed restore must yield BLOCKED; do not count a partial set as certified. The documented procedure backs up current object bytes and paths. It does not make an October 26 database snapshot a zero-loss recovery point for later database writes.
 
-The cryptographic path passed synthetic exact byte/count restoration, wrong-context and tamper rejection, and a two-object encrypted-set restore. Credential handling and sanitized HTTP failure categories passed focused synthetic checks. The credential-free launcher preflight passed. **Live object-byte backup and restore remain pending the owner's private credentialed run.**
+The cryptographic path passed synthetic exact byte/count restoration, wrong-context and tamper rejection, and a two-object encrypted-set restore. Credential handling, pagination, nested paths and sanitized HTTP failure categories passed focused synthetic checks. The credential-free launcher preflight passed.
+
+**Storage object-byte backup and isolated restore: CERTIFIED on 26 October 2026.** The owner ran the private launcher and supplied only the sanitized result `STORAGE_BACKUP_AND_RESTORE_CERTIFIED`. The protected archive `storage-backup-20261026T190237Z-315644c7c41e` contains 741 encrypted object files plus an encrypted manifest, representing 1,024,980,864 source bytes. Its manifest SHA-256 is `8741040D59D150012B6BBF816DBCFF051D2487ED497E437A275A233DD33D4576`; an independent local hash matched the owner result. The helper reported `restoreCertified:true` after authenticated isolated decryption and per-object size/hash checks, with no Storage writes requested. The temporary restore directory was removed. A separate read-only production metadata count still returned 741 objects and 1,024,980,864 bytes. This certifies this Storage object-byte archive; it does not certify writes to Storage or the database made after its snapshot.
 
 ## Hosted payout acceptance
 
