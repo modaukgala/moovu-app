@@ -1,7 +1,7 @@
 // Local-only, owner-run data-backed rehearsal. No network path to production.
 import fs from 'node:fs';
 import path from 'node:path';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
@@ -25,6 +25,29 @@ const native=(args,category,timeout=120000)=>{
   if(result.status!==0||result.error)fail(category);
   return result.stdout.trim();
 };
+const dockerTransferPreflight=()=>{
+  const daemon=spawnSync('docker',['version','--format','{{.Server.Version}}'],{encoding:'utf8',timeout:15000,windowsHide:true});
+  if(daemon.status!==0||daemon.error||!/^\d+\.\d+\.\d+/.test(daemon.stdout.trim()))fail('DOCKER_DAEMON_UNAVAILABLE');
+  const installed=spawnSync('docker',['image','inspect',image,'--format','{{.Id}}'],{encoding:'utf8',timeout:15000,windowsHide:true});
+  if(installed.status!==0||installed.error||!/^sha256:[a-f0-9]{64}$/.test(installed.stdout.trim()))fail('DOCKER_POSTGRES_IMAGE_UNAVAILABLE');
+  protectRecoveryDirectory(privateRoot);
+  const name=`mount-check-${randomUUID()}.txt`;
+  const source=path.join(privateRoot,name);
+  const bytes=Buffer.from('MOOVU isolated non-sensitive Docker mount check\n');
+  fs.writeFileSync(source,bytes,{flag:'wx',mode:0o600});
+  try {
+    const expected=createHash('sha256').update(bytes).digest('hex');
+    const result=spawnSync('docker',['run','--rm','--pull=never','--read-only','--network','none',
+      '--mount',`type=bind,source=${privateRoot},target=/archive,readonly`,
+      '--entrypoint','sha256sum',image,`/archive/${name}`],
+    {encoding:'utf8',timeout:60000,maxBuffer:1024*1024,windowsHide:true});
+    if(result.status!==0||result.error)fail('DOCKER_READONLY_MOUNT_FAILED');
+    if(result.stdout.trim().split(/\s+/)[0]!==expected)fail('DOCKER_TRANSFER_CHECKSUM_MISMATCH');
+  } finally {
+    fs.rmSync(source,{force:true});
+    if(fs.existsSync(source))fail('DOCKER_TRANSFER_TEST_CLEANUP_FAILED');
+  }
+};
 
 try {
   if(!fs.existsSync(file)||fs.statSync(file).size!==expectedSize)fail('EXACT_BACKUP_SIZE_MISMATCH');
@@ -34,8 +57,9 @@ try {
   if(sidecar.sourceProject!=='mvazbszenqahgqpznhhq'||sidecar.safeFilename!==name||
      sidecar.sha256?.toUpperCase()!==expectedSha||sidecar.size!==expectedSize||
      sidecar.productionMutated!==false||!sidecar.sourceCounts)fail('BACKUP_METADATA_MISMATCH');
+  dockerTransferPreflight();
   if(process.argv.includes('--preflight')) {
-    console.log(JSON.stringify({status:'STAGE2_BACKUP_REHEARSAL_PREFLIGHT_PASS_PRIVATE_PASSPHRASE_REQUIRED',productionConnected:false,archiveSha256:expectedSha}));
+    console.log(JSON.stringify({status:'STAGE2_BACKUP_REHEARSAL_PREFLIGHT_PASS_PRIVATE_PASSPHRASE_REQUIRED',productionConnected:false,archiveSha256:expectedSha,dockerReadOnlyMountVerified:true,transferChecksumVerified:true}));
   } else {
     if(process.argv.length!==2)fail('INVALID_MODE');
     const passphrase=process.env.MOOVU_STAGE2_BACKUP_PASSPHRASE;
