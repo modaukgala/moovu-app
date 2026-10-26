@@ -20,6 +20,16 @@ pwsh -NoProfile -File ".\scripts\release4-storage-backup.ps1" -VerifyCredential
 
 Use an existing `service_role` JWT or `sb_secret_` key from project `mvazbszenqahgqpznhhq`. The launcher rejects public keys and malformed credentials. Opaque secret keys are sent on `apikey`; legacy service-role JWTs use `apikey` and Bearer authorization. Only a sanitized status is printed. A 400/401/403 response is not proof of a valid key; confirm the key's project and type in Supabase Dashboard > Settings > API Keys before retrying. No key rotation is required.
 
+After credential verification, a read-only listing check exercises every bucket and folder without downloading object bytes:
+
+```powershell
+pwsh -NoProfile -File ".\scripts\release4-storage-backup.ps1" -VerifyListing
+```
+
+If it fails, share only the sanitized category, bucket identifier, HTTP status, content type, pagination offset, folder depth and retry count. The helper retries transient 429 and 500/502/503/504 responses at most twice with bounded backoff; it does not retry authorization or malformed-request failures. Object names, response bodies and credentials are excluded from diagnostics.
+
+The owner ran this check on 26 October 2026 using the verified production secret key. It returned `STORAGE_OBJECT_LIST_VERIFIED`: seven buckets, 741 objects, 1,024,980,864 bytes, no object download and no production mutation. The earlier `STORAGE_OBJECT_LIST_SERVER_FAILED` response lacked the bucket and HTTP status needed for a definitive root-cause attribution. No invalid pagination or request-body parameter was reproduced. Supabase read-only request logs showed successful object-list calls and no observed 402 or object-list 5xx in the queried window; this is not proof that a transient failure never occurred.
+
 After a fresh read-only inventory confirms the current count and bytes, the owner can run from this repository:
 
 ```powershell

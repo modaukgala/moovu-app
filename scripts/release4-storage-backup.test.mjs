@@ -5,7 +5,7 @@ import path from 'node:path';
 import {Readable} from 'node:stream';
 import {createHash,randomBytes,scryptSync} from 'node:crypto';
 import {encryptObject,decryptObject,sealManifest,certifyStorageBackup,
-  credentialType,storageHeaders,classifyStorageStatus,storageRequest} from './release4-storage-backup.mjs';
+  credentialType,storageHeaders,classifyStorageStatus,storageRequest,currentInventory} from './release4-storage-backup.mjs';
 
 const legacyKey=()=>{
   const payload=Buffer.from(JSON.stringify({role:'service_role',ref:'mvazbszenqahgqpznhhq'})).toString('base64url');
@@ -43,15 +43,76 @@ test('read-only credential request uses the pinned project and never prints a ke
 });
 test('HTTP and network categories remain distinct and redact all provider diagnostics',async()=>{
   const secret='sb_secret_synthetic-only';
-  for(const [status,category] of [[401,'HTTP_401'],[403,'HTTP_403'],[402,'HTTP_402'],[500,'SERVER_FAILED']]){
+  for(const [status,category] of [[400,'REQUEST_REJECTED'],[401,'HTTP_401'],[403,'HTTP_403'],[402,'HTTP_402'],
+    [500,'HTTP_500'],[502,'HTTP_502'],[503,'HTTP_503'],[504,'HTTP_504']]){
     assert.equal(classifyStorageStatus(status,'STORAGE_BUCKET_LIST'),`STORAGE_BUCKET_LIST_${category}`);
+    let calls=0;
     await assert.rejects(storageRequest({endpoint:'/storage/v1/bucket',secret,type:'secret',
-      operation:'STORAGE_BUCKET_LIST',fetchImpl:async()=>({status,privateError:'sensitive'})}),
-      error=>error.message===`STORAGE_BUCKET_LIST_${category}`);
+      operation:'STORAGE_BUCKET_LIST',context:{bucket:'driver-docs',offset:100},
+      fetchImpl:async()=>{calls++;return {status,headers:new Headers({'content-type':'text/html'}),privateError:'sensitive'};},
+      sleepImpl:async()=>{}}),
+      error=>error.message===`STORAGE_BUCKET_LIST_${category}`&&error.details.httpStatus===status&&
+        error.details.bucket==='driver-docs'&&error.details.offset===100&&
+        error.details.contentType==='text/html'&&!JSON.stringify(error.details).includes('sensitive'));
+    assert.equal(calls,[500,502,503,504].includes(status)?3:1);
   }
+  let attempts=0;
   await assert.rejects(storageRequest({endpoint:'/storage/v1/bucket',secret,type:'secret',
-    operation:'STORAGE_BUCKET_LIST',fetchImpl:async()=>{throw Error('private token');}}),
-    error=>error.message==='STORAGE_BUCKET_LIST_NETWORK_FAILED');
+    operation:'STORAGE_BUCKET_LIST',fetchImpl:async()=>{attempts++;throw Error('private token');},
+    sleepImpl:async()=>{}}),
+    error=>error.message==='STORAGE_BUCKET_LIST_NETWORK_FAILED'&&error.details.retryCount===2);
+  assert.equal(attempts,3);
+  await assert.rejects(storageRequest({endpoint:'/storage/v1/bucket',secret,type:'secret',
+    operation:'STORAGE_BUCKET_LIST',fetchImpl:async()=>{throw {name:'TimeoutError',message:'private'};},
+    sleepImpl:async()=>{}}),
+    error=>error.message==='STORAGE_BUCKET_LIST_TIMEOUT');
+});
+test('transient list failures retry and successful response uses correct POST body',async()=>{
+  const secret='sb_secret_synthetic-only';
+  let calls=0;
+  const response=await storageRequest({endpoint:'/storage/v1/object/list/driver-docs',method:'POST',secret,
+    type:'secret',operation:'STORAGE_OBJECT_LIST',context:{bucket:'driver-docs',offset:50},
+    fetchImpl:async(url,options)=>{
+      calls++;
+      assert.equal(url.pathname,'/storage/v1/object/list/driver-docs');
+      assert.equal(options.method,'POST');
+      assert.deepEqual(JSON.parse(options.body),{prefix:'',limit:100,offset:50,sortBy:{column:'name',order:'asc'}});
+      return {status:calls===1?429:calls===2?500:200};
+    },body:{prefix:'',limit:100,offset:50,sortBy:{column:'name',order:'asc'}},
+    sleepImpl:async()=>{}});
+  assert.equal(response.status,200);
+  assert.equal(calls,3);
+});
+test('inventory lists multiple pages, nested paths, and empty buckets without skips',async()=>{
+  const root=Array.from({length:99},(_,i)=>({id:`id-${i}`,name:`file-${String(i).padStart(3,'0')}`,
+    metadata:{size:2}}));
+  const calls=[];
+  const request=async options=>{
+    calls.push(options);
+    let data;
+    if(options.operation==='STORAGE_BUCKET_LIST')data=[{id:'driver-docs',public:false},{id:'empty',public:false}];
+    else if(options.context.bucket==='empty')data=[];
+    else if(options.body.prefix==='nested')data=[{id:'child-id',name:'child',metadata:{size:3}}];
+    else if(options.body.offset===0)data=[...root,{id:null,name:'nested'}];
+    else if(options.body.offset===100)data=[{id:'last-id',name:'last',metadata:{size:4}}];
+    else throw Error('unexpected pagination');
+    return {json:async()=>data};
+  };
+  const inventory=await currentInventory('synthetic','secret',request);
+  assert.equal(inventory.records.length,101);
+  assert.equal(inventory.records.reduce((sum,item)=>sum+item.size,0),205);
+  assert.ok(inventory.records.some(item=>item.name==='nested/child'));
+  assert.equal(calls.filter(item=>item.operation==='STORAGE_OBJECT_LIST').length,4);
+});
+test('inventory rejects duplicate paths and malformed responses',async()=>{
+  const bucket={json:async()=>[{id:'driver-docs',public:false}]};
+  const duplicateRequest=async options=>options.operation==='STORAGE_BUCKET_LIST'?bucket:{json:async()=>[
+    {id:'one',name:'same',metadata:{size:1}},{id:'two',name:'same',metadata:{size:1}}]};
+  await assert.rejects(currentInventory('synthetic','secret',duplicateRequest),/STORAGE_DUPLICATE_PATH/);
+  const malformedRequest=async options=>options.operation==='STORAGE_BUCKET_LIST'?bucket:
+    {json:async()=>({unexpected:true})};
+  await assert.rejects(currentInventory('synthetic','secret',malformedRequest),
+    error=>error.message==='STORAGE_OBJECT_LIST_RESPONSE_INVALID'&&error.details.bucket==='driver-docs');
 });
 
 const parent='D:\\MOOVU Backup Tooling Test';

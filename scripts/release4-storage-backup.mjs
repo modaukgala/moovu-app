@@ -16,6 +16,14 @@ const restoreRoot='D:\\MOOVU Secure Backups\\Storage Restore Certification';
 const objectMagic=Buffer.from('MOOVUOBJ1');
 const kdf={N:32768,r:8,p:1,maxmem:64*1024*1024};
 const fail=category=>{throw Error(category);};
+const safeBucket=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(value)?value:'redacted';
+const safeContentType=value=>{
+  const type=String(value??'').split(';')[0].toLowerCase();
+  return ['application/json','text/html','text/plain'].includes(type)?type:type?'other':'missing';
+};
+class StorageFailure extends Error {
+  constructor(category,details={}){super(category);this.details=details;}
+}
 export const credentialType=secret=>{
   if(typeof secret!=='string'||!secret)fail('STORAGE_CREDENTIAL_MISSING');
   if(secret!==secret.trim()||/[\r\n]/.test(secret))fail('STORAGE_CREDENTIAL_WHITESPACE');
@@ -40,21 +48,36 @@ export const classifyStorageStatus=(status,operation)=>{
   if(status===403)return `${operation}_HTTP_403`;
   if(status===402||status===429)return `${operation}_HTTP_${status}`;
   if(status===404)return `${operation}_PROJECT_OR_ENDPOINT_NOT_FOUND`;
+  if([500,502,503,504].includes(status))return `${operation}_HTTP_${status}`;
   if(status>=500&&status<600)return `${operation}_SERVER_FAILED`;
   if(status===400)return `${operation}_REQUEST_REJECTED`;
   return `${operation}_HTTP_FAILED`;
 };
-export const storageRequest=async({endpoint,method='GET',secret,type,body,operation,fetchImpl=fetch})=>{
+const transientStatus=status=>status===429||[500,502,503,504].includes(status);
+export const storageRequest=async({endpoint,method='GET',secret,type,body,operation,context={},
+  fetchImpl=fetch,sleepImpl=ms=>new Promise(resolve=>setTimeout(resolve,ms))})=>{
   const url=new URL(endpoint,baseUrl);
   if(url.origin!==baseUrl||!url.pathname.startsWith('/storage/v1/'))fail('STORAGE_PROJECT_URL_INVALID');
   const headers=storageHeaders(secret,type);
   if(body!==undefined)headers['Content-Type']='application/json';
-  let response;
-  try{response=await fetchImpl(url,{method,headers,body:body===undefined?undefined:JSON.stringify(body),
-    redirect:'manual',signal:AbortSignal.timeout(120000)});}
-  catch{fail(`${operation}_NETWORK_FAILED`);}
-  if(response.status!==200)fail(classifyStorageStatus(response.status,operation));
-  return response;
+  const details={operation,bucket:safeBucket(context.bucket),offset:context.offset??null,
+    folderDepth:context.folderDepth??null};
+  for(let attempt=0;attempt<3;attempt++){
+    let response;
+    try{response=await fetchImpl(url,{method,headers,body:body===undefined?undefined:JSON.stringify(body),
+      redirect:'manual',signal:AbortSignal.timeout(120000)});}
+    catch(error){
+      const category=error?.name==='TimeoutError'||error?.name==='AbortError'
+        ?`${operation}_TIMEOUT`:`${operation}_NETWORK_FAILED`;
+      if(attempt<2){await sleepImpl(250*3**attempt);continue;}
+      throw new StorageFailure(category,{...details,retryCount:attempt});
+    }
+    if(response.status===200)return response;
+    if(transientStatus(response.status)&&attempt<2){await sleepImpl(250*3**attempt);continue;}
+    throw new StorageFailure(classifyStorageStatus(response.status,operation),{
+      ...details,httpStatus:response.status,contentType:safeContentType(response.headers?.get?.('content-type')),
+      retryCount:attempt});
+  }
 };
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
 const isBackupName=name=>/^storage-backup-\d{8}T\d{6}Z-[a-f0-9]{12}$/.test(name);
@@ -63,8 +86,8 @@ const derive=(passphrase,salt)=>{
   if(typeof passphrase!=='string'||passphrase.length<20)fail('ENCRYPTION_PASSPHRASE_TOO_SHORT');
   return scryptSync(passphrase,salt,32,kdf);
 };
-const currentInventory=async(secret,type)=>{
-  const bucketResponse=await storageRequest({endpoint:'/storage/v1/bucket',secret,type,operation:'STORAGE_BUCKET_LIST'});
+export const currentInventory=async(secret,type,request=storageRequest)=>{
+  const bucketResponse=await request({endpoint:'/storage/v1/bucket',secret,type,operation:'STORAGE_BUCKET_LIST'});
   let buckets;
   try{buckets=await bucketResponse.json();}catch{fail('STORAGE_BUCKET_LIST_RESPONSE_INVALID');}
   if(!Array.isArray(buckets))fail('STORAGE_BUCKET_LIST_RESPONSE_INVALID');
@@ -77,12 +100,14 @@ const currentInventory=async(secret,type)=>{
       if(visited.has(prefix))fail('STORAGE_FOLDER_CYCLE');
       visited.add(prefix);
       for(let offset=0;;offset+=100){
-        const response=await storageRequest({endpoint:`/storage/v1/object/list/${encodeURIComponent(bucket.id)}`,
+        const response=await request({endpoint:`/storage/v1/object/list/${encodeURIComponent(bucket.id)}`,
           method:'POST',secret,type,body:{prefix,limit:100,offset,sortBy:{column:'name',order:'asc'}},
-          operation:'STORAGE_OBJECT_LIST'});
+          operation:'STORAGE_OBJECT_LIST',context:{bucket:bucket.id,offset,folderDepth:prefix?prefix.split('/').length:0}});
         let data;
-        try{data=await response.json();}catch{fail('STORAGE_OBJECT_LIST_RESPONSE_INVALID');}
-        if(!Array.isArray(data))fail('STORAGE_OBJECT_LIST_RESPONSE_INVALID');
+        const listingContext={operation:'STORAGE_OBJECT_LIST',bucket:safeBucket(bucket.id),offset,
+          folderDepth:prefix?prefix.split('/').length:0,retryCount:0};
+        try{data=await response.json();}catch{throw new StorageFailure('STORAGE_OBJECT_LIST_RESPONSE_INVALID',listingContext);}
+        if(!Array.isArray(data))throw new StorageFailure('STORAGE_OBJECT_LIST_RESPONSE_INVALID',listingContext);
         for(const entry of data){
           const name=prefix?`${prefix}/${entry.name}`:entry.name;
           if(!entry.name||entry.name==='.'||entry.name==='..'||entry.name.includes('/')||name.startsWith('/'))fail('STORAGE_OBJECT_PATH_INVALID');
@@ -189,7 +214,7 @@ export async function certifyStorageBackup(directory,passphrase){
 
 async function main(){
   const mode=process.argv[2]??'--preflight';
-  if(!['--preflight','--backup','--certify','--auth-check'].includes(mode)||process.argv.length>(mode==='--backup'?5:4))fail('INVALID_MODE');
+  if(!['--preflight','--backup','--certify','--auth-check','--list-check'].includes(mode)||process.argv.length>(mode==='--backup'?5:4))fail('INVALID_MODE');
   if(!fs.existsSync('D:\\'))fail('BACKUP_D_DRIVE_UNAVAILABLE');
   fs.mkdirSync(backupRoot,{recursive:true,mode:0o700});
   protectRecoveryDirectory(backupRoot);
@@ -217,6 +242,12 @@ async function main(){
     if(!Array.isArray(buckets)||!buckets.some(bucket=>bucket.id==='driver-docs'))fail('STORAGE_BUCKET_LIST_RESPONSE_INVALID');
     return {status:'STORAGE_CREDENTIAL_VERIFIED',project,credentialType:type,bucketCount:buckets.length,
       productionMutated:false,objectsDownloaded:false};
+  }
+  if(mode==='--list-check'){
+    const inventory=await currentInventory(secret,type);
+    return {status:'STORAGE_OBJECT_LIST_VERIFIED',project,buckets:inventory.buckets.length,
+      objects:inventory.records.length,bytes:inventory.records.reduce((sum,item)=>sum+item.size,0),
+      objectsDownloaded:false,productionMutated:false};
   }
   const expectedCount=Number(process.argv.find(value=>value.startsWith('--expected-count='))?.slice(17));
   const expectedBytes=Number(process.argv.find(value=>value.startsWith('--expected-bytes='))?.slice(17));
@@ -263,5 +294,7 @@ async function main(){
 
 if(process.argv[1]&&fileURLToPath(import.meta.url).toLowerCase()===process.argv[1].toLowerCase()){
   try{console.log(JSON.stringify(await main()));}
-  catch(error){const category=error.message;console.error(JSON.stringify({status:'STORAGE_BACKUP_BLOCKED',category:/^(STORAGE_|BACKUP_|PRIVATE_|ENCRYPTED_|ENCRYPTION_|RESTORED_)/.test(category)?category:'STORAGE_BACKUP_FAILED'}));process.exitCode=1;}
+  catch(error){const category=error.message;console.error(JSON.stringify({status:'STORAGE_BACKUP_BLOCKED',
+    category:/^(STORAGE_|BACKUP_|PRIVATE_|ENCRYPTED_|ENCRYPTION_|RESTORED_)/.test(category)?category:'STORAGE_BACKUP_FAILED',
+    ...(error instanceof StorageFailure?error.details:{})}));process.exitCode=1;}
 }
