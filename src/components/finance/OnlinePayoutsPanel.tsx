@@ -70,6 +70,8 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
   const [periodEnd, setPeriodEnd] = useState("");
   const [remainingDebt, setRemainingDebt] = useState<number | null>(null);
   const [available, setAvailable] = useState(false);
+  const [recordingEnabled, setRecordingEnabled] = useState(false);
+  const [verificationEnabled, setVerificationEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -95,6 +97,8 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
           setError("");
           setRows(result.batches ?? []);
           setAvailable(Boolean(result.available));
+          setRecordingEnabled(role === "admin" && result.recordingEnabled === true);
+          setVerificationEnabled(role === "admin" && result.verificationEnabled === true);
           if (role === "admin") setBankEvidence(result.bankEvidence ?? []);
           setManualPayments(result.manualPayments ?? []);
           setItems(result.items ?? []);
@@ -217,7 +221,9 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
       {role === "admin" && rows.length > 0 && <button className="moovu-btn moovu-btn-secondary" onClick={exportCsv}>Export statement CSV</button>}
     </header>
     {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
-    {role === "admin" && available && <section className="rounded-xl border border-slate-200 p-4">
+    {role === "admin" && available && !recordingEnabled &&
+      <p className="text-sm text-slate-600">Payout records are read only. Manual payment actions are disabled.</p>}
+    {role === "admin" && available && recordingEnabled && <section className="rounded-xl border border-slate-200 p-4">
       <h3 className="font-bold">Create weekly payout draft</h3>
       <p className="text-sm text-slate-600">Only completed online trips with independently verified provider fees can enter a draft. Creating a draft does not pay a Driver.</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -275,7 +281,7 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
               <p>Still to record: <strong>{money(Math.max(0, row.net_payout_cents - recorded))}</strong> · Awaiting verification: <strong>{money(Math.max(0, recorded - verified))}</strong></p>
               {payments.length > 0 && <ul className="mt-2 space-y-1">{payments.map(payment =>
                 <li key={payment.id}>{date(payment.payment_at)} · {money(payment.amount_cents)} · {payment.method} · Reference {payment.bank_reference} · <strong>{payment.state === "VERIFIED" ? "Paid / Verified" : payment.state === "FAILED" ? "Bank transfer failed" : "Payment Recorded"}</strong>
-                  {role === "admin" && payment.state === "RECORDED" && manualEvidence.some(item => item.payment_id === payment.id && !item.reviewed_at) &&
+                  {role === "admin" && verificationEnabled && payment.state === "RECORDED" && manualEvidence.some(item => item.payment_id === payment.id && !item.reviewed_at) &&
                     <button type="button" className="moovu-btn moovu-btn-secondary ml-2" disabled={busyId === row.id}
                       onClick={() => void review(row, "VERIFY_MANUAL_PAYMENT", undefined, payment.id)}>Review independent bank evidence</button>}</li>)}</ul>}
             </div>;
@@ -283,13 +289,13 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
           {row.hold_reason && <p className="mt-3 text-sm text-amber-800">Hold or exception: {row.hold_reason}</p>}
           {role === "admin" && bankEvidence.filter(item => item.batch_id === row.id).map(item =>
             <p key={item.id} className="mt-3 text-sm text-slate-700">Independent bank evidence: {item.bank_state.toLowerCase()} · {money(item.amount_cents)} · {item.source_type.replaceAll("_", " ")}. {item.verified_at ? "Verified." : "Awaiting second reviewer."}</p>)}
-          {role === "admin" && <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+          {role === "admin" && recordingEnabled && <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
             {row.status !== "CANCELLED" && <div className="flex flex-wrap gap-2">
               {(row.status === "DRAFT" || row.status === "HELD") && <button type="button" className="moovu-btn moovu-btn-secondary" disabled={busyId === row.id} onClick={() => void review(row, "RECONCILE")}>Recheck reconciliation</button>}
               {(row.status === "DRAFT" || row.status === "RECONCILED") && <button type="button" className="moovu-btn moovu-btn-secondary" disabled={busyId === row.id} onClick={() => void review(row, "HOLD")}>Hold</button>}
               {row.status === "RECONCILED" && <button type="button" className="moovu-btn moovu-btn-primary" disabled={busyId === row.id} onClick={() => void review(row, "APPROVE")}>Approve payout amount</button>}
               {row.status === "APPROVED" && <button type="button" className="moovu-btn moovu-btn-secondary" disabled={busyId === row.id} onClick={() => void review(row, "CANCEL_APPROVED")}>Cancel approved batch</button>}
-              {row.status === "APPROVED" && row.net_payout_cents === 0 && <button type="button" className="moovu-btn moovu-btn-primary" disabled={busyId === row.id} onClick={() => void review(row, "SETTLE_DEBT_ONLY")}>Settle by debt offset — no bank transfer</button>}
+              {verificationEnabled && row.status === "APPROVED" && row.net_payout_cents === 0 && <button type="button" className="moovu-btn moovu-btn-primary" disabled={busyId === row.id} onClick={() => void review(row, "SETTLE_DEBT_ONLY")}>Settle by debt offset — no bank transfer</button>}
               {(row.status === "DRAFT" || row.status === "RECONCILED" || (row.status === "HELD" && !row.approved_at)) && <button type="button" className="moovu-btn moovu-btn-secondary" disabled={busyId === row.id} onClick={() => void review(row, "CANCEL")}>Cancel batch</button>}
             </div>}
             {(row.status === "DRAFT" || row.status === "RECONCILED" || row.status === "HELD" || row.status === "APPROVED" || row.status === "PAYMENT_RECORDED") && <label className="block text-sm text-slate-700">Reason for hold, cancellation or failure

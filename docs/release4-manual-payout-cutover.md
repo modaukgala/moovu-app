@@ -1,8 +1,14 @@
 # Release 4 manual Driver payouts: controlled cutover
 
 This candidate is **not deployed**. It does not initiate bank transfers. Both
-`MOOVU_MANUAL_PAYOUTS_ENABLED` and `MOOVU_UNIVERSAL_FARE_23_ENABLED` default to off.
+`MOOVU_PAYOUT_VISIBILITY_ENABLED`, `MOOVU_MANUAL_PAYOUTS_ENABLED`,
+`MOOVU_ONLINE_PAYABLE_POSTING_ENABLED`, `MOOVU_PAYOUT_BANK_VERIFICATION_ENABLED`,
+and `MOOVU_UNIVERSAL_FARE_23_ENABLED` default to off.
 The old `MOOVU_ONLINE_PAYOUTS_ENABLED` does not expose the new payout pages.
+Visibility permits only authenticated Admin and own-Driver GET views. It cannot enable
+Admin POST actions or shadow-recovery payable posting. Manual recording requires both
+visibility and its own flag. Independently verified settlement also requires the bank
+verification flag; keep it off until real bank evidence intake is certified.
 
 ## Tested local behavior
 
@@ -18,10 +24,10 @@ The UI records a proof reference, **not a file upload**. An operator must retain
 ## Dependency and release order
 
 1. Complete the approved dispatch compatibility Stage 1 runbook in `docs/moovu-release4-final-execution.md`. Do not deploy this branch against the currently claimless worker or use that old worker as a rollback target after ownership enforcement.
-2. Keep both Release 4 flags off. Verify a current recoverable production database point, migration history, post-snapshot write preservation, Yoco webhook monitoring, active trip/payment state and a compatible application rollback deployment.
+2. Keep all Release 4 flags off. Verify a current recoverable production database point, migration history, post-snapshot write preservation, Yoco webhook monitoring, active trip/payment state and a compatible application rollback deployment.
 3. Rehearse the exact production schema and managed-role permissions for these **additive** payout SQL candidates in order: `docs/release4-online-payable-total-separation.sql`, `docs/release4-phase5-booking-fee-allocation.sql`, `docs/release4-online-payout-control-plane.sql`, `docs/release4-online-payout-financial-engine.sql`, then `docs/release4-manual-partial-payments.sql`. Recheck the dependency of each candidate and apply only a separately reviewed, hash-pinned migration bundle. No repository-wide migration push.
-4. Build and stage this exact reviewed source with Production configuration and both flags off. Verify Customer, Driver, Admin, booking, signed Yoco webhook and cron health without real charges or bank transfers. Promote only after its own staged and financial gates pass. This candidate has not completed hosted or managed Supabase testing.
-5. After an explicit payout activation decision, set `MOOVU_MANUAL_PAYOUTS_ENABLED=true` only when migrations, approved policy row, actual Yoco fee intake, three distinct financial operators, bank evidence intake and authenticated UI checks are complete. Keep `MOOVU_ONLINE_PAYOUTS_ENABLED=false`; the legacy single-transfer RPC grant is revoked by the manual-payment candidate.
+4. Build and stage this exact reviewed source with Production configuration and all financial flags off. Verify Customer, Driver, Admin, booking, signed Yoco webhook and cron health without real charges or bank transfers. Promote only after its own staged and financial gates pass.
+5. After separate approval, enable `MOOVU_PAYOUT_VISIBILITY_ENABLED` for authenticated read-only acceptance. Enable `MOOVU_ONLINE_PAYABLE_POSTING_ENABLED` only after its own posting and recovery checks. Enable `MOOVU_MANUAL_PAYOUTS_ENABLED` only when approved policy, actual Yoco fee intake and authenticated write acceptance are complete. Keep `MOOVU_PAYOUT_BANK_VERIFICATION_ENABLED=false` until independent bank evidence intake and reviewer separation are certified. Keep `MOOVU_ONLINE_PAYOUTS_ENABLED=false`; the legacy single-transfer RPC grant is revoked by the manual-payment candidate.
 6. Activate `MOOVU_UNIVERSAL_FARE_23_ENABLED=true` only in a separate pricing decision. The existing quote and booking path uses a server-authoritative versioned fare: R40→R40.92, R76→R77.75, R100→R102.30. A stale old quote is rejected and must be shown again before confirmation. Existing locked bookings are unchanged. No payment-method surcharge is applied.
 
 ## Recovery

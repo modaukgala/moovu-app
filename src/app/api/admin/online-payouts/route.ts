@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
-import { manualPayoutsAvailable } from "@/lib/finance/onlinePayoutAvailability";
+import { bankVerificationAvailable, manualPayoutsAvailable, payoutActionAllowed, payoutVisibilityAvailable } from "@/lib/finance/onlinePayoutAvailability";
 
 export async function GET(req: Request) {
   const auth = await requireAdminUser(req);
@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   if (!isFinancialAdminRole(auth.profile.role)) {
     return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
   }
-  if (!manualPayoutsAvailable()) {
+  if (!payoutVisibilityAvailable()) {
     return NextResponse.json({ ok: true, available: false, batches: [] },
       { headers: { "Cache-Control": "private, no-store" } });
   }
@@ -70,7 +70,9 @@ export async function GET(req: Request) {
     console.error("[admin-online-payouts] bank evidence read failed", { code: evidence.error.code });
     return NextResponse.json({ ok: false, error: "Bank evidence is unavailable." }, { status: 503 });
   }
-  return NextResponse.json({ ok: true, available: true, batches: data ?? [], bankEvidence: evidence.data ?? [],
+  return NextResponse.json({ ok: true, available: true, recordingEnabled: manualPayoutsAvailable(),
+    verificationEnabled: manualPayoutsAvailable() && bankVerificationAvailable(),
+    batches: data ?? [], bankEvidence: evidence.data ?? [],
     manualPayments: manualPayments.data ?? [], manualEvidence: manualEvidence.data ?? [],
     drivers: drivers.data ?? [], items: items.data ?? [],
     eligiblePayables: (eligible.data ?? []).filter(row =>
@@ -85,7 +87,7 @@ export async function POST(req: Request) {
   if (!isFinancialAdminRole(auth.profile.role)) {
     return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
   }
-  if (!manualPayoutsAvailable()) {
+  if (!payoutVisibilityAvailable() || !manualPayoutsAvailable()) {
     return NextResponse.json({ ok: false, error: "Online payouts are disabled." }, { status: 403 });
   }
   let body: unknown;
@@ -98,6 +100,9 @@ export async function POST(req: Request) {
   const input = body as Record<string, unknown>;
   const batchId = input.batchId;
   const action = input.action;
+  if (typeof action === "string" && !payoutActionAllowed(action)) {
+    return NextResponse.json({ ok: false, error: "Payout action is disabled." }, { status: 403 });
+  }
   const reason = input.reason;
   const uuid = (value: unknown): value is string => typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);

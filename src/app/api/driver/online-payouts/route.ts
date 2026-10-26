@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { manualPayoutsAvailable } from "@/lib/finance/onlinePayoutAvailability";
+import { payoutVisibilityAvailable } from "@/lib/finance/onlinePayoutAvailability";
 
 export async function GET(req: Request) {
   const header = req.headers.get("authorization") ?? "";
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   if (accountError || !account?.driver_id) {
     return NextResponse.json({ ok: false, error: "Driver account is not linked." }, { status: 403 });
   }
-  if (!manualPayoutsAvailable()) {
+  if (!payoutVisibilityAvailable()) {
     return NextResponse.json({ ok: true, available: false, batches: [] },
       { headers: { "Cache-Control": "private, no-store" } });
   }
