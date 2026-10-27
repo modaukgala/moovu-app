@@ -16,6 +16,20 @@ export function onlinePayablePostingAvailable(): boolean {
   return process.env.MOOVU_ONLINE_PAYABLE_POSTING_ENABLED === "true";
 }
 
+/** A missing or ambiguous activation boundary must never admit payout posting. */
+export function payoutEffectiveAt(environment: Record<string, string | undefined> = process.env): string | null {
+  const value = environment.MOOVU_PAYOUT_EFFECTIVE_AT?.trim();
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 19) !== value.slice(0, 19)
+    ? null : parsed.toISOString();
+}
+
+export function payoutActivationMatches(configured: string | null, recorded: string | null): boolean {
+  return configured !== null && recorded !== null && Number.isFinite(Date.parse(recorded)) &&
+    Date.parse(configured) === Date.parse(recorded);
+}
+
 export function bankVerificationAvailable(): boolean {
   return process.env.MOOVU_PAYOUT_BANK_VERIFICATION_ENABLED === "true";
 }

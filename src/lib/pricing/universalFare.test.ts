@@ -18,7 +18,11 @@ test("disabled policy keeps the existing fare and the flag defaults off", () => 
   assert.deepEqual(priceStandardFare(76, false), { version: STANDARD_FARE_VERSION,
     baseFareCents: 7600, increaseCents: 0, rideFareCents: 7600 });
   assert.equal(universalFareIncreaseEnabled({}), false);
-  assert.equal(universalFareIncreaseEnabled({ MOOVU_UNIVERSAL_FARE_23_ENABLED: "true" }), true);
+  assert.equal(universalFareIncreaseEnabled({ MOOVU_UNIVERSAL_FARE_23_ENABLED: "true" }), false);
+  assert.equal(universalFareIncreaseEnabled({ MOOVU_UNIVERSAL_FARE_23_ENABLED: "true",
+    MOOVU_FARE_EFFECTIVE_AT: "2026-11-01T00:00:00Z" }, new Date("2026-11-01T00:00:00Z")), true);
+  assert.equal(universalFareIncreaseEnabled({ MOOVU_UNIVERSAL_FARE_23_ENABLED: "true",
+    MOOVU_FARE_EFFECTIVE_AT: "2026-11-01T00:00:00Z" }, new Date("2026-10-31T23:59:59Z")), false);
   assert.equal(universalFareIncreaseEnabled({ MOOVU_UNIVERSAL_FARE_23_ENABLED: "false" }), false);
 });
 

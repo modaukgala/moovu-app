@@ -36,7 +36,7 @@ type ManualEvidence = { id: string; payment_id: string; bank_state: "SETTLED" | 
 type DriverIdentity = { id: string; first_name: string | null; last_name: string | null };
 type PayoutItem = { id: string; batch_id: string };
 type EligiblePayable = { id: string; driver_id: string; trip_id: string; payment_attempt_id: string;
-  fare_cents: number; commission_cents: number; payable_cents: number; earned_at: string };
+  fare_cents: number; commission_cents: number; payable_cents: number; booking_fee_cents: number; earned_at: string };
 
 const money = (value: number) => new Intl.NumberFormat("en-ZA", {
   style: "currency", currency: "ZAR",
@@ -63,6 +63,7 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
   const [drivers, setDrivers] = useState<DriverIdentity[]>([]);
   const [items, setItems] = useState<PayoutItem[]>([]);
   const [eligiblePayables, setEligiblePayables] = useState<EligiblePayable[]>([]);
+  const [bookingFeeByBatch, setBookingFeeByBatch] = useState<Record<string, number>>({});
   const [verifiedFeeAttemptIds, setVerifiedFeeAttemptIds] = useState<string[]>([]);
   const [draftDriver, setDraftDriver] = useState("");
   const [draftIds, setDraftIds] = useState<string[]>([]);
@@ -70,6 +71,7 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
   const [periodEnd, setPeriodEnd] = useState("");
   const [remainingDebt, setRemainingDebt] = useState<number | null>(null);
   const [available, setAvailable] = useState(false);
+  const [activated, setActivated] = useState(false);
   const [recordingEnabled, setRecordingEnabled] = useState(false);
   const [verificationEnabled, setVerificationEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -97,16 +99,18 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
           setError("");
           setRows(result.batches ?? []);
           setAvailable(Boolean(result.available));
+          setActivated(result.activated === true);
           setRecordingEnabled(role === "admin" && result.recordingEnabled === true);
           setVerificationEnabled(role === "admin" && result.verificationEnabled === true);
           if (role === "admin") setBankEvidence(result.bankEvidence ?? []);
           setManualPayments(result.manualPayments ?? []);
           setItems(result.items ?? []);
+          setEligiblePayables(result.eligiblePayables ?? []);
+          setBookingFeeByBatch(result.bookingFeeByBatch ?? {});
+          setVerifiedFeeAttemptIds(result.verifiedFeeAttemptIds ?? []);
           if (role === "admin") {
             setManualEvidence(result.manualEvidence ?? []);
             setDrivers(result.drivers ?? []);
-            setEligiblePayables(result.eligiblePayables ?? []);
-            setVerifiedFeeAttemptIds(result.verifiedFeeAttemptIds ?? []);
           }
           if (role === "driver") setRemainingDebt(result.remainingCommissionDebtCents ?? null);
         }
@@ -223,6 +227,22 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
     {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
     {role === "admin" && available && !recordingEnabled &&
       <p className="text-sm text-slate-600">Payout records are read only. Manual payment actions are disabled.</p>}
+    {available && !activated && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+      New payout accounting is pending its approved effective time. Historical trips are excluded from new payout totals.
+    </p>}
+    {available && activated && <section className="rounded-xl border border-slate-200 p-4">
+      <h3 className="font-bold">New online trip earnings</h3>
+      <p className="text-sm text-slate-600">These are post-activation trip earnings, not confirmed payout amounts. Yoco fee verification and payout reconciliation may still be pending.</p>
+      {eligiblePayables.length === 0 ? <p className="mt-2 text-sm text-slate-600">No new-system trip earnings have been recorded yet.</p>
+        : <ul className="mt-3 space-y-2">{eligiblePayables.map(row => {
+          const driver = drivers.find(item => item.id === row.driver_id);
+          const feeVerified = verifiedFeeAttemptIds.includes(row.payment_attempt_id);
+          return <li key={row.id} className="rounded-lg bg-slate-50 p-3 text-sm text-slate-800">
+            {role === "admin" && <strong className="mr-2">{[driver?.first_name, driver?.last_name].filter(Boolean).join(" ") || `Driver ${row.driver_id.slice(0, 8)}`}</strong>}
+            {date(row.earned_at)} · Driver fare basis {money(row.fare_cents)} · Commission {money(row.commission_cents)} · Booking fee retained by MOOVU {money(row.booking_fee_cents)} · Driver trip earnings {money(row.payable_cents)} · {feeVerified ? "Yoco fee verified; payout reconciliation pending" : "Yoco fee verification pending"}
+          </li>;
+        })}</ul>}
+    </section>}
     {role === "admin" && available && recordingEnabled && <section className="rounded-xl border border-slate-200 p-4">
       <h3 className="font-bold">Create weekly payout draft</h3>
       <p className="text-sm text-slate-600">Only completed online trips with independently verified provider fees can enter a draft. Creating a draft does not pay a Driver.</p>
@@ -264,10 +284,12 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
           </summary>
           <dl className="mt-4 grid gap-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-2">
             {([ ["Completed eligible trips", items.filter(item => item.batch_id === row.id).length],
-              ["Locked trip fares", row.fare_cents], ["Current-trip commission", row.current_commission_cents],
+              ["Driver fare basis", row.fare_cents], ["Booking fees retained by MOOVU", bookingFeeByBatch[row.id] ?? 0],
+              ["Current-trip commission", row.current_commission_cents],
               ["Driver trip earnings", row.driver_earnings_cents], ["Verified Yoco fees", row.actual_provider_fee_cents],
               ["Driver processing-fee contribution", row.driver_provider_fee_cents],
-              ["Previous commission recovered", row.prior_debt_recovery_cents], ["Net payout", row.net_payout_cents] ] as const)
+              ["Previous commission recovered", row.prior_debt_recovery_cents],
+              ["MOOVU-held amount payable", row.net_payout_cents] ] as const)
               .map(([label, value]) => <div key={label}><dt className="text-slate-600">{label}</dt><dd className="font-bold text-slate-950">{label === "Completed eligible trips" ? value : money(value)}</dd></div>)}
           </dl>
           {(() => {

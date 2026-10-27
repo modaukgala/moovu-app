@@ -31,7 +31,11 @@ const quoted = value => `'${value.replaceAll("'", "''")}'`;
 
 export function planMigrations(read = readFileSync) {
   return files.map(([version, name, filename, hash]) => {
-    const bytes = read(join(root, 'docs', filename));
+    // This approved legacy hash uses CRLF. Git attributes check it out as LF;
+    // reconstruct the reviewed bytes before hashing and sending to PostgreSQL.
+    const sourceBytes = read(join(root, 'docs', filename));
+    const bytes = filename === 'release4-manual-partial-payments.sql'
+      ? Buffer.from(sourceBytes.toString('utf8').replace(/\r?\n/g, '\r\n')) : sourceBytes;
     if (sha256(bytes) !== hash) fail(`HASH_MISMATCH_${version}`);
     const sql = bytes.toString('utf8');
     const begin = [...sql.matchAll(/^\s*begin\s*;\s*$/gim)];

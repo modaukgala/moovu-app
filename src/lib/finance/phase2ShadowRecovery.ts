@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { callPhase2Rpc, type Phase2RpcResult } from "@/lib/server/phase2Rpc";
-import { onlinePayablePostingAvailable } from "@/lib/finance/onlinePayoutAvailability";
+import { onlinePayablePostingAvailable, payoutEffectiveAt } from "@/lib/finance/onlinePayoutAvailability";
 
 export const PHASE2_SHADOW_RECOVERY_MAX_ATTEMPTS = 8;
 
@@ -38,10 +38,17 @@ export async function processPhase2ShadowRecoveryJob(
       return { ok: false as const, ...failure };
     }
     if (onlinePayablePostingAvailable()) {
+      const effectiveAt = payoutEffectiveAt();
+      if (!effectiveAt) {
+        await finish(client, job.id, false, true, "payout_activation_unavailable", "Payout activation boundary is unavailable.");
+        return { ok: false as const, retryable: true, code: "payout_activation_unavailable",
+          message: "Payout activation boundary is unavailable." };
+      }
       // The reviewed payable migration must be installed before this independent flag is enabled.
       // A failed reclassification leaves the durable job retryable; commission replay is idempotent.
-      const { error: payableError } = await client.rpc("phase3_post_completed_online_driver_payable", {
+      const { error: payableError } = await client.rpc("release4_post_forward_online_payable", {
         p_trip_id: job.trip_id,
+        p_expected_effective_at: effectiveAt,
       });
       if (payableError) {
         await finish(client, job.id, false, true, "online_payable_unavailable", "Online payable posting did not complete.");

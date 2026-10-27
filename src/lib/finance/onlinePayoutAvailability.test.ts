@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node strip-types tests use the TypeScript source directly.
-import { bankVerificationAvailable, manualPayoutsAvailable, onlinePayablePostingAvailable, payoutActionAllowed, payoutVisibilityAvailable } from "./onlinePayoutAvailability.ts";
+import { bankVerificationAvailable, manualPayoutsAvailable, onlinePayablePostingAvailable, payoutActionAllowed, payoutEffectiveAt, payoutVisibilityAvailable } from "./onlinePayoutAvailability.ts";
+
+test("payout activation requires an unambiguous real UTC timestamp", () => {
+  assert.equal(payoutEffectiveAt({}), null);
+  assert.equal(payoutEffectiveAt({ MOOVU_PAYOUT_EFFECTIVE_AT: "2026-11-01" }), null);
+  assert.equal(payoutEffectiveAt({ MOOVU_PAYOUT_EFFECTIVE_AT: "2026-02-30T00:00:00Z" }), null);
+  assert.equal(payoutEffectiveAt({ MOOVU_PAYOUT_EFFECTIVE_AT: "2026-11-01T00:00:00Z" }), "2026-11-01T00:00:00.000Z");
+});
 
 const keys = ["MOOVU_PAYOUT_VISIBILITY_ENABLED", "MOOVU_MANUAL_PAYOUTS_ENABLED",
   "MOOVU_ONLINE_PAYABLE_POSTING_ENABLED", "MOOVU_PAYOUT_BANK_VERIFICATION_ENABLED"] as const;

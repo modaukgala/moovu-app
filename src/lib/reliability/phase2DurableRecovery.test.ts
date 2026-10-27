@@ -46,11 +46,12 @@ test("runtime claims durable work before posting and cron is secret protected", 
   ]);
 });
 
-function recoveryHarness(posting: Record<string, unknown> | Error, options: { payablePostingEnabled?: boolean; payableError?: boolean } = {}) {
+function recoveryHarness(posting: Record<string, unknown> | Error, options: { payablePostingEnabled?: boolean; payableError?: boolean; effectiveAt?: string | null } = {}) {
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const dependencies: Record<string, unknown> = {
     "@/lib/finance/onlinePayoutAvailability": {
       onlinePayablePostingAvailable: () => options.payablePostingEnabled ?? false,
+      payoutEffectiveAt: () => options.effectiveAt === undefined ? "2026-11-01T00:00:00.000Z" : options.effectiveAt,
     },
     "@/lib/server/phase2Rpc": {
       callPhase2Rpc: async (_client: unknown, name: string, args: Record<string, unknown>) => {
@@ -119,7 +120,7 @@ test("successful and already-posted recovery acknowledge one durable job", async
 test("default-off payable posting preserves prior worker behavior", async () => {
   const h = recoveryHarness({ ok: true, result: { contract_version: "phase-2-v1", replayed: false } });
   assert.equal((await h.process(h.client, job)).ok, true);
-  assert.equal(h.calls.some((call) => call.name === "phase3_post_completed_online_driver_payable"), false);
+  assert.equal(h.calls.some((call) => call.name === "release4_post_forward_online_payable"), false);
 });
 
 test("enabled payable posting finishes only after the idempotent database RPC", async () => {
@@ -127,7 +128,7 @@ test("enabled payable posting finishes only after the idempotent database RPC", 
   const success = recoveryHarness(posted, { payablePostingEnabled: true });
   assert.equal((await success.process(success.client, job)).ok, true);
   assert.deepEqual(success.calls.map((call) => call.name), [
-    "phase2_post_trip_commission", "phase3_post_completed_online_driver_payable",
+    "phase2_post_trip_commission", "release4_post_forward_online_payable",
     "phase2_finish_shadow_recovery_job",
   ]);
   const failure = recoveryHarness(posted, { payablePostingEnabled: true, payableError: true });
@@ -139,5 +140,15 @@ test("enabled payable posting finishes only after the idempotent database RPC", 
 test("payable posting requires its independent gate", async () => {
   const h = recoveryHarness({ ok: true, result: { contract_version: "phase-2-v1" } }, { payablePostingEnabled: true });
   assert.equal((await h.process(h.client, job)).ok, true);
-  assert.equal(h.calls.filter(call => call.name === "phase3_post_completed_online_driver_payable").length, 1);
+  assert.equal(h.calls.filter(call => call.name === "release4_post_forward_online_payable").length, 1);
+  assert.equal(h.calls.find(call => call.name === "release4_post_forward_online_payable")?.args.p_expected_effective_at,
+    "2026-11-01T00:00:00.000Z");
+});
+
+test("posting does not acknowledge success without a fixed activation boundary", async () => {
+  const h = recoveryHarness({ ok: true, result: { contract_version: "phase-2-v1" } },
+    { payablePostingEnabled: true, effectiveAt: null });
+  assert.equal((await h.process(h.client, job)).ok, false);
+  assert.equal(h.calls.some(call => call.name === "release4_post_forward_online_payable"), false);
+  assert.equal(h.calls.at(-1)?.args.p_retryable, true);
 });

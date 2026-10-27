@@ -6,11 +6,12 @@ const stage1 = ['20261022120000','20261022123000','20261022182716'];
 const old = newCategories.slice(0,-2);
 const definition = categories => `CHECK ((account_category = ANY (ARRAY[${categories.map(value=>`'${value}'::text`).join(', ')}])))`;
 
-test('only the five reviewed SQL byte hashes and transaction shapes are accepted', () => {
+test('only the five reviewed SQL hashes and transaction shapes are accepted', () => {
   const plan = planMigrations();
   assert.equal(plan.length,5);
   assert.deepEqual(plan.map(item=>item.version),files.map(row=>row[0]));
   assert.throws(()=>planMigrations(()=>Buffer.from('begin;\nselect 1;\ncommit;')),/HASH_MISMATCH/);
+  assert.equal(plan[4].hash,files[4][3]);
   for (const item of plan) {
     const wrapped = migrationSql(item);
     assert.match(wrapped,/SET LOCAL lock_timeout='5s'/);

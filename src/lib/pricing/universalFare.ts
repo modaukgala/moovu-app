@@ -2,8 +2,16 @@ export const STANDARD_FARE_VERSION = "standard-final-fare-v1";
 export const FUEL_FARE_VERSION = "standard-final-fare-fuel-230bp-v1";
 export const FUEL_INCREASE_BASIS_POINTS = 230;
 
-export function universalFareIncreaseEnabled(environment: Record<string, string | undefined> = process.env): boolean {
-  return environment.MOOVU_UNIVERSAL_FARE_23_ENABLED?.trim().toLowerCase() === "true";
+export function universalFareIncreaseEnabled(
+  environment: Record<string, string | undefined> = process.env,
+  now: Date = new Date(),
+): boolean {
+  if (environment.MOOVU_UNIVERSAL_FARE_23_ENABLED?.trim().toLowerCase() !== "true") return false;
+  const cutoff = environment.MOOVU_FARE_EFFECTIVE_AT?.trim();
+  if (!cutoff || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(cutoff)) return false;
+  const parsed = new Date(cutoff);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 19) === cutoff.slice(0, 19) &&
+    now.getTime() >= parsed.getTime();
 }
 
 /** Applies the versioned change once, after the authoritative engine's minimum and rounding. */
