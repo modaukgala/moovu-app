@@ -34,10 +34,12 @@ test("one public Phase 6 switch controls both enforcement and the Driver notice"
   assert.equal(phase6DriverNoticeEnabled(disabledEnvironment), false);
 });
 
-test("Driver home offers installed onboarding independently of new-work enforcement", () => {
+test("Driver sidebar offers onboarding independently of new-work enforcement", () => {
   const page = readFileSync("src/app/driver/page.tsx", "utf8");
+  const drawer = readFileSync("src/components/driver/home/DriverDrawer.tsx", "utf8");
   const entry = readFileSync("src/components/driver/DriverOnboardingEntry.tsx", "utf8");
-  assert.match(page, /<DriverOnboardingEntry\s*\/>/);
+  assert.doesNotMatch(page, /<DriverOnboardingEntry\s*\/>/);
+  assert.match(drawer, /<DriverOnboardingEntry onNavigate=\{navigate\} \/>/);
   assert.match(entry, /fetch\("\/api\/driver\/onboarding"/);
   assert.doesNotMatch(entry, /phase6DriverNoticeEnabled/);
   assert.doesNotMatch(page, /Commission due/);
