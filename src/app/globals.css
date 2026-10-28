@@ -11147,6 +11147,13 @@ body {
 .driver-drawer-header button { display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid #dbe7f5; border-radius: 16px; }
 .driver-drawer h2 { margin-top: 18px; color: #0f172a; font-size: 24px; font-weight: 950; }
 .driver-drawer p { margin-top: 4px; color: #64748b; font-size: 13px; font-weight: 700; }
+.driver-drawer-onboarding { margin-top: 16px; padding: 12px; border: 1px solid #dbe7f5; border-radius: 16px; background: #f3f8ff; }
+.driver-drawer-onboarding-title { display: flex; align-items: center; gap: 8px; color: #17345c; font-size: 13px; line-height: 1.3; }
+.driver-drawer-onboarding-title svg { width: 17px; height: 17px; flex: none; color: #075ee8; }
+.driver-drawer .driver-drawer-onboarding p { margin-top: 6px; color: #52647c; font-size: 12px; font-weight: 600; line-height: 1.4; }
+.driver-drawer-onboarding button { display: flex; min-height: 44px; width: 100%; align-items: center; justify-content: center; margin-top: 10px; border-radius: 12px; background: #075ee8; color: #fff; font-size: 13px; font-weight: 850; }
+.driver-drawer-onboarding button:hover { background: #0751ca; }
+.driver-drawer-onboarding button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
 .driver-drawer-links { display: grid; gap: 6px; margin-top: 24px; }
 .driver-drawer-links button { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 0 14px; border-radius: 14px; color: #172033; text-align: left; font-size: 14px; font-weight: 850; }
 .driver-drawer-links button svg { width: 19px; height: 19px; color: #075ee8; }

@@ -39,7 +39,6 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { recordPerformanceMetric } from "@/lib/performance/client";
-import DriverOnboardingEntry from "@/components/driver/DriverOnboardingEntry";
 import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
 import {
@@ -1166,7 +1165,6 @@ export default function DriverHomePage() {
 
   return (
     <main className="moovu-page moovu-driver-shell text-black">
-      <DriverOnboardingEntry />
       {driverActionError && (
         <CenteredMessageBox
           title="Action needs attention"

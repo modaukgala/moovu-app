@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { BadgeDollarSign, CarFront, FileCheck2, Headphones, History, LogOut, ReceiptText, Settings, ShieldCheck, WalletCards, X } from "lucide-react";
+import DriverOnboardingEntry from "@/components/driver/DriverOnboardingEntry";
 import type { Driver } from "./types";
 
 export default function DriverDrawer({ open, driver, levelLabel, completedTrips, onClose, onNavigate, onLogout }: { open: boolean; driver: Driver | null; levelLabel: string; completedTrips: number; onClose: () => void; onNavigate: (path: string) => void; onLogout: () => void }) {
@@ -66,6 +67,7 @@ export default function DriverDrawer({ open, driver, levelLabel, completedTrips,
         </div>
         <p>{levelLabel} driver · {completedTrips.toLocaleString()} completed trips</p>
         {driver.phone && <p>{driver.phone}</p>}
+        <DriverOnboardingEntry onNavigate={navigate} />
         <div className="driver-drawer-links">
           <button type="button" onClick={() => navigate("/driver/earnings")}><WalletCards aria-hidden="true" />Earnings</button>
           <button type="button" onClick={() => navigate("/driver/history")}><History aria-hidden="true" />Trip history</button>

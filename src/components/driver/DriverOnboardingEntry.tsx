@@ -1,19 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FileCheck2 } from "lucide-react";
+import { onboardingReminder } from "@/lib/drivers/onboardingReminder";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type Application = { status: string; cycle: number } | null;
 
-function entryFor(application: Application) {
-  if (!application) return { title: "Complete your updated Driver profile", action: "Start onboarding" };
-  if (application.status === "DRAFT" || application.status === "CORRECTION_REQUESTED") return { title: "Your Driver application needs your input", action: "Continue application" };
-  if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW"].includes(application.status)) return { title: "Your Driver application is under review", action: "View application" };
-  if (application.status === "REJECTED") return { title: "Your Driver application needs an Admin decision before re-application", action: "View review" };
-  return { title: "Your Driver onboarding is current", action: "View application" };
-}
-
-export default function DriverOnboardingEntry() {
+export default function DriverOnboardingEntry({ onNavigate }: { onNavigate: (path: string) => void }) {
   const [application, setApplication] = useState<Application>(null);
   const [available, setAvailable] = useState(false);
 
@@ -37,10 +31,11 @@ export default function DriverOnboardingEntry() {
   }, []);
 
   if (!available) return null;
-  const entry = entryFor(application);
-  return <div className="mx-auto my-3 max-w-6xl rounded-xl border bg-white p-4">
-    <p className="font-semibold">{entry.title}</p>
-    <a className="mt-2 inline-block font-semibold underline" href="/driver/onboarding">{entry.action}</a>
-    <p className="mt-1 text-sm">Your current Driver account and work access remain available while Phase 6 enforcement is off.</p>
-  </div>;
+  const entry = onboardingReminder(application?.status ?? null);
+  if (!entry) return null;
+  return <section className="driver-drawer-onboarding" aria-label="Driver application status">
+    <div className="driver-drawer-onboarding-title"><FileCheck2 aria-hidden="true" /><strong>{entry.title}</strong></div>
+    <p>{entry.description}</p>
+    <button type="button" onClick={() => onNavigate("/driver/onboarding")}>{entry.action}</button>
+  </section>;
 }
