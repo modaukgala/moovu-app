@@ -1,5 +1,12 @@
 import type { RideOptionId } from "../domain/fare";
 
+/** PostgREST may return an empty composite object when no active policy row exists. */
+export function phase5PolicyActive(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const policy = value as { version?: unknown; active?: unknown };
+  return typeof policy.version === "string" && policy.version.length > 0 && policy.active === true;
+}
+
 export const PHASE5_POLICY = Object.freeze({
   version: "phase5-owner-v1",
   currency: "ZAR",

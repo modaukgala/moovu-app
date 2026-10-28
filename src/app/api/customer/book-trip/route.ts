@@ -17,7 +17,7 @@ import { calculateDrivingRoute } from "@/lib/maps/routeService";
 import { createRouteSignature } from "@/lib/maps/mapRequestPolicy";
 import { verifyRouteQuote } from "@/lib/maps/routeQuote";
 import { callPhase4Rpc } from "@/lib/server/phase4Rpc";
-import { calculatePhase5Fare } from "@/lib/finance/phase5Fare";
+import { calculatePhase5Fare, phase5PolicyActive } from "@/lib/finance/phase5Fare";
 import { fareQuoteMatches, priceStandardFare, universalFareIncreaseEnabled } from "@/lib/pricing/universalFare";
 import { normalizeCustomerPaymentMethod } from "@/lib/payments/customerPaymentMethod";
 import { SCHEDULED_RIDES_ENABLED } from "@/lib/release/releaseFlags";
@@ -472,7 +472,7 @@ export async function POST(req: Request) {
         { status: 503 },
       );
     }
-    const phase5Active = !!phase5Policy;
+    const phase5Active = phase5PolicyActive(phase5Policy);
     const phase5StateResult = phase5Active
       ? await auth.supabaseAdmin.rpc("phase5_customer_state", {
           p_customer_id: auth.customer.id,

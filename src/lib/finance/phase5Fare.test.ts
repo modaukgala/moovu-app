@@ -3,7 +3,14 @@ import test from "node:test";
 // @ts-expect-error Node strip-types runner requires the explicit extension.
 import { calculateTripFare, type FareInput } from "../domain/fare.ts";
 // @ts-expect-error Node strip-types runner requires the explicit extension.
-import { calculatePhase5Fare } from "./phase5Fare.ts";
+import { calculatePhase5Fare, phase5PolicyActive } from "./phase5Fare.ts";
+
+test("only a real active Phase 5 policy enables separate service fees", () => {
+  assert.equal(phase5PolicyActive(null), false);
+  assert.equal(phase5PolicyActive({ version: null, active: null }), false);
+  assert.equal(phase5PolicyActive({ version: "synthetic", active: false }), false);
+  assert.equal(phase5PolicyActive({ version: "synthetic", active: true }), true);
+});
 
 const base = { distanceKm: 5, durationMin: 10, rideOptionId: "go" as const,
   surgeMultiplier: 1, activeMember: false, availableCreditCents: 0 };

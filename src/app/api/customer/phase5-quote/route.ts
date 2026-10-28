@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { calculateAddStopIncrease, calculateFinalJourneyFare, calculateTripFare, normalizeRideOptionId } from "@/lib/domain/fare";
-import { calculatePhase5Fare } from "@/lib/finance/phase5Fare";
+import { calculatePhase5Fare, phase5PolicyActive } from "@/lib/finance/phase5Fare";
 import { createRouteSignature } from "@/lib/maps/mapRequestPolicy";
 import { verifyRouteQuote } from "@/lib/maps/routeQuote";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   if (!route) return NextResponse.json({ ok: false, error: "Route quote expired. Recalculate the route." }, { status: 409 });
   const { data: policy, error: policyError } = await auth.supabaseAdmin.rpc("phase5_policy_at", { p_at: new Date().toISOString() });
   if (policyError) return NextResponse.json({ ok: false, error: "Pricing authority is unavailable." }, { status: 503 });
-  const phase5Active = Boolean(policy);
+  const phase5Active = phase5PolicyActive(policy);
   const [{ data: state, error: stateError }, surge] = await Promise.all([
     phase5Active ? auth.supabaseAdmin.rpc("phase5_customer_state", { p_customer_id: auth.customer.id })
       : Promise.resolve({ data: null, error: null }),
