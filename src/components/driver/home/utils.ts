@@ -1,4 +1,5 @@
 import type { CurrentTrip, Driver, GpsNotice, Offer, TripStop } from "./types";
+import { formatFareRands } from "@/lib/pricing/fareDisplay";
 
 export const DEFAULT_CENTER = { lat: -25.12, lng: 29.05 };
 export const DRIVER_CANCEL_REASONS = [
@@ -87,5 +88,5 @@ export function parseTripStops(value: unknown): TripStop[] {
   }).filter((stop) => stop.address.trim() && Number.isFinite(stop.lat) && Number.isFinite(stop.lng));
 }
 
-export function money(value: number | null | undefined) { return `R${Number(value ?? 0).toFixed(2)}`; }
+export function money(value: number | null | undefined) { return formatFareRands(Number(value ?? 0)); }
 export function num(value: unknown) { const n = Number(value ?? 0); return Number.isFinite(n) ? n : 0; }

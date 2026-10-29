@@ -1,5 +1,5 @@
 export const STANDARD_FARE_VERSION = "standard-final-fare-v1";
-export const FUEL_FARE_VERSION = "standard-final-fare-fuel-230bp-v1";
+export const FUEL_FARE_VERSION = "standard-final-fare-fuel-230bp-whole-rand-v2";
 export const FUEL_INCREASE_BASIS_POINTS = 230;
 
 export function universalFareIncreaseEnabled(
@@ -26,11 +26,15 @@ export function priceStandardFare(engineFareRands: number, enabled: boolean) {
   const increaseCents = enabled
     ? Math.floor((baseFareCents * FUEL_INCREASE_BASIS_POINTS + 5000) / 10000)
     : 0;
+  const adjustedFareCents = baseFareCents + increaseCents;
+  const rideFareCents = enabled
+    ? Math.ceil(adjustedFareCents / 100) * 100
+    : adjustedFareCents;
   return {
     version: enabled ? FUEL_FARE_VERSION : STANDARD_FARE_VERSION,
     baseFareCents,
-    increaseCents,
-    rideFareCents: baseFareCents + increaseCents,
+    increaseCents: rideFareCents - baseFareCents,
+    rideFareCents,
   };
 }
 

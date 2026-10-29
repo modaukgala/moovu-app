@@ -21,6 +21,7 @@ import {
 import { minimumRequiredTripSeconds } from "@/lib/geo/tripGuards";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { supabaseClient } from "@/lib/supabase/client";
+import { formatFareRands } from "@/lib/pricing/fareDisplay";
 
 type RideTrip = {
   id: string;
@@ -179,7 +180,7 @@ function statusLabel(status: string | null | undefined) {
 }
 
 function money(value: number | null | undefined) {
-  return `R${Number(value ?? 0).toFixed(2)}`;
+  return formatFareRands(Number(value ?? 0));
 }
 
 function displayValue(value: string | null | undefined) {

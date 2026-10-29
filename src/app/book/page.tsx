@@ -58,6 +58,7 @@ import {
   watchMoovuPosition,
 } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
+import { formatFareRands } from "@/lib/pricing/fareDisplay";
 import { openHostedPaymentCheckout } from "@/lib/payments/checkoutNavigation";
 import { SCHEDULED_RIDES_ENABLED } from "@/lib/release/releaseFlags";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
@@ -134,7 +135,7 @@ const SNAP_COLLAPSED = 66;
 const SNAP_EXPANDED = 48;
 
 function money(v: number | null | undefined) {
-  return v == null ? "R--" : `R${Math.round(Number(v))}`;
+  return v == null ? "R--" : formatFareRands(Number(v));
 }
 function fmtDist(v: number | null) {
   return v == null ? "--" : `${v} km`;
@@ -3313,7 +3314,7 @@ export default function RiderBookingPage() {
               {phase5Quote ? (
                 <div className="mt-1 text-[11px] font-semibold text-slate-600">
                   <span>
-                    Ride R{(phase5Quote.rideFareCents / 100).toFixed(2)}
+                    Ride {formatFareRands(phase5Quote.rideFareCents / 100)}
                   </span>
                   <span>
                     {" "}

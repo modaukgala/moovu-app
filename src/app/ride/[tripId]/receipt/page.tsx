@@ -10,6 +10,7 @@ import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import MoovuLoadingScreen from "@/components/customer/MoovuLoadingScreen";
 import { supabaseClient } from "@/lib/supabase/client";
+import { formatFareRands } from "@/lib/pricing/fareDisplay";
 
 type Trip = {
   id: string;
@@ -372,7 +373,7 @@ export default function TripReceiptPage() {
           <div className="moovu-receipt-fare-block">
             <div className="moovu-receipt-fare-row">
               <span>Trip fare (incl. VAT)</span>
-              <span>{money(totalPaid)}</span>
+              <span>{formatFareRands(totalPaid)}</span>
             </div>
             <div className="moovu-receipt-fare-row">
               <span>VAT (15%)</span>
@@ -380,7 +381,7 @@ export default function TripReceiptPage() {
             </div>
             <div className="moovu-receipt-fare-total-row">
               <span>TOTAL PAID</span>
-              <span>{money(totalPaid)}</span>
+              <span>{formatFareRands(totalPaid)}</span>
             </div>
           </div>
 

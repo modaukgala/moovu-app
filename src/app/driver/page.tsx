@@ -36,6 +36,7 @@ import {
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
+import { formatFareRands } from "@/lib/pricing/fareDisplay";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { recordPerformanceMetric } from "@/lib/performance/client";
@@ -730,7 +731,7 @@ export default function DriverHomePage() {
       }
       notifyInApp({
         title: "Payment received",
-        body: `R${completedFareSummary.finalFare.toFixed(2)} marked as received.`,
+        body: `${formatFareRands(completedFareSummary.finalFare)} marked as received.`,
         tone: "success",
       });
       setCompletedFareSummary(null);

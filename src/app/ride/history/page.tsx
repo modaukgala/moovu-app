@@ -11,6 +11,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import MoovuLoadingScreen from "@/components/customer/MoovuLoadingScreen";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import { formatFareRands } from "@/lib/pricing/fareDisplay";
 
 type RiderTrip = {
   id: string;
@@ -49,8 +50,7 @@ type TripFilter = "all" | "completed" | "cancelled" | "ongoing" | "assigned" | "
 const primaryFilters: TripFilter[] = ["all", "completed", "cancelled"];
 
 function money(value: number | null | undefined) {
-  const n = Number(value ?? 0);
-  return `R${n.toFixed(2)}`;
+  return formatFareRands(Number(value ?? 0));
 }
 
 function dash(value: string | null | undefined) {
