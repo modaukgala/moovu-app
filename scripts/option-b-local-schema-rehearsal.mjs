@@ -86,13 +86,36 @@ try {
       "insert into supabase_migrations.schema_migrations(version,name) values ('20261027150000','release4_forward_only_payout_activation'); commit;"));
     run(fs.readFileSync(path.join(root, 'supabase', 'migrations',
       '20261106165812_option_b_online_payout_allocation.sql'), 'utf8'));
-    run(fs.readFileSync(path.join(root, 'scripts', 'option-b-local-fixture.sql'), 'utf8'));
+    const goFixture = fs.readFileSync(path.join(root, 'scripts', 'option-b-local-fixture.sql'), 'utf8');
+    run(goFixture);
+    const replace = (source, before, after) => {
+      if (!source.includes(before)) fail('GO_XL_FIXTURE_TEMPLATE_MISMATCH');
+      return source.replaceAll(before, after);
+    };
+    const xlChanges = [
+      ["'online',49,49,49,'go'", "'online',51,51,51,'group'"],
+      ['4600,300,0,0,4900,4600', '4600,500,0,0,5100,4600'],
+      ["'DEBIT',300)", "'DEBIT',500)"], ["'CREDIT',300)", "'CREDIT',500)"],
+      ['4900', '5100'], ['372,172,200', '379,179,200'],
+      ['actual_provider_fee_cents=372', 'actual_provider_fee_cents=379'],
+      ['percentage_fee_cents=172', 'percentage_fee_cents=179'],
+      ['driver_percentage_fee_cents=86 and moovu_percentage_fee_cents=86',
+        'driver_percentage_fee_cents=90 and moovu_percentage_fee_cents=89'],
+      ['driver_provider_fee_cents=286', 'driver_provider_fee_cents=290'],
+      ['3724', '3720'], ['1725', '1721'], ['1724', '1720'],
+      ["account_id='90000000-0000-4000-8000-000000000014')<>200",
+        "account_id='90000000-0000-4000-8000-000000000014')<>400"],
+    ];
+    let xlFixture = goFixture;
+    for (const [before, after] of xlChanges) xlFixture = replace(xlFixture, before, after);
+    run(xlFixture);
     const policyColumn = query("select count(*) from information_schema.columns where table_schema='public' and table_name='online_payout_policy' and column_name='option_b_effective_at';");
     const batchConstraint = query("select count(*) from pg_constraint where conrelid='public.online_payout_batches'::regclass and conname='online_payout_batches_check1';");
     const clientReadDenied = query("select not has_table_privilege('authenticated','public.online_payout_items','SELECT') and not has_table_privilege('authenticated','public.online_payout_fee_evidence','SELECT');");
     if (policyColumn !== '1' || batchConstraint !== '1' || clientReadDenied !== 't') fail('OPTION_B_SCHEMA_POSTFLIGHT_FAILED');
     return { status: 'OPTION_B_SCHEMA_REHEARSAL_PASS', productionConnected: false,
       syntheticDraftApprovalSettlement: true, syntheticPartialManualSettlement: true,
+      syntheticGoXlSettlement: true,
       policyColumn, batchConstraint, clientReadDenied: true };
   })();
   console.log(JSON.stringify(result));
