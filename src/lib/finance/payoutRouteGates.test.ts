@@ -50,7 +50,9 @@ test("Admin payout GET is read only and POST requires recording and independent 
     "@/lib/finance/onlinePayoutAvailability": {
       bankVerificationAvailable, manualPayoutsAvailable, payoutActionAllowed, payoutVisibilityAvailable,
       payoutActivationMatches, payoutEffectiveAt: () => "2026-11-01T00:00:00.000Z",
+      optionBEffectiveAt: () => null,
     },
+    "@/lib/finance/onlineEarningReadModel": { loadUnpostedOnlineEarnings: async () => [] },
   });
   const request = (action: string) => ({ json: async () => ({ action,
     batchId: "a4500000-0000-4000-8000-000000000001",
@@ -94,7 +96,8 @@ test("Driver payout GET filters service-role reads to the authenticated Driver",
   const route = loadRoute("../../app/api/driver/online-payouts/route.ts", {
     "next/server": response,
     "@/lib/finance/onlinePayoutAvailability": { payoutVisibilityAvailable, payoutActivationMatches,
-      payoutEffectiveAt: () => "2026-11-01T00:00:00.000Z" },
+      payoutEffectiveAt: () => "2026-11-01T00:00:00.000Z", optionBEffectiveAt: () => null },
+    "@/lib/finance/onlineEarningReadModel": { loadUnpostedOnlineEarnings: async () => [] },
     "@supabase/supabase-js": { createClient: () => {
       clientCount++;
       if (clientCount === 1) return { auth: { getUser: async () => ({ data: { user: { id: "user-a" } }, error: null }) } };

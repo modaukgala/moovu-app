@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node strip-types tests use the TypeScript source directly.
-import { bankVerificationAvailable, manualPayoutsAvailable, onlinePayablePostingAvailable, payoutActionAllowed, payoutEffectiveAt, payoutVisibilityAvailable } from "./onlinePayoutAvailability.ts";
+import { bankVerificationAvailable, manualPayoutsAvailable, onlinePayablePostingAvailable, optionBEffectiveAt, payoutActionAllowed, payoutEffectiveAt, payoutVisibilityAvailable } from "./onlinePayoutAvailability.ts";
 
 test("payout activation requires an unambiguous real UTC timestamp", () => {
   assert.equal(payoutEffectiveAt({}), null);
@@ -10,8 +10,17 @@ test("payout activation requires an unambiguous real UTC timestamp", () => {
   assert.equal(payoutEffectiveAt({ MOOVU_PAYOUT_EFFECTIVE_AT: "2026-11-01T00:00:00Z" }), "2026-11-01T00:00:00.000Z");
 });
 
+test("Option B cutoff stays dormant unless a valid UTC instant is configured", () => {
+  assert.equal(optionBEffectiveAt({}), null);
+  assert.equal(optionBEffectiveAt({ MOOVU_OPTION_B_PAYOUT_EFFECTIVE_AT: "2026-11-01" }), null);
+  assert.equal(optionBEffectiveAt({ MOOVU_OPTION_B_PAYOUT_EFFECTIVE_AT: "2026-02-30T00:00:00Z" }), null);
+  assert.equal(optionBEffectiveAt({ MOOVU_OPTION_B_PAYOUT_EFFECTIVE_AT: "2026-11-07T10:30:00Z" }),
+    "2026-11-07T10:30:00.000Z");
+});
+
 const keys = ["MOOVU_PAYOUT_VISIBILITY_ENABLED", "MOOVU_MANUAL_PAYOUTS_ENABLED",
-  "MOOVU_ONLINE_PAYABLE_POSTING_ENABLED", "MOOVU_PAYOUT_BANK_VERIFICATION_ENABLED"] as const;
+  "MOOVU_ONLINE_PAYABLE_POSTING_ENABLED", "MOOVU_PAYOUT_BANK_VERIFICATION_ENABLED",
+  "MOOVU_OPTION_B_PAYOUT_EFFECTIVE_AT"] as const;
 
 test("payout visibility, recording, posting and bank verification require independent server flags", () => {
   const original = Object.fromEntries(keys.map(key => [key, process.env[key]]));

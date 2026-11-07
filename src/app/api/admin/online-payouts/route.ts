@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
-import { bankVerificationAvailable, manualPayoutsAvailable, payoutActionAllowed, payoutActivationMatches, payoutEffectiveAt, payoutVisibilityAvailable } from "@/lib/finance/onlinePayoutAvailability";
+import { bankVerificationAvailable, manualPayoutsAvailable, optionBEffectiveAt, payoutActionAllowed, payoutActivationMatches, payoutEffectiveAt, payoutVisibilityAvailable } from "@/lib/finance/onlinePayoutAvailability";
+import { loadUnpostedOnlineEarnings } from "@/lib/finance/onlineEarningReadModel";
 
 export async function GET(req: Request) {
   const auth = await requireAdminUser(req);
@@ -17,8 +18,23 @@ export async function GET(req: Request) {
     .select("effective_at").eq("policy_key", "manual-online-payouts").single();
   if (policy.error) return NextResponse.json({ ok: false, error: "Payout activation state is unavailable." }, { status: 503 });
   const activated = payoutActivationMatches(cutoff, policy.data.effective_at);
+  const optionBConfigured = optionBEffectiveAt();
+  let optionBCutoff: string | null = null;
+  if (optionBConfigured) {
+    const optionBPolicy = await auth.supabaseAdmin.from("online_payout_policy")
+      .select("option_b_effective_at").eq("policy_key", "manual-online-payouts").single();
+    if (optionBPolicy.error || !payoutActivationMatches(optionBConfigured, optionBPolicy.data.option_b_effective_at)) {
+      return NextResponse.json({ ok: false, error: "Option B activation state is unavailable." }, { status: 503 });
+    }
+    optionBCutoff = optionBConfigured;
+  }
+  let pendingEarnings: Awaited<ReturnType<typeof loadUnpostedOnlineEarnings>> = [];
+  if (activated && cutoff) {
+    try { pendingEarnings = await loadUnpostedOnlineEarnings(auth.supabaseAdmin, cutoff, optionBCutoff); }
+    catch { return NextResponse.json({ ok: false, error: "Completed trip earnings are unavailable." }, { status: 503 }); }
+  }
   const { data, error } = await auth.supabaseAdmin.from("online_payout_batches")
-    .select("id,driver_id,period_start,period_end,status,hold_reason,fare_cents,current_commission_cents,driver_earnings_cents,actual_provider_fee_cents,driver_provider_fee_cents,prior_debt_recovery_cents,net_payout_cents,payout_method,transfer_reference,approved_at,transfer_recorded_at,paid_at,created_at")
+    .select("id,driver_id,period_start,period_end,status,hold_reason,fare_cents,current_commission_cents,driver_earnings_cents,actual_provider_fee_cents,driver_provider_fee_cents,prior_debt_recovery_cents,net_payout_cents,policy_version,driver_booking_share_cents,approved_snapshot,payout_method,transfer_reference,approved_at,transfer_recorded_at,paid_at,created_at")
     .order("created_at", { ascending: false }).limit(100);
   if (error) {
     console.error("[admin-online-payouts] read failed", { code: error.code });
@@ -40,12 +56,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "Payout selection is unavailable." }, { status: 503 });
   }
   const feeEvidence = eligibleAttemptIds.length > 0 ? await auth.supabaseAdmin.from("online_payout_fee_evidence")
-    .select("payment_attempt_id").in("payment_attempt_id", eligibleAttemptIds) : { data: [], error: null };
+    .select("payment_attempt_id,percentage_fee_cents,fixed_fee_cents,actual_fee_cents").in("payment_attempt_id", eligibleAttemptIds) : { data: [], error: null };
   if (feeEvidence.error) {
     return NextResponse.json({ ok: false, error: "Verified fee status is unavailable." }, { status: 503 });
   }
   const driverIds = [...new Set((data ?? []).map(row => row.driver_id))];
   for (const row of eligible.data ?? []) driverIds.push(row.driver_id);
+  for (const row of pendingEarnings) driverIds.push(row.driverId);
   const drivers = driverIds.length > 0 ? await auth.supabaseAdmin.from("drivers")
     .select("id,first_name,last_name").in("id", driverIds) : { data: [], error: null };
   if (drivers.error) {
@@ -65,7 +82,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "Bank review status is unavailable." }, { status: 503 });
   }
   const items = batchIds.length > 0 ? await auth.supabaseAdmin.from("online_payout_items")
-    .select("batch_id,id,payable_id").in("batch_id", batchIds).limit(1000) : { data: [], error: null };
+    .select("batch_id,id,payable_id,percentage_fee_cents,fixed_fee_cents,driver_percentage_fee_cents,moovu_percentage_fee_cents").in("batch_id", batchIds).limit(1000) : { data: [], error: null };
   if (items.error || (items.data ?? []).length === 1000) {
     return NextResponse.json({ ok: false, error: "Payout trip counts are unavailable." }, { status: 503 });
   }
@@ -99,10 +116,17 @@ export async function GET(req: Request) {
     manualPayments: manualPayments.data ?? [], manualEvidence: manualEvidence.data ?? [],
     drivers: drivers.data ?? [], items: items.data ?? [],
     bookingFeeByBatch,
+    pendingEarnings,
     eligiblePayables: (eligible.data ?? []).filter(row =>
       !(alreadyBatched.data ?? []).some(item => item.payable_id === row.id))
       .map(row => ({ ...row, booking_fee_cents: feeByTrip.get(row.trip_id) ?? 0 })),
-    verifiedFeeAttemptIds: (feeEvidence.data ?? []).map(row => row.payment_attempt_id) },
+    verifiedFeeAttemptIds: (feeEvidence.data ?? []).filter(row => {
+      if (!optionBCutoff) return true;
+      const payable = (eligible.data ?? []).find(item => item.payment_attempt_id === row.payment_attempt_id);
+      if (!payable || Date.parse(payable.earned_at) < Date.parse(optionBCutoff)) return true;
+      return row.percentage_fee_cents !== null && row.fixed_fee_cents !== null &&
+        row.percentage_fee_cents + row.fixed_fee_cents === row.actual_fee_cents;
+    }).map(row => row.payment_attempt_id) },
     { headers: { "Cache-Control": "private, no-store" } });
 }
 

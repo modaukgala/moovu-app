@@ -34,13 +34,13 @@ export function calculateOptionBPayout(input: OptionBPayoutInput) {
   const lockedBookingFeeCents = nonnegative(input.lockedBookingFeeCents, "Booking fee");
   const commissionCents = nonnegative(input.commissionCents, "Commission");
   const authorizedDebtRecoveryCents = nonnegative(input.authorizedDebtRecoveryCents, "Debt recovery");
-  if (rideFareCents === 0 || lockedBookingFeeCents !== 300 ||
+  if (rideFareCents === 0 || ![300, 500].includes(lockedBookingFeeCents) ||
       customerTotalCents !== rideFareCents + lockedBookingFeeCents ||
       commissionCents !== roundRatio(rideFareCents, 15, 100)) {
-    throw new Error("Locked Option B fare, R3 booking fee, and commission must reconcile.");
+    throw new Error("Locked Option B fare, approved booking fee, and commission must reconcile.");
   }
   const driverBookingFeeCents = 100;
-  const moovuBookingFeeCents = 200;
+  const moovuBookingFeeCents = lockedBookingFeeCents - driverBookingFeeCents;
   const driverRideEarningsCents = rideFareCents - commissionCents;
   const driverEarningsBeforeProcessingCents = driverRideEarningsCents + driverBookingFeeCents;
   const expectedPercentageFeeCents = roundRatio(customerTotalCents, 35, 1000);

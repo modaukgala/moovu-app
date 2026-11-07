@@ -16,6 +16,18 @@ test("R49 reference reconciles without treating the example as production fee ev
   assert.equal(result.confirmedPayableCents, 3724);
 });
 
+test("Go XL retains its locked R5 fee with R1 to Driver and R4 to MOOVU", () => {
+  const result = calculateOptionBPayout({ customerTotalCents: 5100, rideFareCents: 4600,
+    lockedBookingFeeCents: 500, commissionCents: 690, authorizedDebtRecoveryCents: 0,
+    verifiedFee: { ...verifiedFee, percentageFeeCents: 179 } });
+  assert.equal(result.status, "VERIFIED_FOR_REVIEW");
+  assert.equal(result.driverBookingFeeCents, 100);
+  assert.equal(result.moovuBookingFeeCents, 400);
+  assert.equal(result.verified?.finalPayoutCents, 3720);
+  assert.equal(result.verified?.moovuNetCents, 1001);
+  assert.equal(result.verified?.reconciliationCents, 5100);
+});
+
 test("R100 example separates the R3 booking fee and both provider fee components", () => {
   const result = calculateOptionBPayout({ customerTotalCents: 10000, rideFareCents: 9700,
     lockedBookingFeeCents: 300, commissionCents: 1455, authorizedDebtRecoveryCents: 0,

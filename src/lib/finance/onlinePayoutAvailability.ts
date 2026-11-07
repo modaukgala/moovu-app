@@ -25,6 +25,15 @@ export function payoutEffectiveAt(environment: Record<string, string | undefined
     ? null : parsed.toISOString();
 }
 
+/** Option B is a separate forward-only version; an absent value leaves every existing payout on its current policy. */
+export function optionBEffectiveAt(environment: Record<string, string | undefined> = process.env): string | null {
+  const value = environment.MOOVU_OPTION_B_PAYOUT_EFFECTIVE_AT?.trim();
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 19) !== value.slice(0, 19)
+    ? null : parsed.toISOString();
+}
+
 export function payoutActivationMatches(configured: string | null, recorded: string | null): boolean {
   return configured !== null && recorded !== null && Number.isFinite(Date.parse(recorded)) &&
     Date.parse(configured) === Date.parse(recorded);
