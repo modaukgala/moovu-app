@@ -1,4 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { broadcastCandidates } from "@/lib/dispatch/broadcastPolicy";
+import { dispatchBroadcastIfSelected } from "@/lib/dispatch/broadcast";
 import { notifyAdmins } from "@/lib/push-notify";
 import { notifyDriverOffer } from "@/lib/dispatch/notifyDriverOffer";
 import { dispatchTrip90s } from "@/lib/dispatch/dispatchTrip90s";
@@ -8,7 +10,7 @@ import { getDispatchCandidates, getPreferredDispatchCandidate } from "@/lib/disp
 import { enqueueDispatchJob } from "@/lib/dispatch/dispatchScheduler";
 import { cancelExpiredDispatch } from "@/lib/dispatch/cancelExpiredDispatch";
 import type { DispatchResult } from "@/lib/dispatch/types";
-import { cappedCandidates, settledPool } from "@/lib/dispatch/reliability";
+import { settledPool } from "@/lib/dispatch/reliability";
 import { expireTripOffers } from "@/lib/dispatch/expireTripOffers";
 import { DISPATCHABLE_TRIP_STATUSES } from "@/lib/trips/tripContract";
 
@@ -56,6 +58,8 @@ export async function dispatchTrip(params: {
   preferredDriverId?: string | null;
   allowAfterAutomaticExhaustion?: boolean;
 }): Promise<DispatchResult> {
+  const broadcast = await dispatchBroadcastIfSelected(params);
+  if (broadcast) return broadcast;
   if (params.paymentDispatch && process.env.MOOVU_DISPATCH_90S_ENABLED === "true") {
     return { ok: false, tripId: params.tripId, error: "Paid dispatch claim is not wired to the 90-second engine." };
   }
@@ -180,7 +184,7 @@ export async function dispatchTrip(params: {
     return { ok: false, tripId: trip.id, error: error instanceof Error ? error.message : "Candidate lookup failed." };
   }
 
-  const candidatesToTry = cappedCandidates(candidates, DISPATCH_CONFIG.maxCandidatesPerStep, params.preferredDriverId);
+  const candidatesToTry = broadcastCandidates(candidates, params.preferredDriverId);
 
   console.log("[dispatch] candidates prepared", {
     operation: "dispatch-candidates",
@@ -193,7 +197,7 @@ export async function dispatchTrip(params: {
     eligibleCandidateCount: candidates.length,
     processedCandidateCount: candidatesToTry.length,
     targetedCount: candidatesToTry.length,
-    configuredCandidateCap: DISPATCH_CONFIG.maxCandidatesPerStep,
+    selectionPolicy: "all-eligible-in-current-round",
   });
 
   if (candidatesToTry.length === 0) {

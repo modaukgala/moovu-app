@@ -3,3 +3,6 @@ supabase/migrations/20261022123000_online_payment_dispatch_ownership.sql text eo
 supabase/migrations/20261022182716_online_payment_dispatch_cutover_control.sql text eol=lf
 docs/release4-manual-partial-payments.sql text eol=lf
 docs/release4-forward-only-payout-activation.sql text eol=lf
+scripts/fixtures/scheduler-getkey.sh text eol=lf
+supabase/migrations/20261106165400_driver_offer_broadcast.sql text eol=lf
+supabase/operations/install-driver-broadcast-scheduler.sql text eol=lf

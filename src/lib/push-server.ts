@@ -1,6 +1,9 @@
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
-import type { Message } from "firebase-admin/messaging";
+import type { Message, Messaging } from "firebase-admin/messaging";
+import { retryOfferPush, firebaseRetryAfterMs } from "@/lib/notifications/fcmRetry";
+import { supabaseAdmin as offerDatabase } from "@/lib/supabase/admin";
+import { deviceFailure, type OfferDeviceJob, type DeviceDeliveryResult } from "@/lib/dispatch/deviceDelivery";
 import type { PushRole } from "@/lib/push-auth";
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin";
 import { createNativeNotificationActionToken } from "@/lib/native-notification-actions";
@@ -16,6 +19,80 @@ const MOOVU_ANDROID_CHANNEL_ID = "moovu_premium_v1";
 const MOOVU_ANDROID_TRIP_OFFER_CHANNEL_ID = "moovu_trip_offers_v2";
 const MOOVU_IOS_TRIP_OFFER_CATEGORY = "MOOVU_TRIP_OFFER";
 const MOOVU_IOS_CHAT_REPLY_CATEGORY = "MOOVU_CHAT_REPLY";
+
+/** One claimed device job, one provider submission. Retry scheduling belongs to PostgreSQL. */
+export async function sendOfferDevice(job: OfferDeviceJob): Promise<DeviceDeliveryResult> {
+  const { data: offer, error } = await offerDatabase.from("driver_trip_offers")
+    .select("id,trip_id,driver_id,accept_deadline_at,trips!inner(status,driver_id,pickup_address,dropoff_address)")
+    .eq("id", job.offer_id).in("status", ["pending", "shown"])
+    .gt("accept_deadline_at", new Date().toISOString()).in("trips.status", ["requested", "offered"])
+    .is("trips.driver_id", null).maybeSingle();
+  if (error) return { state: "PENDING", code: "OFFER_LOOKUP_UNAVAILABLE", retrySeconds: 10 };
+  if (!offer) return { state: "CANCELLED", code: "OFFER_UNAVAILABLE" };
+  const { data: account, error: accountError } = await offerDatabase.from("driver_accounts")
+    .select("user_id").eq("driver_id", offer.driver_id).eq("user_id", job.user_id).maybeSingle();
+  if (accountError) return { state: "PENDING", code: "ACCOUNT_LOOKUP_UNAVAILABLE", retrySeconds: 10 };
+  if (!account) return { state: "CANCELLED", code: "ACCOUNT_CHANGED" };
+  const trip = (Array.isArray(offer.trips) ? offer.trips[0] : offer.trips) as {
+    pickup_address?: string; dropoff_address?: string;
+  };
+  const title = "New trip nearby";
+  const body = `Pickup at ${trip?.pickup_address ?? "pickup"} to ${trip?.dropoff_address ?? "destination"}.`;
+  const url = `/driver?offerTripId=${offer.trip_id}`;
+  const sourceData: PushData = { nativeActionType: "trip_offer", tripId: offer.trip_id,
+    driverId: offer.driver_id, offerId: offer.id, offerExpiresAt: offer.accept_deadline_at };
+  try {
+    if (job.transport === "web") {
+      const { data: subscription, error: lookupError } = await offerDatabase.from("push_subscriptions")
+        .select("subscription").eq("id", job.device_ref).eq("user_id", job.user_id).eq("role", "driver").maybeSingle();
+      if (lookupError) return { state: "PENDING", code: "DEVICE_LOOKUP_UNAVAILABLE", retrySeconds: 10 };
+      if (!subscription) return { state: "UNAVAILABLE", code: "DEVICE_UNREGISTERED" };
+      ensureVapidConfigured();
+      await webpush.sendNotification(subscription.subscription as webpush.PushSubscription, JSON.stringify({ title, body, url,
+        tag: `offer-${offer.trip_id}`, data: { ...sourceData, url, role: "driver" } }), {
+        TTL: Math.max(0, Math.floor((Date.parse(job.expires_at) - Date.now()) / 1000)), urgency: "high",
+      });
+      return { state: "ACCEPTED" };
+    }
+    const supabase = getSupabaseAdmin();
+    const { data: row, error: tokenError } = await supabase.from("fcm_tokens")
+      .select("id,user_id,role,token,platform,app_type,enabled").eq("id", job.device_ref)
+      .eq("user_id", job.user_id).eq("role", "driver").eq("enabled", true).maybeSingle();
+    if (tokenError) return { state: "PENDING", code: "DEVICE_LOOKUP_UNAVAILABLE", retrySeconds: 10 };
+    if (!row) return { state: "UNAVAILABLE", code: "DEVICE_UNREGISTERED" };
+    if (row.app_type && !["android_driver", "ios_driver", "web_driver"].includes(row.app_type)) {
+      return { state: "CANCELLED", code: "DEVICE_ROLE_MISMATCH" };
+    }
+    if (isLegacyApnsDeviceToken(row)) {
+      await supabase.from("fcm_tokens").update({ enabled: false, updated_at: new Date().toISOString() })
+        .eq("id", row.id).eq("user_id", job.user_id);
+      return { state: "INVALID", code: "APNS_TOKEN_NOT_FCM" };
+    }
+    const messaging = getFirebaseAdminMessaging();
+    if (!messaging) return { state: "FAILED", code: "FIREBASE_NOT_CONFIGURED" };
+    const routing = stringData(sourceData, { title, body, url, role: "driver" });
+    const data = isAndroidNativeToken(row) || isIosNativeToken(row)
+      ? await withNativeActionData({ supabase, row, data: routing }) : routing;
+    const sounds = pushSoundNames(sourceData);
+    await messaging.send(buildVisibleFirebaseMessage({ token: row.token, title, body, data, url,
+      webLink: absoluteRoleAppUrl(url, "driver"), androidSound: sounds.androidSound,
+      androidChannelId: sounds.androidChannelId, sourceData }));
+    return { state: "ACCEPTED" };
+  } catch (failure) {
+    let code = getFirebaseErrorCode(failure);
+    if (job.transport === "web" && typeof failure === "object" && failure !== null && "statusCode" in failure) {
+      code = `web/${String(failure.statusCode)}`;
+    }
+    const hint = firebaseRetryAfterMs(failure);
+    const result = deviceFailure(code || "PROVIDER_RESULT_UNCERTAIN", job.attempts,
+      Number.isFinite(hint) ? Math.min(3600, Math.ceil(hint / 1000)) : 3600);
+    if (result.state === "INVALID" && job.transport === "fcm") {
+      await offerDatabase.from("fcm_tokens").update({ enabled: false, updated_at: new Date().toISOString() })
+        .eq("id", job.device_ref).eq("user_id", job.user_id).eq("role", "driver");
+    }
+    return result;
+  }
+}
 
 type SendPushParams = {
   userIds?: string[];
@@ -33,6 +110,15 @@ type PushFailure = {
 };
 
 type PushData = Record<string, string | number | boolean | null | undefined>;
+
+async function sendFirebaseMessage(messaging: Messaging, message: Message, data?: PushData) {
+  const expiresAtMs = Date.parse(String(data?.offerExpiresAt ?? ""));
+  if (!isTripOfferData(data) || !Number.isFinite(expiresAtMs)) return messaging.send(message);
+  return retryOfferPush(() => messaging.send(message), {
+    expiresAtMs,
+    onRetry: (code, attempt) => console.info("[fcm] offer transient rejection", { code, attempt }),
+  });
+}
 
 type TokenMetadataOverride = {
   platform?: string | null;
@@ -265,6 +351,10 @@ function buildVisibleFirebaseMessage(params: {
   androidChannelId: string;
   sourceData?: PushData;
 }): Message {
+  const expiry = Date.parse(String(params.sourceData?.offerExpiresAt ?? ""));
+  const boundedOffer = isTripOfferData(params.sourceData) && Number.isFinite(expiry);
+  const collapseKey = `offer-${String(params.sourceData?.tripId ?? "")}`.slice(0, 64);
+  const apns = apnsOptions(params.title, params.body, params.sourceData ?? params.data);
   return {
     token: params.token,
     notification: {
@@ -274,6 +364,7 @@ function buildVisibleFirebaseMessage(params: {
     data: params.data,
     android: {
       priority: "high",
+      ...(boundedOffer ? { ttl: Math.max(0, expiry - Date.now()) } : {}),
       notification: {
         title: params.title,
         body: params.body,
@@ -281,15 +372,20 @@ function buildVisibleFirebaseMessage(params: {
         sound: params.androidSound,
         channelId: params.androidChannelId,
         clickAction: "FCM_PLUGIN_ACTIVITY",
+        ...(boundedOffer ? { tag: collapseKey } : {}),
       },
     },
-    apns: apnsOptions(params.title, params.body, params.sourceData ?? params.data),
+    apns: { ...apns, headers: { ...apns.headers, ...(boundedOffer ? {
+      "apns-expiration": String(Math.floor(expiry / 1000)), "apns-collapse-id": collapseKey,
+    } : {}) } },
     webpush: {
+      ...(boundedOffer ? { headers: { TTL: String(Math.max(0, Math.floor((expiry - Date.now()) / 1000))) } } : {}),
       notification: {
         title: params.title,
         body: params.body,
         icon: absoluteAppUrl("/icon-192.png"),
         badge: absoluteAppUrl("/icon-192.png"),
+        ...(boundedOffer ? { tag: collapseKey } : {}),
         data: {
           url: params.url,
         },
@@ -688,7 +784,7 @@ async function sendFcmToTargets(params: SendPushParams) {
         apnsSound: iosNativeToken ? apns.payload.aps.sound : null,
       });
 
-      const responseId = await messaging.send(buildVisibleFirebaseMessage({
+      const responseId = await sendFirebaseMessage(messaging, buildVisibleFirebaseMessage({
         token: String(row.token),
         title: params.title,
         body: params.body,
@@ -698,7 +794,7 @@ async function sendFcmToTargets(params: SendPushParams) {
         androidSound,
         androidChannelId,
         sourceData: params.data,
-      }));
+      }), params.data);
       delivered += 1;
       console.info("[fcm] send ok", {
         tokenId: row.id,
@@ -903,7 +999,7 @@ export async function sendPushToTokens(
         apnsSound: iosNativeToken ? apns.payload.aps.sound : null,
       });
 
-      const responseId = await messaging.send(buildVisibleFirebaseMessage({
+      const responseId = await sendFirebaseMessage(messaging, buildVisibleFirebaseMessage({
         token,
         title: payload.title,
         body: payload.body,
@@ -913,7 +1009,7 @@ export async function sendPushToTokens(
         androidSound,
         androidChannelId,
         sourceData: payload.data,
-      }));
+      }), payload.data);
       delivered += 1;
       console.info("[fcm] direct token send ok", {
         tokenId: tokenRow?.id ?? null,

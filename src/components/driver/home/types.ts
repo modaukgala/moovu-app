@@ -1,5 +1,6 @@
 export type Offer = {
   id: string;
+  dispatch_offer_id?: string;
   status: string;
   offer_status: string;
   offer_expires_at: string | null;

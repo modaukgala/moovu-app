@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { boundedMap } from "@/lib/dispatch/broadcastPolicy";
 import { DISPATCH_CONFIG } from "@/lib/dispatch/config";
 import { haversineKm } from "@/lib/dispatch/driverScoring";
 import type { DispatchCandidate, DispatchScoreBreakdown } from "@/lib/dispatch/types";
@@ -107,35 +108,22 @@ export async function getDispatchCandidates(params: {
     now - DISPATCH_CONFIG.backgroundOfferEligibilitySeconds * 1000,
   ).toISOString();
 
-  let drivers: CandidateRow[];
-  if (params.ranking !== "nearest") {
-    // Preserve the established legacy query exactly while the opt-in policy is off.
-    const { data, error } = await supabase
-      .from("drivers")
+  const drivers: CandidateRow[] = [];
+  const pageSize = 250;
+  let afterId: string | null = null;
+  for (;;) {
+    let query = supabase.from("drivers")
       .select("id,status,verification_status,profile_completed,online,busy,lat,lng,last_seen,subscription_status,subscription_expires_at,seating_capacity,is_deleted")
-      .eq("online", true)
-      .gte("last_seen", offerEligibleAfter)
-      .limit(250);
+      .eq("online", true).gte("last_seen", offerEligibleAfter).order("id").limit(pageSize);
+    if (afterId) query = query.gt("id", afterId);
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
-    drivers = (data ?? []) as CandidateRow[];
-  } else {
-    drivers = [];
-    const pageSize = 250;
-    // Nearest-first must examine the complete eligible pool, with an explicit
-    // safety cap instead of claiming a nearest Driver from a truncated result.
-    for (let offset = 0; ; offset += pageSize) {
-      const { data, error } = await supabase
-        .from("drivers")
-        .select("id,status,verification_status,profile_completed,online,busy,lat,lng,last_seen,subscription_status,subscription_expires_at,seating_capacity,is_deleted")
-        .eq("online", true)
-        .gte("last_seen", offerEligibleAfter)
-        .order("id")
-        .range(offset, offset + pageSize - 1);
-      if (error) throw new Error(error.message);
-      drivers.push(...(data ?? []) as CandidateRow[]);
-      if ((data ?? []).length < pageSize) break;
-      if (drivers.length >= 2000) throw new Error("Nearest-first candidate pool exceeded the safe query bound.");
-    }
+    const page = (data ?? []) as CandidateRow[];
+    drivers.push(...page);
+    if (page.length < pageSize) break;
+    const lastId = page.at(-1)!.id;
+    if (afterId && lastId <= afterId) throw new Error("Driver discovery cursor did not advance.");
+    afterId = lastId;
   }
 
   const prelim = ((drivers ?? []) as CandidateRow[]).filter((driver) => {
@@ -157,28 +145,36 @@ export async function getDispatchCandidates(params: {
   if (prelim.length === 0) return [] as DispatchCandidate[];
   const driverIds = prelim.map((driver) => driver.id);
 
-  const [walletsResult, qualityResult, statsResult, activeTripsResult, declinedResult, activeOfferResult] = await Promise.all([
+  const batches: string[][] = [];
+  for (let index = 0; index < driverIds.length; index += 100) batches.push(driverIds.slice(index, index + 100));
+  const loaded = await boundedMap(batches, 2, async driverIds => Promise.all([
     supabase.from("driver_wallets").select("driver_id,balance_due").in("driver_id", driverIds),
     supabase.from("driver_quality_metrics").select("driver_id,avg_rating,quality_score,acceptance_rate").in("driver_id", driverIds),
     supabase.from("driver_offer_stats").select("driver_id,offers_received,offers_accepted,offers_rejected,offers_missed,last_offer_at").in("driver_id", driverIds),
     supabase.from("trips").select("driver_id").in("driver_id", driverIds).in("status", [...ACTIVE_ASSIGNED_TRIP_STATUSES]),
     readOfferAttempts(supabase, tripId, driverIds),
     supabase.from("driver_trip_offers").select("driver_id,trips!inner(status,driver_id)").in("driver_id", driverIds).in("status", [...ACTIVE_DRIVER_OFFER_STATUSES]).gt("accept_deadline_at", new Date(now).toISOString()).in("trips.status", ["requested", "offered"]).is("trips.driver_id", null),
-  ]);
+  ]));
+  const walletsResult = { data: loaded.flatMap(row => row[0].data ?? []), error: loaded.find(row => row[0].error)?.[0].error };
+  const qualityResult = { data: loaded.flatMap(row => row[1].data ?? []), error: loaded.find(row => row[1].error)?.[1].error };
+  const statsResult = { data: loaded.flatMap(row => row[2].data ?? []), error: loaded.find(row => row[2].error)?.[2].error };
+  const activeTripsResult = { data: loaded.flatMap(row => row[3].data ?? []), error: loaded.find(row => row[3].error)?.[3].error };
+  const declinedResult = { data: loaded.flatMap(row => row[4].data ?? []), error: loaded.find(row => row[4].error)?.[4].error };
+  const activeOfferResult = { data: loaded.flatMap(row => row[5].data ?? []), error: loaded.find(row => row[5].error)?.[5].error };
 
   const fatal = [walletsResult.error, activeTripsResult.error, declinedResult.error, activeOfferResult.error].find(Boolean);
   if (fatal) throw new Error(fatal.message);
 
   const wallets = new Map(((walletsResult.data ?? []) as WalletRow[]).map((row) => [row.driver_id, row]));
-  const authorityResults = await Promise.all(prelim.map((driver) => resolveDriverFinanceAuthority(supabase, {
+  const authorityResults = await boundedMap(prelim, 5, (driver) => resolveDriverFinanceAuthority(supabase, {
     driverId: driver.id,
     subscriptionStatus: driver.subscription_status,
     subscriptionExpiresAt: driver.subscription_expires_at,
     legacyBalanceDue: wallets.get(driver.id)?.balance_due,
-  })));
+  }));
   const unavailable = authorityResults.find((result) => !result.ok);
   if (unavailable && !unavailable.ok) throw new Error(unavailable.error);
-  const onboardingResults = await Promise.all(prelim.map(driver => phase6NewWork(supabase, driver.id)));
+  const onboardingResults = await boundedMap(prelim, 5, driver => phase6NewWork(supabase, driver.id));
   const onboardingUnavailable = onboardingResults.find(result => !result.ok);
   if (onboardingUnavailable) throw new Error(onboardingUnavailable.error ?? "Onboarding eligibility unavailable.");
   const onboardingEligible = new Set(prelim.filter((_, index) => onboardingResults[index].eligible).map(driver => driver.id));

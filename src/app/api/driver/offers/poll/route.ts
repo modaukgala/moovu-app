@@ -26,13 +26,13 @@ export async function POST(req: Request) {
     // Check eligibility
     const { data: driver, error: dErr } = await supabaseAdmin
       .from("drivers")
-      .select("id,online,status,subscription_status,subscription_expires_at")
+      .select("id,online,busy,status,subscription_status,subscription_expires_at")
       .eq("id", driverId)
       .single();
 
     if (dErr || !driver) return NextResponse.json({ ok: false, error: "Driver record not found" }, { status: 404 });
 
-    if (!driver.online) {
+    if (!driver.online || driver.busy) {
       return NextResponse.json({ ok: true, offers: [], info: "You are offline" });
     }
 
@@ -69,7 +69,8 @@ export async function POST(req: Request) {
       .gt("accept_deadline_at", nowIso)
       .in("trips.status", ["requested", "offered"])
       .is("trips.driver_id", null)
-      .order("offered_at", { ascending: false })
+      .order("accept_deadline_at", { ascending: true })
+      .order("id", { ascending: true })
       .limit(5);
 
     if (offerErr) {

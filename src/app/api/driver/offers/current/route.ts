@@ -49,7 +49,7 @@ export async function GET(req: Request) {
 
     const { data: driver, error: dErr } = await supabaseAdmin
       .from("drivers")
-      .select("id,online,status,subscription_status,subscription_expires_at")
+      .select("id,online,busy,status,subscription_status,subscription_expires_at")
       .eq("id", driverId)
       .maybeSingle();
 
@@ -57,7 +57,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "Driver record not found" }, { status: 404 });
     }
 
-    if (!driver.online) {
+    if (!driver.online || driver.busy) {
       return NextResponse.json({ ok: true, offer: null, info: "You are offline" });
     }
 
@@ -89,13 +89,13 @@ export async function GET(req: Request) {
     const nowIso = new Date().toISOString();
     const { data: offers, error: offerErr } = await supabaseAdmin
       .from("driver_trip_offers")
-      .select("trip_id,accept_deadline_at,offered_at,trips!inner(status,driver_id)")
+      .select("id,broadcast_round_id,trip_id,accept_deadline_at,offered_at,trips!inner(status,driver_id)")
       .eq("driver_id", driverId)
       .in("status", ["pending", "shown"])
       .gt("accept_deadline_at", nowIso)
       .in("trips.status", ["requested", "offered"])
       .is("trips.driver_id", null)
-      .order("offered_at", { ascending: false })
+      .order("accept_deadline_at", { ascending: true }).order("id")
       .limit(1);
 
     if (offerErr) {
@@ -105,6 +105,12 @@ export async function GET(req: Request) {
     const offerRow = offers?.[0] ?? null;
     if (!offerRow?.trip_id) {
       return NextResponse.json({ ok: true, offer: null });
+    }
+    if (offerRow.broadcast_round_id) {
+      const { error: receiptError } = await supabaseAdmin.rpc("record_driver_offer_receipt", {
+        p_offer: offerRow.id, p_user: user.id, p_type: "FETCHED",
+      });
+      if (receiptError) console.warn("[broadcast] fetch receipt unavailable", { code: receiptError.code });
     }
 
     const { data: trip, error: tripErr } = await supabaseAdmin
@@ -131,7 +137,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         ok: true,
         offer: legacyTrip && !legacyTrip.driver_id && ["requested", "offered"].includes(legacyTrip.status) && Date.parse(offerRow.accept_deadline_at) > Date.now()
-          ? { ...legacyTrip, offer_expires_at: offerRow.accept_deadline_at } : null,
+          ? { ...legacyTrip, offer_expires_at: offerRow.accept_deadline_at, dispatch_offer_id: offerRow.broadcast_round_id ? offerRow.id : undefined } : null,
       });
     }
 
@@ -141,7 +147,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      offer: { ...trip, offer_expires_at: offerRow.accept_deadline_at },
+      offer: { ...trip, offer_expires_at: offerRow.accept_deadline_at, dispatch_offer_id: offerRow.broadcast_round_id ? offerRow.id : undefined },
     });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Server error" }, { status: 500 });

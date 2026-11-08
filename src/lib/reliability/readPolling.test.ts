@@ -53,6 +53,27 @@ test("hidden and terminal reads never start", async () => {
   assert.equal(calls, 0);
 });
 
+test("explicit recovery clears cooldown but retains single-flight and terminal protection", async () => {
+  const controller = createReadController(READ_POLICIES.driverOffers, "recovery-test", { now: () => 0, log: () => {} });
+  await controller.run(async () => false);
+  let calls = 0;
+  await controller.run(async () => { calls++; });
+  assert.equal(calls, 0);
+  controller.retryNow();
+  let finish!: () => void;
+  const read = controller.run(async () => { calls++; await new Promise<void>(resolve => { finish = resolve; }); });
+  controller.retryNow();
+  assert.equal(controller.run(async () => { calls++; }), read);
+  await Promise.resolve();
+  finish();
+  await read;
+  assert.equal(calls, 1);
+  controller.setTerminal(true);
+  controller.retryNow();
+  await controller.run(async () => { calls++; });
+  assert.equal(calls, 1);
+});
+
 test("Realtime reconnect does not erase API failure backoff; auth and server errors are distinguished", async () => {
   const logs: Array<Record<string, string | number | boolean>> = [];
   let now = 0;

@@ -942,6 +942,62 @@ export default function DriverHomePage() {
   useReadLoop(tripRead, loadCurrentTrip, Boolean(driver?.online) && !otpEntryOpen, false);
 
   useEffect(() => {
+    if (!driver?.id || !driver.online) return;
+    let lastRecovery = Number.NEGATIVE_INFINITY;
+    const recover = () => {
+      if (document.hidden || Date.now() - lastRecovery < 5000) return;
+      lastRecovery = Date.now();
+      offerRead.retryNow();
+      void loadCurrentOffer();
+      if (!otpEntryOpen) {
+        tripRead.retryNow();
+        void loadCurrentTrip();
+      }
+    };
+    window.addEventListener("online", recover);
+    window.addEventListener("focus", recover);
+    document.addEventListener("visibilitychange", recover);
+    const { data: authListener } = supabaseClient.auth.onAuthStateChange(event => {
+      if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") queueMicrotask(recover);
+    });
+    recover();
+    return () => {
+      window.removeEventListener("online", recover);
+      window.removeEventListener("focus", recover);
+      document.removeEventListener("visibilitychange", recover);
+      authListener.subscription.unsubscribe();
+    };
+  }, [driver?.id, driver?.online, offerRead, tripRead, loadCurrentOffer, loadCurrentTrip, otpEntryOpen]);
+
+  useEffect(() => {
+    if (!driver?.online) return;
+    let pending = false;
+    const publish = async () => {
+      if (document.hidden || pending) return;
+      pending = true;
+      try {
+        const token = await getAccessToken();
+        if (token) await fetch("/api/driver/presence", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      } catch { /* A failed heartbeat is not represented as fresh presence. */ }
+      finally { pending = false; }
+    };
+    void publish();
+    const timer = setInterval(() => { void publish(); }, 30000);
+    document.addEventListener("visibilitychange", publish);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", publish); };
+  }, [driver?.online, getAccessToken]);
+
+  useEffect(() => {
+    if (!offer?.dispatch_offer_id) return;
+    const offerId = offer.dispatch_offer_id;
+    void (async () => {
+      const token = await getAccessToken();
+      if (token) await fetch("/api/driver/offers/displayed", { method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ offerId }) });
+    })().catch(() => {});
+  }, [offer?.dispatch_offer_id, getAccessToken]);
+
+  useEffect(() => {
     if (searchParams.get("offerExpired") !== "1") return;
     setInfo("This trip is no longer available.");
   }, [searchParams]);
@@ -1036,7 +1092,11 @@ export default function DriverHomePage() {
       )
       .subscribe((status) => {
         setDriverRealtimeConnected(status === "SUBSCRIBED");
-        if (status === "SUBSCRIBED") recordPerformanceMetric("driver_realtime_connect", performance.now() - realtimeStarted);
+        if (status === "SUBSCRIBED") {
+          recordPerformanceMetric("driver_realtime_connect", performance.now() - realtimeStarted);
+          void loadCurrentOffer();
+          void loadCurrentTrip();
+        }
       });
 
     return () => {

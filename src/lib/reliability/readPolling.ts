@@ -57,6 +57,7 @@ export function createReadController(policy: ReadPolicy, name: string, options: 
   return {
     delay,
     setConnected(value: boolean) { connected = value; },
+    retryNow() { retryAt = 0; },
     setTerminal(value: boolean) { terminal = value; },
     isTerminal: () => terminal,
     abort() { abort?.abort(); },

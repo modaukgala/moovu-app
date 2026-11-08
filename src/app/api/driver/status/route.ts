@@ -84,7 +84,6 @@ export async function POST(req: Request) {
           .update({
             online: false,
             busy: false,
-            last_seen: new Date().toISOString(),
           })
           .eq("id", driverId);
 
@@ -103,7 +102,6 @@ export async function POST(req: Request) {
       .from("drivers")
       .update({
         online: wantOnline,
-        last_seen: new Date().toISOString(),
       })
       .eq("id", driverId);
 
