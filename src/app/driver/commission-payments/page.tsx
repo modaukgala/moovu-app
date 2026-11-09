@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
@@ -81,6 +81,7 @@ export default function DriverCommissionPaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [authRequired, setAuthRequired] = useState(false);
   const [busy, setBusy] = useState(false);
+  const onlinePaymentPending = useRef(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [driver, setDriver] = useState<DriverInfo | null>(null);
@@ -157,27 +158,30 @@ export default function DriverCommissionPaymentsPage() {
   const driverName = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
 
   async function payOnline() {
+    if (onlinePaymentPending.current) return;
+    onlinePaymentPending.current = true;
     setBusy(true);
     setMsg(null);
-    const token = await getToken();
-    if (!token) { setBusy(false); setMsg("You are not logged in."); return; }
-    const response = await fetch("/api/payments/yoco/driver/checkout", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const body = await response.json().catch(() => null);
-    if (!response.ok || !body?.redirectUrl) {
-      setBusy(false);
-      setMsg(body?.error ?? "Online payment is currently unavailable.");
-      return;
-    }
     try {
+      const token = await getToken();
+      if (!token) { setMsg("Your session has expired. Please sign in again."); return; }
+      const response = await fetch("/api/payments/yoco/driver/checkout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.redirectUrl) {
+        setMsg(body?.error ?? "Online payment is currently unavailable.");
+        return;
+      }
       await openHostedPaymentCheckout(body.redirectUrl, {
         returnPath: `/driver/payment/success?attemptId=${encodeURIComponent(body.attemptId)}`,
       });
     } catch (error) {
+      setMsg(error instanceof TypeError ? "Connection interrupted. Please try again or check your payment status." : "Unable to open secure checkout. Please try again or check its status.");
+    } finally {
+      onlinePaymentPending.current = false;
       setBusy(false);
-      setMsg(error instanceof Error ? error.message : "Unable to open secure checkout.");
     }
   }
 

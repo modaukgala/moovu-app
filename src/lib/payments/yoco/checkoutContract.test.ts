@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 // @ts-expect-error Native Node tests require the TypeScript extension.
-import { requestCheckout } from "./checkoutContract.ts";
+import { requestCheckout, YocoCheckoutError } from "./checkoutContract.ts";
 const input = { amountCents: 5500, currency: "ZAR" as const, idempotencyKey: "moovu:checkout:fixture",
   successUrl: "https://moovurides.co.za/payment/success", cancelUrl: "https://moovurides.co.za/payment/cancel" };
 const config = () => ({ secretKey: `sk_test_${randomBytes(32).toString("hex")}`, mode: "test" as const, baseUrl: "https://payments.yoco.com/api" });
@@ -57,4 +57,18 @@ test("all shared callers use persistent attempt identity; Customer confirms bind
   const retired = readFileSync("src/app/api/payments/yoco/driver/subscription/checkout/route.ts", "utf8");
   assert.match(retired, /status:\s*410/);
   assert.doesNotMatch(retired, /requestCheckout|callHardenedRpc|\.insert\(/);
+});
+
+for (const status of [403, 409, 422, 500]) {
+  test(`provider HTTP ${status} preserves uncertainty for conflicts and server errors`, async () => {
+    await assert.rejects(() => requestCheckout(input, config(), async () => new Response("not JSON", { status })),
+      error => error instanceof YocoCheckoutError && error.outcome === (status === 403 ? "NOT_CREATED" : "UNKNOWN"));
+  });
+}
+
+test("R42.45 is submitted as exactly 4245 cents", async () => {
+  await requestCheckout({ ...input, amountCents: 4245 }, config(), async (_url, init) => {
+    assert.equal(JSON.parse(String(init?.body)).amount, 4245);
+    return new Response(JSON.stringify({ ...response, amount: 4245 }));
+  });
 });

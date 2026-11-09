@@ -5,6 +5,15 @@ export type CheckoutInput = {
 };
 export type CheckoutResult = { id: string; redirectUrl: string; status: string };
 
+export class YocoCheckoutError extends Error {
+  readonly outcome: "NOT_CREATED" | "UNKNOWN";
+  constructor(message: string, outcome: "NOT_CREATED" | "UNKNOWN") {
+    super(message);
+    this.name = "YocoCheckoutError";
+    this.outcome = outcome;
+  }
+}
+
 // Injected transport permits offline tests; replies never confer financial authority.
 export async function requestCheckout(input: CheckoutInput, config: {
   secretKey: string; mode: "test" | "live"; baseUrl: string;
@@ -27,11 +36,14 @@ export async function requestCheckout(input: CheckoutInput, config: {
         ...(input.metadata ? { metadata: input.metadata } : {}) }),
       cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000),
     });
-    value = await response.json();
   } catch {
-    throw new Error("Yoco checkout outcome unavailable; reconciliation is required before retry.");
+    throw new YocoCheckoutError("Yoco checkout outcome unavailable; reconciliation is required before retry.", "UNKNOWN");
   }
-  if (!response.ok) throw new Error(`Yoco checkout rejected (HTTP ${response.status}).`);
+  if (!response.ok) throw new YocoCheckoutError(`Yoco checkout rejected (HTTP ${response.status}).`,
+    [400, 401, 403, 404, 405, 415, 429].includes(response.status) ? "NOT_CREATED" : "UNKNOWN");
+  try { value = await response.json(); } catch {
+    throw new YocoCheckoutError("Yoco checkout outcome unavailable; reconciliation is required before retry.", "UNKNOWN");
+  }
   const data = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown> : null;
   if (!data || typeof data.id !== "string" || !data.id.trim()
