@@ -142,6 +142,17 @@ type SubscriptionRequest = {
   confirmed_at: string | null;
 };
 
+type ApplicationSummary = {
+  source: "phase6" | "legacy";
+  id: string;
+  cycle: number | null;
+  status: string;
+  decision: string | null;
+  decisionAt: string | null;
+};
+
+type LinkedAccount = { user_id: string; email: string | null };
+
 const PLAN_PRICES = {
   day: 45,
   week: 100,
@@ -198,6 +209,10 @@ export default function AdminDriverProfilePage() {
   const [noteDraft, setNoteDraft] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "documents" | "vehicle" | "notes" | "actions">("overview");
   const [readinessScore, setReadinessScore] = useState(0);
+  const [applicationSummary, setApplicationSummary] = useState<ApplicationSummary | null>(null);
+  const [applicationReadError, setApplicationReadError] = useState<string | null>(null);
+  const [linkedAccount, setLinkedAccount] = useState<LinkedAccount | null>(null);
+  const [accountReadError, setAccountReadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -229,13 +244,23 @@ export default function AdminDriverProfilePage() {
       return;
     }
 
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     const profileRes = await fetch(`/api/admin/driver-profile?driverId=${encodeURIComponent(driverId)}`, {
       method: "GET",
       cache: "no-store",
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    });
+    }).catch(() => null);
+    window.clearTimeout(timeout);
+
+    if (!profileRes) {
+      setBusy(false);
+      setMsg("Driver profile request timed out or failed. Please retry.");
+      return;
+    }
 
     const profileJson = await profileRes.json().catch(() => null);
 
@@ -246,6 +271,10 @@ export default function AdminDriverProfilePage() {
     }
 
     setProfile(profileJson.profile ?? null);
+    setApplicationSummary(profileJson.application_summary ?? null);
+    setApplicationReadError(profileJson.application_read_error ?? null);
+    setLinkedAccount(profileJson.linked_account ?? null);
+    setAccountReadError(profileJson.account_read_error ?? null);
     setSubscriptionPayments(profileJson.subscription_payments ?? []);
     setSubscriptionRequests(profileJson.subscription_requests ?? []);
     setDocuments(profileJson.documents ?? []);
@@ -595,12 +624,58 @@ export default function AdminDriverProfilePage() {
             </p>
           </div>
 
-          <Link href="/admin/applications" className="inline-flex moovu-btn moovu-btn-secondary">
-            Back
-          </Link>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link
+              href={`/admin/link-driver?driverId=${encodeURIComponent(driverId)}&email=${encodeURIComponent(profile.email ?? "")}`}
+              className="inline-flex moovu-btn moovu-btn-primary"
+            >
+              Link login account
+            </Link>
+            <Link href="/admin/applications" className="inline-flex moovu-btn moovu-btn-secondary">
+              Back
+            </Link>
+          </div>
         </div>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
+        <section className="moovu-card p-5 sm:p-6" aria-label="Driver authority summary">
+          <div className="moovu-section-title">Independent driver states</div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="moovu-data-row">
+              <div className="text-xs font-black uppercase tracking-wide text-slate-500">Application status</div>
+              <div className="mt-1 font-black">{applicationSummary?.status ?? (applicationReadError ? "Unavailable" : "Legacy only")}</div>
+              {applicationSummary?.source === "phase6" && <Link className="mt-2 inline-block text-sm font-bold text-blue-700 underline" href={`/admin/onboarding?id=${encodeURIComponent(applicationSummary.id)}`}>Cycle {applicationSummary.cycle} review</Link>}
+            </div>
+            <div className="moovu-data-row">
+              <div className="text-xs font-black uppercase tracking-wide text-slate-500">Approval decision</div>
+              <div className="mt-1 font-black">{applicationSummary?.decision ?? "No recorded decision"}</div>
+              <div className="mt-1 text-xs text-slate-600">{applicationSummary?.decisionAt ? new Date(applicationSummary.decisionAt).toLocaleString() : "Decision date unavailable"}</div>
+            </div>
+            <div className="moovu-data-row">
+              <div className="text-xs font-black uppercase tracking-wide text-slate-500">Operating status</div>
+              <div className="mt-1 font-black capitalize">{profile.status ?? "Unavailable"}</div>
+              <div className="mt-1 text-xs text-slate-600">Independent of application approval</div>
+            </div>
+            <div className="moovu-data-row">
+              <div className="text-xs font-black uppercase tracking-wide text-slate-500">Availability</div>
+              <div className="mt-1 font-black">{profile.busy ? "Busy" : profile.online ? "Online" : "Offline"}</div>
+              <div className="mt-1 text-xs text-slate-600">Presence only; not an eligibility decision</div>
+            </div>
+          </div>
+          {(applicationReadError || accountReadError) && <p className="mt-3 text-sm font-bold text-amber-800">{applicationReadError ?? accountReadError}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+            <strong>Linked authentication account:</strong>
+            <span>{linkedAccount ? `${linkedAccount.email ?? "Email unavailable"} · ${linkedAccount.user_id}` : accountReadError ? "Unavailable" : "Not linked"}</span>
+            <Link href={`/admin/link-driver?driverId=${encodeURIComponent(driverId)}&email=${encodeURIComponent(linkedAccount?.email ?? profile.email ?? "")}`} className="moovu-btn moovu-btn-secondary">Manage link</Link>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href={`/admin/archive?q=${encodeURIComponent(driverName)}`} className="moovu-btn moovu-btn-secondary">Trip history</Link>
+            <Link href="/admin/commission-payments" className="moovu-btn moovu-btn-secondary">Commission history</Link>
+            <Link href="/admin/settlements" className="moovu-btn moovu-btn-secondary">Payout history</Link>
+            <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">Subscription history</Link>
+          </div>
+        </section>
 
         <nav className="sticky top-2 z-20 rounded-[2rem] border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
           <div className="flex gap-2 overflow-x-auto">

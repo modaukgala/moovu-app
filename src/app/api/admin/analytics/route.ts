@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { PHASE6_NEEDS_REVIEW } from "@/lib/admin/applicationSummary";
 
 type DriverDirectoryRow = {
   id: string;
@@ -33,18 +34,22 @@ export async function GET(req: Request) {
 
     const { supabaseAdmin } = auth;
 
-    const now = new Date().toISOString();
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const weekStart = new Date(dayStart);
-    weekStart.setDate(dayStart.getDate() - 6);
-    const monthStart = new Date(dayStart.getFullYear(), dayStart.getMonth(), 1);
+    const nowDate = new Date();
+    const now = nowDate.toISOString();
+    const southAfricaNow = new Date(nowDate.getTime() + 2 * 60 * 60 * 1000);
+    const dayStart = new Date(Date.UTC(southAfricaNow.getUTCFullYear(), southAfricaNow.getUTCMonth(), southAfricaNow.getUTCDate()) - 2 * 60 * 60 * 1000);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const weekStart = new Date(dayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(Date.UTC(southAfricaNow.getUTCFullYear(), southAfricaNow.getUTCMonth(), 1) - 2 * 60 * 60 * 1000);
     const nextHour = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const expiringSoon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
     const [
       completedToday,
       cancelledToday,
+      bookingsToday,
+      activeTrips,
+      unassignedTrips,
       weeklyCompleted,
       monthlyCompleted,
       activeDrivers,
@@ -53,6 +58,7 @@ export async function GET(req: Request) {
       activeSubscriptions,
       expiringSubscriptions,
       scheduledDue,
+      scheduledOverdue,
       scheduledTotal,
       openIssues,
       lowRatedDrivers,
@@ -64,12 +70,18 @@ export async function GET(req: Request) {
         .from("trips")
         .select("id,fare_amount,commission_amount", { count: "exact" })
         .eq("status", "completed")
-        .gte("completed_at", dayStart.toISOString()),
+        .gte("completed_at", dayStart.toISOString()).lt("completed_at", dayEnd.toISOString()),
       supabaseAdmin
         .from("trips")
         .select("id", { count: "exact", head: true })
         .eq("status", "cancelled")
-        .gte("cancelled_at", dayStart.toISOString()),
+        .gte("cancelled_at", dayStart.toISOString()).lt("cancelled_at", dayEnd.toISOString()),
+      supabaseAdmin.from("trips").select("id", { count: "exact", head: true })
+        .gte("created_at", dayStart.toISOString()).lt("created_at", dayEnd.toISOString()),
+      supabaseAdmin.from("trips").select("id", { count: "exact", head: true })
+        .in("status", ["requested", "offered", "assigned", "arrived", "ongoing"]),
+      supabaseAdmin.from("trips").select("id", { count: "exact", head: true })
+        .in("status", ["requested", "offered"]).is("driver_id", null),
       supabaseAdmin
         .from("trips")
         .select("id", { count: "exact", head: true })
@@ -89,9 +101,9 @@ export async function GET(req: Request) {
         .select("id", { count: "exact", head: true })
         .eq("online", true),
       supabaseAdmin
-        .from("driver_applications")
+        .from("phase6_applications")
         .select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
+        .in("status", [...PHASE6_NEEDS_REVIEW]),
       supabaseAdmin
         .from("drivers")
         .select("id", { count: "exact", head: true })
@@ -107,7 +119,10 @@ export async function GET(req: Request) {
         .select("id", { count: "exact", head: true })
         .eq("ride_type", "scheduled")
         .eq("status", "scheduled")
+        .gte("scheduled_for", now)
         .lte("scheduled_for", nextHour),
+      supabaseAdmin.from("trips").select("id", { count: "exact", head: true })
+        .eq("ride_type", "scheduled").eq("status", "scheduled").lt("scheduled_for", now),
       supabaseAdmin
         .from("trips")
         .select("id", { count: "exact", head: true })
@@ -157,29 +172,35 @@ export async function GET(req: Request) {
       (sum, row) => sum + Number(row.commission_amount ?? 0),
       0
     );
-    const todayCompletedCount = completedToday.count ?? completedTodayRows.length;
-    const todayCancelledCount = cancelledToday.count ?? 0;
-    const todayTripTotal = todayCompletedCount + todayCancelledCount;
+    const todayCompletedCount = completedToday.error ? null : completedToday.count ?? completedTodayRows.length;
+    const todayCancelledCount = cancelledToday.error ? null : cancelledToday.count ?? 0;
+    const todayTripTotal = todayCompletedCount == null || todayCancelledCount == null ? null : todayCompletedCount + todayCancelledCount;
 
     return NextResponse.json({
       ok: true,
       analytics: {
+        operational_timezone: "Africa/Johannesburg",
+        operational_day_start: dayStart.toISOString(),
+        today_total_bookings: bookingsToday.error ? null : bookingsToday.count,
         today_completed_trips: todayCompletedCount,
         today_cancelled_trips: todayCancelledCount,
-        today_gross_revenue: todayGrossRevenue,
-        today_commission_owed: todayCommissionOwed,
-        weekly_trips: weeklyCompleted.count ?? 0,
-        monthly_trips: monthlyCompleted.count ?? 0,
-        active_drivers: activeDrivers.count ?? 0,
-        online_drivers: onlineDrivers.count ?? 0,
-        pending_driver_applications: pendingApplications.error ? 0 : pendingApplications.count ?? 0,
-        active_subscriptions: activeSubscriptions.count ?? 0,
-        expiring_subscriptions: expiringSubscriptions.count ?? 0,
-        average_fare: todayCompletedCount > 0 ? todayGrossRevenue / todayCompletedCount : 0,
-        cancellation_rate: todayTripTotal > 0 ? (todayCancelledCount / todayTripTotal) * 100 : 0,
-        scheduled_due_next_hour: scheduledDue.count ?? 0,
-        scheduled_total_pending: scheduledTotal.count ?? 0,
-        open_support_issues: openIssues.count ?? 0,
+        active_trips: activeTrips.error ? null : activeTrips.count,
+        unassigned_trips: unassignedTrips.error ? null : unassignedTrips.count,
+        today_gross_revenue: completedToday.error ? null : todayGrossRevenue,
+        today_commission_owed: completedToday.error ? null : todayCommissionOwed,
+        weekly_trips: weeklyCompleted.error ? null : weeklyCompleted.count,
+        monthly_trips: monthlyCompleted.error ? null : monthlyCompleted.count,
+        active_drivers: activeDrivers.error ? null : activeDrivers.count,
+        online_drivers: onlineDrivers.error ? null : onlineDrivers.count,
+        pending_driver_applications: pendingApplications.error ? null : pendingApplications.count,
+        active_subscriptions: activeSubscriptions.error ? null : activeSubscriptions.count,
+        expiring_subscriptions: expiringSubscriptions.error ? null : expiringSubscriptions.count,
+        average_fare: todayCompletedCount && todayCompletedCount > 0 ? todayGrossRevenue / todayCompletedCount : todayCompletedCount === 0 ? 0 : null,
+        cancellation_rate: todayTripTotal && todayTripTotal > 0 && todayCancelledCount != null ? (todayCancelledCount / todayTripTotal) * 100 : todayTripTotal === 0 ? 0 : null,
+        scheduled_due_next_hour: scheduledDue.error ? null : scheduledDue.count,
+        scheduled_overdue: scheduledOverdue.error ? null : scheduledOverdue.count,
+        scheduled_total_pending: scheduledTotal.error ? null : scheduledTotal.count,
+        open_support_issues: openIssues.error ? null : openIssues.count,
         low_rated_drivers: ((lowRatedDrivers.data ?? []) as DriverQualityRow[]).map((row) => ({
           ...row,
           driver_name: driverNameById.get(row.driver_id) ?? "Driver profile unavailable",

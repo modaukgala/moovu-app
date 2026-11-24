@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import CompactTabs from "@/components/ui/CompactTabs";
 import EmptyState from "@/components/ui/EmptyState";
@@ -75,8 +75,15 @@ export default function AdminCustomerProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
   const [tab, setTab] = useState<ProfileTab>("overview");
+  const [tripPage, setTripPage] = useState(1);
+  const [tripTotalPages, setTripTotalPages] = useState(0);
+  const [membership, setMembership] = useState<{ status: string; payment_id: string; starts_at: string; expires_at: string; activated_at: string } | null>(null);
+  const [membershipPayments, setMembershipPayments] = useState<Array<{ id: string; amount_cents: number; method: string; status: string; submitted_at: string; reviewed_at: string | null; financial_transaction_id: string | null }>>([]);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
   const loadCustomer = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     const customerId = String(params.id ?? "");
     if (!customerId) return;
 
@@ -92,16 +99,16 @@ export default function AdminCustomerProfilePage() {
       return;
     }
 
-    const response = await fetch(
-      `/api/admin/customers?customerId=${encodeURIComponent(customerId)}`,
-      {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      },
-    );
-    const json = await response.json().catch(() => null);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(`/api/admin/customers?customerId=${encodeURIComponent(customerId)}&tripPage=${tripPage}&tripPageSize=25`, {
+      cache: "no-store", headers: { Authorization: `Bearer ${session.access_token}` }, signal: controller.signal,
+    }).catch(() => null);
+    window.clearTimeout(timeout);
+    if (sequence !== requestSequence.current) return;
+    const json = response ? await response.json().catch(() => null) : null;
 
-    if (!response.ok || !json?.ok || !json.customer) {
+    if (!response?.ok || !json?.ok || !json.customer) {
       setError(json?.error || "Customer profile could not be found.");
       setLoading(false);
       return;
@@ -109,8 +116,12 @@ export default function AdminCustomerProfilePage() {
 
     setCustomer(json.customer);
     setSecurityEvents(Array.isArray(json.security_events) ? json.security_events : []);
+    setTripTotalPages(Number(json.customer.trip_total_pages ?? 0));
+    setMembership(json.membership ?? null);
+    setMembershipPayments(Array.isArray(json.membership_payments) ? json.membership_payments : []);
+    setMembershipError(json.membership_read_error ?? null);
     setLoading(false);
-  }, [params.id]);
+  }, [params.id, tripPage]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -195,7 +206,7 @@ export default function AdminCustomerProfilePage() {
               { value: "overview", label: "Overview" },
               { value: "trips", label: "Trips", count: customer.total_trips },
               { value: "payments", label: "Payments" },
-              { value: "receipts", label: "Receipts", count: customer.completed_trips },
+              { value: "receipts", label: "Receipts", count: customer.completed_trips + customer.cancelled_trips },
               { value: "support", label: "Support" },
               { value: "benefits", label: "Benefits" },
               { value: "activity", label: "Activity" },
@@ -269,7 +280,7 @@ export default function AdminCustomerProfilePage() {
             ) : (
               <div className="divide-y divide-[var(--moovu-border)]">
                 {sortedTrips
-                  .filter((trip) => tab !== "receipts" || trip.status === "completed")
+                  .filter((trip) => tab !== "receipts" || ["completed", "cancelled"].includes(String(trip.status)))
                   .map((trip) => (
                     <div
                       key={trip.id}
@@ -294,7 +305,7 @@ export default function AdminCustomerProfilePage() {
                         <Link href={`/admin/trips/${trip.id}`} className="moovu-btn moovu-btn-secondary min-h-10 px-4 py-2 text-sm">
                           Trip
                         </Link>
-                        {trip.status === "completed" ? (
+                        {["completed", "cancelled"].includes(String(trip.status)) ? (
                           <Link href={`/admin/receipts/${trip.id}`} className="moovu-btn moovu-btn-secondary min-h-10 px-4 py-2 text-sm">
                             Receipt
                           </Link>
@@ -304,6 +315,11 @@ export default function AdminCustomerProfilePage() {
                   ))}
               </div>
             )}
+            <div className="flex items-center justify-center gap-3 border-t p-4">
+              <button className="moovu-btn moovu-btn-secondary" disabled={tripPage <= 1 || loading} onClick={() => setTripPage(value => value - 1)}>Previous</button>
+              <span className="text-sm font-bold">Page {tripPage} of {Math.max(1, tripTotalPages)}</span>
+              <button className="moovu-btn moovu-btn-secondary" disabled={tripPage >= tripTotalPages || loading} onClick={() => setTripPage(value => value + 1)}>Next</button>
+            </div>
           </section>
         ) : null}
 
@@ -363,6 +379,8 @@ export default function AdminCustomerProfilePage() {
                     </div>
                     <div className="text-right">
                       <strong>{money(trip.final_fare ?? trip.fare_amount)}</strong>
+                      <div className="mt-1 text-xs font-bold">Submission: {trip.payment_method ? "Recorded" : "Unavailable"}</div>
+                      <div className="mt-1 text-xs font-bold">Verified payment: Unavailable from trip record</div>
                       <div className="mt-1"><StatusBadge status={trip.status} /></div>
                     </div>
                   </div>
@@ -374,10 +392,19 @@ export default function AdminCustomerProfilePage() {
 
         {tab === "benefits" ? (
           <section className="moovu-card p-5 sm:p-6">
-            <EmptyState
-              title="Customer benefits not configured"
-              description="This area is ready for future customer subscriptions or ride benefits. No plan or entitlement is assigned automatically."
-            />
+            <div className="moovu-section-title">MOOVU+ membership</div>
+            {membershipError ? <p className="mt-4 font-bold text-amber-800">{membershipError} <Link href="/admin/moovu-plus" className="underline">Open MOOVU+</Link></p> : membership ? (
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                <div className="font-black">Membership activation: {membership.status}</div>
+                <div className="mt-1 text-sm">Activated {displayDate(membership.activated_at)} · expires {displayDate(membership.expires_at)}</div>
+              </div>
+            ) : <p className="mt-4 text-sm font-semibold">No active or historical membership record is available.</p>}
+            <h3 className="mt-5 font-black">Payment submissions</h3>
+            {membershipPayments.map(payment => <div key={payment.id} className="mt-2 rounded-2xl border p-4 text-sm">
+              <strong>Submission: {payment.status}</strong> · {money(payment.amount_cents / 100)} · {payment.method}<br />
+              Verified payment: {payment.reviewed_at && payment.status === "APPROVED" ? `Approved ${displayDate(payment.reviewed_at)}` : "Not verified"}<br />
+              Membership activation: {membership?.status === "ACTIVE" && membership.payment_id === payment.id ? "Activated (see membership record above)" : "Not established by this proof"}
+            </div>)}
           </section>
         ) : null}
       </div>

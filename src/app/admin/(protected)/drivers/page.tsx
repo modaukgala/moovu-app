@@ -8,6 +8,7 @@ import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
+import { useSearchParams } from "next/navigation";
 
 type Driver = {
   id: string;
@@ -16,6 +17,14 @@ type Driver = {
   phone: string | null;
   email: string | null;
   status: string | null;
+  application_summary?: {
+    id: string;
+    cycle: number | null;
+    status: string;
+    decision: string | null;
+    decisionAt: string | null;
+    source: "phase6" | "legacy";
+  } | null;
 };
 
 function driverName(driver: Driver) {
@@ -31,6 +40,8 @@ function adminDriverStatusLabel(status?: string | null) {
 }
 
 export default function DriversPage() {
+  const searchParams = useSearchParams();
+  const onlineOnly = searchParams.get("online") === "true";
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -56,13 +67,17 @@ export default function DriversPage() {
       return;
     }
 
-    const res = await fetch("/api/admin/drivers/list", {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(`/api/admin/drivers/list${onlineOnly ? "?online=true" : ""}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
-    });
-    const json = await res.json().catch(() => null);
+      signal: controller.signal,
+    }).catch(() => null);
+    window.clearTimeout(timeout);
+    const json = res ? await res.json().catch(() => null) : null;
 
-    if (!res.ok || !json?.ok) {
+    if (!res?.ok || !json?.ok) {
       setDrivers([]);
       setPageError(json?.error || "Could not load drivers. Please refresh or contact admin support.");
       setLoading(false);
@@ -71,7 +86,7 @@ export default function DriversPage() {
 
     setDrivers((json.drivers ?? []) as Driver[]);
     setLoading(false);
-  }, [getAccessToken]);
+  }, [getAccessToken, onlineOnly]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -226,6 +241,7 @@ export default function DriversPage() {
                     <th className="px-5 py-4">Phone</th>
                     <th className="px-5 py-4">Email</th>
                     <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4">Application</th>
                     <th className="px-5 py-4">Actions</th>
                   </tr>
                 </thead>
@@ -241,6 +257,13 @@ export default function DriversPage() {
                       <td className="px-5 py-4 text-slate-700">{driver.email ?? "--"}</td>
                       <td className="px-5 py-4">
                         <StatusBadge status={adminDriverStatusLabel(driver.status)} />
+                      </td>
+                      <td className="px-5 py-4 text-xs text-slate-700">
+                        {driver.application_summary ? (
+                          <Link href={driver.application_summary.source === "phase6" ? `/admin/onboarding?id=${driver.application_summary.id}` : `/admin/drivers/${driver.id}`} className="font-bold hover:underline">
+                            {driver.application_summary.status} · {driver.application_summary.decision ?? "No decision"}
+                          </Link>
+                        ) : "Unavailable"}
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-2">
@@ -289,6 +312,9 @@ export default function DriversPage() {
                       </Link>
                       <div className="mt-2">
                         <StatusBadge status={adminDriverStatusLabel(driver.status)} />
+                      </div>
+                      <div className="mt-2 text-xs font-bold text-slate-600">
+                        Application: {driver.application_summary?.status ?? "Unavailable"} · {driver.application_summary?.decision ?? "No decision"}
                       </div>
                     </div>
                   </div>

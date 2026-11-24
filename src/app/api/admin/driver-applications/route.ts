@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { loadApplicationAuthority } from "@/lib/admin/applicationAuthority";
+import { applicationSummary } from "@/lib/admin/applicationSummary";
 import {
   buildDriverReadiness,
   type DriverDocumentStatusInput,
@@ -134,6 +136,12 @@ export async function GET(req: Request) {
       });
     }
 
+    let authority: Awaited<ReturnType<typeof loadApplicationAuthority>> | null = null;
+    if (isFinancialAdminRole(auth.profile.role)) {
+      try { authority = await loadApplicationAuthority(supabaseAdmin, driverIds); }
+      catch (error) { console.error("[admin-driver-applications] Phase 6 authority unavailable", error); }
+    }
+
     const enriched = rows.map((row) => {
       const profile = profileByDriver[row.id] ?? null;
       const readiness = buildDriverReadiness(
@@ -152,6 +160,10 @@ export async function GET(req: Request) {
 
       return {
         ...row,
+        application_summary: authority ? (() => {
+          const phase6 = authority.current.get(row.id) ?? null;
+          return applicationSummary({ driverId: row.id, verificationStatus: row.verification_status, phase6, decision: phase6 ? authority.decisions.get(phase6.id) ?? null : null });
+        })() : null,
         driver_profile: profile,
         readiness,
         validation_issues: readiness.issues,

@@ -38,6 +38,12 @@ export default function AdminCustomersPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CustomerFilter>("all");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalCustomers, setTotalCustomers] = useState<number | null>(0);
+  const [totalLowerBound, setTotalLowerBound] = useState<number | null>(null);
+  const [retrievalWarning, setRetrievalWarning] = useState<string | null>(null);
   const [recentCutoff] = useState(() => Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const loadCustomers = useCallback(async () => {
@@ -54,21 +60,33 @@ export default function AdminCustomersPage() {
       return;
     }
 
-    const response = await fetch("/api/admin/customers", {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${session.access_token}` },
+    const params = new URLSearchParams({
+      page: String(page), pageSize: "25", q: appliedQuery,
+      status: filter === "active" || filter === "inactive" ? filter : "all",
     });
-    const json = await response.json().catch(() => null);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(`/api/admin/customers?${params}`, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    }).catch(() => null);
+    window.clearTimeout(timeout);
+    const json = response ? await response.json().catch(() => null) : null;
 
-    if (!response.ok || !json?.ok) {
+    if (!response?.ok || !json?.ok) {
       setError(json?.error || "Could not load customers. Please try again.");
       setLoading(false);
       return;
     }
 
     setCustomers(json.customers ?? []);
+    setTotalPages(Number(json.total_pages ?? 0));
+    setTotalCustomers(json.total == null ? null : Number(json.total));
+    setTotalLowerBound(json.total_lower_bound == null ? null : Number(json.total_lower_bound));
+    setRetrievalWarning(json.retrieval_warning ?? null);
     setLoading(false);
-  }, []);
+  }, [appliedQuery, filter, page]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -150,9 +168,10 @@ export default function AdminCustomersPage() {
             {error}
           </section>
         ) : null}
+        {retrievalWarning ? <section className="rounded-3xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{retrievalWarning}</section> : null}
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Registered" value={String(customers.length)} helper="Customer accounts" />
+          <MetricCard label="Registered" value={totalCustomers == null ? `At least ${totalLowerBound ?? customers.length}` : String(totalCustomers)} helper={totalCustomers == null ? "Incomplete bounded result" : "Matching customer accounts"} />
           <MetricCard label="Active" value={String(counts.active)} helper="Available accounts" tone="success" />
           <MetricCard label="With trips" value={String(counts.has_trips)} helper="Customers who have booked" tone="primary" />
           <MetricCard label="New" value={String(counts.recent)} helper="Registered in 30 days" />
@@ -168,11 +187,12 @@ export default function AdminCustomersPage() {
               placeholder="Search name, phone, or email"
             />
           </label>
+          <button className="moovu-btn moovu-btn-primary" onClick={() => { setPage(1); setAppliedQuery(query.trim()); }}>Search all customers</button>
 
           <CompactTabs
             ariaLabel="Customer filters"
             value={filter}
-            onChange={(value) => setFilter(value as CustomerFilter)}
+            onChange={(value) => { setFilter(value as CustomerFilter); setPage(1); }}
             items={[
               { value: "all", label: "All", count: counts.all },
               { value: "active", label: "Active", count: counts.active },
@@ -183,6 +203,11 @@ export default function AdminCustomersPage() {
             ]}
           />
         </section>
+        <div className="flex items-center justify-center gap-3">
+          <button className="moovu-btn moovu-btn-secondary" disabled={page <= 1 || loading} onClick={() => setPage(value => value - 1)}>Previous</button>
+          <span className="text-sm font-bold">Page {page} of {Math.max(1, totalPages)}</span>
+          <button className="moovu-btn moovu-btn-secondary" disabled={page >= totalPages || loading} onClick={() => setPage(value => value + 1)}>Next</button>
+        </div>
 
         <section className="moovu-card overflow-hidden p-0">
           <div className="hidden grid-cols-[minmax(220px,1.3fr)_minmax(150px,0.8fr)_120px_130px_160px_110px] gap-4 border-b border-[var(--moovu-border)] bg-slate-50 px-5 py-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 lg:grid">
@@ -197,8 +222,8 @@ export default function AdminCustomersPage() {
           {filteredCustomers.length === 0 ? (
             <div className="p-5">
               <EmptyState
-                title="No customers found"
-                description="Try a different search or customer filter."
+                title={retrievalWarning ? "No match in the retrieved customer set" : "No customers found"}
+                description={retrievalWarning ? "The retrieval boundary was reached, so this is not a conclusive no-match result. Refine the search." : "Try a different search or customer filter."}
               />
             </div>
           ) : (

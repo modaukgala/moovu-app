@@ -49,6 +49,7 @@ type ApplicationRow = {
     message: string;
     severity: "ready" | "warning" | "blocked";
   }[];
+  application_summary?: { source: "phase6" | "legacy"; id: string; cycle: number | null; status: string; decision: string | null; decisionAt: string | null } | null;
 };
 
 type ApplicationFilter = "all" | "pending" | "needs_attention" | "approved" | "rejected";
@@ -194,6 +195,10 @@ export default function AdminDriverApplicationsPage() {
 
   async function runApplicationAction(action: "approve" | "suspend" | "delete") {
     if (!selected) return;
+    if (action === "approve" && selected.application_summary?.source === "phase6") {
+      window.location.href = `/admin/onboarding?id=${encodeURIComponent(selected.application_summary.id)}`;
+      return;
+    }
 
     setBusy(true);
     setMsg(null);
@@ -323,6 +328,7 @@ export default function AdminDriverApplicationsPage() {
                   {selected.first_name ?? "--"} {selected.last_name ?? ""}
                 </div>
                 <div className="mt-1 text-sm text-slate-600">{selected.phone ?? selected.email ?? selected.id}</div>
+                <div className="mt-2 text-sm font-bold">Application: {selected.application_summary?.status ?? "Legacy-only record"} · Decision: {selected.application_summary?.decision ?? "No recorded decision"}</div>
               </div>
               <div className="mt-5 flex flex-wrap justify-end gap-3">
                 <button

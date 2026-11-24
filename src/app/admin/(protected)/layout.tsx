@@ -32,18 +32,9 @@ const navItems = [
 ];
 
 type PaymentFlagCounts = {
-  all: number;
-  subscription: number;
-  commission: number;
-};
-
-type PaymentFlagRow = {
-  payment_type?: string | null;
-  status?: string | null;
-};
-
-type ApplicationFlagRow = {
-  id: string;
+  all: number | null;
+  subscription: number | null;
+  commission: number | null;
 };
 
 export default function AdminProtectedLayout({
@@ -58,44 +49,37 @@ export default function AdminProtectedLayout({
     subscription: 0,
     commission: 0,
   });
-  const [pendingApplications, setPendingApplications] = useState(0);
-  const [adminAccessToken, setAdminAccessToken] = useState<string | null>(null);
+  const [pendingApplications, setPendingApplications] = useState<number | null>(null);
   const isPageVisible = usePageVisibility();
   const lastPendingApplicationsRef = useRef(0);
 
   useEffect(() => {
     let mounted = true;
     let flagsTimer: number | null = null;
+    let flagsController: AbortController | null = null;
 
     function loadAdminFlags(accessToken: string) {
-      fetch("/api/admin/payment-reviews?status=all", {
+      flagsController?.abort();
+      flagsController = new AbortController();
+      const controller = flagsController;
+      const timeout = window.setTimeout(() => controller.abort(), 15000);
+      fetch("/api/admin/operational-counts", {
         cache: "no-store",
+        signal: controller.signal,
         headers: { Authorization: `Bearer ${accessToken}` },
       })
-        .then((res) => res.json())
-        .then((json: { ok?: boolean; requests?: PaymentFlagRow[] }) => {
-          if (!mounted || !json?.ok) return;
-          const active = (json.requests ?? []).filter((row) =>
-            ["pending_payment_review", "waiting_confirmation"].includes(String(row.status ?? ""))
-          );
+        .then(async (res) => ({ res, json: await res.json().catch(() => null) }))
+        .then(({ res, json }) => {
+          if (!mounted || controller !== flagsController) return;
+          if (!res.ok || !json?.ok) throw new Error("Operational counts unavailable");
+          const queues = json.paymentQueues as { pendingProofs: number; awaitingConfirmation: number; subscriptionProofs: number; commissionProofs: number } | null;
           setPaymentFlags({
-            all: active.length,
-            subscription: active.filter((row) => row.payment_type === "subscription").length,
-            commission: active.filter((row) => row.payment_type === "commission").length,
+            all: queues ? queues.pendingProofs + queues.awaitingConfirmation : null,
+            subscription: queues?.subscriptionProofs ?? null,
+            commission: queues?.commissionProofs ?? null,
           });
-        })
-        .catch(() => {
-          if (mounted) setPaymentFlags({ all: 0, subscription: 0, commission: 0 });
-        });
-
-      fetch("/api/admin/driver-applications?status=pending_review", {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-        .then((res) => res.json())
-        .then((json: { ok?: boolean; applications?: ApplicationFlagRow[] }) => {
-          if (!mounted || !json?.ok) return;
-          const nextCount = (json.applications ?? []).length;
+          const nextCount = json.pendingApplicationReviews as number | null;
+          if (nextCount == null) { setPendingApplications(null); return; }
           if (nextCount > lastPendingApplicationsRef.current) {
             window.dispatchEvent(new CustomEvent("moovu-admin:new-applications", {
               detail: {
@@ -108,8 +92,12 @@ export default function AdminProtectedLayout({
           setPendingApplications(nextCount);
         })
         .catch(() => {
-          if (mounted) setPendingApplications(0);
-        });
+          if (mounted && controller === flagsController) {
+            setPaymentFlags({ all: null, subscription: null, commission: null });
+            setPendingApplications(null);
+          }
+        })
+        .finally(() => window.clearTimeout(timeout));
     }
 
     async function checkAuth() {
@@ -137,7 +125,6 @@ export default function AdminProtectedLayout({
         return;
       }
 
-      setAdminAccessToken(session.access_token);
       loadAdminFlags(session.access_token);
       flagsTimer = window.setInterval(
         () => {
@@ -153,13 +140,14 @@ export default function AdminProtectedLayout({
 
     return () => {
       mounted = false;
+      flagsController?.abort();
       if (flagsTimer) window.clearInterval(flagsTimer);
     };
   }, [pathname]);
 
   useEffect(() => {
     if (!isPageVisible) return;
-    lastPendingApplicationsRef.current = pendingApplications;
+    if (pendingApplications != null) lastPendingApplicationsRef.current = pendingApplications;
   }, [isPageVisible, pendingApplications]);
 
   async function handleLogout() {
@@ -263,22 +251,22 @@ export default function AdminProtectedLayout({
                           }`}
                         >
                           <span>{item.label}</span>
-                          {item.href === "/admin/payment-reviews" && paymentFlags.all > 0 ? (
+                          {item.href === "/admin/payment-reviews" && (paymentFlags.all ?? 0) > 0 ? (
                             <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
                               {paymentFlags.all}
                             </span>
                           ) : null}
-                          {item.href === "/admin/commission-payments" && paymentFlags.commission > 0 ? (
+                          {item.href === "/admin/commission-payments" && (paymentFlags.commission ?? 0) > 0 ? (
                             <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
                               {paymentFlags.commission}
                             </span>
                           ) : null}
-                          {item.href === "/admin/subscriptions" && paymentFlags.subscription > 0 ? (
+                          {item.href === "/admin/subscriptions" && (paymentFlags.subscription ?? 0) > 0 ? (
                             <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">
                               {paymentFlags.subscription}
                             </span>
                           ) : null}
-                          {item.href === "/admin/applications" && pendingApplications > 0 ? (
+                          {item.href === "/admin/onboarding" && (pendingApplications ?? 0) > 0 ? (
                             <span className="ml-auto rounded-full bg-red-100 px-2 py-0.5 text-xs font-black text-red-700">
                               {pendingApplications}
                             </span>
@@ -341,10 +329,10 @@ export default function AdminProtectedLayout({
                 className={active ? "is-active" : ""}
               >
                   {item.label}
-                  {item.href === "/admin/applications" && pendingApplications > 0 ? ` (${pendingApplications})` : ""}
-                  {item.href === "/admin/payment-reviews" && paymentFlags.all > 0 ? ` (${paymentFlags.all})` : ""}
-                  {item.href === "/admin/commission-payments" && paymentFlags.commission > 0 ? ` (${paymentFlags.commission})` : ""}
-                  {item.href === "/admin/subscriptions" && paymentFlags.subscription > 0 ? ` (${paymentFlags.subscription})` : ""}
+                  {item.href === "/admin/onboarding" && (pendingApplications ?? 0) > 0 ? ` (${pendingApplications})` : ""}
+                  {item.href === "/admin/payment-reviews" && (paymentFlags.all ?? 0) > 0 ? ` (${paymentFlags.all})` : ""}
+                  {item.href === "/admin/commission-payments" && (paymentFlags.commission ?? 0) > 0 ? ` (${paymentFlags.commission})` : ""}
+                  {item.href === "/admin/subscriptions" && (paymentFlags.subscription ?? 0) > 0 ? ` (${paymentFlags.subscription})` : ""}
                 </Link>
               );
             })}

@@ -31,6 +31,11 @@ type BoardTrip = {
   dispatch_state?: string | null;
   dispatch_search_radius_km?: number | null;
   dispatch_failure_reason?: string | null;
+  offers?: Array<{
+    id: string; driver_id: string; status: string; offered_at: string | null;
+    responded_at: string | null; expired_at: string | null; accept_deadline_at: string | null;
+    decline_reason: string | null; response_source: string | null;
+  }>;
   driver: {
     id: string;
     name: string;
@@ -38,6 +43,7 @@ type BoardTrip = {
     online: boolean | null;
     busy: boolean | null;
     subscription_status: string | null;
+    last_seen: string | null;
   } | null;
 };
 
@@ -56,6 +62,7 @@ export default function DispatchBoardPage() {
   const [rows, setRows] = useState<BoardTrip[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [retrievalWarning, setRetrievalWarning] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const refreshDebounceRef = useRef<number | null>(null);
   const isPageVisible = usePageVisibility();
@@ -96,6 +103,7 @@ export default function DispatchBoardPage() {
 
     setMsg(null);
     setRows(json.rows ?? []);
+    setRetrievalWarning(json.retrieval?.warning ?? null);
   }), [getAccessToken, boardRead]);
 
   useReadLoop(boardRead, loadBoard);
@@ -283,11 +291,18 @@ export default function DispatchBoardPage() {
           </div>
         </div>
 
-        {trip.dispatch_failure_reason ? (
-          <div className="rounded-2xl bg-amber-50 p-3 text-sm font-bold text-amber-900">
-            {trip.dispatch_failure_reason}
-          </div>
-        ) : null}
+        <div className="rounded-2xl bg-amber-50 p-3 text-sm font-bold text-amber-900">
+          Dispatch failure reason: {trip.dispatch_failure_reason || "Reason unavailable"}
+        </div>
+
+        {(trip.offers?.length ?? 0) > 0 && <details className="rounded-2xl border p-3 text-sm">
+          <summary className="cursor-pointer font-black">Recorded offer responses ({trip.offers?.length})</summary>
+          <div className="mt-2 space-y-2">{trip.offers?.map(offer => <div key={offer.id} className="rounded-xl bg-slate-50 p-2">
+            <strong>{offer.status}</strong> · Driver {offer.driver_id.slice(0, 8)}<br />
+            Offered {offer.offered_at ? new Date(offer.offered_at).toLocaleString() : "Unavailable"} · response {offer.responded_at ? new Date(offer.responded_at).toLocaleString() : "Not recorded"}<br />
+            {offer.decline_reason ? `Recorded reason: ${offer.decline_reason}` : "Reason unavailable"}
+          </div>)}</div>
+        </details>}
 
         {left != null ? (
           <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800">
@@ -307,6 +322,7 @@ export default function DispatchBoardPage() {
               <span>{trip.driver.online ? "online" : "offline"}</span>
               <span>{trip.driver.busy ? "busy" : "free"}</span>
               <span>{trip.driver.subscription_status ?? "no subscription"}</span>
+              <span>Location seen {trip.driver.last_seen ? new Date(trip.driver.last_seen).toLocaleString() : "unavailable"}</span>
             </div>
           ) : null}
         </div>
@@ -399,6 +415,7 @@ export default function DispatchBoardPage() {
       </section>
 
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {retrievalWarning && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{retrievalWarning}</section>}
 
       <section className="grid gap-3 md:grid-cols-4">
         <div className="moovu-stat-card">

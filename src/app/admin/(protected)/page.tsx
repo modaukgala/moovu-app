@@ -10,21 +10,26 @@ import { supabaseClient } from "@/lib/supabase/client";
 type AnalyticsResponse = {
   ok: boolean;
   analytics?: {
-    today_completed_trips: number;
-    today_cancelled_trips: number;
-    today_gross_revenue: number;
-    today_commission_owed: number;
+    today_total_bookings: number | null;
+    today_completed_trips: number | null;
+    today_cancelled_trips: number | null;
+    active_trips: number | null;
+    unassigned_trips: number | null;
+    today_gross_revenue: number | null;
+    today_commission_owed: number | null;
     weekly_trips: number;
     monthly_trips: number;
     active_drivers: number;
-    online_drivers: number;
-    pending_driver_applications: number;
+    online_drivers: number | null;
+    pending_driver_applications: number | null;
     active_subscriptions: number;
     expiring_subscriptions: number;
     average_fare: number;
     cancellation_rate: number;
-    scheduled_due_next_hour: number;
-    scheduled_total_pending: number;
+    scheduled_due_next_hour: number | null;
+    scheduled_overdue: number | null;
+    scheduled_total_pending: number | null;
+    operational_timezone: string;
     open_support_issues: number;
     low_rated_drivers: Array<{
       driver_id: string;
@@ -54,15 +59,12 @@ type AnalyticsResponse = {
   error?: string;
 };
 
-type PaymentFlagRow = {
-  payment_type?: string | null;
-  status?: string | null;
-};
-
 type PaymentFlags = {
-  subscription: number;
-  commission: number;
-  waiting: number;
+  subscription: number | null;
+  commission: number | null;
+  pending: number | null;
+  waiting: number | null;
+  yocoExceptions: number | null;
 };
 
 function money(value: number | null | undefined) {
@@ -73,6 +75,10 @@ function displayDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "--";
 }
 
+function countValue(value: number | null | undefined) {
+  return value == null ? "Unavailable" : String(value);
+}
+
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -80,40 +86,30 @@ export default function AdminDashboardPage() {
   const [paymentFlags, setPaymentFlags] = useState<PaymentFlags>({
     subscription: 0,
     commission: 0,
+    pending: 0,
     waiting: 0,
+    yocoExceptions: null,
   });
 
   async function loadAnalytics() {
     setLoading(true);
     setMsg(null);
-
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session) {
-      setMsg("You are not logged in.");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (!session) throw new Error("You are not logged in.");
+      const res = await fetch("/api/admin/analytics", { cache: "no-store", signal: controller.signal, headers: { Authorization: `Bearer ${session.access_token}` } });
+      const json = await res.json().catch(() => null) as AnalyticsResponse | null;
+      if (!res.ok || !json?.ok || !json.analytics) throw new Error(json?.error || "Failed to load analytics.");
+      setAnalytics(json.analytics);
+    } catch (error) {
+      setAnalytics(null);
+      setMsg(error instanceof DOMException && error.name === "AbortError" ? "Dashboard request timed out. Please retry." : error instanceof Error ? error.message : "Failed to load analytics.");
+    } finally {
+      window.clearTimeout(timeout);
       setLoading(false);
-      return;
     }
-
-    const res = await fetch("/api/admin/analytics", {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
-
-    const json = (await res.json()) as AnalyticsResponse;
-
-    if (!json?.ok || !json.analytics) {
-      setMsg(json?.error || "Failed to load analytics.");
-      setLoading(false);
-      return;
-    }
-
-    setAnalytics(json.analytics);
-    setLoading(false);
   }
 
   async function loadPaymentFlags() {
@@ -123,23 +119,23 @@ export default function AdminDashboardPage() {
 
     if (!session) return;
 
-    const res = await fetch("/api/admin/payment-reviews?status=all", {
+    const res = await fetch("/api/admin/operational-counts", {
       cache: "no-store",
       headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    const json = (await res.json().catch(() => null)) as
-      | { ok?: boolean; requests?: PaymentFlagRow[] }
-      | null;
+    }).catch(() => null);
+    const json = res ? await res.json().catch(() => null) : null;
 
-    if (!json?.ok) return;
-
-    const active = (json.requests ?? []).filter((row) =>
-      ["pending_payment_review", "waiting_confirmation"].includes(String(row.status ?? ""))
-    );
+    if (!res?.ok || !json?.ok) {
+      setPaymentFlags({ subscription: null, commission: null, pending: null, waiting: null, yocoExceptions: null });
+      return;
+    }
+    const queues = json.paymentQueues as { pendingProofs: number; awaitingConfirmation: number; subscriptionProofs: number; commissionProofs: number } | null;
     setPaymentFlags({
-      subscription: active.filter((row) => row.payment_type === "subscription").length,
-      commission: active.filter((row) => row.payment_type === "commission").length,
-      waiting: active.filter((row) => row.status === "waiting_confirmation").length,
+      subscription: queues?.subscriptionProofs ?? null,
+      commission: queues?.commissionProofs ?? null,
+      pending: queues?.pendingProofs ?? null,
+      waiting: queues?.awaitingConfirmation ?? null,
+      yocoExceptions: json.yocoTripPaymentExceptions ?? null,
     });
   }
 
@@ -220,48 +216,56 @@ export default function AdminDashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Link href="/admin/trips?date=today"><MetricCard label="Bookings today" value={countValue(analytics?.today_total_bookings)} helper={`Operational day · ${analytics?.operational_timezone ?? "Africa/Johannesburg"}`} /></Link>
+        <Link href="/admin/trips?status=completed&date=today"><MetricCard
           label="Completed today"
-          value={String(analytics?.today_completed_trips ?? 0)}
+          value={countValue(analytics?.today_completed_trips)}
           helper={`Gross ${money(analytics?.today_gross_revenue)}`}
           tone="success"
-        />
+        /></Link>
         <MetricCard
           label="Commission today"
           value={money(analytics?.today_commission_owed)}
           helper={`Average fare ${money(analytics?.average_fare)}`}
           tone="primary"
         />
-        <MetricCard
+        <Link href="/admin/trips?status=cancelled&date=today"><MetricCard
           label="Cancelled today"
-          value={String(analytics?.today_cancelled_trips ?? 0)}
+          value={countValue(analytics?.today_cancelled_trips)}
           helper={`${Number(analytics?.cancellation_rate ?? 0).toFixed(1)}% cancellation rate`}
           tone={(analytics?.today_cancelled_trips ?? 0) > 0 ? "warning" : "success"}
-        />
+        /></Link>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        <Link href="/admin/dispatch" className="block"><MetricCard label="Active trips" value={countValue(analytics?.active_trips)} helper="Requested through ongoing" tone="primary" /></Link>
+        <Link href="/admin/dispatch" className="block"><MetricCard label="Unassigned trips" value={countValue(analytics?.unassigned_trips)} helper="Requested/offered without driver" tone="warning" /></Link>
+        <Link href="/admin/onboarding?status=NEEDS_REVIEW" className="block"><MetricCard label="Pending application reviews" value={countValue(analytics?.pending_driver_applications)} helper="Phase 6 review authority" /></Link>
       </section>
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <MetricCard label="Weekly trips" value={String(analytics?.weekly_trips ?? 0)} helper="Completed" />
         <MetricCard label="Monthly trips" value={String(analytics?.monthly_trips ?? 0)} helper="Completed" />
         <MetricCard label="Active drivers" value={String(analytics?.active_drivers ?? 0)} helper="Approved/active" />
-        <MetricCard label="Online drivers" value={String(analytics?.online_drivers ?? 0)} helper="Live availability" />
-        <MetricCard label="Applications" value={String(analytics?.pending_driver_applications ?? 0)} helper="Pending review" />
+        <Link href="/admin/drivers?online=true"><MetricCard label="Online drivers" value={countValue(analytics?.online_drivers)} helper="Presence only" /></Link>
+        <MetricCard label="Applications" value={countValue(analytics?.pending_driver_applications)} helper="Pending Phase 6 review" />
         <MetricCard label="Expiring subs" value={String(analytics?.expiring_subscriptions ?? 0)} helper={`${analytics?.active_subscriptions ?? 0} active`} />
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard
+        <Link href="/admin/trips?status=scheduled&schedule=next-hour"><MetricCard
           label="Due next hour"
-          value={String(analytics?.scheduled_due_next_hour ?? 0)}
+          value={countValue(analytics?.scheduled_due_next_hour)}
           helper="Scheduled trips needing release"
           tone="primary"
-        />
-        <MetricCard
+        /></Link>
+        <Link href="/admin/trips?status=scheduled&schedule=overdue"><MetricCard label="Scheduled overdue" value={countValue(analytics?.scheduled_overdue)} helper="Scheduled time is before now" tone={(analytics?.scheduled_overdue ?? 0) > 0 ? "warning" : "default"} /></Link>
+        <Link href="/admin/trips?status=scheduled"><MetricCard
           label="Scheduled pending"
-          value={String(analytics?.scheduled_total_pending ?? 0)}
+          value={countValue(analytics?.scheduled_total_pending)}
           helper="Future rides in queue"
-        />
+        /></Link>
         <MetricCard
           label="Open issues"
           value={String(analytics?.open_support_issues ?? 0)}
@@ -272,28 +276,33 @@ export default function AdminDashboardPage() {
 
       <ManualSurgeControl />
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Link href="/admin/subscriptions" className="moovu-card-interactive p-5">
           <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
             Subscription POPs
           </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.subscription}</div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.subscription ?? "Unavailable"}</div>
           <p className="mt-2 text-sm text-slate-600">Persistent pending subscription reviews.</p>
         </Link>
         <Link href="/admin/commission-payments" className="moovu-card-interactive p-5">
           <div className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
             Commission POPs
           </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.commission}</div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.commission ?? "Unavailable"}</div>
           <p className="mt-2 text-sm text-slate-600">Persistent pending commission reviews.</p>
         </Link>
         <Link href="/admin/payment-reviews" className="moovu-card-interactive p-5">
           <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
             Waiting for bank
           </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.waiting}</div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.waiting ?? "Unavailable"}</div>
           <p className="mt-2 text-sm text-slate-600">Requests marked waiting for confirmation.</p>
         </Link>
+        <div className="moovu-card p-5">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-600">Yoco trip-payment exceptions</div>
+          <div className="mt-2 text-xl font-black text-slate-950">{paymentFlags.yocoExceptions ?? "Unsupported"}</div>
+          <p className="mt-2 text-sm text-slate-600">This baseline has a verified-payment report, but no supported exception queue.</p>
+        </div>
       </section>
 
       <section className="moovu-admin-command-grid">

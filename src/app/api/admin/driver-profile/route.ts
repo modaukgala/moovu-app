@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { loadApplicationAuthority } from "@/lib/admin/applicationAuthority";
+import { applicationSummary } from "@/lib/admin/applicationSummary";
 import { buildDriverDocumentChecks } from "@/lib/driver-document-checks";
 import {
   buildDriverReadiness,
@@ -222,12 +224,46 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(30);
 
+    let authoritativeApplication = null;
+    let applicationReadError: string | null = null;
+    try {
+      if (!isFinancialAdminRole(auth.profile.role)) throw new Error("Application records require review access.");
+      const authority = await loadApplicationAuthority(supabaseAdmin, [driverId]);
+      const phase6 = authority.current.get(driverId) ?? null;
+      authoritativeApplication = applicationSummary({
+        driverId,
+        verificationStatus: driver?.verification_status ?? null,
+        phase6,
+        decision: phase6 ? authority.decisions.get(phase6.id) ?? null : null,
+      });
+    } catch (error) {
+      applicationReadError = error instanceof Error ? error.message : "Application records are unavailable.";
+    }
+
+    const accountResult = await supabaseAdmin.from("driver_accounts")
+      .select("user_id,driver_id")
+      .eq("driver_id", driverId)
+      .maybeSingle();
+    let linkedAccount: { user_id: string; email: string | null } | null = null;
+    let accountReadError: string | null = null;
+    if (accountResult.error) {
+      accountReadError = "Linked account is unavailable.";
+    } else if (accountResult.data?.user_id) {
+      const authUser = await supabaseAdmin.auth.admin.getUserById(accountResult.data.user_id);
+      if (authUser.error) accountReadError = "Linked login identity is unavailable.";
+      else linkedAccount = { user_id: accountResult.data.user_id, email: authUser.data.user?.email ?? null };
+    }
+
     return NextResponse.json({
       ok: true,
       profile: {
         ...(driver ?? {}),
         driver_profile: profile ?? null,
       },
+      application_summary: authoritativeApplication,
+      application_read_error: applicationReadError,
+      linked_account: linkedAccount,
+      account_read_error: accountReadError,
       subscription_payments: subscriptionPayments ?? [],
       subscription_requests: subscriptionRequests ?? [],
       documents: documents ?? [],

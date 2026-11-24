@@ -9,6 +9,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
+import { useSearchParams } from "next/navigation";
 
 type Trip = {
   id: string;
@@ -20,6 +21,9 @@ type Trip = {
   fare_amount: number | null;
   status: string;
   created_at: string;
+  scheduled_for?: string | null;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
   driver_id: string | null;
   driver_name?: string | null;
   stops?: unknown;
@@ -44,6 +48,7 @@ type Driver = {
 const STATUSES = [
   "all",
   "requested",
+  "scheduled",
   "assigned",
   "arrived",
   "ongoing",
@@ -92,13 +97,21 @@ function AdminTripMobileField({
 }
 
 export default function TripsPage() {
+  const searchParams = useSearchParams();
+  const requestedStatus = searchParams.get("status");
+  const scheduleFilter = searchParams.get("schedule");
+  const dateFilter = searchParams.get("date");
   const [trips, setTrips] = useState<Trip[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
+  const [status, setStatus] = useState<(typeof STATUSES)[number]>(() =>
+    STATUSES.includes(requestedStatus as (typeof STATUSES)[number])
+      ? requestedStatus as (typeof STATUSES)[number]
+      : "all",
+  );
   const [pageError, setPageError] = useState<string | null>(null);
 
   const getAccessToken = useCallback(async () => {
@@ -161,11 +174,26 @@ export default function TripsPage() {
     }
 
     const rows = (json.trips ?? []) as Trip[];
-    setTrips(currentStatus === "all" ? rows : rows.filter((trip) => trip.status === currentStatus));
+    const statusRows = currentStatus === "all" ? rows : rows.filter((trip) => trip.status === currentStatus);
+    const now = Date.now();
+    const scheduleRows = scheduleFilter === "overdue"
+      ? statusRows.filter((trip) => trip.scheduled_for && new Date(trip.scheduled_for).getTime() < now)
+      : scheduleFilter === "next-hour"
+        ? statusRows.filter((trip) => { const at = trip.scheduled_for ? new Date(trip.scheduled_for).getTime() : 0; return at >= now && at <= now + 60 * 60 * 1000; })
+        : statusRows;
+    if (dateFilter === "today") {
+      const southAfricaNow = new Date(now + 2 * 60 * 60 * 1000);
+      const start = Date.UTC(southAfricaNow.getUTCFullYear(), southAfricaNow.getUTCMonth(), southAfricaNow.getUTCDate()) - 2 * 60 * 60 * 1000;
+      setTrips(scheduleRows.filter((trip) => {
+        const basis = trip.status === "completed" ? trip.completed_at : trip.status === "cancelled" ? trip.cancelled_at : trip.created_at;
+        const at = basis ? new Date(basis).getTime() : Number.NaN;
+        return at >= start && at < start + 24 * 60 * 60 * 1000;
+      }));
+    } else setTrips(scheduleRows);
     setLastUpdatedAt(new Date());
     setLoading(false);
     setRefreshing(false);
-  }, [getAccessToken]);
+  }, [dateFilter, getAccessToken, scheduleFilter]);
 
   useEffect(() => {
     void loadDrivers();

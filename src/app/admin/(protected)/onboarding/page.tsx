@@ -1,36 +1,62 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { supabaseClient } from "@/lib/supabase/client";
 import { PHASE6_SECTIONS, type Phase6Application } from "@/lib/drivers/phase6Policy";
 
 type Review = { id: string; action: string; source_version: number; reason: string; created_at: string };
 type Detail = { application: Phase6Application; versions: { version: number; snapshot: unknown; submitted_at: string }[]; reviews: Review[]; uploads: { id: string; section: string; state: string; source: string }[] };
 export default function OnboardingReview() {
+  const searchParams = useSearchParams();
   const [queue, setQueue] = useState<Phase6Application[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [reason, setReason] = useState("");
   const [sections, setSections] = useState<string[]>([]);
   const [message, setMessage] = useState("Loading review queue…");
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") ?? "ALL");
+  const [retrievalWarning, setRetrievalWarning] = useState<string | null>(null);
+  const requestSequence = useRef(0);
   const pending = useRef<Record<string, unknown> | null>(null);
   const request = useCallback(async (url: string, options?: RequestInit) => {
     const { data } = await supabaseClient.auth.getSession();
     if (!data.session) throw new Error("Reviewer sign-in required.");
-    const response = await fetch(url, { ...options, headers: { ...options?.headers, Authorization: `Bearer ${data.session.access_token}` }, cache: "no-store" });
-    const body = await response.json();
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(url, { ...options, headers: { ...options?.headers, Authorization: `Bearer ${data.session.access_token}` }, cache: "no-store", signal: controller.signal });
+    window.clearTimeout(timeout);
+    const body = await response.json().catch(() => null);
+    if (!body || typeof body !== "object") throw new Error("Review service returned an invalid response.");
     if (!response.ok) throw new Error(body.error ?? "Review unavailable.");
     return body;
   }, []);
   const load = useCallback(async (id?: string) => {
+    const sequence = ++requestSequence.current;
     setBusy(true);
     try {
-      const body = await request(`/api/admin/onboarding${id ? `?id=${encodeURIComponent(id)}` : ""}`);
-      if (id) setDetail(body); else setQueue(body.applications);
+      const query = id ? `?id=${encodeURIComponent(id)}` : `?page=${page}&pageSize=25&status=${encodeURIComponent(statusFilter)}&q=${encodeURIComponent(search.trim())}`;
+      const body = await request(`/api/admin/onboarding${query}`);
+      if (sequence !== requestSequence.current) return;
+      if (id) setDetail(body); else {
+        setQueue(Array.isArray(body.applications) ? body.applications : []);
+        setTotalPages(Number(body.totalPages ?? body.availablePages ?? 0));
+        setRetrievalWarning(body.retrievalWarning ?? null);
+      }
       setMessage("Review current immutable version and evidence before deciding.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Review unavailable."); }
     finally { setBusy(false); }
-  }, [request]);
-  useEffect(() => { void load(); }, [load]);
+  }, [page, request, search, statusFilter]);
+  useEffect(() => {
+    const directId = searchParams.get("id");
+    void (async () => {
+      await load();
+      if (directId) await load(directId);
+    })();
+  }, [load, searchParams]);
   async function decision(action: string) {
     if (!detail || busy) return;
     setBusy(true);
@@ -41,6 +67,7 @@ export default function OnboardingReview() {
       pending.current = null;
       const refreshed = await request(`/api/admin/onboarding?id=${encodeURIComponent(body.application.id)}`);
       setDetail(refreshed); setReason(""); setSections([]);
+      await load();
       setMessage("Decision recorded atomically with actor, reason and source version. Review history refreshed.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Decision unavailable."); }
     finally { setBusy(false); }
@@ -62,10 +89,21 @@ export default function OnboardingReview() {
   return <main className="mx-auto max-w-5xl p-4 sm:p-8">
     <h1 className="text-2xl font-bold">Driver onboarding review</h1>
     <p role="status" className="my-4 rounded border p-3">{message}</p>
+    {retrievalWarning && <p role="alert" className="my-4 rounded border border-amber-300 bg-amber-50 p-3 font-semibold text-amber-900">{retrievalWarning}</p>}
     <button className="rounded border p-2" disabled={busy || !!pending.current} onClick={() => void load(detail?.application.id)}>Refresh</button>
+    <div className="my-4 flex flex-wrap gap-2">
+      <input className="rounded border p-2" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Applicant name, cellphone, email, application or driver ID" />
+      <select className="rounded border p-2" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
+        {['ALL','NEEDS_REVIEW','SUBMITTED','RESUBMITTED','UNDER_REVIEW','CORRECTION_REQUESTED','APPROVED','REJECTED'].map(value => <option key={value}>{value}</option>)}
+      </select>
+      <button className="rounded border p-2" disabled={page <= 1 || busy} onClick={() => setPage(value => value - 1)}>Previous</button>
+      <span className="p-2">Page {page} of {Math.max(1, totalPages)}</span>
+      <button className="rounded border p-2" disabled={page >= totalPages || busy} onClick={() => setPage(value => value + 1)}>Next</button>
+    </div>
     <div className="my-4 flex flex-wrap gap-2">{queue.map(item => <button className="rounded border p-3 text-left" key={item.id} disabled={busy || !!pending.current} onClick={() => void load(item.id)}>Cycle {item.cycle} · {item.status}<br /><span className="text-xs">{item.id}</span></button>)}</div>
     {detail && <>
       <h2 className="text-xl font-semibold">Cycle {detail.application.cycle} · Version {detail.application.version} · {status}</h2>
+      <p className="my-2"><Link className="font-bold text-blue-700 underline" href={`/admin/drivers/${detail.application.driver_id}`}>Open linked driver profile</Link> · Application {detail.application.id}</p>
       <p className="my-2">Submitted data cannot be edited. Request a scoped correction, or record a reasoned decision against this version.</p>
       {detail.versions.map(version => <details className="my-3 rounded border p-3" key={version.version} open={version.version === detail.application.version}><summary>Immutable version {version.version} · {new Date(version.submitted_at).toLocaleString()}</summary><pre className="overflow-auto whitespace-pre-wrap break-words text-sm">{JSON.stringify(version.snapshot, null, 2)}</pre></details>)}
       <section><h3 className="font-semibold">Private evidence</h3><p>Capture source is metadata, not authenticity proof. Vehicle Check is manual evidence, not AI diagnosis.</p><div className="my-3 flex flex-wrap gap-2">{detail.uploads.filter(upload => upload.state === "VALIDATED").map(upload => <button className="rounded border p-2" key={upload.id} onClick={() => void preview(upload.id)}>{upload.section} · {upload.source} · View capture</button>)}</div></section>

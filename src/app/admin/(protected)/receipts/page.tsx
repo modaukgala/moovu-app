@@ -30,37 +30,41 @@ export default function AdminReceiptsPage() {
   const [trips, setTrips] = useState<ReceiptTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [retrievalWarning, setRetrievalWarning] = useState<string | null>(null);
 
-  async function loadReceipts() {
+  async function loadReceipts(requestedPage = page) {
     setLoading(true);
     setMsg(null);
-
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session?.access_token) {
-      setMsg("Please sign in as an admin to view receipts.");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in as an admin to view receipts.");
+      const params = new URLSearchParams({ page: String(requestedPage), pageSize: "25", q: query.trim(), status });
+      const res = await fetch(`/api/admin/receipts?${params}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Could not load receipts. Please refresh or contact admin support.");
+      setTrips(Array.isArray(json.receipts) ? json.receipts : []);
+      setPage(Number(json.page ?? requestedPage));
+      setTotalPages(Number(json.totalPages ?? json.availablePages ?? 0));
+      setRetrievalWarning(json.retrievalWarning ?? null);
+    } catch (error) {
       setTrips([]);
+      setMsg(error instanceof DOMException && error.name === "AbortError"
+        ? "The receipts request timed out. Please retry."
+        : error instanceof Error ? error.message : "Could not load receipts.");
+    } finally {
+      window.clearTimeout(timeout);
       setLoading(false);
-      return;
     }
-
-    const res = await fetch("/api/admin/receipts", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      cache: "no-store",
-    });
-    const json = await res.json().catch(() => null);
-
-    if (!res.ok || !json?.ok) {
-      setMsg(json?.error || "Could not load receipts. Please refresh or contact admin support.");
-      setTrips([]);
-      setLoading(false);
-      return;
-    }
-
-    setTrips((json.receipts ?? []) as ReceiptTrip[]);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -68,11 +72,14 @@ export default function AdminReceiptsPage() {
       void loadReceipts();
     }, 0);
     return () => window.clearTimeout(timer);
+    // Initial load only; filter and page changes are submitted explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <main className="space-y-5">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      {retrievalWarning && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{retrievalWarning}</section>}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -89,6 +96,16 @@ export default function AdminReceiptsPage() {
           Refresh
         </button>
       </div>
+
+      <section className="moovu-card flex flex-wrap gap-3 p-4">
+        <input className="moovu-input min-w-64 flex-1" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search trip, customer, route, phone, or driver" />
+        <select className="moovu-input bg-white" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="all">Completed and cancelled</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button className="moovu-btn moovu-btn-primary" onClick={() => void loadReceipts(1)}>Search</button>
+      </section>
 
       <section className="moovu-card overflow-hidden">
         {loading ? (
@@ -129,14 +146,24 @@ export default function AdminReceiptsPage() {
                   </div>
                 </div>
 
-                <Link href={`/admin/receipts/${trip.id}`} className="moovu-btn moovu-btn-primary">
-                  Open
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                  <Link href={`/admin/trips/${trip.id}`} className="moovu-btn moovu-btn-secondary">
+                    Trip detail
+                  </Link>
+                  <Link href={`/admin/receipts/${trip.id}`} className="moovu-btn moovu-btn-primary">
+                    Receipt
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
         )}
       </section>
+      <div className="flex items-center justify-center gap-3">
+        <button className="moovu-btn moovu-btn-secondary" disabled={page <= 1 || loading} onClick={() => void loadReceipts(page - 1)}>Previous</button>
+        <span className="text-sm font-bold">Page {page} of {Math.max(1, totalPages)}</span>
+        <button className="moovu-btn moovu-btn-secondary" disabled={page >= totalPages || loading} onClick={() => void loadReceipts(page + 1)}>Next</button>
+      </div>
     </main>
   );
 }
