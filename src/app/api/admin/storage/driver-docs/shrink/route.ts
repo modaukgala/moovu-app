@@ -7,14 +7,14 @@ export const maxDuration = 60;
 const BATCH = 6;
 
 /**
- * Owner only. Shrinks the next few large JPEG driver documents in place
+ * Owner/admin only. Shrinks the next few large JPEG driver documents in place
  * (max 2000 px, JPEG quality 82). Only replaces a file when the result is smaller.
  */
 export async function POST(req: Request) {
   const auth = await requireAdminUser(req);
   if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
-  if (String(auth.profile.role) !== "owner") {
-    return NextResponse.json({ ok: false, error: "Owner only." }, { status: 403 });
+  if (!["owner", "admin"].includes(String(auth.profile.role))) {
+    return NextResponse.json({ ok: false, error: "Owner or admin only." }, { status: 403 });
   }
   const body = await req.json().catch(() => null);
   if (body?.confirmBackup !== true) {
