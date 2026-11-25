@@ -24,6 +24,19 @@ update public.phase2_finance_policy
        updated_at = now()
  where policy_key = 'phase2-driver-finance';
 
+-- 1b. Owner/test accounts exempt from the lock and from payouts ------------------
+create table if not exists public.driver_finance_exemptions (
+  driver_id uuid primary key references public.drivers(id) on delete cascade,
+  reason text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.driver_finance_exemptions enable row level security;
+revoke all on public.driver_finance_exemptions from anon, authenticated;
+insert into public.driver_finance_exemptions(driver_id, reason)
+  select id, 'Owner test account (Kgalaletso Modau)' from public.drivers
+   where id = '6fe679ab-8065-48cc-84b0-5ddd56e300b6'
+on conflict (driver_id) do nothing;
+
 -- 2. Driver bank details -------------------------------------------------------
 create table if not exists public.driver_payout_accounts (
   driver_id uuid primary key references public.drivers(id) on delete cascade,
@@ -66,7 +79,7 @@ create or replace function public.phase2_driver_finance_position(p_driver_id uui
 as $function$
 declare
   v_debt bigint := 0; v_credit bigint := 0; v_payable bigint := 0; v_paid bigint := 0;
-  v_net bigint; v_owed bigint; v_due bigint;
+  v_net bigint; v_owed bigint; v_due bigint; v_exempt boolean;
   v_policy public.phase2_finance_policy;
 begin
   if auth.role() is distinct from 'service_role' then raise exception 'Trusted server role required'; end if;
@@ -93,6 +106,7 @@ begin
   select coalesce(sum(amount_cents),0) into v_paid
     from public.driver_payouts where driver_id=p_driver_id and status='paid';
 
+  v_exempt := exists(select 1 from public.driver_finance_exemptions where driver_id=p_driver_id);
   v_debt := greatest(v_debt,0); v_credit := greatest(v_credit,0); v_payable := greatest(v_payable,0);
   v_net  := (v_payable - v_paid) + v_credit - v_debt;
   v_owed := greatest(-v_net,0);
@@ -104,7 +118,8 @@ begin
     'card_earnings_cents',v_payable,'paid_out_cents',v_paid,
     'net_owed_cents',v_owed,'payout_due_cents',v_due,
     'debt_limit_cents',v_policy.debt_limit_cents,
-    'financially_eligible',v_owed < v_policy.debt_limit_cents,
+    'financially_eligible',v_exempt or v_owed < v_policy.debt_limit_cents,
+    'finance_exempt',v_exempt,
     'commission_lock_enforced',true,
     'paid_up',v_owed = 0,
     'subscription_required',v_policy.subscription_required);
@@ -160,6 +175,8 @@ begin
   if v_role not in ('owner','admin') then raise exception 'Only owner/admin can record payouts' using errcode='P0001'; end if;
   perform pg_advisory_xact_lock(hashtextextended('driver-payout:'||p_driver_id::text,0));
   v_pos := public.phase2_driver_finance_position(p_driver_id);
+  if exists(select 1 from public.driver_finance_exemptions where driver_id=p_driver_id) then
+    raise exception 'This account is exempt from payouts' using errcode='P0001'; end if;
   if p_amount_cents is null or p_amount_cents <= 0 then raise exception 'Amount must be positive' using errcode='P0001'; end if;
   if p_amount_cents > (v_pos->>'payout_due_cents')::bigint then
     raise exception 'Amount exceeds payout due (R%)', round((v_pos->>'payout_due_cents')::numeric/100,2) using errcode='P0001'; end if;
@@ -173,3 +190,6 @@ end $function$;
 
 revoke execute on function public.moovu_record_driver_payout(uuid,bigint,text,uuid,text) from public, anon, authenticated;
 grant execute on function public.moovu_record_driver_payout(uuid,bigint,text,uuid,text) to service_role;
+
+revoke execute on function public.phase2_driver_finance_position(uuid) from public, anon, authenticated;
+grant execute on function public.phase2_driver_finance_position(uuid) to service_role;

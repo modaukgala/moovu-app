@@ -14,14 +14,16 @@ export async function GET(req: Request) {
     .select("id,first_name,last_name,phone,status,online")
     .in("status", ["approved", "active"]).or("is_deleted.is.null,is_deleted.eq.false").limit(500);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  const ids = (drivers ?? []).map((d) => d.id);
+  const { data: exempt } = await db.from("driver_finance_exemptions").select("driver_id");
+  const exemptIds = new Set((exempt ?? []).map((e) => String(e.driver_id)));
+  const ids = (drivers ?? []).map((d) => d.id).filter((id) => !exemptIds.has(id));
   const { data: banks } = ids.length
     ? await db.from("driver_payout_accounts").select("*").in("driver_id", ids)
     : { data: [] as Record<string, unknown>[] };
   const bankBy = new Map((banks ?? []).map((b) => [String(b.driver_id), b]));
 
   const rows = [];
-  for (const d of drivers ?? []) {
+  for (const d of (drivers ?? []).filter((x) => !exemptIds.has(x.id))) {
     const s = await getDriverSettlement(db, d.id);
     if (!s.ok) continue;
     const st = s.settlement;
