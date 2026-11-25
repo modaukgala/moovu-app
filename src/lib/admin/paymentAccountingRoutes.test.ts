@@ -29,11 +29,12 @@ function fixture() {
   };
 }
 
-function harness(tables: Record<string, Row[]>, options: { cap?: number; fail?: string; verification?: unknown; role?: string; unauthenticated?: boolean; missingDriver?: boolean; legacySchema?: boolean; payoutDebt?: number } = {}) {
+function harness(tables: Record<string, Row[]>, options: { cap?: number; fail?: string; verification?: unknown; role?: string; reject?: string; unauthenticated?: boolean; missingDriver?: boolean; legacySchema?: boolean; payoutDebt?: number } = {}) {
   const calls: { name: string; args: Row }[] = [];
   let active = 0;
   let peak = 0;
   const db = {
+    storage: { from: () => ({ createSignedUrl: async (path: string) => ({ data: { signedUrl: `synthetic-signed/${path}` }, error: null }) }) },
     from(table: string) {
       assert.ok(table in tables);
       let rows = [...tables[table]];
@@ -57,7 +58,8 @@ function harness(tables: Record<string, Row[]>, options: { cap?: number; fail?: 
         in(key: string, ids: unknown[]) { rows = rows.filter((row) => ids.includes(row[key])); return query; },
         order(key: string, arg?: { ascending: boolean }) { order.push([key, arg?.ascending === false ? -1 : 1]); return query; },
         range(from: number, to: number) { range = [from, to + 1]; return query; },
-        then(resolve: (value: unknown) => void) {
+        then(resolve: (value: unknown) => void, reject?: (error: Error) => void) {
+          if (options.reject === table) { reject?.(new Error("synthetic transport failure")); return; }
           rows.sort((a, b) => {
             for (const [key, sign] of order) {
               const comparison = String(a[key]).localeCompare(String(b[key]));
@@ -507,4 +509,44 @@ test("actual Driver Earnings GET enforces ownership and uses only read-only comm
   assert.equal(partial.wallet.balance_due, 62);
   assert.equal(partial.cancellation_unavailable, true);
   assert.equal(partial.cancellation_driver_earnings, null);
+});
+
+test("exact payment receipt resolves older proof and preserves signing and allocations", async () => {
+  const tables = fixture();
+  const id = "20000000-0000-4000-8000-000000000001";
+  const older = { id, driver_id: "d", status: "approved", payment_type: "combined", amount_submitted: 180,
+    submitted_at: "2020-01-01", created_at: "2020-01-01", pop_file_path: "old-proof", contract_version: "phase-05b-v1",
+    subscription_amount_applied: 100, commission_amount_applied: 60, unapplied_excess: 20 };
+  tables.driver_payment_requests = [...Array.from({ length: 1050 }, (_, index) => ({
+    ...older, id: String(index), submitted_at: "2025-01-01",
+  })), older];
+  const read = (options: Parameters<typeof harness>[1] = {}, selected = id) =>
+    harness(tables, options).read("payment-reviews", undefined, 1, "pending_payment_review", undefined, `id=${selected}`);
+  const result = await read();
+  assert.equal(result.status, 200);
+  assert.equal(result.body.receipt.id, id);
+  assert.equal(result.body.receipt.pop_file_url, "synthetic-signed/old-proof");
+  assert.equal(result.body.receipt.amount_submitted, 180);
+  assert.deepEqual(result.body.receipt.allocation, { subscription: 100, commission: 60, excess: 20 });
+  assert.equal(result.body.requests, undefined);
+  assert.equal((await read({}, "20000000-0000-4000-8000-000000000099")).status, 404);
+  assert.equal((await read({}, "invalid")).status, 400);
+  assert.equal((await read({ unauthenticated: true })).status, 401);
+  assert.equal((await read({ role: "support" })).status, 403);
+  assert.equal((await read({ role: "dispatcher" })).status, 403);
+  assert.equal((await read({ fail: "driver_payment_requests" })).status, 500);
+});
+
+test("operational count read retains authenticated role when one metric transport rejects", async () => {
+  const tables: Record<string, Row[]> = fixture();
+  tables.phase6_applications = [{ id: "review", status: "SUBMITTED" }];
+  tables.online_payment_attempts = [];
+  tables.online_provider_events = [];
+  tables.trips = [];
+  const result = await harness(tables, { role: "owner", reject: "driver_payment_requests" }).read("operational-counts");
+  assert.equal(result.status, 200);
+  assert.equal(result.body.role, "owner");
+  assert.equal(result.body.paymentQueues, null);
+  assert.equal(result.body.pendingApplicationReviews, 1);
+  assert.equal((await harness(tables, { unauthenticated: true }).read("operational-counts")).status, 401);
 });

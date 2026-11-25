@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { dispatchBoardParams, dispatchPageControls } from "@/lib/admin/resultNavigation";
+import { AdminFilters, AdminPagination } from "@/components/admin/AdminResults";
 import { waLinkZA } from "@/lib/whatsapp";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -59,12 +63,21 @@ function money(value: number | null | undefined) {
 }
 
 export default function DispatchBoardPage() {
+  return <Suspense fallback={<p role="status">Loading dispatch board…</p>}><DispatchQueue /></Suspense>;
+}
+
+function DispatchQueue() {
+  const queue = useSearchParams().get("queue") ?? "";
+  return <DispatchBoardContent key={queue} queue={queue} />;
+}
+
+function DispatchBoardContent({ queue }: { queue: string }) {
   const [openPage, setOpenPage] = useState(1);
   const [closedPage, setClosedPage] = useState(1);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
-  const [pagination, setPagination] = useState<{ openTripsTotal: number | null; closedTripsTotal: number | null; openTripsVisible: number; closedTripsVisible: number } | null>(null);
+  const [pagination, setPagination] = useState<{ openPage: number; closedPage: number; filters: string; openTripsTotal: number | null; closedTripsTotal: number | null; openTripsVisible: number; closedTripsVisible: number } | null>(null);
   const [rows, setRows] = useState<BoardTrip[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -73,7 +86,8 @@ export default function DispatchBoardPage() {
   const refreshDebounceRef = useRef<number | null>(null);
   const isPageVisible = usePageVisibility();
   const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const boardRead = useReliableRead(READ_POLICIES.adminBoard, "admin-board", realtimeConnected, `${openPage}:${closedPage}:${search}:${status}`);
+  const filters = JSON.stringify([search, status, queue]);
+  const boardRead = useReliableRead(READ_POLICIES.adminBoard, "admin-board", realtimeConnected, `${openPage}:${closedPage}:${filters}`);
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -86,6 +100,7 @@ export default function DispatchBoardPage() {
   const loadBoard = useCallback(() => boardRead.run(async (signal) => {
     const token = await getAccessToken();
 
+    signal.throwIfAborted();
     if (!token) {
       setMsg("Missing access token.");
       setRows([]);
@@ -93,7 +108,7 @@ export default function DispatchBoardPage() {
       return readFailure(401);
     }
 
-    const res = await fetch(`/api/admin/dispatch/board?${new URLSearchParams({ openPage: String(openPage), closedPage: String(closedPage), q: search, status })}`, {
+    const res = await fetch(`/api/admin/dispatch/board?${dispatchBoardParams(openPage, closedPage, search, status, queue)}`, {
       signal,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -111,9 +126,9 @@ export default function DispatchBoardPage() {
 
     setMsg(null);
     setRows(json.rows ?? []);
-    setPagination(json.retrieval ?? null);
+    setPagination(json.retrieval ? { ...json.retrieval, filters } : null);
     setRetrievalWarning(json.retrieval?.warning ?? null);
-  }), [getAccessToken, boardRead, openPage, closedPage, search, status]);
+  }), [getAccessToken, boardRead, openPage, closedPage, search, status, queue, filters]);
 
   useReadLoop(boardRead, loadBoard);
 
@@ -426,29 +441,32 @@ export default function DispatchBoardPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
       {retrievalWarning && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{retrievalWarning}</section>}
 
-      <form className="flex flex-wrap gap-2" onSubmit={(event) => {
+      <AdminFilters label="Dispatch filters">
+      {(queue === "active" || queue === "unassigned") && <p>{queue === "active" ? "Active trips" : "Unassigned trips"} · <Link className="underline" href="/admin/dispatch">Clear queue filter</Link></p>}
+      <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
         event.preventDefault();
         setOpenPage(1);
         setClosedPage(1);
         setSearch(query.trim());
       }}>
-        <input aria-label="Search dispatch trips" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Address or trip ID" />
-        <select aria-label="Trip status" value={status} onChange={(event) => {
+        <label className="grid gap-1 text-sm font-semibold">Search dispatch trips<input className="moovu-input" aria-label="Search dispatch trips" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Address or trip ID" /></label>
+        <label className="grid gap-1 text-sm font-semibold">Trip status<select className="moovu-input" aria-label="Trip status" value={status} onChange={(event) => {
           setOpenPage(1);
           setClosedPage(1);
           setStatus(event.target.value);
         }}>
           {["all", "requested", "offered", "assigned", "arrived", "ongoing", "scheduled", "completed", "cancelled"].map((value) => <option key={value} value={value}>{value}</option>)}
-        </select>
+        </select></label>
         <button className="moovu-btn moovu-btn-secondary">Search</button>
       </form>
+      </AdminFilters>
       {pagination && <div className="flex flex-wrap gap-4">
-        <button disabled={openPage <= 1} onClick={() => setOpenPage(openPage - 1)}>Previous open</button>
-        <span>Open page {openPage} · {pagination.openTripsTotal ?? "Total unavailable"}</span>
-        <button disabled={pagination.openTripsTotal == null ? pagination.openTripsVisible < 50 : openPage * 50 >= pagination.openTripsTotal} onClick={() => setOpenPage(openPage + 1)}>Next open</button>
-        <button disabled={closedPage <= 1} onClick={() => setClosedPage(closedPage - 1)}>Previous closed</button>
-        <span>Closed page {closedPage} · {pagination.closedTripsTotal ?? "Total unavailable"}</span>
-        <button disabled={pagination.closedTripsTotal == null ? pagination.closedTripsVisible < 50 : closedPage * 50 >= pagination.closedTripsTotal} onClick={() => setClosedPage(closedPage + 1)}>Next closed</button>
+        <AdminPagination label="open trips" page={openPage} count={pagination.openTripsTotal}
+          {...dispatchPageControls(openPage, pagination.openPage, pagination.filters === filters, pagination.openTripsTotal, pagination.openTripsVisible)}
+          onPage={setOpenPage} />
+        <AdminPagination label="closed trips" page={closedPage} count={pagination.closedTripsTotal}
+          {...dispatchPageControls(closedPage, pagination.closedPage, pagination.filters === filters, pagination.closedTripsTotal, pagination.closedTripsVisible)}
+          onPage={setClosedPage} />
       </div>}
       <section aria-label="Trip counts on the displayed pages" className="grid gap-3 md:grid-cols-4">
         <div className="moovu-stat-card">

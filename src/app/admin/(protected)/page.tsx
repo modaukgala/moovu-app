@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { countValue, dashboardOperationalCards, dashboardQueueCards } from "@/lib/admin/dashboardCards";
+import { AdminRoleContext } from "@/lib/admin/adminRoleContext";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import MetricCard from "@/components/ui/MetricCard";
 import ManualSurgeControl from "@/components/admin/ManualSurgeControl";
@@ -68,26 +70,24 @@ type PaymentFlags = {
 };
 
 function money(value: number | null | undefined) {
-  return `R${Number(value ?? 0).toFixed(2)}`;
+  return value == null ? "Unavailable" : `R${Number(value).toFixed(2)}`;
 }
 
 function displayDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "--";
 }
 
-function countValue(value: number | null | undefined) {
-  return value == null ? "Unavailable" : String(value);
-}
-
 export default function AdminDashboardPage() {
+  const role = useContext(AdminRoleContext);
+  const financial = role === "owner" || role === "admin";
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsResponse["analytics"] | null>(null);
   const [paymentFlags, setPaymentFlags] = useState<PaymentFlags>({
-    subscription: 0,
-    commission: 0,
-    pending: 0,
-    waiting: 0,
+    subscription: null,
+    commission: null,
+    pending: null,
+    waiting: null,
     yocoExceptions: null,
   });
 
@@ -216,59 +216,75 @@ export default function AdminDashboardPage() {
         </div>
       </section>
 
+      <h2 className="text-xl font-semibold">Requires attention</h2>
+      {financial && <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {dashboardQueueCards(financial, { ...paymentFlags, applications: analytics?.pending_driver_applications }).map(card => (
+          <Link key={card.field} href={card.href}><MetricCard label={card.label} value={card.value} /></Link>
+        ))}
+      </section>}
+      <h2 className="text-xl font-semibold">Live operations</h2>
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Link href="/admin/trips?date=today"><MetricCard label="Bookings today" value={countValue(analytics?.today_total_bookings)} helper={`Operational day · ${analytics?.operational_timezone ?? "Africa/Johannesburg"}`} /></Link>
-        <Link href="/admin/trips?status=completed&date=today"><MetricCard
-          label="Completed today"
+        <Link href={dashboardOperationalCards.today_total_bookings.href}><MetricCard label={dashboardOperationalCards.today_total_bookings.label} value={countValue(analytics?.today_total_bookings)} helper={`Operational day · ${analytics?.operational_timezone ?? "Africa/Johannesburg"}`} /></Link>
+        <Link href={dashboardOperationalCards.today_completed_trips.href}><MetricCard
+          label={dashboardOperationalCards.today_completed_trips.label}
           value={countValue(analytics?.today_completed_trips)}
-          helper={`Gross ${money(analytics?.today_gross_revenue)}`}
+          helper={financial ? `Gross ${money(analytics?.today_gross_revenue)}` : undefined}
           tone="success"
         /></Link>
-        <MetricCard
+        {financial && <MetricCard
           label="Commission today"
           value={money(analytics?.today_commission_owed)}
           helper={`Average fare ${money(analytics?.average_fare)}`}
           tone="primary"
-        />
-        <Link href="/admin/trips?status=cancelled&date=today"><MetricCard
-          label="Cancelled today"
+        />}
+        <Link href={dashboardOperationalCards.today_cancelled_trips.href}><MetricCard
+          label={dashboardOperationalCards.today_cancelled_trips.label}
           value={countValue(analytics?.today_cancelled_trips)}
-          helper={`${Number(analytics?.cancellation_rate ?? 0).toFixed(1)}% cancellation rate`}
+          helper={analytics?.cancellation_rate == null ? "Cancellation rate unavailable" : `${analytics.cancellation_rate.toFixed(1)}% cancellation rate`}
           tone={(analytics?.today_cancelled_trips ?? 0) > 0 ? "warning" : "success"}
         /></Link>
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <Link href="/admin/dispatch" className="block"><MetricCard label="Active trips" value={countValue(analytics?.active_trips)} helper="Requested through ongoing" tone="primary" /></Link>
-        <Link href="/admin/dispatch" className="block"><MetricCard label="Unassigned trips" value={countValue(analytics?.unassigned_trips)} helper="Requested/offered without driver" tone="warning" /></Link>
-        <Link href="/admin/onboarding?status=NEEDS_REVIEW" className="block"><MetricCard label="Pending application reviews" value={countValue(analytics?.pending_driver_applications)} helper="Phase 6 review authority" /></Link>
+        <Link href={dashboardOperationalCards.active_trips.href} className="block"><MetricCard label={dashboardOperationalCards.active_trips.label} value={countValue(analytics?.active_trips)} helper="Requested through ongoing" tone="primary" /></Link>
+        <Link href={dashboardOperationalCards.unassigned_trips.href} className="block"><MetricCard label={dashboardOperationalCards.unassigned_trips.label} value={countValue(analytics?.unassigned_trips)} helper="Requested/offered without driver" tone="warning" /></Link>
+
       </section>
 
+      <h2 className="text-xl font-semibold">Operational shortcuts</h2>
+      <section className="moovu-admin-command-grid">
+        {commandCards.filter((item) => financial || item.href !== "/admin/payment-reviews").map((item) => (
+          <Link key={item.href} href={item.href} className="moovu-admin-command">
+            <strong>{item.title}</strong>
+            <span>{item.body}</span>
+          </Link>
+        ))}
+      </section>
+      <h2 className="text-xl font-semibold">Business overview</h2>
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <MetricCard label="Weekly trips" value={String(analytics?.weekly_trips ?? 0)} helper="Completed" />
-        <MetricCard label="Monthly trips" value={String(analytics?.monthly_trips ?? 0)} helper="Completed" />
-        <MetricCard label="Active drivers" value={String(analytics?.active_drivers ?? 0)} helper="Approved/active" />
-        <Link href="/admin/drivers?online=true"><MetricCard label="Online drivers" value={countValue(analytics?.online_drivers)} helper="Presence only" /></Link>
-        <MetricCard label="Applications" value={countValue(analytics?.pending_driver_applications)} helper="Pending Phase 6 review" />
-        <MetricCard label="Expiring subs" value={String(analytics?.expiring_subscriptions ?? 0)} helper={`${analytics?.active_subscriptions ?? 0} active`} />
+        <MetricCard label="Weekly trips" value={countValue(analytics?.weekly_trips)} helper="Completed" />
+        <MetricCard label="Monthly trips" value={countValue(analytics?.monthly_trips)} helper="Completed" />
+        <MetricCard label="Active drivers" value={countValue(analytics?.active_drivers)} helper="Approved/active" />
+        <Link href={dashboardOperationalCards.online_drivers.href}><MetricCard label={dashboardOperationalCards.online_drivers.label} value={countValue(analytics?.online_drivers)} helper="Presence only" /></Link>
+        <MetricCard label="Expiring historical subscriptions" value={countValue(analytics?.expiring_subscriptions)} helper={`${countValue(analytics?.active_subscriptions)} active`} />
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <Link href="/admin/trips?status=scheduled&schedule=next-hour"><MetricCard
-          label="Due next hour"
+        <Link href={dashboardOperationalCards.scheduled_due_next_hour.href}><MetricCard
+          label={dashboardOperationalCards.scheduled_due_next_hour.label}
           value={countValue(analytics?.scheduled_due_next_hour)}
           helper="Scheduled trips needing release"
           tone="primary"
         /></Link>
-        <Link href="/admin/trips?status=scheduled&schedule=overdue"><MetricCard label="Scheduled overdue" value={countValue(analytics?.scheduled_overdue)} helper="Scheduled time is before now" tone={(analytics?.scheduled_overdue ?? 0) > 0 ? "warning" : "default"} /></Link>
-        <Link href="/admin/trips?status=scheduled"><MetricCard
-          label="Scheduled pending"
+        <Link href={dashboardOperationalCards.scheduled_overdue.href}><MetricCard label={dashboardOperationalCards.scheduled_overdue.label} value={countValue(analytics?.scheduled_overdue)} helper="Scheduled time is before now" tone={(analytics?.scheduled_overdue ?? 0) > 0 ? "warning" : "default"} /></Link>
+        <Link href={dashboardOperationalCards.scheduled_total_pending.href}><MetricCard
+          label={dashboardOperationalCards.scheduled_total_pending.label}
           value={countValue(analytics?.scheduled_total_pending)}
           helper="Future rides in queue"
         /></Link>
         <MetricCard
           label="Open issues"
-          value={String(analytics?.open_support_issues ?? 0)}
+          value={countValue(analytics?.open_support_issues)}
           helper="Support items needing attention"
           tone={(analytics?.open_support_issues ?? 0) > 0 ? "warning" : "success"}
         />
@@ -276,43 +292,9 @@ export default function AdminDashboardPage() {
 
       <ManualSurgeControl />
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Link href="/admin/subscriptions" className="moovu-card-interactive p-5">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
-            Subscription POPs
-          </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.subscription ?? "Unavailable"}</div>
-          <p className="mt-2 text-sm text-slate-600">Persistent pending subscription reviews.</p>
-        </Link>
-        <Link href="/admin/commission-payments" className="moovu-card-interactive p-5">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
-            Commission POPs
-          </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.commission ?? "Unavailable"}</div>
-          <p className="mt-2 text-sm text-slate-600">Persistent pending commission reviews.</p>
-        </Link>
-        <Link href="/admin/payment-reviews" className="moovu-card-interactive p-5">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
-            Waiting for bank
-          </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.waiting ?? "Unavailable"}</div>
-          <p className="mt-2 text-sm text-slate-600">Requests marked waiting for confirmation.</p>
-        </Link>
-        <Link href="/admin/online-payments#fulfilment" className="moovu-card p-5">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-600">Yoco trip-payment exceptions</div>
-          <div className="mt-2 text-xl font-black text-slate-950">{paymentFlags.yocoExceptions ?? "Unavailable"}</div>
-          <p className="mt-2 text-sm text-slate-600">Open the actionable fulfilment queue · Financial Admin access</p>
-        </Link>
-      </section>
 
-      <section className="moovu-admin-command-grid">
-        {commandCards.map((item) => (
-          <Link key={item.href} href={item.href} className="moovu-admin-command">
-            <strong>{item.title}</strong>
-            <span>{item.body}</span>
-          </Link>
-        ))}
-      </section>
+
+
 
       <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="moovu-card-interactive p-5 sm:p-6">

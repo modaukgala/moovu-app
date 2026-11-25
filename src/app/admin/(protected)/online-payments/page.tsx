@@ -48,6 +48,7 @@ export default function OnlinePaymentsPage() {
   },[load]);
   useEffect(()=>{
     if(!selected)return;
+    const returnTarget = opener.current;
     close.current?.focus();
     const old=document.body.style.overflow;document.body.style.overflow='hidden';
     const key=(event:KeyboardEvent)=>{
@@ -55,7 +56,7 @@ export default function OnlinePaymentsPage() {
       if(event.key==='Tab'){event.preventDefault();close.current?.focus();}
     };
     document.addEventListener('keydown',key);
-    return()=>{document.body.style.overflow=old;document.removeEventListener('keydown',key);opener.current?.focus();};
+    return()=>{document.body.style.overflow=old;document.removeEventListener('keydown',key);if (returnTarget?.isConnected && !returnTarget.disabled) returnTarget.focus();};
   },[selected]);
   const changeRange=(value:string)=>{
     setRange(value);setPage(1);
@@ -82,7 +83,7 @@ export default function OnlinePaymentsPage() {
       </button>)}
     </div>}
     {report&&report.total>20&&<div className={styles.pagination}><button aria-label="Previous page" disabled={page===1||loading} onClick={()=>setPage(page-1)}><ChevronLeft/></button><span>Page {page} of {Math.ceil(report.total/20)}</span><button aria-label="Next page" disabled={page*20>=report.total||loading} onClick={()=>setPage(page+1)}><ChevronRight/></button></div>}
-    {selected&&<div className={styles.backdrop} onClick={()=>setSelection(null)}><div role="dialog" aria-modal="true" aria-labelledby="payment-title" className={styles.dialog} onClick={e=>e.stopPropagation()}>
+    {selected&&<div className={styles.backdrop} onClick={()=>setSelection(null)}><div role="dialog" aria-modal="true" aria-labelledby="payment-title" className={styles.dialog} style={{ maxHeight: "calc(100dvh - 2rem)", overflowY: "auto" }} onClick={e=>e.stopPropagation()}>
       <header className={styles.header}><h2 id="payment-title">Payment details</h2><button ref={close} aria-label="Close payment details" onClick={()=>setSelection(null)}><X/></button></header>
       <strong className={styles.detailAmount}>{money(selected.amount_cents)}</strong><span className={styles.approved}>Approved</span>
       <dl>{Object.entries({Payer:selected.payer,'Payer type':selected.payer_type==='customer'?'Customer':'Driver',Purpose:selected.purpose,'Verified at (SAST)':date(selected.verified_at),Trip:selected.trip_id,Pickup:selected.pickup_address,Destination:selected.dropoff_address,'Yoco payment ID':selected.provider_payment_id,'Yoco checkout ID':selected.provider_checkout_id,'MOOVU payment attempt':selected.id,'Commission settlement ledger':selected.payer_type==='driver'?selected.payment_ledger_transaction_id:null,'Ledger transaction':selected.payment_ledger_transaction_id,'Provider event':selected.provider_event_id}).filter(([,value])=>value).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>

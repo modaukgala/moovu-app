@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AdminFilters, AdminPagination, AdminTableRegion } from "@/components/admin/AdminResults";
 import { useCallback, useEffect, useRef, useState } from "react";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -155,6 +156,7 @@ export default function DriversPage() {
             <button onClick={loadDrivers} className="moovu-btn moovu-btn-secondary">
               Refresh
             </button>
+            <Link href="/admin/link-driver" className="moovu-btn moovu-btn-secondary">Link driver account</Link>
             <Link href="/admin/drivers/new" className="moovu-btn moovu-btn-primary">
               Add driver
             </Link>
@@ -178,14 +180,16 @@ export default function DriversPage() {
         />
       </section>
 
-      <section className="moovu-card p-4 sm:p-5">
+      <AdminFilters label="Driver filters">
         <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
+          <label className="grid gap-1 text-sm font-semibold">Search drivers
           <input
             value={query}
             onChange={(event) => { setPage(1); setQuery(event.target.value); }}
+            aria-label="Search drivers by name, phone or email"
             placeholder="Search driver, phone, or email"
             className="min-h-11 rounded-2xl border border-[var(--moovu-border)] bg-white px-4 text-sm font-semibold text-slate-950 outline-none focus:border-[var(--moovu-blue)]"
-          />
+          /></label>
           <div className="flex flex-wrap gap-2">
             {["all", "pending", "approved", "active", "suspended"].map((status) => (
               <button
@@ -202,14 +206,11 @@ export default function DriversPage() {
             ))}
           </div>
         </div>
-      </section>
+      </AdminFilters>
 
       <section className="moovu-card overflow-hidden">
-        <div className="my-3 flex flex-wrap items-center gap-3">
-          <button disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
-          <span>Page {page}{total === null ? "" : ` · ${total} matching drivers`}</span>
-          <button disabled={loading || (total === null ? drivers.length < 50 : page * 50 >= total)} onClick={() => setPage(page + 1)}>Next</button>
-        </div>
+        <AdminPagination label="matching drivers" page={page} count={total} busy={loading}
+          hasNext={total === null ? drivers.length === 50 : page * 50 < total} onPage={setPage} />
         {loading ? <LoadingState title="Loading drivers" description="Preparing driver profiles." /> : pageError && drivers.length === 0 ? (
           <button onClick={() => void loadDrivers()}>Retry driver directory</button>
         ) : drivers.length === 0 ? (
@@ -221,7 +222,7 @@ export default function DriversPage() {
           </div>
         ) : (
           <>
-            <div className="hidden overflow-x-auto lg:block">
+            <AdminTableRegion className="hidden lg:block" label="Driver results table">
               <table className="w-full min-w-[840px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                   <tr>
@@ -285,7 +286,7 @@ export default function DriversPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </AdminTableRegion>
 
             <div className="grid gap-3 p-4 lg:hidden">
               {drivers.map((driver) => (

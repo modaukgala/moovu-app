@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 
 type Props = {
   message: string | null | undefined;
@@ -30,22 +30,36 @@ export default function CenteredMessageBox({
   onClose,
   title,
 }: Props) {
+  const dialog = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const closeAction = useRef(onClose);
+  useEffect(() => { closeAction.current = onClose; }, [onClose]);
+  const open = Boolean(message);
   useEffect(() => {
-    if (!message) return;
-
+    if (!open || !dialog.current) return;
+    const panel = dialog.current;
+    const opener = document.activeElement;
+    const buttons = Array.from(panel.querySelectorAll<HTMLButtonElement>("button:not([disabled])"));
+    buttons.at(-1)?.focus();
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") closeAction.current();
+      if (event.key !== "Tab") return;
+      const target = document.activeElement;
+      if (!panel.contains(target) || (event.shiftKey && target === buttons[0]) ||
+          (!event.shiftKey && target === buttons.at(-1))) {
+        event.preventDefault();
+        (event.shiftKey ? buttons.at(-1) : buttons[0])?.focus();
+      }
     }
-
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
-
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      if (opener instanceof HTMLElement && opener.isConnected && !opener.matches(":disabled, [inert], [inert] *")) opener.focus();
     };
-  }, [message, onClose]);
+  }, [open]);
 
   if (!message) return null;
 
@@ -58,10 +72,12 @@ export default function CenteredMessageBox({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
+      ref={dialog}
       aria-live="assertive"
     >
       <div
-        className="w-full max-w-md rounded-[30px] border bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.18)]"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[30px] border bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.18)]"
         onClick={(event) => event.stopPropagation()}
         style={{
           borderColor: success ? "#ccefd8" : "var(--moovu-border)",
@@ -81,7 +97,7 @@ export default function CenteredMessageBox({
                   success ? "bg-emerald-500" : "bg-slate-400"
                 }`}
               />
-              {heading}
+              <span id={titleId}>{heading}</span>
             </div>
 
             <p className="mt-4 text-base leading-7 text-slate-900">{message}</p>

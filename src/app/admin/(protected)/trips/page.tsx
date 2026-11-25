@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { AdminFilters, AdminResultCount, AdminTableRegion } from "@/components/admin/AdminResults";
 import { RefreshCw } from "lucide-react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -432,11 +433,13 @@ export default function TripsPage() {
         <MetricCard label="Visible value" value={money(tripStats.revenue)} helper="Fare total in filter" tone="warning" />
       </section>
 
-      <section className="moovu-card p-4 sm:p-5">
+      <AdminFilters label="Trip filters">
+        <p className="text-sm font-semibold">Trip status</p>
         <div className="moovu-filter-row" aria-label="Trip status filters">
           {STATUSES.map((s) => (
             <button
               key={s}
+              aria-pressed={status === s}
               onClick={() => setStatus(s)}
               className={status === s ? "moovu-filter-chip active capitalize" : "moovu-filter-chip capitalize"}
             >
@@ -444,7 +447,8 @@ export default function TripsPage() {
             </button>
           ))}
         </div>
-      </section>
+        <AdminResultCount count={trips.length} label="visible trips" />
+      </AdminFilters>
 
       {trips.length === 0 ? (
         <EmptyState
@@ -454,7 +458,7 @@ export default function TripsPage() {
       ) : (
         <>
           <section className="moovu-card hidden overflow-hidden xl:block">
-            <div className="overflow-x-auto">
+            <AdminTableRegion label="Trip results table">
               <table className="w-full min-w-[1080px] text-left text-sm">
                 <thead>
                   <tr>
@@ -523,7 +527,7 @@ export default function TripsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </AdminTableRegion>
           </section>
 
           <section className="grid gap-3 xl:hidden">

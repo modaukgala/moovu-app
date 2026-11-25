@@ -57,15 +57,21 @@ export async function GET(req: Request) {
     if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     if (!isFinancialAdminRole(auth.profile.role)) return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
     const url = new URL(req.url);
+    const id = url.searchParams.get("id");
+    if (id !== null && !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) {
+      return NextResponse.json({ ok: false, error: "Invalid receipt ID." }, { status: 400 });
+    }
     const status = String(url.searchParams.get("status") ?? "pending_payment_review").trim();
     let query = auth.supabaseAdmin.from("driver_payment_requests").select(`
       id,driver_id,payment_type,subscription_plan,amount_expected,amount_submitted,payment_reference,
       note,pop_file_path,pop_file_url,status,review_note,submitted_at,reviewed_at,
       contract_version,subscription_amount_applied,commission_amount_applied,unapplied_excess
     `).order("submitted_at", { ascending: false });
-    if (status !== "all") query = query.eq("status", status);
+    if (id !== null) query = query.eq("id", id);
+    else if (status !== "all") query = query.eq("status", status);
     const { data: rows, error } = await query;
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    if (id !== null && !rows?.length) return NextResponse.json({ ok: false, error: "Receipt not found." }, { status: 404 });
     const paymentRows = (rows ?? []) as PaymentRequestRecord[];
     const driverIds = Array.from(new Set(paymentRows.map((row) => row.driver_id)));
     const { data: drivers } = await auth.supabaseAdmin.from("drivers").select("id,first_name,last_name,phone")
@@ -106,7 +112,7 @@ export async function GET(req: Request) {
       driver_name: driverById.get(row.driver_id)?.name ?? "Driver profile unavailable",
       driver_phone: driverById.get(row.driver_id)?.phone ?? null,
     })));
-    return NextResponse.json({ ok: true, requests: decorated });
+    return NextResponse.json(id === null ? { ok: true, requests: decorated } : { ok: true, receipt: decorated[0] }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to load payment reviews." }, { status: 500 });
   }

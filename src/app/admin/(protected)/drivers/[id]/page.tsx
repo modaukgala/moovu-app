@@ -4,6 +4,7 @@ import CommissionFirstEstimates from "@/components/finance/CommissionFirstEstima
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { driverArchiveHref } from "@/lib/admin/archiveContext";
 import { useParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -675,7 +676,7 @@ export default function AdminDriverProfilePage() {
             <Link href={`/admin/link-driver?driverId=${encodeURIComponent(driverId)}&email=${encodeURIComponent(linkedAccount?.email ?? profile.email ?? "")}`} className="moovu-btn moovu-btn-secondary">Manage link</Link>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link href={`/admin/archive?q=${encodeURIComponent(driverName)}`} className="moovu-btn moovu-btn-secondary">Trip history</Link>
+            <Link href={driverArchiveHref(driverName)} className="moovu-btn moovu-btn-secondary">Search trips by driver name</Link>
             <Link href="/admin/commission-payments" className="moovu-btn moovu-btn-secondary">Commission history</Link>
             <Link href="/admin/settlements" className="moovu-btn moovu-btn-secondary">Commission settlements</Link>
             <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">Subscription history</Link>

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { archiveQuery, archiveRequest } from "@/lib/admin/archiveContext";
+import { useSearchParams } from "next/navigation";
+import { supabaseClient } from "@/lib/supabase/client";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 
 type ArchiveTrip = {
@@ -24,11 +27,20 @@ function money(value: number | null | undefined) {
 }
 
 export default function AdminArchivePage() {
+  return <Suspense fallback={<p role="status">Loading…</p>}><PageContent /></Suspense>;
+}
+
+function PageContent() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [trips, setTrips] = useState<ArchiveTrip[]>([]);
 
-  const [q, setQ] = useState("");
+  const urlQuery = archiveQuery(useSearchParams());
+  const [search, setSearch] = useState({ url: urlQuery, value: urlQuery });
+  if (search.url !== urlQuery) setSearch({ url: urlQuery, value: urlQuery });
+  const q = search.url === urlQuery ? search.value : urlQuery;
+  const setQ = (value: string) => { setSearch({ url: urlQuery, value }); setPage(1); };
+  const request = useRef<AbortController | null>(null);
   const [status, setStatus] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -36,26 +48,24 @@ export default function AdminArchivePage() {
   const [totalPages, setTotalPages] = useState(0);
   const [retrievalWarning, setRetrievalWarning] = useState<string | null>(null);
 
-  const searchTrips = useCallback(async (requestedPage = page) => {
+  const searchTrips = useCallback(async (requestedPage = 1) => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     setLoading(true);
     setMsg(null);
 
     try {
-      const params = new URLSearchParams();
-      if (q.trim()) params.set("q", q.trim());
-      if (status) params.set("status", status);
-      if (dateFrom) params.set("dateFrom", dateFrom);
-      if (dateTo) params.set("dateTo", dateTo);
-      params.set("page", String(requestedPage));
-      params.set("pageSize", "25");
-
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 15000);
-      const res = await fetch(`/api/admin/archive?${params.toString()}`, {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (!session) throw new Error("Sign in to search the archive.");
+      controller.signal.throwIfAborted();
+      const res = await fetch(archiveRequest({ q, status, dateFrom, dateTo, page: requestedPage }), {
         cache: "no-store",
+        headers: { Authorization: `Bearer ${session.access_token}` },
         signal: controller.signal,
       });
-      window.clearTimeout(timeout);
+      controller.signal.throwIfAborted();
 
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
@@ -66,7 +76,8 @@ export default function AdminArchivePage() {
 
       const json = await res.json().catch(() => null);
 
-      if (!json?.ok) {
+      controller.signal.throwIfAborted();
+      if (!res.ok || !json?.ok) {
         setTrips([]);
         setMsg(json?.error || "Failed to search archive.");
         return;
@@ -77,16 +88,19 @@ export default function AdminArchivePage() {
       setTotalPages(Number(json.totalPages ?? json.availablePages ?? 0));
       setRetrievalWarning(json.retrievalWarning ?? null);
     } catch {
+      if (request.current !== controller) return;
       setTrips([]);
       setMsg("Failed to search archive.");
     } finally {
-      setLoading(false);
+      window.clearTimeout(timeout);
+      if (request.current === controller) setLoading(false);
     }
-  }, [dateFrom, dateTo, page, q, status]);
+  }, [dateFrom, dateTo, q, status]);
 
   useEffect(() => {
-    void searchTrips();
-  }, [searchTrips]);
+    void searchTrips(1);
+    return () => { request.current?.abort(); request.current = null; };
+  }, [searchTrips, urlQuery]);
 
   return (
     <main className="text-black">
@@ -102,7 +116,7 @@ export default function AdminArchivePage() {
 
           <div className="moovu-action-row">
             <Link href="/admin/trips" className="moovu-btn moovu-btn-secondary">
-              Back to Dispatch
+              Back to Trips
             </Link>
 
             <button
@@ -123,13 +137,14 @@ export default function AdminArchivePage() {
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
             <input
               className="moovu-input"
-              placeholder="Search trip, customer, phone, address or driver"
+              aria-label="Search trip archive" placeholder="Search trip, customer, phone, address or driver"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
 
             <select
               className="moovu-input"
+              aria-label="Trip status"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
             >
@@ -146,6 +161,7 @@ export default function AdminArchivePage() {
             <input
               type="date"
               className="moovu-input"
+              aria-label="From date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
             />
@@ -153,6 +169,7 @@ export default function AdminArchivePage() {
             <input
               type="date"
               className="moovu-input"
+              aria-label="To date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
             />

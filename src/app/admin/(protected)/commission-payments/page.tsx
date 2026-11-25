@@ -5,6 +5,8 @@ import PaymentAllocation from "@/components/finance/PaymentAllocation";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { createCommissionHistoryRequest } from "@/lib/admin/commissionHistoryRequest";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -119,6 +121,11 @@ function standing(balanceDue: number, hasPending: boolean) {
 }
 
 export default function AdminCommissionPaymentsPage() {
+  return <Suspense fallback={<p role="status">Loading payment queue…</p>}><PageContent /></Suspense>;
+}
+
+function PageContent() {
+  const pendingOnly = useSearchParams().get("status") === "pending_payment_review";
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -276,7 +283,7 @@ export default function AdminCommissionPaymentsPage() {
   }, [ledger, ledgerDate, ledgerType, historyKind]);
 
   const pendingRequests = requests.filter((row) =>
-    ["pending_payment_review", "waiting_confirmation"].includes(row.status)
+    row.status === "pending_payment_review" || (!pendingOnly && row.status === "waiting_confirmation")
   );
   const pendingByDriver = useMemo(
     () => new Set(pendingRequests.map((row) => row.driver_id)),

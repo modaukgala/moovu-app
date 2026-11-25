@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { readPaymentReceipt } from "@/lib/admin/paymentReceiptRead";
+import { useFinancialRead } from "@/lib/admin/useFinancialRead";
+import PaymentAllocation from "@/components/finance/PaymentAllocation";
+import type { ComponentProps } from "react";
 import LoadingState from "@/components/ui/LoadingState";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
 
-type PaymentRequestRow = {
+type PaymentRequestRow = ComponentProps<typeof PaymentAllocation>["row"] & {
   id: string;
   driver_id: string;
   driver_name: string;
@@ -27,7 +30,7 @@ type PaymentRequestRow = {
 };
 
 function money(value: number | null | undefined) {
-  return `R${Number(value ?? 0).toFixed(2)}`;
+  return value == null ? "Unavailable" : `R${Number(value).toFixed(2)}`;
 }
 
 function displayDate(value: string | null | undefined) {
@@ -41,58 +44,23 @@ function label(value: string | null | undefined) {
 export default function AdminPaymentReceiptPage() {
   const params = useParams<{ id: string }>();
   const receiptId = params.id;
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [payment, setPayment] = useState<PaymentRequestRow | null>(null);
+  const read = useCallback(async (id: string, signal: AbortSignal) => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    return await readPaymentReceipt(id, session?.access_token, signal) as PaymentRequestRow | null;
+  }, []);
+  const { data: payment, loading, error, retry } = useFinancialRead(receiptId, read);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setMsg(null);
-
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session) {
-      setMsg("You are not logged in.");
-      setLoading(false);
-      return;
-    }
-
-    const res = await fetch("/api/admin/payment-reviews?status=all", {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Could not load receipt.");
-      setLoading(false);
-      return;
-    }
-
-    const row = ((json.requests ?? []) as PaymentRequestRow[]).find(
-      (item) => item.id === receiptId,
-    );
-    setPayment(row ?? null);
-    setLoading(false);
-  }, [receiptId]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadData]);
-
-  if (loading) {
-    return <LoadingState title="Loading receipt" description="Preparing the admin payment receipt." />;
-  }
+  if (loading) return <LoadingState title="Loading receipt" description="Preparing the admin payment receipt." />;
+  if (error) return <section className="moovu-card p-6">
+    <h1 className="text-2xl font-black">Receipt unavailable</h1>
+    <p role="alert">{error}</p>
+    <button className="moovu-btn moovu-btn-secondary" onClick={retry}>Retry receipt</button>
+    <Link href="/admin/payment-reviews" className="moovu-btn moovu-btn-secondary">Back to payment reviews</Link>
+  </section>;
 
   return (
     <main className="space-y-6 text-slate-950">
-      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+
 
       {!payment ? (
         <section className="moovu-card p-6">
@@ -107,12 +75,14 @@ export default function AdminPaymentReceiptPage() {
           <div className="bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-6">
             <div className="moovu-section-title">MOOVU admin payment receipt</div>
             <h1 className="mt-2 text-3xl font-black">{payment.payment_reference}</h1>
+            <Link href="/admin/payment-reviews" className="underline">Back to payment reviews</Link>
             <div className="mt-3 flex flex-wrap gap-3">
               <StatusBadge status={payment.status} />
               <StatusBadge status={payment.payment_type} />
             </div>
           </div>
 
+          <div className="px-6 pt-4"><PaymentAllocation row={payment} /></div>
           <div className="grid gap-4 p-6 md:grid-cols-3">
             <div className="rounded-3xl bg-slate-50 p-4">
               <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Driver</div>

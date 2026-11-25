@@ -58,11 +58,14 @@ export async function GET(req: Request) {
     const pageSize = 50;
     const query = (params.get("q") ?? "").trim().slice(0, 160);
     const status = params.get("status");
+    const queue = params.get("queue");
     const base = "id,driver_id,pickup_address,dropoff_address,fare_amount,payment_method,status,cancel_reason,created_at,offer_status,offer_expires_at,offer_attempted_driver_ids";
     const extended = base + ",dispatch_started_at,dispatch_cycle,dispatch_sequence,dispatch_state,dispatch_search_radius_km,dispatch_failure_reason";
     const readTrips = async (open: boolean, page: number, columns: string) => {
       let read = supabaseAdmin.from("trips").select(columns, { count: "exact" });
       read = open ? read.in("status", OPEN_TRIP_STATUSES) : read.not("status", "in", `(${OPEN_TRIP_STATUSES.join(",")})`);
+      if (queue === "active") read = read.in("status", ["requested", "offered", "assigned", "arrived", "ongoing"]);
+      if (queue === "unassigned") read = read.in("status", ["requested", "offered"]).is("driver_id", null);
       if (status && status !== "all") read = read.eq("status", status);
       if (query) {
         const literal = query.replace(/[\\%_*]/g, "\\$&").replace(/["\\]/g, "\\$&");

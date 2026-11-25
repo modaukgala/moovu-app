@@ -3,8 +3,9 @@
 import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRead";
 import PaymentAllocation from "@/components/finance/PaymentAllocation";
 
-import { useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -43,9 +44,17 @@ function displayDate(value: string | null | undefined) {
 }
 
 export default function AdminPaymentReviewsPage() {
+  return <Suspense fallback={<p role="status">Loading…</p>}><PageContent /></Suspense>;
+}
+
+function PageContent() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState("pending_payment_review");
+  const requestedStatus = useSearchParams().get("status");
+  const [selection, setStatus] = useState({ requested: requestedStatus, value: requestedStatus });
+  const selectedStatus = selection.requested === requestedStatus ? selection.value : requestedStatus;
+  const statusFilter = selectedStatus || "pending_payment_review";
+  const setStatusFilter = (value: string) => setStatus({ requested: requestedStatus, value });
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("all");
   const [reviewDraft, setReviewDraft] = useState<{
     requestId: string;

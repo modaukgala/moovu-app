@@ -5,6 +5,8 @@ import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRea
 import PaymentAllocation from "@/components/finance/PaymentAllocation";
 
 import Link from "next/link";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -96,6 +98,11 @@ function isActiveSubscription(status: string | null | undefined) {
 }
 
 export default function AdminSubscriptionsPage() {
+  return <Suspense fallback={<p role="status">Loading payment queue…</p>}><PageContent /></Suspense>;
+}
+
+function PageContent() {
+  const pendingOnly = useSearchParams().get("status") === "pending_payment_review";
   const [q, setQ] = useState("");
   const [drivers, setDrivers] = useState<DriverRow[]>([]);
   const [selected, setSelected] = useState<DriverRow | null>(null);
@@ -204,7 +211,7 @@ export default function AdminSubscriptionsPage() {
   }, [selected]);
 
   const pendingRequests = requests.filter((row) =>
-    ["pending_payment_review", "waiting_confirmation"].includes(row.status)
+    row.status === "pending_payment_review" || (!pendingOnly && row.status === "waiting_confirmation")
   );
   const activeDrivers = drivers.filter((driver) => isActiveSubscription(driver.subscription_status));
   const expiringSoon = drivers.filter((driver) => isExpiringSoon(driver.subscription_expires_at));

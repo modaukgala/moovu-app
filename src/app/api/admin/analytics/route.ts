@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
 import { PHASE6_NEEDS_REVIEW } from "@/lib/admin/applicationSummary";
 
 type DriverDirectoryRow = {
@@ -186,8 +186,8 @@ export async function GET(req: Request) {
         today_cancelled_trips: todayCancelledCount,
         active_trips: activeTrips.error ? null : activeTrips.count,
         unassigned_trips: unassignedTrips.error ? null : unassignedTrips.count,
-        today_gross_revenue: completedToday.error ? null : todayGrossRevenue,
-        today_commission_owed: completedToday.error ? null : todayCommissionOwed,
+        today_gross_revenue: completedToday.error || !isFinancialAdminRole(auth.profile.role) ? null : todayGrossRevenue,
+        today_commission_owed: completedToday.error || !isFinancialAdminRole(auth.profile.role) ? null : todayCommissionOwed,
         weekly_trips: weeklyCompleted.error ? null : weeklyCompleted.count,
         monthly_trips: monthlyCompleted.error ? null : monthlyCompleted.count,
         active_drivers: activeDrivers.error ? null : activeDrivers.count,
@@ -195,7 +195,7 @@ export async function GET(req: Request) {
         pending_driver_applications: pendingApplications.error ? null : pendingApplications.count,
         active_subscriptions: activeSubscriptions.error ? null : activeSubscriptions.count,
         expiring_subscriptions: expiringSubscriptions.error ? null : expiringSubscriptions.count,
-        average_fare: todayCompletedCount && todayCompletedCount > 0 ? todayGrossRevenue / todayCompletedCount : todayCompletedCount === 0 ? 0 : null,
+        average_fare: !isFinancialAdminRole(auth.profile.role) ? null : todayCompletedCount && todayCompletedCount > 0 ? todayGrossRevenue / todayCompletedCount : todayCompletedCount === 0 ? 0 : null,
         cancellation_rate: todayTripTotal && todayTripTotal > 0 && todayCancelledCount != null ? (todayCancelledCount / todayTripTotal) * 100 : todayTripTotal === 0 ? 0 : null,
         scheduled_due_next_hour: scheduledDue.error ? null : scheduledDue.count,
         scheduled_overdue: scheduledOverdue.error ? null : scheduledOverdue.count,

@@ -24,6 +24,7 @@ function database(tables: Record<string, Row[]>, error = false) {
     const query = {
       select: () => query,
       eq: (field: string, value: unknown) => { rows = rows.filter((r) => r[field] === value); return query; },
+      is: (field: string, value: unknown) => query.eq(field, value),
       in: (field: string, values: unknown[]) => { rows = rows.filter((r) => values.includes(r[field])); return query; },
       not: (field: string, _op: string, values: string) => {
         rows = rows.filter((r) => !values.slice(1, -1).split(",").includes(String(r[field]))); return query;
@@ -79,7 +80,7 @@ test("driver directory filters before stable bounded pages and scopes applicatio
 
 test("dispatch Board reaches the 1001st open trip independently of newer closed history", async () => {
   const trips = Array.from({ length: 1061 }, (_, i) => ({
-    id: String(i).padStart(4,"0"), status: i < 1001 ? "requested" : "completed",
+    id: String(i).padStart(4,"0"), status: i === 1 ? "scheduled" : i < 1001 ? "requested" : "completed", driver_id: i === 0 ? null : "",
     pickup_address: i === 0 ? "Oldtown" : "Main Road", created_at: i >= 1001 ? "new" : "old",
   }));
   const route = (error = false) => handler(load("app/api/admin/dispatch/board/route.ts", {
@@ -88,6 +89,12 @@ test("dispatch Board reaches the 1001st open trip independently of newer closed 
   }),"GET");
   const result = await (await route()(url("?openPage=21"))).json();
   assert.equal(result.retrieval.openTripsTotal, 1001);
+  const active = await (await route()(url("?queue=active"))).json();
+  assert.equal(active.retrieval.openTripsTotal, 1000);
+  assert.equal(active.retrieval.closedTripsTotal, 0);
+  const unassigned = await (await route()(url("?queue=unassigned"))).json();
+  assert.equal(unassigned.retrieval.openTripsTotal, 1);
+  assert.equal(unassigned.rows[0].id, "0000");
   assert.equal(result.retrieval.closedTripsTotal, 60);
   assert.equal(result.retrieval.openTripsVisible, 1);
   assert.ok(result.rows.some((row: Row) => row.id === "0000"));
