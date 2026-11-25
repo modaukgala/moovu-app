@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { DOCS_BUCKET, listDriverDocs, needsShrink } from "@/lib/storage/driverDocsMaintenance";
 
@@ -20,11 +21,31 @@ export async function POST(req: Request) {
   if (body?.confirmBackup !== true) {
     return NextResponse.json({ ok: false, error: "Confirm the backup is saved first." }, { status: 400 });
   }
-  const db = auth.supabaseAdmin;
+  return NextResponse.json(await shrinkBatch(auth.supabaseAdmin));
+}
+
+/**
+ * Temporary Vercel Cron entry (owner authorised on 2026-11-25 after saving the
+ * 9 backup parts). Remove the cron entry once remaining reaches 0.
+ */
+export async function GET(req: Request) {
+  const secret = process.env.CRON_SECRET?.trim();
+  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+  }
+  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
+  const result = await shrinkBatch(db);
+  console.info("[storage-shrink]", JSON.stringify({ done: result.done.length, failed: result.failed.length, remaining: result.remaining }));
+  return NextResponse.json(result);
+}
+
+async function shrinkBatch(db: SupabaseClient) {
   const pending = (await listDriverDocs(db)).filter(needsShrink);
   const done: Array<{ path: string; before: number; after: number }> = [];
   const failed: Array<{ path: string; error: string }> = [];
-  for (const doc of pending.slice(0, BATCH)) {
+  const started = Date.now();
+  for (const doc of pending) {
+    if (done.length >= BATCH || Date.now() - started > 40_000) break;
     try {
       const { data, error } = await db.storage.from(DOCS_BUCKET).download(doc.path);
       if (error || !data) throw new Error(error?.message ?? "download failed");
@@ -39,5 +60,5 @@ export async function POST(req: Request) {
       failed.push({ path: doc.path, error: e instanceof Error ? e.message : "error" });
     }
   }
-  return NextResponse.json({ ok: true, done, failed, remaining: Math.max(0, pending.length - done.length - failed.length) });
+  return { ok: true, done, failed, remaining: Math.max(0, pending.length - done.length - failed.length) };
 }
