@@ -6,8 +6,10 @@ import { callHardenedRpc } from "@/lib/server/hardenedRpc";
 import { callPhase2Rpc } from "@/lib/server/phase2Rpc";
 import { phase2Mode } from "@/lib/finance/phase2Policy";
 import { isOutboxDeliveryEnabled } from "@/lib/notifications/outboxDelivery";
+import { recordedAllocation, type PersistedAllocation } from "@/lib/admin/paymentAllocations";
+import { chunkValues } from "@/lib/admin/boundedRetrieval";
 
-type PaymentRequestRecord = {
+type PaymentRequestRecord = PersistedAllocation & {
   id: string; driver_id: string; payment_type: string | null; subscription_plan: string | null;
   amount_expected: number | null; amount_submitted: number | null; payment_reference: string | null;
   note: string | null; pop_file_path: string | null; pop_file_url: string | null; status: string | null;
@@ -53,11 +55,13 @@ export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
     if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    if (!isFinancialAdminRole(auth.profile.role)) return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
     const url = new URL(req.url);
     const status = String(url.searchParams.get("status") ?? "pending_payment_review").trim();
     let query = auth.supabaseAdmin.from("driver_payment_requests").select(`
       id,driver_id,payment_type,subscription_plan,amount_expected,amount_submitted,payment_reference,
-      note,pop_file_path,pop_file_url,status,review_note,submitted_at,reviewed_at
+      note,pop_file_path,pop_file_url,status,review_note,submitted_at,reviewed_at,
+      contract_version,subscription_amount_applied,commission_amount_applied,unapplied_excess
     `).order("submitted_at", { ascending: false });
     if (status !== "all") query = query.eq("status", status);
     const { data: rows, error } = await query;
@@ -73,8 +77,31 @@ export async function GET(req: Request) {
         phone: driver.phone,
       });
     }
+    const financial = isFinancialAdminRole(auth.profile.role);
+    const references = new Map<string, { settlements: string[] | null; subscriptions: string[] | null; transactions: string[] | null }>();
+    if (financial) {
+      for (const ids of chunkValues(paymentRows.map((row) => row.id), 100)) {
+        const db = auth.supabaseAdmin;
+        const [settlements, subscriptions, transactions] = await Promise.all([
+          db.from("driver_settlements").select("id,payment_request_id").in("payment_request_id", ids),
+          db.from("driver_subscription_payments").select("id,payment_request_id").in("payment_request_id", ids),
+          db.from("financial_transactions").select("id,source_id").eq("source_type", "DRIVER_PAYMENT_REQUEST").in("source_id", ids),
+        ]);
+        for (const id of ids) references.set(id, {
+          settlements: settlements.error ? null : (settlements.data ?? []).filter((row) => row.payment_request_id === id).map((row) => row.id),
+          subscriptions: subscriptions.error ? null : (subscriptions.data ?? []).filter((row) => row.payment_request_id === id).map((row) => row.id),
+          transactions: transactions.error ? null : (transactions.data ?? []).filter((row) => row.source_id === id).map((row) => row.id),
+        });
+      }
+    }
     const decorated = await Promise.all(paymentRows.map(async (row) => ({
       ...row,
+      allocation: financial ? recordedAllocation(row) : null,
+      financialReferences: references.get(row.id) ?? null,
+      subscription_amount_applied: undefined,
+      commission_amount_applied: undefined,
+      unapplied_excess: undefined,
+      contract_version: undefined,
       pop_file_url: (await createPaymentProofSignedUrl(auth.supabaseAdmin, row)) ?? row.pop_file_url,
       driver_name: driverById.get(row.driver_id)?.name ?? "Driver profile unavailable",
       driver_phone: driverById.get(row.driver_id)?.phone ?? null,

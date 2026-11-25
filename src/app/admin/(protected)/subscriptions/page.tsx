@@ -1,5 +1,9 @@
 "use client";
 
+import { reportingDay } from "@/lib/admin/earningsMetrics";
+import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRead";
+import PaymentAllocation from "@/components/finance/PaymentAllocation";
+
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -96,7 +100,7 @@ export default function AdminSubscriptionsPage() {
   const [drivers, setDrivers] = useState<DriverRow[]>([]);
   const [selected, setSelected] = useState<DriverRow | null>(null);
   const [history, setHistory] = useState<SubEvent[]>([]);
-  const [requests, setRequests] = useState<SubscriptionRequest[]>([]);
+
   const [note, setNote] = useState("");
   const [plan, setPlan] = useState("");
   const [busy, setBusy] = useState(false);
@@ -147,32 +151,12 @@ export default function AdminSubscriptionsPage() {
     setLoading(false);
   }, [getAccessToken, q]);
 
-  const loadPaymentRequests = useCallback(async () => {
-    const token = await getAccessToken();
-    if (!token) {
-      setRequests([]);
-      return;
-    }
-
-    const res = await fetch("/api/admin/payment-reviews?status=all", {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const json = await res.json().catch(() => null);
-    if (!json?.ok) {
-      setRequests([]);
-      return;
-    }
-
-    setRequests(
-      (json.requests ?? []).filter((row: SubscriptionRequest) =>
-        row.payment_type === "subscription"
-      )
-    );
-  }, [getAccessToken]);
+  const readAllocations = useCallback(async (_: string, signal: AbortSignal) =>
+    (await readFinancialJson<{ requests: SubscriptionRequest[] }>("/api/admin/payment-reviews?status=all",
+      await getAccessToken(), signal, (body) => Array.isArray(body.requests))).requests, [getAccessToken]);
+  const allocationRead = useFinancialRead(`${selected?.id ?? ""}:${q}`, readAllocations);
+  const requests = (allocationRead.data ?? []).filter((row) => row.payment_type === "subscription" || row.payment_type === "combined");
+  const loadPaymentRequests = allocationRead.reload;
 
   const loadHistory = useCallback(async (driverId: string) => {
     const token = await getAccessToken();
@@ -200,8 +184,8 @@ export default function AdminSubscriptionsPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadDrivers(), loadPaymentRequests()]);
-  }, [loadDrivers, loadPaymentRequests]);
+    await loadDrivers();
+  }, [loadDrivers]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -225,13 +209,17 @@ export default function AdminSubscriptionsPage() {
   const activeDrivers = drivers.filter((driver) => isActiveSubscription(driver.subscription_status));
   const expiringSoon = drivers.filter((driver) => isExpiringSoon(driver.subscription_expires_at));
   const inactiveDrivers = drivers.filter((driver) => !isActiveSubscription(driver.subscription_status));
-  const monthlySubscriptionRevenue = requests.reduce((sum, row) => {
-    if (row.status !== "approved") return sum;
-    const submittedAt = row.submitted_at ? new Date(row.submitted_at) : null;
-    const now = new Date();
-    const inMonth = submittedAt && submittedAt.getMonth() === now.getMonth() && submittedAt.getFullYear() === now.getFullYear();
-    return sum + (inMonth ? Number(row.amount_submitted ?? 0) : 0);
-  }, 0);
+  const [to, setTo] = useState(() => reportingDay(new Date()));
+  const [from, setFrom] = useState(() => reportingDay(new Date()).slice(0, 7) + "-01");
+  const [receiptPage, setReceiptPage] = useState(1);
+  const receiptQuery = new URLSearchParams({ from, to, page: String(receiptPage) }).toString();
+  const readReceipts = useCallback(async (query: string, signal: AbortSignal) =>
+    readFinancialJson<{ total: number | null; complete: boolean | null; count: number; pageSize: number;
+      rows: { id: string; driver_id: string; amount_paid: number | null; created_at: string;
+        reference: string | null; payment_request_id: string | null; payment_method: string | null; proof_type: string | null }[] }>(
+      `/api/admin/subscriptions/receipts?${query}`, await getAccessToken(), signal,
+      (body) => Array.isArray(body.rows) && Number.isSafeInteger(body.count)), [getAccessToken]);
+  const receipts = useFinancialRead(receiptQuery, readReceipts);
 
   async function act(action: string, days?: number) {
     if (!selected) return;
@@ -311,7 +299,7 @@ export default function AdminSubscriptionsPage() {
 
     setReviewDraft(null);
     setMsg(json.message || "Subscription payment updated.");
-    await loadAll();
+    await Promise.all([loadAll(), loadPaymentRequests()]);
   }
 
   if (loading) {
@@ -325,6 +313,28 @@ export default function AdminSubscriptionsPage() {
 
   return (
     <main className="space-y-6 text-slate-950">
+      <section className="moovu-card p-5 space-y-3">
+        <h2>Recorded subscription payment history</h2>
+        <label>From <input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setReceiptPage(1); }} /></label>
+        <label>To <input type="date" value={to} onChange={(event) => { setTo(event.target.value); setReceiptPage(1); }} /></label>
+        <p>Africa/Johannesburg · inclusive recorded payment dates</p>
+        {receipts.loading && <p role="status">Loading receipts…</p>}
+        {receipts.error && <p role="alert">{receipts.error} {receipts.data && "Showing previously loaded receipts."} <button onClick={receipts.retry}>Retry receipts</button></p>}
+        {receipts.data && <>
+          <p>Selected-period receipts · {receipts.data.total === null ? receipts.data.complete === false ? "Unavailable · retrieval limit reached" : "Unavailable" : money(receipts.data.total)}</p>
+          {!receipts.data.rows.length && <p>No recorded receipts in this period.</p>}
+          {receipts.data.rows.map((row) => <article key={row.id} className="moovu-data-row">
+            <p>Payment {row.id} · Driver {row.driver_id ?? "Unavailable"}</p>
+            <p>{row.amount_paid == null ? "Amount unavailable" : money(row.amount_paid)} · {new Date(row.created_at).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" })}</p>
+            <p>Reference {row.reference ?? "Unavailable"} · Review {row.payment_request_id ?? "Unavailable"} · {row.payment_method ?? "Method unavailable"}</p>
+            <p>{row.proof_type === "combined" ? "Recorded subscription allocation from a combined proof" : row.proof_type ?? "Proof classification unavailable"}</p>
+          </article>)}
+          <button disabled={receipts.loading || receiptPage <= 1} onClick={() => setReceiptPage(receiptPage - 1)}>Previous receipts</button>
+          <span> Page {receiptPage} · {receipts.data.count} records </span>
+          <button disabled={receipts.loading || receiptPage * receipts.data.pageSize >= receipts.data.count} onClick={() => setReceiptPage(receiptPage + 1)}>Next receipts</button>
+        </>}
+      </section>
+      {allocationRead.error && <p role="alert">{allocationRead.error} {allocationRead.data && "Showing previously loaded reviews."} <button onClick={allocationRead.retry}>Retry reviews</button></p>}
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       {reviewDraft && (
@@ -387,7 +397,7 @@ export default function AdminSubscriptionsPage() {
               <Link href="/admin/commission-payments" className="moovu-btn moovu-btn-secondary">
                 Commission payments
               </Link>
-              <button className="moovu-btn moovu-btn-primary" onClick={() => void loadAll()}>
+              <button className="moovu-btn moovu-btn-primary" onClick={() => void Promise.all([loadAll(), loadPaymentRequests()])}>
                 Refresh
               </button>
             </div>
@@ -400,7 +410,6 @@ export default function AdminSubscriptionsPage() {
         <MetricCard label="Pending POPs" value={String(pendingRequests.length)} helper="Needs admin review" tone={pendingRequests.length ? "warning" : "default"} />
         <MetricCard label="Expiring soon" value={String(expiringSoon.length)} helper="Within 3 days" tone={expiringSoon.length ? "warning" : "default"} />
         <MetricCard label="Inactive" value={String(inactiveDrivers.length)} helper="Expired, suspended, inactive" tone={inactiveDrivers.length ? "danger" : "default"} />
-        <MetricCard label="Revenue this month" value={money(monthlySubscriptionRevenue)} helper="Approved subscription POPs" tone="primary" />
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
@@ -445,6 +454,7 @@ export default function AdminSubscriptionsPage() {
                   <div>
                     <div className="text-sm text-slate-500">Submitted</div>
                     <div className="font-semibold">{money(row.amount_submitted)}</div>
+                    <PaymentAllocation row={row} />
                   </div>
                   <div>
                     <div className="text-sm text-slate-500">POP</div>

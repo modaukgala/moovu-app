@@ -1,5 +1,7 @@
 "use client";
 
+import CommissionFirstEstimates from "@/components/finance/CommissionFirstEstimates";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -196,6 +198,7 @@ export default function AdminDriverProfilePage() {
   const driverId = params.id;
 
   const [profile, setProfile] = useState<DriverProfile | null>(null);
+  const [subscriptionFinancialAccess, setSubscriptionFinancialAccess] = useState(false);
   const [subscriptionPayments, setSubscriptionPayments] = useState<SubscriptionPayment[]>([]);
   const [subscriptionRequests, setSubscriptionRequests] = useState<SubscriptionRequest[]>([]);
   const [documents, setDocuments] = useState<DriverDocumentRow[]>([]);
@@ -275,6 +278,7 @@ export default function AdminDriverProfilePage() {
     setApplicationReadError(profileJson.application_read_error ?? null);
     setLinkedAccount(profileJson.linked_account ?? null);
     setAccountReadError(profileJson.account_read_error ?? null);
+    setSubscriptionFinancialAccess(profileJson.subscription_financial_access === true);
     setSubscriptionPayments(profileJson.subscription_payments ?? []);
     setSubscriptionRequests(profileJson.subscription_requests ?? []);
     setDocuments(profileJson.documents ?? []);
@@ -615,6 +619,7 @@ export default function AdminDriverProfilePage() {
   return (
     <main className="min-h-screen px-6 py-10 text-black">
       <div className="max-w-6xl mx-auto space-y-6">
+        <CommissionFirstEstimates key={driverId} driverId={driverId} />
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-sm text-gray-500">Admin Driver Profile</div>
@@ -672,7 +677,7 @@ export default function AdminDriverProfilePage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <Link href={`/admin/archive?q=${encodeURIComponent(driverName)}`} className="moovu-btn moovu-btn-secondary">Trip history</Link>
             <Link href="/admin/commission-payments" className="moovu-btn moovu-btn-secondary">Commission history</Link>
-            <Link href="/admin/settlements" className="moovu-btn moovu-btn-secondary">Payout history</Link>
+            <Link href="/admin/settlements" className="moovu-btn moovu-btn-secondary">Commission settlements</Link>
             <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">Subscription history</Link>
           </div>
         </section>
@@ -1281,7 +1286,7 @@ export default function AdminDriverProfilePage() {
         <section className="moovu-card space-y-4 p-5 sm:p-6">
           <h2 className="text-2xl font-semibold">Recent Subscription Requests</h2>
 
-          {subscriptionRequests.length === 0 ? (
+          {!subscriptionFinancialAccess ? <p>Financial Admin access required.</p> : subscriptionRequests.length === 0 ? (
             <div>No subscription requests yet.</div>
           ) : (
             <div className="space-y-3">
@@ -1333,7 +1338,7 @@ export default function AdminDriverProfilePage() {
         <section className="moovu-card space-y-4 p-5 sm:p-6">
           <h2 className="text-2xl font-semibold">Subscription Payment History</h2>
 
-          {subscriptionPayments.length === 0 ? (
+          {!subscriptionFinancialAccess ? <p>Financial Admin access required.</p> : subscriptionPayments.length === 0 ? (
             <div>No subscription payments recorded yet.</div>
           ) : (
             <div className="space-y-3">

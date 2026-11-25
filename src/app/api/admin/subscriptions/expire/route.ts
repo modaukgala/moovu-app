@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
 import { expireDriverSubscriptions } from "@/lib/subscriptions/expireDriverSubscriptions";
 
 function errorMessage(error: unknown, fallback: string) {
@@ -14,6 +14,10 @@ export async function POST(req: Request) {
         { ok: false, error: auth.error },
         { status: auth.status }
       );
+    }
+
+    if (!isFinancialAdminRole(auth.profile.role)) {
+      return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
     }
 
     const result = await expireDriverSubscriptions();

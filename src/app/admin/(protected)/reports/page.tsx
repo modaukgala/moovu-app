@@ -1,254 +1,145 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
-import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { reportingDay, type EarningsTrip } from "@/lib/admin/earningsMetrics";
+import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRead";
 
-type ReportRow = {
-  id: string;
-  driver_id: string | null;
-  driver_name?: string | null;
-  fare_amount: number | null;
-  payment_method: string | null;
-  pickup_address: string | null;
-  dropoff_address: string | null;
-  status: string | null;
-  created_at: string | null;
-  commission_amount?: number | null;
-  driver_net_earnings?: number | null;
+type Amount = number | null;
+type Section = { value: Amount; complete: boolean } | null;
+type Report = {
+  pageSize: number;
+  historical: { count: number; relationship: string; rows: {
+    id: string; trip_id: string | null; created_at: string | null; fee_type: string | null; trip_status: string | null;
+    fee_amount: Amount; driver_amount: Amount; moovu_amount: Amount;
+  }[] } | null;
+  overview: {
+    trips: { gross: Amount; commission: Amount; net: Amount } | null;
+    tripsComplete: boolean | null; direct: Section; subscriptions: Section; membership: Section; debt: Section;
+    online: { total: number } | null; asOf: string;
+  } | null;
+  trips: { rows: EarningsTrip[]; count: number } | null;
+  cancellations: { count: number; rows: {
+    id: string; trip_id: string | null; assessed_at: string; fee_type: string; fee_cents: Amount;
+    liability: { original_cents: number; open_cents: number; status: string } | null;
+    compensation: { earned_cents: number; settled_cents: number; status: string } | null;
+    liabilityUnavailable: boolean; compensationUnavailable: boolean;
+  }[] } | null;
+  cancellationSummary: { complete: boolean | null; assessed: Amount; driverShare: Amount; platformShare: Amount };
 };
 
-type ReportResponse = {
-  completed: ReportRow[];
-  inProgress: ReportRow[];
-  totals: {
-    completedTrips: number;
-    completedRevenue: number;
-    completedCommission: number;
-    completedDriverNet: number;
-    inProgressTrips: number;
-    inProgressValue: number;
-    lateCancellationFees?: number;
-    noShowFees?: number;
-    cancellationDriverPayouts?: number;
-    cancellationMoovuRevenue?: number;
-  };
-  byDriver: Array<{
-    driver_id: string;
-    driver_name: string;
-    completed_trips: number;
-    completed_revenue: number;
-    completed_commission: number;
-    completed_driver_net: number;
-    cancellation_driver_payouts?: number;
-  }>;
-};
+const money = (value?: Amount) => value == null ? "Unavailable" : `R${value.toFixed(2)}`;
+const cents = (value?: Amount) => money(value == null ? null : value / 100);
+const metric = (section?: Section) => section?.complete === false ? "Unavailable · retrieval limit reached" : money(section?.value);
+const date = (value?: string) => value ? new Date(value).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" }) : "Unavailable";
 
-function money(v: number | null | undefined) {
-  return `R${Number(v ?? 0).toFixed(2)}`;
-}
-
-function todayIso() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function weekAgoIso() {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+function Pages({ page, size, count, change }: { page: number; size: number; count: number; change: (page: number) => void }) {
+  return <div className="flex gap-3">
+    <button disabled={page <= 1} onClick={() => change(page - 1)}>Previous</button>
+    <span>Page {page} · {count} records</span>
+    <button disabled={page * size >= count} onClick={() => change(page + 1)}>Next</button>
+  </div>;
 }
 
 export default function AdminReportsPage() {
-  const [from, setFrom] = useState(weekAgoIso());
-  const [to, setTo] = useState(todayIso());
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [data, setData] = useState<ReportResponse | null>(null);
-
-  const getAccessToken = useCallback(async () => {
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-    return session?.access_token ?? null;
+  const [from, setFrom] = useState(() => reportingDay(new Date(Date.now() - 7 * 86400000)));
+  const [to, setTo] = useState(() => reportingDay(new Date()));
+  const [page, setPage] = useState(1);
+  const [cancellationPage, setCancellationPage] = useState(1);
+  const [historicalPage, setHistoricalPage] = useState(1);
+  const [historicalDates, setHistoricalDates] = useState("period");
+  const query = new URLSearchParams({ from, to, page: String(page), cancellationPage: String(cancellationPage),
+    historicalPage: String(historicalPage), historicalDates }).toString();
+  const read = useCallback(async (key: string, signal: AbortSignal) => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    return readFinancialJson<Report>(`/api/admin/reports?${key}`, session?.access_token ?? null, signal,
+      (body) => Number.isSafeInteger(body.pageSize) && !!body.cancellationSummary);
   }, []);
+  const report = useFinancialRead(query, read);
+  const data = report.data;
+  const overview = data?.overview;
+  const resetPages = () => { setPage(1); setCancellationPage(1); setHistoricalPage(1); };
 
-  const runReport = useCallback(async () => {
-    setBusy(true);
-    setMsg(null);
-
-    try {
-      const token = await getAccessToken();
-      if (!token) {
-        setMsg("Missing access token.");
-        setBusy(false);
-        return;
-      }
-
-      const url = `/api/admin/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-
-      const res = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (!json?.ok) {
-        setMsg(json?.error || "Failed to load report.");
-        setBusy(false);
-        return;
-      }
-
-      setData(json.report ?? null);
-    } catch (error: unknown) {
-      setMsg(error instanceof Error ? error.message : "Failed to load report.");
-    }
-
-    setBusy(false);
-  }, [from, getAccessToken, to]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void runReport();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [runReport]);
-
-  const totals = useMemo(() => {
-    return (
-      data?.totals ?? {
-        completedTrips: 0,
-        completedRevenue: 0,
-        completedCommission: 0,
-        completedDriverNet: 0,
-        inProgressTrips: 0,
-        inProgressValue: 0,
-        lateCancellationFees: 0,
-        noShowFees: 0,
-        cancellationDriverPayouts: 0,
-        cancellationMoovuRevenue: 0,
-      }
-    );
-  }, [data]);
-
-  return (
-    <main className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold">Driver Earnings Report</h1>
-        <p className="opacity-70 mt-1">
-          Completed trips use service-type MOOVU commission: 10% for MOOVU Go and 12% for MOOVU Go XL. Cancellation and no-show fees are fixed split payouts, not commission debt.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <input
-          type="date"
-          className="border rounded-xl px-4 py-2"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        />
-        <input
-          type="date"
-          className="border rounded-xl px-4 py-2"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-        />
-        <button
-          className="border rounded-xl px-4 py-2"
-          disabled={busy}
-          onClick={runReport}
-        >
-          {busy ? "Running..." : "Run"}
-        </button>
-      </div>
-
-      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
-
-      <section className="moovu-card space-y-4 p-5 sm:p-6">
-        <h2 className="font-semibold">Totals</h2>
-
-        <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-4">
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Completed trips</div>
-            <div className="text-2xl font-semibold mt-2">{totals.completedTrips}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Total earnings (completed)</div>
-            <div className="text-2xl font-semibold mt-2">{money(totals.completedRevenue)}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">MOOVU commission</div>
-            <div className="text-2xl font-semibold mt-2">{money(totals.completedCommission)}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Driver net</div>
-            <div className="text-2xl font-semibold mt-2">{money(totals.completedDriverNet)}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">In-progress trips</div>
-            <div className="text-2xl font-semibold mt-2">{totals.inProgressTrips}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">In-progress value</div>
-            <div className="text-2xl font-semibold mt-2">{money(totals.inProgressValue)}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Late cancel fees</div>
-            <div className="text-2xl font-semibold mt-2">{money(totals.lateCancellationFees)}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">No-show fees</div>
-            <div className="text-2xl font-semibold mt-2">{money(totals.noShowFees)}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">Driver fee payouts</div>
-            <div className="text-2xl font-semibold mt-2">{money(totals.cancellationDriverPayouts)}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm opacity-70">MOOVU fee revenue</div>
-            <div className="text-2xl font-semibold mt-2">{money(totals.cancellationMoovuRevenue)}</div>
-          </div>
-        </div>
+  return <main className="space-y-6">
+    <header className="moovu-card p-5 space-y-2">
+      <h1 className="text-2xl font-bold">Financial reports</h1>
+      <p>Inclusive reporting dates · Africa/Johannesburg</p>
+      <label>From <input type="date" value={from} onChange={(event) => { setFrom(event.target.value); resetPages(); }} /></label>
+      <label>To <input type="date" value={to} onChange={(event) => { setTo(event.target.value); resetPages(); }} /></label>
+      <button onClick={() => void report.reload()}>Refresh report</button>
+    </header>
+    {report.loading && <p role="status">Loading financial report…</p>}
+    {report.error && <p role="alert">{report.error} {data && "Showing the previously loaded report."} <button onClick={report.retry}>Retry report</button></p>}
+    {data && <>
+      <section className="moovu-card p-5 space-y-2">
+        <h2 className="font-bold">Selected-period activity</h2>
+        <p>Gross recorded fares · {money(overview?.trips?.gross)}</p>
+        <p>Commission accrued · {money(overview?.trips?.commission)}</p>
+        <p>Driver net earnings · {money(overview?.trips?.net)}</p>
+        {overview?.tripsComplete === false && <p>Complete trip totals unavailable · retrieval limit reached.</p>}
+        <p>Recorded direct commission collections · {metric(overview?.direct)}</p>
+        <p>Provider-verified online receipts · {money(overview?.online?.total)}</p>
+        <p>Recorded historical subscription receipts · {metric(overview?.subscriptions)}</p>
+        <p>MOOVU+ receipts with posted evidence · {metric(overview?.membership)}</p>
+        <p>Recorded manual payouts · Unavailable</p><p>Independently verified manual payouts · Unavailable</p>
+        <h2 className="font-bold">Current balances</h2>
+        <p>Current outstanding commission · {metric(overview?.debt)} · read {date(overview?.asOf)} SAST</p>
+        <p>Historical period-end commission balance · Unavailable</p>
+        <p>Actual driver payout obligations · Unavailable</p>
       </section>
-
-      <section className="moovu-card space-y-4 p-5 sm:p-6">
-        <h2 className="font-semibold">By Driver</h2>
-
-        {!data?.byDriver?.length ? (
-          <div className="opacity-70">No data.</div>
-        ) : (
-          <div className="space-y-3">
-            {data.byDriver.map((row) => (
-              <div key={row.driver_id} className="moovu-data-row">
-                <div className="font-medium">{row.driver_name}</div>
-                <div className="text-sm opacity-70 mt-2">
-                  Trips: {row.completed_trips} - Revenue: {money(row.completed_revenue)} - Commission: {money(row.completed_commission)} - Driver Net: {money(row.completed_driver_net)} - Fee Payouts: {money(row.cancellation_driver_payouts)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <section className="moovu-card p-5 space-y-2">
+        <h2 className="font-bold">Completed trips</h2>
+        {!data.trips ? <p>Trip history unavailable.</p> : <>
+          {!data.trips.rows.length && <p>No completed trips on this page.</p>}
+          {data.trips.rows.map((row) => <article key={row.id} className="moovu-data-row">
+            <Link href={`/admin/trips/${row.id}`}>Trip {row.id}</Link> · {date(row.completed_at)}
+            <p>Fare {money(row.fare_amount)} · Commission {money(row.commission_amount)} ({row.commission_pct == null ? "Rate unavailable" : `${row.commission_pct}%`}) · Driver net {money(row.driver_net_earnings)}</p>
+          </article>)}
+          <Pages page={page} size={data.pageSize} count={data.trips.count} change={setPage} />
+        </>}
       </section>
-    </main>
-  );
+      <section className="moovu-card p-5 space-y-2">
+        <h2 className="font-bold">Historical cancellation records</h2>
+        <p>Recorded legacy amounts. Excluded from Phase 4 totals. Collection and payout evidence unavailable.</p>
+        <label>Recorded date <select value={historicalDates} onChange={(event) => {
+          setHistoricalDates(event.target.value); setHistoricalPage(1);
+        }}>
+          <option value="period">Selected reporting period</option>
+          <option value="unavailable">Unavailable date · outside period filtering</option>
+        </select></label>
+        {!data.historical ? <p role="alert">Historical cancellation history unavailable. <button onClick={() => void report.reload()}>Retry history</button></p> : <>
+          <p>{data.historical.relationship === "unverified" ? "Phase 4 relationships are unverified in this history." : "Records with a stored Phase 4 assessment link are excluded."}</p>
+          {!data.historical.rows.length && <p>No historical cancellation records match this filter.</p>}
+          {data.historical.rows.map((row) => <article key={row.id} className="moovu-data-row">
+            <p>Record {row.id} · {row.trip_id ? <Link href={`/admin/trips/${row.trip_id}`}>Trip {row.trip_id}</Link> : "Stored trip unavailable"}</p>
+            <p>Recorded at {date(row.created_at ?? undefined)} · {row.fee_type ?? "Fee type unavailable"}</p>
+            <p>Stored trip status · {row.trip_status ?? "Unavailable"}</p>
+            <p>Recorded fee {money(row.fee_amount)} · Driver allocation {money(row.driver_amount)} · MOOVU allocation {money(row.moovu_amount)}</p>
+          </article>)}
+          <Pages page={historicalPage} size={data.pageSize} count={data.historical.count} change={setHistoricalPage} />
+        </>}
+      </section>
+      <section className="moovu-card p-5 space-y-2">
+        <h2 className="font-bold">Cancellation accounting</h2>
+        <p>Recorded Phase 4 assessments · {money(data.cancellationSummary.assessed)}</p>
+        <p>Assessed driver share · {money(data.cancellationSummary.driverShare)}</p>
+        <p>Assessed MOOVU allocation · {money(data.cancellationSummary.platformShare)}</p>
+        <p>Verified cancellation collections · Unavailable</p><p>Actual driver compensation paid · Unavailable</p>
+        {data.cancellationSummary.complete === false && <p>Complete assessment totals unavailable · retrieval limit reached.</p>}
+        {!data.cancellations ? <p>Assessment history unavailable.</p> : <>
+          {!data.cancellations.rows.length && <p>No Phase 4 assessments on this page.</p>}
+          {data.cancellations.rows.map((row) => <article key={row.id} className="moovu-data-row">
+            {row.trip_id ? <Link href={`/admin/trips/${row.trip_id}`}>Trip {row.trip_id}</Link> : "Stored trip relationship unavailable"}
+            <p>{row.fee_type} · {date(row.assessed_at)} · Assessed {cents(row.fee_cents)}</p>
+            <p>{row.liability ? `Recorded liability ${cents(row.liability.original_cents)} · Open now ${cents(row.liability.open_cents)} · ${row.liability.status}` :
+              row.liabilityUnavailable ? "Liability read unavailable" : "No linked liability recorded"}</p>
+            <p>{row.compensation ? `Recorded compensation ${cents(row.compensation.earned_cents)} · ${row.compensation.status}` :
+              row.compensationUnavailable ? "Compensation read unavailable" : "No linked compensation recorded"}</p>
+          </article>)}
+          <Pages page={cancellationPage} size={data.pageSize} count={data.cancellations.count} change={setCancellationPage} />
+        </>}
+      </section>
+    </>}
+  </main>;
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useFinancialRead, readFinancialJson } from "@/lib/admin/useFinancialRead";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -38,10 +39,9 @@ function money(value: number | null | undefined) {
 }
 
 export default function AdminSettlementsPage() {
-  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
-  const [drivers, setDrivers] = useState<DriverRow[]>([]);
-  const [settlements, setSettlements] = useState<SettlementRow[]>([]);
+  const [driverPage, setDriverPage] = useState(1);
+  const [settlementPage, setSettlementPage] = useState(1);
 
   const [driverId, setDriverId] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
@@ -59,36 +59,19 @@ export default function AdminSettlementsPage() {
     return session?.access_token || "";
   }, []);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setMsg(null);
-
-    const token = await getToken();
-    if (!token) {
-      setMsg("You are not logged in.");
-      setLoading(false);
-      return;
-    }
-
-    const res = await fetch("/api/admin/settlements", {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to load settlements.");
-      setLoading(false);
-      return;
-    }
-
-    setDrivers(json.drivers ?? []);
-    setSettlements(json.settlements ?? []);
-    setLoading(false);
-  }, [getToken]);
+  const key = new URLSearchParams({ driverPage: String(driverPage), settlementPage: String(settlementPage) }).toString();
+  const read = useCallback(async (query: string, signal: AbortSignal) =>
+    readFinancialJson<{ drivers: DriverRow[]; settlements: SettlementRow[];
+      driverPagination: { total: number }; settlementPagination: { total: number } }>(
+      `/api/admin/settlements?${query}`, await getToken(), signal, (body) =>
+        Array.isArray(body.drivers) && Array.isArray(body.settlements) &&
+        Number.isSafeInteger((body.driverPagination as { total?: number } | undefined)?.total) &&
+        Number.isSafeInteger((body.settlementPagination as { total?: number } | undefined)?.total)), [getToken]);
+  const { data, loading, error, retry, reload: loadData } = useFinancialRead(key, read);
+  const drivers = useMemo(() => data?.drivers ?? [], [data]);
+  const settlements = data?.settlements ?? [];
+  const driverTotal = data?.driverPagination.total ?? 0;
+  const settlementTotal = data?.settlementPagination.total ?? 0;
 
   async function postSettlement(payload: {
     driverId: string;
@@ -197,14 +180,6 @@ export default function AdminSettlementsPage() {
     setBusy(false);
   }
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadData]);
-
   const driverOptions = useMemo(() => {
     return drivers.map((driver) => {
       const label =
@@ -224,6 +199,7 @@ export default function AdminSettlementsPage() {
 
   return (
     <main className="space-y-6 text-black">
+      {error && <p role="alert">{error} {data && "Showing previously loaded records."} <button onClick={retry}>Retry settlements</button></p>}
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-card p-5 sm:p-6">
@@ -236,6 +212,11 @@ export default function AdminSettlementsPage() {
 
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Record settlement</h2>
+          <div className="flex gap-3 items-center">
+            <button disabled={loading || busy || driverPage === 1} onClick={() => { setDriverId(""); setDriverPage(driverPage - 1); }}>Previous drivers</button>
+            <span>Driver page {driverPage}</span>
+            <button disabled={loading || busy || driverPage * 50 >= driverTotal} onClick={() => { setDriverId(""); setDriverPage(driverPage + 1); }}>Next drivers</button>
+          </div>
 
           <select
             className="moovu-input"
@@ -375,8 +356,13 @@ export default function AdminSettlementsPage() {
 
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Recent settlements</h2>
+          <div className="flex gap-3 items-center">
+            <button disabled={loading || settlementPage === 1} onClick={() => setSettlementPage(settlementPage - 1)}>Previous settlements</button>
+            <span>Settlement page {settlementPage}</span>
+            <button disabled={loading || settlementPage * 50 >= settlementTotal} onClick={() => setSettlementPage(settlementPage + 1)}>Next settlements</button>
+          </div>
 
-          {settlements.length === 0 ? (
+          {!data ? <p>{loading ? "Loading settlements…" : "Settlements unavailable."}</p> : settlements.length === 0 ? (
             <div>No settlements recorded yet.</div>
           ) : (
             <div className="space-y-3">

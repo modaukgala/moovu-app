@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRead";
+import PaymentAllocation from "@/components/finance/PaymentAllocation";
+
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
@@ -40,12 +43,10 @@ function displayDate(value: string | null | undefined) {
 }
 
 export default function AdminPaymentReviewsPage() {
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("pending_payment_review");
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("all");
-  const [rows, setRows] = useState<PaymentRequestRow[]>([]);
   const [reviewDraft, setReviewDraft] = useState<{
     requestId: string;
     action: "approve" | "reject" | "waiting";
@@ -60,35 +61,12 @@ export default function AdminPaymentReviewsPage() {
     return session?.access_token || "";
   }, []);
 
-  const loadData = useCallback(async (status: string) => {
-    setLoading(true);
-    setMsg(null);
-
-    const token = await getToken();
-    if (!token) {
-      setMsg("You are not logged in.");
-      setLoading(false);
-      return;
-    }
-
-    const res = await fetch(`/api/admin/payment-reviews?status=${encodeURIComponent(status)}`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to load payment reviews.");
-      setLoading(false);
-      return;
-    }
-
-    setRows(json.requests ?? []);
-    setLoading(false);
-  }, [getToken]);
+  const read = useCallback(async (key: string, signal: AbortSignal) =>
+    (await readFinancialJson<{ requests: PaymentRequestRow[] }>(
+      `/api/admin/payment-reviews?status=${encodeURIComponent(key.split(":")[0])}`, await getToken(), signal,
+      (body) => Array.isArray(body.requests))).requests, [getToken]);
+  const { data, loading, error: allocationError, retry: retryAllocations, reload: loadData } = useFinancialRead(`${statusFilter}:${paymentTypeFilter}`, read);
+  const rows = useMemo(() => data ?? [], [data]);
 
   async function reviewRequest(
     requestId: string,
@@ -129,16 +107,8 @@ export default function AdminPaymentReviewsPage() {
     setMsg(json?.message || "Payment request updated.");
     setReviewDraft(null);
     setBusyId(null);
-    await loadData(statusFilter);
+    await loadData();
   }
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData(statusFilter);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadData, statusFilter]);
 
   const visibleRows = useMemo(() => {
     return rows.filter((row) => paymentTypeFilter === "all" || row.payment_type === paymentTypeFilter);
@@ -160,6 +130,7 @@ export default function AdminPaymentReviewsPage() {
 
   return (
     <main className="space-y-6 text-black">
+      {allocationError && <p role="alert">{allocationError} {data && "Showing previously loaded reviews."} <button onClick={retryAllocations}>Retry reviews</button></p>}
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       {reviewDraft && (
@@ -266,7 +237,7 @@ export default function AdminPaymentReviewsPage() {
             </select>
 
             <button
-              onClick={() => void loadData(statusFilter)}
+              onClick={() => void loadData()}
               className="moovu-btn moovu-btn-primary"
             >
               Refresh
@@ -309,6 +280,7 @@ export default function AdminPaymentReviewsPage() {
                     <div>
                       <div className="text-sm text-gray-500">Submitted</div>
                       <div className="font-medium">{money(row.amount_submitted)}</div>
+                    <PaymentAllocation row={row} />
                     </div>
 
                     <div>

@@ -1,7 +1,11 @@
 "use client";
 
+import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRead";
+import PaymentAllocation from "@/components/finance/PaymentAllocation";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createCommissionHistoryRequest } from "@/lib/admin/commissionHistoryRequest";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -72,6 +76,8 @@ type CommissionLedger = {
   driverName: string;
   balanceDue: number;
   transactions: CommissionLedgerEntry[];
+  pages: number[];
+  totals: number[];
 };
 
 function money(value: number | null | undefined) {
@@ -113,13 +119,16 @@ function standing(balanceDue: number, hasPending: boolean) {
 }
 
 export default function AdminCommissionPaymentsPage() {
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [requests, setRequests] = useState<CommissionRequest[]>([]);
-  const [drivers, setDrivers] = useState<SettlementDriver[]>([]);
+
+  const [driverPage, setDriverPage] = useState(1);
   const [ledger, setLedger] = useState<CommissionLedger | null>(null);
   const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerRequest] = useState(() => createCommissionHistoryRequest<{ row: SettlementDriver; pages: number[] }, CommissionLedger>());
+  const [ledgerError, setLedgerError] = useState<string>();
+  useEffect(() => () => ledgerRequest.invalidate(), [ledgerRequest]);
+  const [historyKind, setHistoryKind] = useState(0);
   const [ledgerType, setLedgerType] = useState("all");
   const [ledgerDate, setLedgerDate] = useState("");
   const [reviewDraft, setReviewDraft] = useState<{
@@ -136,59 +145,21 @@ export default function AdminCommissionPaymentsPage() {
     return session?.access_token || "";
   }, []);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setMsg(null);
+  const readAllocations = useCallback(async (_: string, signal: AbortSignal) =>
+    (await readFinancialJson<{ requests: CommissionRequest[] }>("/api/admin/payment-reviews?status=all",
+      await getToken(), signal, (body) => Array.isArray(body.requests))).requests, [getToken]);
+  const allocationRead = useFinancialRead(String(driverPage), readAllocations);
+  const requests = (allocationRead.data ?? []).filter((row) => row.payment_type === "commission" || row.payment_type === "combined");
 
-    const token = await getToken();
-    if (!token) {
-      setMsg("You are not logged in.");
-      setLoading(false);
-      return;
-    }
-
-    const [reviewsRes, settlementsRes] = await Promise.all([
-      fetch("/api/admin/payment-reviews?status=all", {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      fetch("/api/admin/settlements", {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-    ]);
-
-    const reviewsJson = await reviewsRes.json().catch(() => null);
-    const settlementsJson = await settlementsRes.json().catch(() => null);
-
-    if (!reviewsJson?.ok) {
-      setMsg(reviewsJson?.error || "Failed to load commission payment reviews.");
-      setLoading(false);
-      return;
-    }
-
-    if (!settlementsJson?.ok) {
-      setMsg(settlementsJson?.error || "Failed to load commission balances.");
-      setLoading(false);
-      return;
-    }
-
-    setRequests(
-      (reviewsJson.requests ?? []).filter(
-        (row: CommissionRequest) => row.payment_type === "commission"
-      )
-    );
-    setDrivers(settlementsJson.drivers ?? []);
-    setLoading(false);
-  }, [getToken]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadData]);
+  const readBalances = useCallback(async (page: string, signal: AbortSignal) =>
+    readFinancialJson<{ drivers: SettlementDriver[]; driverPagination: { total: number } }>(
+      `/api/admin/settlements?driverPage=${page}`, await getToken(), signal,
+      (body) => Array.isArray(body.drivers) && Number.isSafeInteger((body.driverPagination as { total?: number } | undefined)?.total)), [getToken]);
+  const balances = useFinancialRead(String(driverPage), readBalances);
+  const drivers = balances.data?.drivers ?? [];
+  const driverTotal = balances.data?.driverPagination.total ?? null;
+  const loading = balances.loading || allocationRead.loading;
+  const loadData = balances.reload;
 
   async function reviewRequest(
     requestId: string,
@@ -224,27 +195,28 @@ export default function AdminCommissionPaymentsPage() {
 
     setReviewDraft(null);
     setMsg(json?.message || "Commission payment updated.");
-    await loadData();
+    await Promise.all([loadData(), allocationRead.reload()]);
   }
 
-  async function openLedger(row: SettlementDriver) {
+  async function openLedger(row: SettlementDriver, pages = [1, 1, 1]) {
     const id = driverId(row);
     if (!id) return;
-    setLedgerLoading(true);
-    setMsg(null);
+    await ledgerRequest.run({ row, pages }, async ({ pages }, signal) => {
     const token = await getToken();
     const response = await fetch(
-      `/api/admin/driver-wallet-summary?driverId=${encodeURIComponent(id)}`,
+      `/api/admin/driver-wallet-summary?driverId=${encodeURIComponent(id)}&transactionPage=${pages[0]}&settlementPage=${pages[1]}&tripPage=${pages[2]}`,
       {
         cache: "no-store",
+        signal,
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       },
     );
     const json = await response.json().catch(() => null);
-    setLedgerLoading(false);
-    if (!response.ok || !json?.ok) {
-      setMsg(json?.error || "Could not load the commission breakdown.");
-      return;
+    const totals = [json?.pagination?.transactionTotal, json?.pagination?.settlementTotal, json?.pagination?.tripTotal];
+    if (!response.ok || !json?.ok || !Number.isFinite(json.wallet?.balance_due) ||
+        !totals.every(Number.isSafeInteger) ||
+        ![json.transactions, json.settlements, json.recent_completed_trips].every(Array.isArray)) {
+      throw new Error(json?.error || "Could not load the commission breakdown.");
     }
 
     const transactions: CommissionLedgerEntry[] = [
@@ -255,35 +227,53 @@ export default function AdminCommissionPaymentsPage() {
       ...(json.settlements ?? []).map(
         (entry: { id: string; amount_paid: number; created_at: string; reference?: string | null }) => ({
           id: `settlement-${entry.id}`,
-          tx_type: "payment",
+          tx_type: "direct_payment",
           amount: Number(entry.amount_paid ?? 0),
           direction: "credit",
           description: entry.reference ? `Payment ${entry.reference}` : "Commission payment",
           created_at: entry.created_at,
         }),
       ),
+      ...json.recent_completed_trips.map((entry: { id: string; fare_amount: number | null; commission_amount: number | null; created_at: string }) => ({
+        id: entry.id, trip_id: entry.id, tx_type: "completed_trip", direction: "debit",
+        amount: entry.commission_amount, created_at: entry.created_at,
+        description: entry.fare_amount == null ? "Recorded fare unavailable" : `Recorded fare: ${money(entry.fare_amount)}`,
+      })),
     ].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
 
-    setLedger({
+    return {
       driverId: id,
       driverName: driverName(row),
-      balanceDue: Number(json.wallet?.balance_due ?? 0),
+      balanceDue: json.wallet.balance_due,
       transactions,
+      pages,
+      totals,
+    };
+    }, ({ loading, error, result }) => {
+      setLedgerLoading(loading);
+      setLedgerError(error);
+      if (result) setLedger(result);
     });
-    setLedgerType("all");
-    setLedgerDate("");
+  }
+
+  function invalidateLedgerRequest() {
+    ledgerRequest.invalidate();
+    setLedgerLoading(false);
+    setLedgerError(undefined);
   }
 
   const filteredLedgerEntries = useMemo(() => {
     if (!ledger) return [];
     return ledger.transactions.filter((entry) => {
+      const kind = entry.tx_type === "direct_payment" ? 1 : entry.tx_type === "completed_trip" ? 2 : 0;
+      if (kind !== historyKind) return false;
       if (ledgerType !== "all" && entry.tx_type !== ledgerType) return false;
       if (ledgerDate && entry.created_at.slice(0, 10) !== ledgerDate) return false;
       return true;
     });
-  }, [ledger, ledgerDate, ledgerType]);
+  }, [ledger, ledgerDate, ledgerType, historyKind]);
 
   const pendingRequests = requests.filter((row) =>
     ["pending_payment_review", "waiting_confirmation"].includes(row.status)
@@ -302,13 +292,6 @@ export default function AdminCommissionPaymentsPage() {
   const owingDrivers = drivers.filter(
     (row) => Number(wallet(row).balance_due ?? 0) > 0
   );
-  const collectedThisMonth = drivers.reduce((sum, row) => {
-    const driverWallet = wallet(row);
-    const paidAt = driverWallet.last_payment_at ? new Date(driverWallet.last_payment_at) : null;
-    const now = new Date();
-    const inMonth = paidAt && paidAt.getMonth() === now.getMonth() && paidAt.getFullYear() === now.getFullYear();
-    return sum + (inMonth ? Number(driverWallet.last_payment_amount ?? 0) : 0);
-  }, 0);
 
   if (loading) {
     return (
@@ -321,6 +304,8 @@ export default function AdminCommissionPaymentsPage() {
 
   return (
     <main className="space-y-6 text-slate-950">
+      {balances.error && <p role="alert">{balances.error} {balances.data && "Showing previously loaded balances."} <button onClick={balances.retry}>Retry balances</button></p>}
+      {allocationRead.error && <p role="alert">{allocationRead.error} {allocationRead.data && "Showing previously loaded reviews."} <button onClick={allocationRead.retry}>Retry reviews</button></p>}
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       {reviewDraft && (
@@ -363,6 +348,10 @@ export default function AdminCommissionPaymentsPage() {
         </div>
       )}
 
+      {!ledger && ledgerError && <p role="alert">{ledgerError} <button onClick={() => {
+                const request = ledgerRequest.failedRequest();
+                if (request) void openLedger(request.row, request.pages);
+              }}>Retry commission history</button></p>}
       {ledger && (
         <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <section className="max-h-[88dvh] w-full max-w-3xl overflow-y-auto rounded-[30px] bg-white p-5 shadow-2xl sm:p-6">
@@ -374,12 +363,34 @@ export default function AdminCommissionPaymentsPage() {
                   Current amount owed: {money(ledger.balanceDue)}
                 </p>
               </div>
-              <button className="moovu-icon-button" aria-label="Close breakdown" onClick={() => setLedger(null)}>
+              <button className="moovu-icon-button" aria-label="Close breakdown" onClick={() => {
+                invalidateLedgerRequest();
+                setLedger(null);
+              }}>
                 X
               </button>
             </div>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {["Wallet transactions", "Direct commission payments", "Completed trips"].map((label, kind) => (
+                <button key={label} aria-pressed={historyKind === kind} onClick={() => {
+                  invalidateLedgerRequest(); setHistoryKind(kind); setLedgerType("all"); setLedgerDate("");
+                }}>{label}</button>
+              ))}
+              {[-1, 1].map((step) => <button key={step} disabled={ledgerLoading || (step < 0
+                ? ledger.pages[historyKind] === 1 : ledger.pages[historyKind] * 20 >= ledger.totals[historyKind])}
+                onClick={() => {
+                  const row = drivers.find((driver) => driverId(driver) === ledger.driverId);
+                  if (row) void openLedger(row, ledger.pages.map((page, index) => page + (index === historyKind ? step : 0)));
+                }}>{step < 0 ? "Previous" : "Next"}</button>)}
+              <span>Page {ledger.pages[historyKind]} · {ledger.totals[historyKind]} records</span>
+            </div>
+            {ledgerError && <p role="alert">{ledgerError} <button onClick={() => {
+                const request = ledgerRequest.failedRequest();
+                if (request) void openLedger(request.row, request.pages);
+              }}>Retry commission history</button></p>}
+            <p className="text-sm">Filters apply to the visible page.</p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <select className="moovu-input" value={ledgerType} onChange={(event) => setLedgerType(event.target.value)}>
+              <select className="moovu-input" value={ledgerType} onChange={(event) => { invalidateLedgerRequest(); setLedgerType(event.target.value); }}>
                 <option value="all">All transaction types</option>
                 <option value="commission">Trip commission</option>
                 <option value="cancellation_credit">Cancellation credit</option>
@@ -389,7 +400,7 @@ export default function AdminCommissionPaymentsPage() {
                 className="moovu-input"
                 type="date"
                 value={ledgerDate}
-                onChange={(event) => setLedgerDate(event.target.value)}
+                onChange={(event) => { invalidateLedgerRequest(); setLedgerDate(event.target.value); }}
                 aria-label="Filter commission history by date"
               />
             </div>
@@ -405,7 +416,7 @@ export default function AdminCommissionPaymentsPage() {
                           {entry.tx_type.replaceAll("_", " ")}
                         </div>
                         <div className="mt-1 text-xs font-semibold text-slate-500">
-                          {entry.trip_id ? `Trip ${entry.trip_id.slice(0, 8)} · ` : ""}
+                          {entry.trip_id && <Link href={`/admin/trips/${entry.trip_id}`}>Trip {entry.trip_id.slice(0, 8)} · </Link>}
                           {displayDate(entry.created_at)}
                         </div>
                         {entry.description && <p className="mt-2 text-sm text-slate-600">{entry.description}</p>}
@@ -438,7 +449,7 @@ export default function AdminCommissionPaymentsPage() {
             <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">
               Subscription payments
             </Link>
-            <button className="moovu-btn moovu-btn-primary" onClick={() => void loadData()}>
+            <button className="moovu-btn moovu-btn-primary" onClick={() => void Promise.all([loadData(), allocationRead.reload()])}>
               Refresh
             </button>
           </div>
@@ -446,12 +457,16 @@ export default function AdminCommissionPaymentsPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-5">
-        <MetricCard label="Total owed" value={money(totalOwed)} helper="Unpaid MOOVU commission" tone="warning" />
+      <div className="flex gap-3 items-center">
+        <button disabled={driverPage === 1 || loading} onClick={() => setDriverPage(driverPage - 1)}>Previous drivers</button>
+        <span>Driver page {driverPage}</span>
+        <button disabled={driverTotal === null || driverPage * 50 >= driverTotal || loading} onClick={() => setDriverPage(driverPage + 1)}>Next drivers</button>
+      </div>
+      <section className="grid gap-3 md:grid-cols-4">
+        <MetricCard label="Commission owed on this page" value={driverTotal === null ? "Unavailable" : money(totalOwed)} tone="warning" />
         <MetricCard label="Pending reviews" value={String(pendingRequests.length)} helper="Commission POPs" tone={pendingRequests.length ? "warning" : "default"} />
-        <MetricCard label="Drivers owing" value={String(owingDrivers.length)} helper="Outstanding commission" />
-        <MetricCard label="Collected this month" value={money(collectedThisMonth)} helper="From latest wallet records" tone="success" />
-        <MetricCard label="All-time collected" value={money(totalPaid)} helper={`${money(totalCommissionEarned)} generated`} tone="primary" />
+        <MetricCard label="Drivers owing on this page" value={driverTotal === null ? "Unavailable" : String(owingDrivers.length)} />
+        <MetricCard label="Recorded collections for these drivers" value={driverTotal === null ? "Unavailable" : money(totalPaid)} helper={driverTotal === null ? undefined : `${money(totalCommissionEarned)} accrued`} tone="primary" />
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
@@ -500,6 +515,7 @@ export default function AdminCommissionPaymentsPage() {
                   <div>
                     <div className="text-sm text-slate-500">Submitted</div>
                     <div className="font-semibold">{money(row.amount_submitted)}</div>
+                    <PaymentAllocation row={row} />
                   </div>
                   <div>
                     <div className="text-sm text-slate-500">Reference</div>
@@ -592,7 +608,7 @@ export default function AdminCommissionPaymentsPage() {
                           type="button"
                           className="mt-3 text-sm font-black text-blue-700 underline"
                           disabled={ledgerLoading}
-                          onClick={() => void openLedger(row)}
+                          onClick={() => { setLedger(null); setHistoryKind(0); setLedgerType("all"); setLedgerDate(""); void openLedger(row); }}
                         >
                           {ledgerLoading ? "Loading..." : "View breakdown"}
                         </button>

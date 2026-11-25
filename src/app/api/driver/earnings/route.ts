@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { recalculateDriverWalletServer } from "@/lib/finance/driverWalletLedger";
+import { readCommissionDebt } from "@/lib/admin/commissionDebt";
 import { resolveDriverFinanceAuthority } from "@/lib/finance/phase2DriverEligibility";
 
 type CompletedTripRow = {
@@ -102,6 +102,10 @@ export async function GET(req: Request) {
     }
 
     const driverId = account.driver_id;
+    const requestedDriver = new URL(req.url).searchParams.get("driverId");
+    if (requestedDriver !== null && requestedDriver !== driverId) {
+      return NextResponse.json({ ok: false, error: "Driver access denied." }, { status: 403 });
+    }
 
     const [
       { data: wallet, error: walletError },
@@ -211,11 +215,10 @@ export async function GET(req: Request) {
     }
 
     const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
-    const walletResult = await recalculateDriverWalletServer(driverId);
-    if (!walletResult.ok) {
-      return NextResponse.json({ ok: false, error: walletResult.error }, { status: 500 });
-    }
-    const normalizedWallet = walletResult.wallet ?? wallet;
+    const debt = await readCommissionDebt((name, args) => supabaseAdmin.rpc(name, args), driverId).catch(() => null);
+    if (!debt) return NextResponse.json({ ok: false, error: "Authoritative commission balance unavailable." }, { status: 503 });
+    const normalizedWallet = { ...wallet, balance_due: debt.balance_due, total_commission: debt.total_commission,
+      total_driver_net: debt.total_driver_net, total_trips_completed: debt.total_trips_completed };
     const financeResult = await resolveDriverFinanceAuthority(supabaseAdmin, {
       driverId,
       subscriptionStatus: driver?.subscription_status,
@@ -255,13 +258,14 @@ export async function GET(req: Request) {
       )
       .slice(0, 50);
 
-    const { data: cancellationFees } = await supabaseAdmin
+    const { data: cancellationFees, error: cancellationError } = await supabaseAdmin
       .from("trip_cancellation_fees")
       .select("id,trip_id,fee_type,fee_amount,driver_amount,moovu_amount,reason,created_at,phase4_assessment_id")
       .eq("driver_id", driverId)
       .order("created_at", { ascending: false })
       .limit(50);
 
+    let cancellationUnavailable = !!cancellationError;
     const typedCancellationFees = (cancellationFees ?? []) as CancellationFeeRow[];
     const phase4Ids = typedCancellationFees.map((row) => row.phase4_assessment_id).filter((id): id is string => !!id);
     let compensationStatus = new Map<string, string>();
@@ -269,7 +273,7 @@ export async function GET(req: Request) {
       const { data: compensations, error: compensationError } = await supabaseAdmin
         .from("phase4_driver_compensations").select("assessment_id,status")
         .in("assessment_id", phase4Ids).eq("driver_id", driverId);
-      if (compensationError) return NextResponse.json({ ok: false, error: "Driver compensation state unavailable." }, { status: 503 });
+      if (compensationError) cancellationUnavailable = true;
       compensationStatus = new Map((compensations ?? []).map((row) => [row.assessment_id, row.status]));
     }
     const cancellationRows = typedCancellationFees.map((row) => ({ ...row,
@@ -296,12 +300,14 @@ export async function GET(req: Request) {
         subscription_payments: subscriptionPayments ?? [],
         payment_requests: paymentRequests ?? [],
         commission_breakdown: walletTransactions ?? [],
-        commission_totals: walletResult.totals,
+        commission_totals: { totalCommission: debt.total_commission, totalDriverNet: debt.total_driver_net,
+          totalSettled: debt.total_settled, cancellationCredits: debt.cancellation_credits, balanceDue: debt.balance_due },
         recent_completed_trips: normalizedTrips,
-        cancellation_fees: cancellationRows,
-        cancellation_driver_earnings: cancellationDriverEarnings,
-        late_cancellation_driver_earnings: lateCancellationDriverEarnings,
-        no_show_driver_earnings: noShowDriverEarnings,
+        cancellation_fees: cancellationUnavailable ? null : cancellationRows,
+        cancellation_unavailable: cancellationUnavailable,
+        cancellation_driver_earnings: cancellationUnavailable ? null : cancellationDriverEarnings,
+        late_cancellation_driver_earnings: cancellationUnavailable ? null : lateCancellationDriverEarnings,
+        no_show_driver_earnings: cancellationUnavailable ? null : noShowDriverEarnings,
       },
     });
   } catch (error: unknown) {

@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
-import { recalculateDriverWalletServer } from "@/lib/finance/driverWalletLedger";
-
-function num(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { readCommissionDebt } from "@/lib/admin/commissionDebt";
 
 type CompletedTripRow = {
   fare_amount: number | null;
   commission_amount: number | null;
   driver_net_earnings: number | null;
-};
-
-type SettlementRow = {
-  amount_paid: number | null;
 };
 
 export async function GET(req: Request) {
@@ -27,6 +18,9 @@ export async function GET(req: Request) {
       );
     }
 
+    if (!isFinancialAdminRole(auth.profile.role)) {
+      return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
+    }
     const { supabaseAdmin } = auth;
     const url = new URL(req.url);
     const driverId = String(url.searchParams.get("driverId") ?? "").trim();
@@ -38,7 +32,15 @@ export async function GET(req: Request) {
       );
     }
 
-    const [{ data: walletRow, error: walletErr }, { data: txns, error: txErr }, { data: settlements, error: settlementsErr }, { data: completedTrips, error: tripsErr }] =
+    const pages = ["transactionPage", "settlementPage", "tripPage"].map((key) => Number(url.searchParams.get(key) ?? 1));
+    if (pages.some((page) => !Number.isInteger(page) || page < 1 || page > 100000)) {
+      return NextResponse.json({ ok: false, error: "Invalid history page." }, { status: 400 });
+    }
+    const [transactionPage, settlementPage, tripPage] = pages;
+    const pageSize = 20;
+    const start = (page: number) => (page - 1) * pageSize;
+
+    const [{ data: walletRow, error: walletErr }, { data: txns, count: transactionTotal, error: txErr }, { data: settlements, count: settlementTotal, error: settlementsErr }, { data: completedTrips, count: tripTotal, error: tripsErr }] =
       await Promise.all([
         supabaseAdmin
           .from("driver_wallets")
@@ -54,10 +56,10 @@ export async function GET(req: Request) {
           .maybeSingle(),
         supabaseAdmin
           .from("driver_wallet_transactions")
-          .select("id,trip_id,tx_type,amount,direction,description,meta,created_at")
+          .select("id,trip_id,tx_type,amount,direction,description,meta,created_at", { count: "exact" })
           .eq("driver_id", driverId)
           .order("created_at", { ascending: false })
-          .limit(20),
+          .order("id", { ascending: false }).range(start(transactionPage), start(transactionPage) + pageSize - 1),
         supabaseAdmin
           .from("driver_settlements")
           .select(`
@@ -67,10 +69,10 @@ export async function GET(req: Request) {
             reference,
             note,
             created_at
-          `)
+          `, { count: "exact" })
           .eq("driver_id", driverId)
           .order("created_at", { ascending: false })
-          .limit(20),
+          .order("id", { ascending: false }).range(start(settlementPage), start(settlementPage) + pageSize - 1),
         supabaseAdmin
           .from("trips")
           .select(`
@@ -83,11 +85,11 @@ export async function GET(req: Request) {
             dropoff_address,
             created_at,
             status
-          `)
+          `, { count: "exact" })
           .eq("driver_id", driverId)
           .eq("status", "completed")
           .order("created_at", { ascending: false })
-          .limit(100),
+          .order("id", { ascending: false }).range(start(tripPage), start(tripPage) + pageSize - 1),
       ]);
 
     if (walletErr) {
@@ -107,32 +109,26 @@ export async function GET(req: Request) {
     }
 
     const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
-    const typedSettlements = (settlements ?? []) as SettlementRow[];
-
-    const totalTripsCompleted = typedCompletedTrips.length;
-    const totalSettled = typedSettlements.reduce((sum, row) => sum + num(row.amount_paid), 0);
-    const recalculated = await recalculateDriverWalletServer(driverId);
-    if (!recalculated.ok) {
-      return NextResponse.json({ ok: false, error: recalculated.error }, { status: 500 });
-    }
-    const balanceDue = recalculated.totals.balanceDue;
+    const debt = await readCommissionDebt((name, args) => supabaseAdmin.rpc(name, args), driverId);
+    const balanceDue = debt.balance_due;
 
     return NextResponse.json({
       ok: true,
       wallet: {
         driver_id: driverId,
         balance_due: balanceDue,
-        total_commission: recalculated.totals.totalCommission,
-        total_driver_net: recalculated.totals.totalDriverNet + recalculated.totals.cancellationCredits,
-        total_trips_completed: totalTripsCompleted,
-        total_paid: totalSettled,
-        cancellation_credits: recalculated.totals.cancellationCredits,
+        total_commission: debt.total_commission,
+        total_driver_net: debt.total_driver_net,
+        total_trips_completed: debt.total_trips_completed,
+        total_paid: debt.total_settled,
+        cancellation_credits: debt.cancellation_credits,
         threshold_percentage: null,
         last_payment_at: walletRow?.last_payment_at ?? null,
         last_payment_amount: walletRow?.last_payment_amount ?? null,
         account_status: balanceDue > 0 ? "due" : "settled",
         updated_at: walletRow?.updated_at ?? null,
       },
+      pagination: { pageSize, transactionPage, transactionTotal, settlementPage, settlementTotal, tripPage, tripTotal },
       transactions: txns ?? [],
       settlements: settlements ?? [],
       recent_completed_trips: typedCompletedTrips,

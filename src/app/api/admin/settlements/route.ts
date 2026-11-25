@@ -1,218 +1,73 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { readCommissionDebt } from "@/lib/admin/commissionDebt";
 
-function num(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
-
-type DriverRow = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  online: boolean | null;
-  busy: boolean | null;
-  status: string | null;
-  verification_status: string | null;
-};
-
-type CompletedTripRow = {
-  driver_id: string | null;
-  commission_amount: number | null;
-  driver_net_earnings: number | null;
-  fare_amount: number | null;
-};
-
-type SettlementRow = {
-  driver_id: string | null;
-  amount_paid: number | null;
-  created_at: string | null;
-};
+const pageSize = 50;
 
 export async function GET(req: Request) {
   try {
     const auth = await requireAdminUser(req);
-    if (!auth.ok) {
-      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    if (!isFinancialAdminRole(auth.profile.role)) {
+      return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
     }
 
-    const { supabaseAdmin } = auth;
-
-    const [{ data: drivers, error: driverError }, { data: completedTrips, error: tripError }, { data: settlements, error: settlementError }] =
-      await Promise.all([
-        supabaseAdmin
-          .from("drivers")
-          .select(`
-            id,
-            first_name,
-            last_name,
-            phone,
-            online,
-            busy,
-            status,
-            verification_status
-          `)
-          .order("first_name"),
-        supabaseAdmin
-          .from("trips")
-          .select(`
-            id,
-            driver_id,
-            commission_amount,
-            driver_net_earnings,
-            fare_amount,
-            status,
-            created_at
-          `)
-          .eq("status", "completed"),
-        supabaseAdmin
-          .from("driver_settlements")
-          .select(`
-            id,
-            driver_id,
-            wallet_id,
-            amount_paid,
-            payment_method,
-            reference,
-            note,
-            created_at
-          `)
-          .order("created_at", { ascending: false })
-          .limit(200),
-      ]);
-
-    if (driverError) {
-      return NextResponse.json({ ok: false, error: driverError.message }, { status: 500 });
+    const params = new URL(req.url).searchParams;
+    const driverPage = Number(params.get("driverPage") ?? 1);
+    const settlementPage = Number(params.get("settlementPage") ?? 1);
+    if ([driverPage, settlementPage].some((page) => !Number.isInteger(page) || page < 1 || page > 100000)) {
+      return NextResponse.json({ ok: false, error: "Invalid page." }, { status: 400 });
     }
 
-    if (tripError) {
-      return NextResponse.json({ ok: false, error: tripError.message }, { status: 500 });
+    const db = auth.supabaseAdmin;
+    const [drivers, history] = await Promise.all([
+      db.from("drivers").select("id,first_name,last_name,phone,online,busy,status,verification_status", { count: "exact" })
+        .order("first_name").order("id").range((driverPage - 1) * pageSize, driverPage * pageSize - 1),
+      db.from("driver_settlements").select("id,driver_id,wallet_id,amount_paid,payment_method,reference,note,created_at", { count: "exact" })
+        .order("created_at", { ascending: false }).order("id", { ascending: false })
+        .range((settlementPage - 1) * pageSize, settlementPage * pageSize - 1),
+    ]);
+    if (drivers.error || history.error) {
+      return NextResponse.json({ ok: false, error: "Commission settlement records are unavailable." }, { status: 503 });
     }
 
-    if (settlementError) {
-      return NextResponse.json({ ok: false, error: settlementError.message }, { status: 500 });
+    const rows = drivers.data ?? [];
+    const driverRows = [];
+    for (let offset = 0; offset < rows.length; offset += 8) {
+      driverRows.push(...await Promise.all(rows.slice(offset, offset + 8).map(async (driver) => {
+        const [debt, latest] = await Promise.all([
+          readCommissionDebt((name, args) => db.rpc(name, args), driver.id),
+          db.from("driver_settlements").select("amount_paid,created_at").eq("driver_id", driver.id)
+            .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        return { ...driver, wallet_summary: {
+          balance_due: debt.balance_due,
+          total_commission: debt.total_commission,
+          total_driver_net: debt.total_driver_net,
+          total_trips_completed: debt.total_trips_completed,
+          total_paid: debt.total_settled,
+          cancellation_credits: debt.cancellation_credits,
+          last_payment_at: latest.error ? null : latest.data?.created_at ?? null,
+          last_payment_amount: latest.error ? null : latest.data?.amount_paid ?? null,
+          account_status: debt.balance_due > 0 ? "due" : "settled",
+        } };
+      })));
     }
 
-    const tripsByDriver = new Map<
-      string,
-      {
-        total_commission: number;
-        total_driver_net: number;
-        total_trips_completed: number;
-      }
-    >();
-
-    const typedDrivers = (drivers ?? []) as DriverRow[];
-    const typedCompletedTrips = (completedTrips ?? []) as CompletedTripRow[];
-    const typedSettlements = (settlements ?? []) as SettlementRow[];
-
-    for (const trip of typedCompletedTrips) {
-      const driverId = String(trip.driver_id ?? "").trim();
-      if (!driverId) continue;
-
-      const curr = tripsByDriver.get(driverId) ?? {
-        total_commission: 0,
-        total_driver_net: 0,
-        total_trips_completed: 0,
-      };
-
-      curr.total_commission += num(trip.commission_amount);
-      curr.total_driver_net +=
-        trip.driver_net_earnings != null
-          ? num(trip.driver_net_earnings)
-          : num(trip.fare_amount) - num(trip.commission_amount);
-      curr.total_trips_completed += 1;
-
-      tripsByDriver.set(driverId, curr);
-    }
-
-    const settlementsByDriver = new Map<
-      string,
-      {
-        total_paid: number;
-        last_payment_at: string | null;
-        last_payment_amount: number | null;
-      }
-    >();
-
-    for (const row of typedSettlements) {
-      const driverId = String(row.driver_id ?? "").trim();
-      if (!driverId) continue;
-
-      const curr = settlementsByDriver.get(driverId) ?? {
-        total_paid: 0,
-        last_payment_at: null,
-        last_payment_amount: null,
-      };
-
-      curr.total_paid += num(row.amount_paid);
-
-      if (!curr.last_payment_at) {
-        curr.last_payment_at = row.created_at ?? null;
-        curr.last_payment_amount = num(row.amount_paid);
-      }
-
-      settlementsByDriver.set(driverId, curr);
-    }
-
-    const driverRows = typedDrivers.map((driver) => {
-      const tripTotals = tripsByDriver.get(driver.id) ?? {
-        total_commission: 0,
-        total_driver_net: 0,
-        total_trips_completed: 0,
-      };
-
-      const settlementTotals = settlementsByDriver.get(driver.id) ?? {
-        total_paid: 0,
-        last_payment_at: null,
-        last_payment_amount: null,
-      };
-
-      const balanceDue = Math.max(0, tripTotals.total_commission - settlementTotals.total_paid);
-
-      return {
-        id: driver.id,
-        first_name: driver.first_name ?? null,
-        last_name: driver.last_name ?? null,
-        phone: driver.phone ?? null,
-        online: driver.online ?? null,
-        busy: driver.busy ?? null,
-        status: driver.status ?? null,
-        verification_status: driver.verification_status ?? null,
-        wallet_summary: {
-          balance_due: balanceDue,
-          total_commission: tripTotals.total_commission,
-          total_driver_net: tripTotals.total_driver_net,
-          total_trips_completed: tripTotals.total_trips_completed,
-          total_paid: settlementTotals.total_paid,
-          last_payment_at: settlementTotals.last_payment_at,
-          last_payment_amount: settlementTotals.last_payment_amount,
-          account_status: balanceDue > 0 ? "due" : "settled",
-        },
-      };
-    });
-
-    const driverNameById = new Map<string, string>();
-    for (const d of typedDrivers) {
-      const fullName = `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim();
-      driverNameById.set(d.id, fullName || d.phone || d.id);
-    }
-
-    const decoratedSettlements = typedSettlements.map((row) => ({
-      ...row,
-      driver_name: row.driver_id ? driverNameById.get(row.driver_id) ?? "Driver profile unavailable" : null,
-    }));
-
+    const settlementRows = history.data ?? [];
+    const ids = [...new Set(settlementRows.map((row) => row.driver_id).filter(Boolean))];
+    const names = ids.length
+      ? await db.from("drivers").select("id,first_name,last_name").in("id", ids)
+      : { data: [] };
+    const byId = new Map((names.data ?? []).map((row) => [row.id, `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim()]));
     return NextResponse.json({
       ok: true,
       drivers: driverRows,
-      settlements: decoratedSettlements,
+      settlements: settlementRows.map((row) => ({ ...row, driver_name: byId.get(row.driver_id) || "Driver profile unavailable" })),
+      driverPagination: { page: driverPage, pageSize, total: drivers.count },
+      settlementPagination: { page: settlementPage, pageSize, total: history.count },
     });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Server error." },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ ok: false, error: "Authoritative commission balances are unavailable." }, { status: 503 });
   }
 }

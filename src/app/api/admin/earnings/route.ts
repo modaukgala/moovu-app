@@ -1,225 +1,77 @@
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/admin";
-
-type TripRow = {
-  id: string;
-  driver_id: string | null;
-  fare_amount: number | null;
-  payment_method: string | null;
-  pickup_address: string | null;
-  dropoff_address: string | null;
-  status: string | null;
-  created_at: string | null;
-  commission_amount?: number | null;
-  driver_net_earnings?: number | null;
-};
-
-type DriverRow = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-};
-
-type TripEventRow = {
-  trip_id: string;
-  event_type: string;
-  created_at: string;
-};
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
-
-function startOfToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-function startOfWeek() {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  const d = new Date(now);
-  d.setDate(now.getDate() - diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function startOfMonth() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
-}
-
-function moneyNumber(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { collectBoundedPages, chunkValues } from "@/lib/admin/boundedRetrieval";
+import { readCommissionDebt } from "@/lib/admin/commissionDebt";
+import { earningsPeriod, recordedSum, summariseTrips } from "@/lib/admin/earningsMetrics";
+import { scanTrips, verifiedOnlineReceipts } from "@/lib/admin/earningsRead";
 
 export async function GET(req: Request) {
-  try {
-    const auth = await requireAdminUser(req);
-    if (!auth.ok) {
-      return NextResponse.json(
-        { ok: false, error: auth.error },
-        { status: auth.status }
-      );
-    }
-
-    const { supabaseAdmin } = auth;
-
-    const [{ data: trips, error: tripsError }, { data: drivers, error: driversError }] = await Promise.all([
-      supabaseAdmin
-        .from("trips")
-        .select(`
-          id,
-          driver_id,
-          fare_amount,
-          payment_method,
-          pickup_address,
-          dropoff_address,
-          status,
-          created_at,
-          commission_amount,
-          driver_net_earnings
-        `)
-        .eq("status", "completed")
-        .order("created_at", { ascending: false }),
-      supabaseAdmin.from("drivers").select("id,first_name,last_name,phone"),
-    ]);
-
-    if (tripsError) {
-      return NextResponse.json(
-        { ok: false, error: tripsError.message },
-        { status: 500 }
-      );
-    }
-
-    if (driversError) {
-      return NextResponse.json(
-        { ok: false, error: driversError.message },
-        { status: 500 }
-      );
-    }
-
-    const driverNameById = new Map<string, string>();
-    for (const driver of (drivers ?? []) as DriverRow[]) {
-      const fullName = `${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim();
-      driverNameById.set(driver.id, fullName || driver.phone || driver.id);
-    }
-
-    const completedTrips = (trips ?? []) as TripRow[];
-    const tripIds = completedTrips.map((t) => t.id);
-
-    const completedAtMap = new Map<string, string>();
-
-    if (tripIds.length > 0) {
-      const { data: events } = await supabaseAdmin
-        .from("trip_events")
-        .select("trip_id,event_type,created_at")
-        .in("trip_id", tripIds)
-        .eq("event_type", "trip_completed")
-        .order("created_at", { ascending: false });
-
-      for (const row of (events ?? []) as TripEventRow[]) {
-        if (!completedAtMap.has(row.trip_id)) {
-          completedAtMap.set(row.trip_id, row.created_at);
-        }
-      }
-    }
-
-    const normalizedTrips = completedTrips.map((trip) => ({
-      ...trip,
-      completed_at: completedAtMap.get(trip.id) ?? trip.created_at,
-      driver_name: trip.driver_id ? driverNameById.get(trip.driver_id) ?? "Driver profile unavailable" : null,
-    }));
-
-    const todayStart = startOfToday().getTime();
-    const weekStart = startOfWeek().getTime();
-    const monthStart = startOfMonth().getTime();
-
-    let todayTotal = 0;
-    let weekTotal = 0;
-    let monthTotal = 0;
-
-    let todayCommission = 0;
-    let weekCommission = 0;
-    let monthCommission = 0;
-
-    for (const trip of normalizedTrips) {
-      const fare = moneyNumber(trip.fare_amount);
-      const commission = moneyNumber(trip.commission_amount);
-      const completedAt = trip.completed_at ? new Date(trip.completed_at).getTime() : 0;
-
-      if (completedAt >= todayStart) {
-        todayTotal += fare;
-        todayCommission += commission;
-      }
-      if (completedAt >= weekStart) {
-        weekTotal += fare;
-        weekCommission += commission;
-      }
-      if (completedAt >= monthStart) {
-        monthTotal += fare;
-        monthCommission += commission;
-      }
-    }
-
-    const totalRevenue = normalizedTrips.reduce(
-      (sum, trip) => sum + moneyNumber(trip.fare_amount),
-      0
-    );
-
-    const totalCommission = normalizedTrips.reduce(
-      (sum, trip) => sum + moneyNumber(trip.commission_amount),
-      0
-    );
-
-    const driverPayoutEstimate = normalizedTrips.reduce(
-      (sum, trip) =>
-        sum +
-        (trip.driver_net_earnings != null
-          ? moneyNumber(trip.driver_net_earnings)
-          : moneyNumber(trip.fare_amount) - moneyNumber(trip.commission_amount)),
-      0
-    );
-
-    const byPaymentMethod = normalizedTrips.reduce<
-      Record<string, { revenue: number; commission: number; count: number }>
-    >((acc, trip) => {
-      const key = String(trip.payment_method ?? "unknown").toLowerCase();
-      if (!acc[key]) {
-        acc[key] = { revenue: 0, commission: 0, count: 0 };
-      }
-      acc[key].revenue += moneyNumber(trip.fare_amount);
-      acc[key].commission += moneyNumber(trip.commission_amount);
-      acc[key].count += 1;
-      return acc;
-    }, {});
-
-    return NextResponse.json({
-      ok: true,
-      earnings: {
-        today_total: todayTotal,
-        week_total: weekTotal,
-        month_total: monthTotal,
-        today_commission: todayCommission,
-        week_commission: weekCommission,
-        month_commission: monthCommission,
-        total_revenue: totalRevenue,
-        total_commission: totalCommission,
-        estimated_driver_payout: driverPayoutEstimate,
-        commission_rate: null,
-        commission_rate_label: "10% MOOVU Go / 12% MOOVU Go XL",
-        total_completed_trips: normalizedTrips.length,
-        by_payment_method: byPaymentMethod,
-        recent_completed_trips: normalizedTrips.slice(0, 15),
+  const auth = await requireAdminUser(req);
+  if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  if (!isFinancialAdminRole(auth.profile.role)) return NextResponse.json({ ok: false, error: "Financial Admin access required." }, { status: 403 });
+  let period: ReturnType<typeof earningsPeriod>;
+  try { period = earningsPeriod(new URL(req.url).searchParams); }
+  catch { return NextResponse.json({ ok: false, error: "Choose a valid date range." }, { status: 400 }); }
+  const db = auth.supabaseAdmin;
+  async function receipts(table: "driver_settlements" | "driver_subscription_payments") {
+    const result = await collectBoundedPages<{ amount_paid: number | null }>({
+      pageSize: 500, maxRows: 10000, load: async (from, to) => {
+        const query = await db.from(table).select("id,amount_paid").gte("created_at", period.start)
+          .lt("created_at", period.end).order("id").range(from, to);
+        if (query.error || !query.data) throw new Error("Receipts unavailable.");
+        return query.data;
       },
     });
-  } catch (e: unknown) {
-    return NextResponse.json(
-      { ok: false, error: errorMessage(e, "Server error.") },
-      { status: 500 }
-    );
+    return { value: result.complete ? recordedSum(result.rows.map((row) => row.amount_paid)) : null, complete: result.complete };
   }
+  async function outstanding() {
+    const drivers = await collectBoundedPages<{ id: string }>({
+      pageSize: 200, maxRows: 2000, load: async (from, to) => {
+        const result = await db.from("drivers").select("id").order("id").range(from, to);
+        if (result.error || !result.data) throw new Error("Driver population unavailable.");
+        return result.data;
+      },
+    });
+    if (!drivers.complete) return { value: null, complete: false };
+    const balances = [];
+    for (const group of chunkValues(drivers.rows, 8)) {
+      balances.push(...await Promise.all(group.map(({ id }) => readCommissionDebt((name, args) => db.rpc(name, args), id))));
+    }
+    return { value: recordedSum(balances.map((row) => row.balance_due)), complete: true };
+  }
+  async function memberships() {
+    const payments = await collectBoundedPages<{ financial_transaction_id: string; amount_cents: number }>({
+      pageSize: 500, maxRows: 10000, load: async (from, to) => {
+        const result = await db.from("phase5_membership_payments").select("financial_transaction_id,amount_cents")
+          .eq("status", "APPROVED").not("financial_transaction_id", "is", null)
+          .gte("reviewed_at", period.start).lt("reviewed_at", period.end).order("id").range(from, to);
+        if (result.error || !result.data) throw new Error("Membership receipts unavailable.");
+        return result.data;
+      },
+    });
+    if (!payments.complete) return { value: null, complete: false };
+    const unique = new Map(payments.rows.map((row) => [row.financial_transaction_id, row.amount_cents]));
+    let cents = 0;
+    for (const ids of chunkValues([...unique.keys()], 100)) {
+      const result = await db.from("financial_transactions").select("id").eq("transaction_state", "POSTED").in("id", ids);
+      if (result.error || !result.data || result.data.length !== ids.length) throw new Error("Membership transaction evidence unavailable.");
+      for (const row of result.data) {
+        const value = unique.get(row.id);
+        if (!Number.isSafeInteger(value)) throw new Error("Membership receipt amount unavailable.");
+        cents += value!;
+      }
+    }
+    return { value: cents / 100, complete: true };
+  }
+  const [trips, direct, subscriptions, membership, online, debt] = await Promise.all([
+    scanTrips(db, period).catch(() => null), receipts("driver_settlements").catch(() => null),
+    receipts("driver_subscription_payments").catch(() => null), memberships().catch(() => null),
+    verifiedOnlineReceipts(db, period).catch(() => null), outstanding().catch(() => null),
+  ]);
+  return NextResponse.json({ ok: true, period, asOf: new Date().toISOString(),
+    trips: trips?.complete ? summariseTrips(trips.rows) : null, tripsComplete: trips?.complete ?? null,
+    direct, subscriptions, membership, online, debt,
+    internalRecovery: null, totalSettled: null, grossPayout: null, netPayout: null,
+    manualPayout: null, verifiedManualPayout: null, outstandingPayout: null,
+  });
 }

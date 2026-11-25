@@ -298,11 +298,11 @@ export default function AdminDashboardPage() {
           <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.waiting ?? "Unavailable"}</div>
           <p className="mt-2 text-sm text-slate-600">Requests marked waiting for confirmation.</p>
         </Link>
-        <div className="moovu-card p-5">
+        <Link href="/admin/online-payments#fulfilment" className="moovu-card p-5">
           <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-600">Yoco trip-payment exceptions</div>
-          <div className="mt-2 text-xl font-black text-slate-950">{paymentFlags.yocoExceptions ?? "Unsupported"}</div>
-          <p className="mt-2 text-sm text-slate-600">This baseline has a verified-payment report, but no supported exception queue.</p>
-        </div>
+          <div className="mt-2 text-xl font-black text-slate-950">{paymentFlags.yocoExceptions ?? "Unavailable"}</div>
+          <p className="mt-2 text-sm text-slate-600">Open the actionable fulfilment queue · Financial Admin access</p>
+        </Link>
       </section>
 
       <section className="moovu-admin-command-grid">

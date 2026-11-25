@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRead";
+import CommissionFirstEstimates from "@/components/finance/CommissionFirstEstimates";
+
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -9,7 +12,6 @@ import {
 } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
-import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import EmptyState from "@/components/ui/EmptyState";
 import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import LoadingState from "@/components/ui/LoadingState";
@@ -127,81 +129,34 @@ function tripDate(trip: CompletedTrip) {
 }
 
 export default function DriverEarningsPage() {
-  const [loading, setLoading] = useState(true);
-  const [authRequired, setAuthRequired] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [driver, setDriver] = useState<DriverInfo | null>(null);
-  const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
-  const [settlements, setSettlements] = useState<Settlement[]>([]);
-  const [subscriptionPayments, setSubscriptionPayments] = useState<SubscriptionPayment[]>([]);
-  const [trips, setTrips] = useState<CompletedTrip[]>([]);
-  const [cancellationFees, setCancellationFees] = useState<CancellationFee[]>([]);
-  const [cancellationDriverEarnings, setCancellationDriverEarnings] = useState(0);
-  const [lateCancellationDriverEarnings, setLateCancellationDriverEarnings] = useState(0);
-  const [noShowDriverEarnings, setNoShowDriverEarnings] = useState(0);
-  const [commissionBreakdown, setCommissionBreakdown] = useState<CommissionTransaction[]>([]);
-
   const [selectedPlan, setSelectedPlan] = useState<PlanType>("month");
-
-  const getToken = useCallback(async () => {
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    return session?.access_token || "";
+  const read = useCallback(async (url: string, signal: AbortSignal) => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return null;
+    return (await readFinancialJson<{ earnings: {
+      wallet: Wallet; driver: DriverInfo | null; payment_requests: PaymentRequest[];
+      settlements: Settlement[]; subscription_payments: SubscriptionPayment[]; recent_completed_trips: CompletedTrip[];
+      cancellation_fees: CancellationFee[] | null; cancellation_unavailable: boolean; cancellation_driver_earnings: number | null;
+      late_cancellation_driver_earnings: number | null; no_show_driver_earnings: number | null; commission_breakdown: CommissionTransaction[];
+    } }>(url, session.access_token, signal, (body) => {
+      const data = body.earnings as { wallet?: { balance_due?: number }; recent_completed_trips?: unknown } | undefined;
+      return Number.isFinite(data?.wallet?.balance_due) && Array.isArray(data?.recent_completed_trips);
+    })).earnings;
   }, []);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setMsg(null);
-
-    const token = await getToken();
-    if (!token) {
-      setAuthRequired(true);
-      setLoading(false);
-      return;
-    }
-
-    setAuthRequired(false);
-
-    const res = await fetch("/api/driver/earnings", {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const json = await res.json().catch(() => null);
-
-    if (!json?.ok) {
-      setMsg(json?.error || "Failed to load MOOVU payments.");
-      setLoading(false);
-      return;
-    }
-
-    setWallet(json.earnings?.wallet ?? null);
-    setDriver(json.earnings?.driver ?? null);
-    setPaymentRequests(json.earnings?.payment_requests ?? []);
-    setSettlements(json.earnings?.settlements ?? []);
-    setSubscriptionPayments(json.earnings?.subscription_payments ?? []);
-    setTrips(json.earnings?.recent_completed_trips ?? []);
-    setCancellationFees(json.earnings?.cancellation_fees ?? []);
-    setCancellationDriverEarnings(Number(json.earnings?.cancellation_driver_earnings ?? 0));
-    setLateCancellationDriverEarnings(Number(json.earnings?.late_cancellation_driver_earnings ?? 0));
-    setNoShowDriverEarnings(Number(json.earnings?.no_show_driver_earnings ?? 0));
-    setCommissionBreakdown(json.earnings?.commission_breakdown ?? []);
-    setLoading(false);
-  }, [getToken]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadData]);
+  const report = useFinancialRead("/api/driver/earnings", read);
+  const { data, loading } = report;
+  const wallet = data?.wallet;
+  const driver = data?.driver;
+  const paymentRequests = data?.payment_requests ?? [];
+  const settlements = data?.settlements ?? [];
+  const subscriptionPayments = data?.subscription_payments ?? [];
+  const trips = useMemo(() => data?.recent_completed_trips ?? [], [data]);
+  const cancellationUnavailable = data?.cancellation_unavailable === true;
+  const cancellationFees = data?.cancellation_fees ?? [];
+  const cancellationDriverEarnings = data?.cancellation_driver_earnings ?? 0;
+  const lateCancellationDriverEarnings = data?.late_cancellation_driver_earnings ?? 0;
+  const noShowDriverEarnings = data?.no_show_driver_earnings ?? 0;
+  const commissionBreakdown = data?.commission_breakdown ?? [];
 
   const commissionDue = Number(wallet?.balance_due ?? 0);
   const subscriptionSelectedPrice = DRIVER_SUBSCRIPTION_PLANS[selectedPlan].amount;
@@ -242,13 +197,16 @@ export default function DriverEarningsPage() {
     );
   }
 
-  if (authRequired) {
+  if (data === null) {
     return <DriverAuthRequired description="Sign in to view your earnings, subscription status, and MOOVU commission balance." />;
   }
 
+  if (!data) return <main className="driver-mobile-page"><p role="alert">{report.error ?? "Driver earnings unavailable."} <button onClick={report.retry}>Retry earnings</button></p><CommissionFirstEstimates /></main>;
+
   return (
     <main className="driver-mobile-page driver-earnings-v3 text-black">
-      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      <CommissionFirstEstimates />
+      {report.error && <p role="alert">{report.error} Showing previously loaded earnings. <button onClick={report.retry}>Retry earnings</button></p>}
 
       <div className="driver-mobile-container space-y-5">
         <header className="driver-money-heading">
@@ -276,7 +234,7 @@ export default function DriverEarningsPage() {
             <span className="driver-money-icon"><WalletCards aria-hidden="true" /></span>
             <div>
               <small>Total earned</small>
-              <strong>{money(Number(wallet?.total_driver_net ?? earningsSummary.total) + cancellationDriverEarnings)}</strong>
+              <strong>{cancellationUnavailable ? "Unavailable" : money(Number(wallet?.total_driver_net ?? earningsSummary.total) + cancellationDriverEarnings)}</strong>
               <p>{wallet?.total_trips_completed ?? trips.length} completed trips + fees</p>
             </div>
           </article>
@@ -311,19 +269,19 @@ export default function DriverEarningsPage() {
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <MetricCard
             label="Cancellation amounts"
-            value={money(lateCancellationDriverEarnings)}
+            value={cancellationUnavailable ? "Unavailable" : money(lateCancellationDriverEarnings)}
             helper="Recorded Driver amounts; check status below"
             tone={lateCancellationDriverEarnings > 0 ? "warning" : "default"}
           />
           <MetricCard
             label="No-show amounts"
-            value={money(noShowDriverEarnings)}
+            value={cancellationUnavailable ? "Unavailable" : money(noShowDriverEarnings)}
             helper="Recorded Driver amounts; check status below"
             tone={noShowDriverEarnings > 0 ? "primary" : "default"}
           />
           <MetricCard
             label="Fee amounts total"
-            value={money(cancellationDriverEarnings)}
+            value={cancellationUnavailable ? "Unavailable" : money(cancellationDriverEarnings)}
             helper="Legacy credits and Phase 4 earned obligations differ"
             tone="success"
           />
@@ -536,7 +494,7 @@ export default function DriverEarningsPage() {
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Cancellation and no-show compensation</h2>
 
-          {cancellationFees.length === 0 ? (
+          {cancellationUnavailable ? <p>Cancellation earnings unavailable. <button onClick={() => void report.reload()}>Retry earnings</button></p> : cancellationFees.length === 0 ? (
             <EmptyState
               title="No cancellation compensation"
               description="Late cancellation and no-show amounts will appear here."
