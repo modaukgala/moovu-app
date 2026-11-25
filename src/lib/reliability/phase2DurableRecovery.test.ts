@@ -43,6 +43,8 @@ test("runtime claims durable work before posting and cron is secret protected", 
   assert.deepEqual(config.crons, [
     { path: "/api/jobs/phase2-shadow-recovery", schedule: "0 2 * * *" },
     { path: "/api/jobs/online-payment-dispatch", schedule: "* * * * *" },
+    { path: "/api/jobs/dispatch", schedule: "* * * * *" },
+    { path: "/api/jobs/engagement", schedule: "0 * * * *" },
   ]);
 });
 

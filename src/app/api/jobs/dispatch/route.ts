@@ -7,6 +7,7 @@ import { isDispatchWorkerAuthorized } from "@/lib/dispatch/dispatchScheduler";
 import { releaseDueScheduledTrips } from "@/lib/operations/releaseDueScheduledTrips";
 import { MAX_DISPATCH_ATTEMPTS, retryDelayMs } from "@/lib/dispatch/reliability";
 import { isNinetySecondDispatchEnabledFor } from "@/lib/dispatch/matchingWindowPolicy";
+import { sweepUnmatchedTrips } from "@/lib/dispatch/sweepUnmatchedTrips";
 
 type ClaimedJob = {
   id: string;
@@ -195,4 +196,26 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, processed: results.length, results });
+}
+
+/**
+ * Vercel Cron entry point (every minute). Vercel sends GET with
+ * "Authorization: Bearer $CRON_SECRET". Runs the 30-minute safety net, then the
+ * durable dispatch job worker (escalations, expiries, recoveries).
+ */
+export async function GET(req: Request) {
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  const jobSecret = process.env.DISPATCH_JOB_SECRET?.trim();
+  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ ok: false, error: "Unauthorized dispatch cron." }, { status: 401 });
+  }
+  const sweep = await sweepUnmatchedTrips().catch((e: unknown) => ({ ok: false as const, error: String(e) }));
+  if (!jobSecret) return NextResponse.json({ ok: false, sweep, error: "Dispatch worker secret missing." }, { status: 503 });
+  const workerResponse = await POST(new Request(req.url, {
+    method: "POST",
+    headers: { authorization: `Bearer ${jobSecret}`, "content-type": "application/json" },
+    body: JSON.stringify({ limit: 20 }),
+  }));
+  const worker = await workerResponse.json().catch(() => null);
+  return NextResponse.json({ ok: true, sweep, worker });
 }
