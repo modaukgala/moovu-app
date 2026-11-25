@@ -1038,7 +1038,8 @@ export default function DriverHomePage() {
     void startBackgroundLocation(
       (fix) => {
         const now = Date.now();
-        if (now - lastBackgroundBeatRef.current < LIVE_LOCATION_CONFIG.idleHeartbeatMs) return;
+        // At most one update a minute in the background, and only after moving 25m+.
+        if (now - lastBackgroundBeatRef.current < 60_000) return;
         lastBackgroundBeatRef.current = now;
         void sendHeartbeat(fix.lat, fix.lng, {
           heading: fix.heading, speedMps: fix.speedMps, accuracyM: fix.accuracyM,
