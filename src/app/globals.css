@@ -11958,3 +11958,14 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
 /* Driver home: one big Go online / Go offline button */
 .driver-map-primary-status { min-height: 68px; font-size: 21px; font-weight: 900; border-radius: 20px; background: var(--moovu-success); color: #fff; box-shadow: none; background-image: none; }
 .driver-map-primary-status.is-online { background: #fff; color: var(--moovu-text); border: 2px solid var(--moovu-border-strong); }
+/* Google / Apple sign-in */
+.moovu-social-auth { display: grid; gap: 10px; }
+.moovu-social-btn { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; border-radius: 14px; border: 1px solid var(--moovu-border-strong); background: #fff; color: var(--moovu-text); font-size: 16px; font-weight: 700; }
+.moovu-social-apple { background: #050505; color: #fff; border-color: #050505; }
+.moovu-social-divider { display: flex; align-items: center; gap: 10px; color: var(--moovu-text-soft); font-size: 13px; font-weight: 600; }
+.moovu-social-divider::before, .moovu-social-divider::after { content: ""; flex: 1; height: 1px; background: var(--moovu-border); }
+.moovu-link-prompt { position: fixed; inset: 0; z-index: 10050; display: grid; place-items: end center; background: rgba(5, 5, 5, 0.45); padding: 16px; }
+.moovu-link-card { width: 100%; max-width: 420px; display: grid; gap: 12px; padding: 22px; border-radius: 24px; background: #fff; }
+.moovu-link-card h2 { margin: 0; font-size: 22px; font-weight: 900; }
+.moovu-link-card p { margin: 0; color: var(--moovu-text-soft); font-size: 15px; }
+.moovu-link-later { min-height: 44px; background: transparent; color: var(--moovu-text-soft); font-weight: 700; }

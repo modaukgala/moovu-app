@@ -34,6 +34,7 @@ import {
   stopMarkerIcon,
 } from "@/lib/maps/liveMapMarkers";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
+import LinkSignInPrompt from "@/components/auth/LinkSignInPrompt";
 import DriverApplicationNudge from "@/components/driver/DriverApplicationNudge";
 import { isBackgroundLocationAvailable, startBackgroundLocation } from "@/lib/location/backgroundLocation";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
@@ -201,6 +202,12 @@ export default function DriverHomePage() {
         });
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.ok || !json?.driver) {
+          // A brand-new account (e.g. first Google/Apple sign-in) has no driver
+          // record yet: send it to the driver application.
+          if (json?.code === "DRIVER_MISSING" || json?.code === "NOT_LINKED") {
+            router.replace("/driver/onboarding");
+            return null;
+          }
           if (!silent) {
             setDriver(null);
             setProfileLoadError(json?.error || "Driver profile is unavailable. Try again.");
@@ -1948,6 +1955,7 @@ export default function DriverHomePage() {
       />
 
       <DriverBottomNav />
+      {driver ? <LinkSignInPrompt next="/driver" /> : null}
       <NotificationPermissionReminder
         role="driver"
         active={Boolean(driver) && !driver?.online && !offer && !currentTrip && !otpEntryOpen && !busy && !offerResponding && !driverToolsOpen && !tripSheetOpen}
