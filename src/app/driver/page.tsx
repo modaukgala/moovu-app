@@ -34,6 +34,7 @@ import {
   stopMarkerIcon,
 } from "@/lib/maps/liveMapMarkers";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
+import { isBackgroundLocationAvailable, startBackgroundLocation } from "@/lib/location/backgroundLocation";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { formatFareRands } from "@/lib/pricing/fareDisplay";
@@ -1026,6 +1027,37 @@ export default function DriverHomePage() {
       loud: true,
     });
   }, [offer?.dropoff_address, offer?.id, offer?.pickup_address]);
+
+  // Native background location: keeps sending heartbeats while the phone is
+  // locked or the driver is in another app, so they stay visible for trips.
+  const backgroundStopRef = useRef<(() => Promise<void>) | null>(null);
+  const lastBackgroundBeatRef = useRef(0);
+  useEffect(() => {
+    let cancelled = false;
+    if (!driver?.online || !isBackgroundLocationAvailable()) return;
+    void startBackgroundLocation(
+      (fix) => {
+        const now = Date.now();
+        if (now - lastBackgroundBeatRef.current < LIVE_LOCATION_CONFIG.idleHeartbeatMs) return;
+        lastBackgroundBeatRef.current = now;
+        void sendHeartbeat(fix.lat, fix.lng, {
+          heading: fix.heading, speedMps: fix.speedMps, accuracyM: fix.accuracyM,
+        });
+      },
+      (message) => setGpsInfo({ tone: "danger", message }),
+    ).then((stop) => {
+      if (cancelled) void stop?.();
+      else backgroundStopRef.current = stop;
+    });
+    return () => {
+      cancelled = true;
+      const stop = backgroundStopRef.current;
+      backgroundStopRef.current = null;
+      void stop?.();
+    };
+    // Start/stop only with online state; sendHeartbeat is stable in behaviour.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver?.online]);
 
   useEffect(() => {
     if (gpsTimerRef.current) clearInterval(gpsTimerRef.current);

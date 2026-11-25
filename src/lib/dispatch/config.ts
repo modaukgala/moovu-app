@@ -1,6 +1,7 @@
 export const DISPATCH_CONFIG = {
-  escalationSeconds: 25,
-  acceptWindowSeconds: 25,
+  // 40s: data showed accepted offers often took 20s+ and many timed out at 25s.
+  escalationSeconds: 40,
+  acceptWindowSeconds: 40,
   cycleCooldownSeconds: 0,
   gpsFreshnessSeconds: 90,
   backgroundOfferEligibilitySeconds: 8 * 60 * 60,
