@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import SocialSignInButtons from "@/components/auth/SocialSignInButtons";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import TimedPasswordField from "@/components/ui/TimedPasswordField";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
@@ -280,6 +281,7 @@ export default function CustomerAuthPage() {
         <section className="space-y-4">
           {step === "phone" && (
             <>
+              <SocialSignInButtons next={nextPath} />
               <div className="moovu-auth-step-card">
                 <h2 className="text-lg font-semibold text-slate-900">
                   Step 1: Email or cellphone

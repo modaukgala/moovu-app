@@ -5,6 +5,7 @@ import ClientErrorRecovery from "@/components/ClientErrorRecovery";
 import InAppNotificationBar from "@/components/InAppNotificationBar";
 import PortalNotificationLauncher from "@/components/PortalNotificationLauncher";
 import NotificationDeepLinkRouter from "@/components/NotificationDeepLinkRouter";
+import AuthDeepLinkHandler from "@/components/auth/AuthDeepLinkHandler";
 import CustomerLaunchNotice from "@/components/CustomerLaunchNotice";
 import CustomerTripRecovery from "@/components/customer/CustomerTripRecovery";
 
@@ -55,6 +56,7 @@ export default function RootLayout({
         <CapacitorBackButtonHandler />
         <PortalNotificationLauncher />
         <NotificationDeepLinkRouter />
+        <AuthDeepLinkHandler />
         <CustomerLaunchNotice />
       </body>
     </html>

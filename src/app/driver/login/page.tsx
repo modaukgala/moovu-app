@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SocialSignInButtons from "@/components/auth/SocialSignInButtons";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -104,6 +105,7 @@ export default function DriverLoginPage() {
           </div>
 
           <section className="space-y-4">
+            <SocialSignInButtons next="/driver" />
             <input
               className="moovu-input"
               placeholder="Email"

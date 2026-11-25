@@ -1,4 +1,5 @@
 "use client";
+import LinkSignInPrompt from "@/components/auth/LinkSignInPrompt";
 import MoovuLoadingScreen, { MoovuInlineLoader } from "@/components/customer/MoovuLoadingScreen";
 
 import {
@@ -683,6 +684,12 @@ export default function RiderBookingPage() {
     });
     const json = (await res.json()) as CustomerMe;
     if (!json?.ok || !json.customer) {
+      // New Google/Apple customers add name + cellphone once before booking.
+      const provider = String(session.user?.app_metadata?.provider ?? "");
+      if (provider === "google" || provider === "apple") {
+        router.replace("/customer/complete-profile");
+        return;
+      }
       router.replace("/customer/auth?next=/book");
       return;
     }
@@ -3404,6 +3411,7 @@ export default function RiderBookingPage() {
           </div>
         </div>
       </div>
+      {!authLoading && customer ? <LinkSignInPrompt next="/book" /> : null}
       <CustomerBottomNav
         className="booking-scroll-nav"
         visibilityMode="controlled"
