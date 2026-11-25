@@ -21,6 +21,8 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
   { href: "/admin/commission-payments", label: "Commissions", group: "Finance" },
   { href: "/admin/earnings", label: "Earnings", group: "Finance" },
   { href: "/admin/reports", label: "Reports", group: "Finance" },
+  { href: "/admin/business-intelligence", label: "Business Intelligence", group: "Finance" },
+  { href: "/admin/business-management", label: "Business Management", group: "Archive" },
   { href: "/admin/moovu-plus", label: "MOOVU+", group: "Finance" },
   { href: "/admin/subscriptions", label: "Subscriptions", group: "Finance" },
   { href: "/admin/notifications", label: "Notifications", group: "Notifications" },

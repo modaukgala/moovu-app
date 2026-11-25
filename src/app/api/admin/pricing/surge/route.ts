@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { getActiveManualSurge, setActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
-import { SURGE_MODES, validateSurgeMode } from "@/lib/domain/fare";
+import { readManualSurge, setActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
+import { SURGE_MODES } from "@/lib/domain/fare";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +11,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   }
 
-  const surge = await getActiveManualSurge();
+  const setting = await readManualSurge();
   return NextResponse.json(
-    { ok: true, surge, modes: Object.values(SURGE_MODES) },
+    { ok: true, ...setting, modes: Object.values(SURGE_MODES) },
     {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
@@ -29,7 +29,10 @@ export async function POST(req: Request) {
   }
 
   const body = (await req.json().catch(() => null)) as { mode?: unknown } | null;
-  const mode = validateSurgeMode(body?.mode);
+  const mode = body?.mode;
+  if (typeof mode !== "string" || !Object.hasOwn(SURGE_MODES, mode)) {
+    return NextResponse.json({ ok: false, error: "Choose a supported surge mode." }, { status: 400 });
+  }
   const result = await setActiveManualSurge(mode, auth.user.id);
 
   if (!result.ok) {
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json(
-    { ok: true, surge: result.surge, modes: Object.values(SURGE_MODES) },
+    { ok: true, surge: result.surge, state: "configured", updatedAt: result.updatedAt, updatedBy: result.updatedBy, modes: Object.values(SURGE_MODES) },
     {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
