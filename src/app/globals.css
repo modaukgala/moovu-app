@@ -11884,3 +11884,77 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
     padding-inline: 12px;
   }
 }
+
+/* ---- MOOVU clean (2026-11-25): simpler, larger, flatter. Same brand colours. ---- */
+.mbk-map-satellite {
+  position: absolute;
+  top: calc(164px + env(safe-area-inset-top));
+  right: 16px;
+  z-index: 12;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--moovu-border);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--moovu-text);
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+.mbk-map-satellite[aria-pressed="true"] { background: var(--moovu-primary); color: #fff; border-color: var(--moovu-primary); }
+.moovu-location-picker-view {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+}
+.moovu-location-picker-view button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--moovu-text-soft);
+  background: transparent;
+}
+.moovu-location-picker-view button[aria-pressed="true"] { background: var(--moovu-primary); color: #fff; }
+
+/* Flat, solid main buttons (no glow), tall enough to tap easily. */
+.moovu-btn-primary, .moovu-btn-primary:hover, .moovu-confirm-button { box-shadow: none; background-image: none; }
+.moovu-btn { min-height: 48px; font-size: 15px; }
+.moovu-confirm-button { min-height: 58px; font-size: 17px; }
+@media (max-width: 380px) { .moovu-confirm-button { min-height: 54px; font-size: 16px; } }
+/* Readable small text: nothing under 12px; labels in sentence case. */
+.moovu-field-label { font-size: 13px; letter-spacing: 0; text-transform: none; }
+.moovu-kicker, .moovu-section-title { letter-spacing: 0.04em; }
+.moovu-field-hint, .customer-booking-payment-note { font-size: 13px; }
+.moovu-whatsapp-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 60px; padding: 0 20px; border-radius: 18px;
+  background: var(--moovu-success); color: #fff; font-size: 18px; font-weight: 800; text-decoration: none;
+}
+.moovu-whatsapp-btn:hover { filter: brightness(0.95); color: #fff; }
+.moovu-help-list { display: grid; border: 1px solid var(--moovu-border); border-radius: 18px; background: #fff; overflow: hidden; }
+.moovu-help-list a { display: block; padding: 16px; font-size: 16px; font-weight: 600; color: var(--moovu-text); text-decoration: none; border-top: 1px solid var(--moovu-bg-soft); }
+.moovu-help-list a:first-child { border-top: 0; }
+/* Customer start/end code always visible during the trip */
+.customer-code-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 1px solid var(--moovu-border); border-radius: 16px; background: #fff; }
+.customer-code-card p { margin: 0; font-size: 14px; font-weight: 600; color: var(--moovu-text-soft); }
+.customer-code-card strong { font-size: 28px; font-weight: 900; letter-spacing: 4px; color: var(--moovu-text); white-space: nowrap; }
+/* Driver offer: shrinking timer, big Accept, quiet Decline */
+.driver-offer-timer { height: 6px; margin: 0 0 10px; border-radius: 3px; background: var(--moovu-bg-muted); overflow: hidden; }
+.driver-offer-timer span { display: block; height: 100%; background: var(--moovu-primary); transition: width 1s linear; }
+.moovu-driver-accept-big { min-height: 60px; font-size: 19px; font-weight: 900; border-radius: 16px; }
+.moovu-driver-decline-quiet { min-height: 44px; background: transparent !important; border: 0 !important; color: var(--moovu-text-soft) !important; box-shadow: none !important; font-weight: 700; }
+/* End-code bypass tucked away */
+.driver-end-code-problem { grid-column: 1 / -1; }
+.driver-end-code-problem summary { cursor: pointer; padding: 8px 0; font-size: 14px; font-weight: 700; color: var(--moovu-text-soft); }
+/* Driver home: one big Go online / Go offline button */
+.driver-map-primary-status { min-height: 68px; font-size: 21px; font-weight: 900; border-radius: 20px; background: var(--moovu-success); color: #fff; box-shadow: none; background-image: none; }
+.driver-map-primary-status.is-online { background: #fff; color: var(--moovu-text); border: 2px solid var(--moovu-border-strong); }

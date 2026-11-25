@@ -59,6 +59,7 @@ export default function LocationMapPicker({
   const defaultLng = defaultCenter.lng;
   const initialLat = initialLocation?.lat;
   const initialLng = initialLocation?.lng;
+  const [satellite, setSatellite] = useState(false);
   const [center, setCenter] = useState(initialLocation ?? defaultCenter);
   const [label, setLabel] = useState(fallbackLabel(kind));
   const [placeId, setPlaceId] = useState("");
@@ -241,6 +242,10 @@ export default function LocationMapPicker({
         >
           <LocateFixed aria-hidden="true" size={20} strokeWidth={2.2} />
         </button>
+        <div className="moovu-location-picker-view" role="group" aria-label="Map view">
+          <button type="button" aria-pressed={!satellite} onClick={() => { setSatellite(false); mapRef.current?.setMapTypeId("roadmap"); }}>Map</button>
+          <button type="button" aria-pressed={satellite} onClick={() => { setSatellite(true); mapRef.current?.setMapTypeId("hybrid"); }}>Satellite</button>
+        </div>
         <div className="moovu-location-picker-tip">Move the map to place the pin exactly</div>
       </div>
 

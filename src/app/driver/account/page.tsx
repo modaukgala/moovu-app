@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MoovuInlineLoader } from "@/components/ui/MoovuLoadingScreen";
 import Link from "next/link";
-import { CarFront, ChevronRight, CircleUserRound, FileCheck2, Headphones, LogOut, ShieldCheck, WalletCards } from "lucide-react";
+import { CarFront, CircleUserRound, FileCheck2, Headphones, LogOut, ShieldCheck, WalletCards } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
 import DriverSectionTabs from "@/components/app-shell/DriverSectionTabs";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -154,11 +154,7 @@ export default function DriverAccountPage() {
           <div className="moovu-card driver-account-subscription p-5 sm:p-6">
             <div className="moovu-section-title">Driver account</div>
             <h2 className="mt-2 text-2xl font-black">{driver?.status === "approved" || driver?.status === "active" ? "Approved Driver" : "Account review"}</h2>
-            <p className="mt-2 text-sm text-slate-600">Subscriptions are retired and do not determine your eligibility to go online.</p>
             <div className="mt-5"><Info label="Commission owed" value={money(earnings?.wallet?.balance_due)} /></div>
-            <Link href="/driver/subscriptions" className="moovu-btn moovu-btn-secondary mt-5">
-              Legacy subscription history <ChevronRight aria-hidden="true" />
-            </Link>
           </div>
 
           <div className="moovu-card driver-account-readiness p-5 sm:p-6">
@@ -204,8 +200,7 @@ export default function DriverAccountPage() {
 
         <ProfileSectionCard title="Quick actions" description="Open the areas used for daily driving, payments, documents, and support.">
           <QuickActionGrid actions={[
-            { href: "/driver/subscriptions", label: "Legacy subscription history", description: "Past records only", icon: WalletCards },
-            { href: "/driver/earnings", label: "Earnings", description: "Trips and totals", icon: WalletCards },
+            { href: "/driver/earnings", label: "Money", description: "Earnings, commission and payouts", icon: WalletCards },
             { href: "/driver/trip-offers", label: "Trip offers", description: "Received requests", icon: CarFront },
             { href: "/driver/commission-payments", label: "Commission", description: "Balance and secure online payment", icon: WalletCards },
             { href: "/driver/complete-profile", label: "Documents", description: "Profile and vehicle", icon: FileCheck2 },

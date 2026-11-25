@@ -7,7 +7,7 @@ import { CircleUserRound, House, ListChecks, WalletCards } from "lucide-react";
 const items = [
   { href: "/driver", label: "Home", icon: House },
   { href: "/driver/history", label: "Trips", icon: ListChecks },
-  { href: "/driver/earnings", label: "Earnings", icon: WalletCards },
+  { href: "/driver/earnings", label: "Money", icon: WalletCards },
   { href: "/driver/account", label: "Account", icon: CircleUserRound },
 ] as const;
 

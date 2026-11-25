@@ -1246,7 +1246,7 @@ export default function RideTrackingPage() {
       case "assigned":
         return {
           eyebrow: "Driver assigned",
-          title: "Your Driver is on the way",
+          title: "Your driver is coming",
           body: "Watch the map and confirm the vehicle, plate and driver before getting in.",
           eta: displayDuration(trip.duration_min),
         };
@@ -2114,6 +2114,18 @@ export default function RideTrackingPage() {
           {(trip?.status === "requested" || trip?.status === "offered") && !trip?.driver_id ? (
             <DriverSearchProgress tripId={tripId} getAccessToken={getAccessToken} />
           ) : null}
+          {trip && ["assigned", "arrived"].includes(String(trip.status)) && !trip.start_otp_verified && trip.start_otp ? (
+            <section className="customer-code-card" aria-label="Start code">
+              <p>Start code: tell your driver when you get in</p>
+              <strong>{String(trip.start_otp).split("").join(" ")}</strong>
+            </section>
+          ) : null}
+          {trip && trip.status === "ongoing" && !trip.end_otp_verified && trip.end_otp ? (
+            <section className="customer-code-card" aria-label="End code">
+              <p>End code: tell your driver when you arrive</p>
+              <strong>{String(trip.end_otp).split("").join(" ")}</strong>
+            </section>
+          ) : null}
           <section className="customer-trip-map-card">
             <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-black text-slate-700 shadow">
               Live route
@@ -2593,7 +2605,7 @@ export default function RideTrackingPage() {
             else setActiveDetailModal("otp");
           }}
         >
-          View OTPs
+          Show codes
         </button>
       )}
 

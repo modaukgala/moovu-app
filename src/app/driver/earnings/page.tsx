@@ -323,14 +323,6 @@ export default function DriverEarningsPage() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="moovu-card-interactive moovu-driver-payment-card p-5">
-              <div className="moovu-section-title">Legacy subscription history</div>
-              <p className="text-sm text-slate-600">Subscriptions are retired. Past records are available for your reference.</p>
-              <Link href="/driver/subscriptions" className="moovu-btn moovu-btn-secondary w-full justify-center">
-                View past records
-              </Link>
-            </div>
-
-            <div className="moovu-card-interactive moovu-driver-payment-card p-5">
               <div className="moovu-section-title">Commission Payment</div>
               <div className="text-2xl font-black text-slate-950">{money(commissionDue)}</div>
               <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary w-full justify-center">
