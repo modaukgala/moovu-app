@@ -185,6 +185,17 @@ export const SURGE_MODES: Record<SurgeMode, SurgeModeConfig> = {
 export const DEFAULT_SURGE_MODE: SurgeMode = "normal";
 export const MAX_SURGE_MULTIPLIER = 1.4;
 
+/**
+ * Card-processing allowance (Yoco online fee incl. VAT) built into every fare.
+ * It is never shown to customers as a separate line. Cash and card riders pay
+ * the same price, and the 85/15 Driver/MOOVU split is taken from that price.
+ */
+export const CARD_FEE_ALLOWANCE_PCT = 3.5;
+
+export function applyCardFeeAllowance(amount: number) {
+  return amount * (1 + CARD_FEE_ALLOWANCE_PCT / 100);
+}
+
 export const RIDE_OPTION_RULES: Record<RideOptionId, FareRules> = {
   go: {
     baseFare: 15,
@@ -194,7 +205,7 @@ export const RIDE_OPTION_RULES: Record<RideOptionId, FareRules> = {
     minFare: 40,
     waitingFeePerMinute: 2,
     freeWaitingMinutes: 3,
-    platformCommissionPct: 10,
+    platformCommissionPct: 15,
     lateCancellationFee: 20,
     lateCancellationDriverAmount: 13,
     lateCancellationMoovuAmount: 7,
@@ -212,7 +223,7 @@ export const RIDE_OPTION_RULES: Record<RideOptionId, FareRules> = {
     minFare: 70,
     waitingFeePerMinute: 3,
     freeWaitingMinutes: 3,
-    platformCommissionPct: 12,
+    platformCommissionPct: 15,
     lateCancellationFee: 30,
     lateCancellationDriverAmount: 20,
     lateCancellationMoovuAmount: 10,
@@ -361,7 +372,7 @@ export function calculateTripFare(input: FareInput): FareBreakdown {
     Math.max(0, fareBeforeDistanceDiscount - distanceDiscountAmount)
   );
   const effectiveMinimumFare = roundMoney(rules.minFare * surge.multiplier);
-  const fareBeforeRounding = Math.max(effectiveMinimumFare, fareBeforeMinimum);
+  const fareBeforeRounding = applyCardFeeAllowance(Math.max(effectiveMinimumFare, fareBeforeMinimum));
   const totalFare = Math.round(fareBeforeRounding);
   const platformCommission = roundMoney(totalFare * (rules.platformCommissionPct / 100));
   const driverNetEstimate = roundMoney(totalFare - platformCommission);
@@ -419,7 +430,7 @@ export function calculateFinalJourneyFare(params: {
   const effectiveMinimumFare = roundMoney(
     params.baseFare.minFare * params.baseFare.surgeMultiplier,
   );
-  const totalFare = Math.round(Math.max(effectiveMinimumFare, fareBeforeMinimum));
+  const totalFare = Math.round(applyCardFeeAllowance(Math.max(effectiveMinimumFare, fareBeforeMinimum)));
 
   return {
     fareBeforeDistanceDiscount,

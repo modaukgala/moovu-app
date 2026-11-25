@@ -39,9 +39,9 @@ test("Go XL fee, minimum fare and surge remain deterministic", () => {
   const regular = phase5(input);
   const member = phase5({ ...input, activeMember: true, availableCreditCents: 0 });
   assert.equal(regular.grossServiceFeeCents, 500);
-  assert.equal(regular.rideFareCents, 9800);
-  assert.equal(regular.customerTotalCents, 10300);
-  assert.equal(member.customerTotalCents, 9800);
+  assert.equal(regular.rideFareCents, 10100);
+  assert.equal(regular.customerTotalCents, 10600);
+  assert.equal(member.customerTotalCents, 10100);
   assert.equal(member.driverFareBasisCents, regular.driverFareBasisCents);
 });
 

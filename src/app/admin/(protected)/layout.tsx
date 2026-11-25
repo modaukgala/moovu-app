@@ -22,10 +22,10 @@ const navItems = [
   { href: "/admin/payment-reviews", label: "Payments", group: "Payments" },
   { href: "/admin/online-payments", label: "Online Payments", group: "Payments" },
   { href: "/admin/moovu-plus", label: "MOOVU+", group: "Payments" },
-  { href: "/admin/commission-payments", label: "Commissions", group: "Payments" },
-  { href: "/admin/subscriptions", label: "Subscriptions", group: "Payments" },
-  { href: "/admin/subscriptions/paid", label: "Paid Subscriptions", group: "Payments" },
-  { href: "/admin/settlements", label: "Settlements", group: "Payments" },
+  { href: "/admin/payouts", label: "Driver Balances & Payouts", group: "Payments" },
+  { href: "/admin/commission-payments", label: "Commission Payments", group: "Payments" },
+  // Old subscription-era pages (/admin/subscriptions, /admin/settlements) are hidden
+  // from the menu but still reachable by URL for historical records.
   { href: "/admin/reports", label: "Earnings Report", group: "Reports" },
   { href: "/admin/earnings", label: "Earnings Dashboard", group: "Reports" },
   { href: "/admin/notifications", label: "Notifications", group: "System" },
