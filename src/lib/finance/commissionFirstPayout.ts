@@ -35,3 +35,46 @@ export function estimateCommissionFirstPayout(input: {
       input.commissionDueCents),
   };
 }
+
+/**
+ * Arithmetic for a future allocation transaction. The caller must establish
+ * independent fee evidence and read debt while holding the driver finance lock.
+ */
+export function calculateCommissionFirstAllocation(input: {
+  customerPaymentCents: bigint;
+  rideFareCents: bigint;
+  bookingFeeCents: bigint;
+  commissionDueCents: bigint;
+  rideOption: "go" | "go-xl";
+  providerFee: {
+    percentageCents: bigint;
+    fixedCents: bigint;
+    recordedTotalCents: bigint;
+  } | null;
+}) {
+  const zero = BigInt(0);
+  const driverBookingShareCents = BigInt(100);
+  const expectedBookingFee = BigInt(input.rideOption === "go" ? 300 : 500);
+  if (input.rideFareCents <= zero || input.commissionDueCents < zero ||
+      input.bookingFeeCents !== expectedBookingFee ||
+      input.customerPaymentCents !== input.rideFareCents + input.bookingFeeCents) {
+    throw new RangeError("Recorded fare and booking allocation do not reconcile");
+  }
+  const evidence = input.providerFee;
+  if (!evidence) throw new RangeError("Independent provider fee evidence is required");
+  const fixedFeeCents = BigInt(200);
+  if (evidence.percentageCents < zero || evidence.fixedCents !== fixedFeeCents ||
+      evidence.recordedTotalCents !== evidence.percentageCents + evidence.fixedCents ||
+      evidence.recordedTotalCents > input.customerPaymentCents) {
+    throw new RangeError("Recorded provider fee components do not reconcile");
+  }
+  const driverPercentageFeeCents = (evidence.percentageCents + BigInt(1)) / BigInt(2);
+  return {
+    driverBookingShareCents,
+    platformBookingShareCents: input.bookingFeeCents - driverBookingShareCents,
+    driverPercentageFeeCents,
+    fixedFeeCents,
+    ...splitPayout(input.rideFareCents + driverBookingShareCents - driverPercentageFeeCents - fixedFeeCents,
+      input.commissionDueCents),
+  };
+}
