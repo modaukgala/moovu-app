@@ -49,8 +49,8 @@ export async function expireDriverSubscriptions() {
     .from("drivers")
     .update({
       subscription_status: "expired",
-      online: false,
-      busy: false,
+      // Keep online/busy untouched: drivers now work on commission, and dispatch
+      // enforces finance eligibility. Forcing offline here dropped active drivers.
       updated_at: nowIso,
     })
     .in("id", driverIds);

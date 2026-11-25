@@ -1,6 +1,6 @@
 import { getCommissionPctForRideOption } from "@/lib/domain/fare";
 
-export const MOOVU_COMMISSION_PCT = 9.5;
+export const MOOVU_COMMISSION_PCT = 15;
 export const MOOVU_COMMISSION_RATE = MOOVU_COMMISSION_PCT / 100;
 
 export function resolveCommissionPct(params?: {

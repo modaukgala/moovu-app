@@ -61,21 +61,9 @@ export async function GET(req: Request) {
       });
     }
 
-    const subscriptionStatus = String(driver.subscription_status ?? "").toLowerCase();
-    const subscriptionAllowsOnline = subscriptionStatus === "active" || subscriptionStatus === "grace";
-    if (!subscriptionAllowsOnline && driver.online) {
-      await supabaseAdmin
-        .from("drivers")
-        .update({
-          online: false,
-          busy: false,
-          last_seen: new Date().toISOString(),
-        })
-        .eq("id", driver.id);
-
-      driver.online = false;
-      driver.busy = false;
-    }
+    // Do not force drivers offline from a profile read. Commission drivers have no
+    // subscription, and this read runs on every app resume, which knocked them offline.
+    // Eligibility (commission lock, account status) is enforced at go-online and dispatch.
 
     return NextResponse.json({ ok: true, driver });
   } catch (error: unknown) {

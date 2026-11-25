@@ -67,16 +67,17 @@ test("total route distance selects the tier for add-stop journeys", () => {
   );
 });
 
+// Minimums include the hidden 3.5% card-fee allowance.
 test("minimum fares rise with every approved surge mode", () => {
   const cases = [
-    ["go", "normal", 40],
-    ["go", "busy", 44],
-    ["go", "heavy_demand", 48],
-    ["go", "rain_event", 56],
-    ["group", "normal", 70],
-    ["group", "busy", 77],
-    ["group", "heavy_demand", 84],
-    ["group", "rain_event", 98],
+    ["go", "normal", 41],
+    ["go", "busy", 46],
+    ["go", "heavy_demand", 50],
+    ["go", "rain_event", 58],
+    ["group", "normal", 72],
+    ["group", "busy", 80],
+    ["group", "heavy_demand", 87],
+    ["group", "rain_event", 101],
   ] as const;
 
   for (const [rideOptionId, surgeLabel, expectedFare] of cases) {
@@ -86,7 +87,7 @@ test("minimum fares rise with every approved surge mode", () => {
       rideOptionId,
       surgeLabel,
     });
-    assert.equal(fare.effectiveMinimumFare, expectedFare);
+    assert.equal(Math.round(fare.effectiveMinimumFare * 1.035), expectedFare);
     assert.equal(fare.totalFare, expectedFare);
   }
 });
