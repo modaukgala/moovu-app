@@ -11943,3 +11943,18 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
 .moovu-help-list { display: grid; border: 1px solid var(--moovu-border); border-radius: 18px; background: #fff; overflow: hidden; }
 .moovu-help-list a { display: block; padding: 16px; font-size: 16px; font-weight: 600; color: var(--moovu-text); text-decoration: none; border-top: 1px solid var(--moovu-bg-soft); }
 .moovu-help-list a:first-child { border-top: 0; }
+/* Customer start/end code always visible during the trip */
+.customer-code-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 1px solid var(--moovu-border); border-radius: 16px; background: #fff; }
+.customer-code-card p { margin: 0; font-size: 14px; font-weight: 600; color: var(--moovu-text-soft); }
+.customer-code-card strong { font-size: 28px; font-weight: 900; letter-spacing: 4px; color: var(--moovu-text); white-space: nowrap; }
+/* Driver offer: shrinking timer, big Accept, quiet Decline */
+.driver-offer-timer { height: 6px; margin: 0 0 10px; border-radius: 3px; background: var(--moovu-bg-muted); overflow: hidden; }
+.driver-offer-timer span { display: block; height: 100%; background: var(--moovu-primary); transition: width 1s linear; }
+.moovu-driver-accept-big { min-height: 60px; font-size: 19px; font-weight: 900; border-radius: 16px; }
+.moovu-driver-decline-quiet { min-height: 44px; background: transparent !important; border: 0 !important; color: var(--moovu-text-soft) !important; box-shadow: none !important; font-weight: 700; }
+/* End-code bypass tucked away */
+.driver-end-code-problem { grid-column: 1 / -1; }
+.driver-end-code-problem summary { cursor: pointer; padding: 8px 0; font-size: 14px; font-weight: 700; color: var(--moovu-text-soft); }
+/* Driver home: one big Go online / Go offline button */
+.driver-map-primary-status { min-height: 68px; font-size: 21px; font-weight: 900; border-radius: 20px; background: var(--moovu-success); color: #fff; box-shadow: none; background-image: none; }
+.driver-map-primary-status.is-online { background: #fff; color: var(--moovu-text); border: 2px solid var(--moovu-border-strong); }

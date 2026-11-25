@@ -80,7 +80,7 @@ export default function DriverMapSurface({
           <span className={online ? "driver-availability-dot is-online" : "driver-availability-dot"} aria-hidden="true" />
           <span>
             <strong>{online ? "You're online" : "You're offline"}</strong>
-            <small>{online ? "Ready for nearby trip requests" : "Go online when you're ready to drive"}</small>
+            <small>{online ? "You will get trip requests here" : "Tap Go online when you are ready to drive"}</small>
           </span>
         </div>
           <button

@@ -9,7 +9,6 @@ import {
   Headphones,
   History,
   House,
-  ReceiptText,
   UserRound,
   WalletCards,
 } from "lucide-react";
@@ -25,9 +24,8 @@ const tabs = {
     { href: "/driver", label: "Home", icon: House },
   ],
   money: [
-    { href: "/driver/earnings", label: "Earnings", icon: WalletCards },
+    { href: "/driver/earnings", label: "Money", icon: WalletCards },
     { href: "/driver/commission-payments", label: "Commission", icon: BadgeDollarSign },
-    { href: "/driver/subscriptions", label: "Past plans", icon: ReceiptText },
   ],
   account: [
     { href: "/driver/account", label: "Account", icon: UserRound },

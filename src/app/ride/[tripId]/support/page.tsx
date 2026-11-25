@@ -1,5 +1,6 @@
 "use client";
 
+import WhatsAppSupportButton from "@/components/support/WhatsAppSupportButton";
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
@@ -82,11 +83,12 @@ export default function TripSupportPage() {
           <div className="moovu-customer-task-hero">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="moovu-section-title">MOOVU Support</div>
-                <h1 className="mt-2 text-3xl font-black">Report a trip issue</h1>
+                <h1 className="text-3xl font-black">Get help with this trip</h1>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-                  Send a clear support note linked to this trip so MOOVU can review it properly.
+                  Fastest: message us on WhatsApp (messages only, no calls). Your trip number is added for you.
                 </p>
+                <div className="mt-4"><WhatsAppSupportButton topic="customer" trip={String(params.tripId)} /></div>
+                <p className="mt-4 text-sm font-semibold text-slate-600">Or write it down below and we&apos;ll review it.</p>
               </div>
             </div>
           </div>

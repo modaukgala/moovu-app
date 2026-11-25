@@ -1484,7 +1484,7 @@ export default function DriverHomePage() {
                         className="moovu-driver-nav-button"
                         onClick={() => setNavigationTarget("pickup")}
                       >
-                        <span>Drive to pickup</span>
+                        <span>Show me the way to pickup</span>
                         <span className="text-xs font-bold opacity-80">Choose Google Maps or Waze</span>
                       </button>
                     )}
@@ -1510,7 +1510,7 @@ export default function DriverHomePage() {
                           disabled={busy}
                           onClick={() => arriveTrip(currentTrip.id)}
                         >
-                          Mark as arrived
+                          I&apos;ve arrived
                         </button>
                         <button
                           type="button"
@@ -1534,7 +1534,7 @@ export default function DriverHomePage() {
                             disabled={busy}
                             className="moovu-btn moovu-btn-primary mt-4 w-full sm:w-auto"
                           >
-                            Enter start OTP
+                            Enter start code
                           </button>
                         ) : (
                           <div className="driver-trip-otp-form">
@@ -1617,7 +1617,7 @@ export default function DriverHomePage() {
                     {currentTrip.status === "ongoing" && (
                       <div className="moovu-driver-otp-card is-complete">
                         <h3 className="driver-trip-otp-title">End trip</h3>
-                        <p className="driver-trip-otp-instruction">Ask the customer for their 4-digit end code before completing the trip.</p>
+                        <p className="driver-trip-otp-instruction">Ask the rider for their 4-digit end code to finish the trip.</p>
 
                         {!showEndOtp && !showEndOtpBypass && (
                           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1626,15 +1626,18 @@ export default function DriverHomePage() {
                               disabled={busy}
                               className="moovu-btn moovu-btn-primary w-full"
                             >
-                              Complete with End OTP
+                              Enter end code and finish
                             </button>
-                            <button
-                              onClick={() => setShowEndOtpBypass(true)}
-                              disabled={busy}
-                              className="moovu-btn moovu-btn-secondary w-full"
-                            >
-                              Complete without End OTP
-                            </button>
+                            <details className="driver-end-code-problem">
+                              <summary>Problem with the code?</summary>
+                              <button
+                                onClick={() => setShowEndOtpBypass(true)}
+                                disabled={busy}
+                                className="moovu-btn moovu-btn-secondary mt-2 w-full"
+                              >
+                                Finish without end code
+                              </button>
+                            </details>
                           </div>
                         )}
                         {showEndOtp && (

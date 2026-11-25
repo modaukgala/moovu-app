@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { BadgeDollarSign, CarFront, FileCheck2, Headphones, History, LogOut, ReceiptText, Settings, ShieldCheck, WalletCards, X } from "lucide-react";
+import { BadgeDollarSign, CarFront, FileCheck2, Headphones, History, LogOut, Settings, ShieldCheck, WalletCards, X } from "lucide-react";
 import DriverOnboardingEntry from "@/components/driver/DriverOnboardingEntry";
 import type { Driver } from "./types";
 
@@ -69,14 +69,13 @@ export default function DriverDrawer({ open, driver, levelLabel, completedTrips,
         {driver.phone && <p>{driver.phone}</p>}
         <DriverOnboardingEntry onNavigate={navigate} />
         <div className="driver-drawer-links">
-          <button type="button" onClick={() => navigate("/driver/earnings")}><WalletCards aria-hidden="true" />Earnings</button>
+          <button type="button" onClick={() => navigate("/driver/earnings")}><WalletCards aria-hidden="true" />Money</button>
           <button type="button" onClick={() => navigate("/driver/history")}><History aria-hidden="true" />Trip history</button>
           <button type="button" onClick={() => navigate("/driver/trip-offers")}><CarFront aria-hidden="true" />Trip offers</button>
           <button type="button" onClick={() => navigate("/driver/commission-payments")}><BadgeDollarSign aria-hidden="true" />Commission payments</button>
-          <button type="button" onClick={() => navigate("/driver/subscriptions")}><ReceiptText aria-hidden="true" />Legacy subscription history</button>
           <button type="button" onClick={() => navigate("/driver/complete-profile")}><FileCheck2 aria-hidden="true" />Documents &amp; vehicle</button>
           <button type="button" onClick={() => navigate("/driver/account")}><Settings aria-hidden="true" />Settings</button>
-          <button type="button" onClick={() => navigate("/driver/contact")}><Headphones aria-hidden="true" />Help &amp; safety</button>
+          <button type="button" onClick={() => navigate("/driver/contact")}><Headphones aria-hidden="true" />Help (WhatsApp)</button>
         </div>
         <footer className="driver-drawer-footer">
           <button type="button" onClick={() => navigate("/driver/privacy-policy")}>Privacy Policy</button>
