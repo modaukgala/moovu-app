@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { MOOVU_SUPPORT_EMAIL } from "@/lib/legal";
+import WhatsAppSupportButton from "@/components/support/WhatsAppSupportButton";
 
 export const metadata: Metadata = {
   title: "Driver Contact | MOOVU",
@@ -10,10 +10,9 @@ export const metadata: Metadata = {
 const supportItems = [
   "Driver application and approval status",
   "Complete-profile and document questions",
-  "Subscription payments and expiry questions",
-  "Commission balance, payments, and settlement support",
-  "Trip offers, OTP workflow, chat, cancellations, and no-show support",
-  "Notification, login, GPS, and mobile app issues",
+  "Commission, payments and payouts",
+  "Trip offers, start and end codes, cancellations",
+  "Notifications, login, location and app problems",
 ];
 
 export default function DriverContactPage() {
@@ -26,45 +25,17 @@ export default function DriverContactPage() {
         </div>
 
         <section className="legal-hero">
-          <p className="legal-kicker">MOOVU Driver Help</p>
-          <h1 className="legal-title">Contact Driver Support</h1>
-          <p className="legal-meta">Support email: {MOOVU_SUPPORT_EMAIL}</p>
+          <h1 className="legal-title">Driver help</h1>
+          <p className="legal-meta">Message us on WhatsApp. Messages only, no calls.</p>
         </section>
 
-        <div className="legal-body">
-          <section className="legal-section">
-            <h2>How drivers can get help</h2>
-            <p>
-              Email MOOVU with your full name, cellphone number, driver email, trip ID or payment
-              reference if available, and a clear description of the issue.
-            </p>
-            <div className="legal-contact-block">
-              <div>Email: <a href={`mailto:${MOOVU_SUPPORT_EMAIL}`}>{MOOVU_SUPPORT_EMAIL}</a></div>
-              <div>
-                <a
-                  href={`mailto:${MOOVU_SUPPORT_EMAIL}?subject=${encodeURIComponent("MOOVU Driver Support")}`}
-                  className="moovu-btn moovu-btn-primary mt-3 inline-flex"
-                >
-                  Email driver support
-                </a>
-              </div>
-            </div>
-          </section>
-
-          <section className="legal-section">
-            <h2>Driver support topics</h2>
-            <ul>
-              {supportItems.map((item) => <li key={item}>{item}</li>)}
-            </ul>
-          </section>
-
-          <section className="legal-section">
-            <h2>Important safety note</h2>
-            <p>
-              For urgent personal safety emergencies, contact local emergency services first. Use
-              MOOVU support for platform, trip, account, payment, or review follow-up.
-            </p>
-          </section>
+        <div className="legal-body" style={{ display: "grid", gap: 16 }}>
+          <WhatsAppSupportButton topic="driver" />
+          <h2 style={{ margin: "8px 0 0", fontSize: 16 }}>We can help with</h2>
+          <ul>
+            {supportItems.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+          <p className="legal-meta">In an emergency, call 10111 or 112 first.</p>
         </div>
 
         <div className="legal-footer">

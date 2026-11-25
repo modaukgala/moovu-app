@@ -282,6 +282,9 @@ export default function RiderBookingPage() {
   const calculatingKeyRef = useRef("");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const [satelliteView, setSatelliteView] = useState(false);
+  const autoPickupTriedRef = useRef(false);
+  const pickupEditedRef = useRef(false);
   const currentLocationMarkerRef = useRef<google.maps.Marker | null>(null);
   const nearbyDriverMarkerRefs = useRef<Map<string, google.maps.Marker>>(
     new Map(),
@@ -820,8 +823,8 @@ export default function RiderBookingPage() {
   }
 
 
-  async function useCurrentLocation() {
-    setMsg(null);
+  async function detectCurrentLocation(auto = false) {
+    if (!auto) setMsg(null);
     setPickupError(null);
     if (typeof window === "undefined") {
       setMsg("This device does not support location.");
@@ -839,6 +842,8 @@ export default function RiderBookingPage() {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       setCurrentLocation({ lat, lng, capturedAt: Date.now() });
+      // Automatic pickup never overwrites a pickup the customer already chose.
+      if (auto && pickupEditedRef.current) return;
       setPickupLat(lat);
       setPickupLng(lng);
       setPickupPlaceId("");
@@ -859,12 +864,21 @@ export default function RiderBookingPage() {
       const msg = isGeolocationPositionError(e)
         ? getLocationErrorMessage(e)
         : "Could not detect location.";
-      setPickupError(msg);
-      setMsg(msg);
+      setPickupError(auto ? "Couldn't find your location. Type your pickup address or turn on location." : msg);
+      if (!auto) setMsg(msg);
     } finally {
       setLocationLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (autoPickupTriedRef.current || pickupAddress.trim() || pickupLat != null) return;
+    autoPickupTriedRef.current = true;
+    const timer = setTimeout(() => { void detectCurrentLocation(true); }, 0);
+    return () => clearTimeout(timer);
+    // Run once on open; detectCurrentLocation reads the latest state itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function openMapPicker(kind: LocationKind) {
     setMsg(null);
@@ -892,7 +906,8 @@ export default function RiderBookingPage() {
     instruction: string,
   ) {
     if (mapPickerKind === "pickup") {
-      setPickupAddress(location.address);
+      pickupEditedRef.current = true;
+    setPickupAddress(location.address);
       setPickupPlaceId(location.placeId);
       setPickupLat(location.lat);
       setPickupLng(location.lng);
@@ -984,6 +999,7 @@ export default function RiderBookingPage() {
   }
 
   function onPickupInputChange(value: string) {
+    pickupEditedRef.current = true;
     setPickupAddress(value);
     clearPickupSelection();
     pickupAutocompleteAbortRef.current?.abort();
@@ -1223,6 +1239,7 @@ export default function RiderBookingPage() {
     }
 
     if (kind === "pickup") {
+      pickupEditedRef.current = true;
       setPickupAddress(selectedPlaceLabel(description, json.name));
       setPickupPlaceId(json.place_id || placeId);
       setPickupLat(json.lat);
@@ -1479,6 +1496,7 @@ export default function RiderBookingPage() {
     const { target, stopIndex, resolved } = pendingPastedLocation;
 
     if (target === "pickup") {
+      pickupEditedRef.current = true;
       setPickupAddress(resolved.address);
       setPickupPlaceId(resolved.placeId);
       setPickupLat(resolved.lat);
@@ -1722,6 +1740,18 @@ export default function RiderBookingPage() {
     if (busy || !canSubmit) return;
     setMsg(null);
     setBookingConfirmationOpen(true);
+  }
+
+  async function bookNow() {
+    if (busy || !canSubmit || bookingSubmissionRef.current) return;
+    if (rideType === "scheduled") { openBookingConfirmation(); return; }
+    setMsg(null);
+    bookingSubmissionRef.current = true;
+    try {
+      await submitBooking();
+    } finally {
+      bookingSubmissionRef.current = false;
+    }
   }
 
   async function confirmBooking() {
@@ -2406,7 +2436,7 @@ export default function RiderBookingPage() {
             {displayFare == null ? "Preparing" : "Ready"}
           </span>
         </div>
-        <div className="moovu-booking-steps" aria-label="Booking progress">
+        <div className="moovu-booking-steps hidden" aria-label="Booking progress">
           {bookingSteps.map((step, index) => (
             <span
               key={step.label}
@@ -2721,7 +2751,7 @@ export default function RiderBookingPage() {
               ))}
               <div><dt className="font-bold text-slate-500">Destination</dt><dd className="mt-0.5 font-semibold break-words">{dropoffAddress}</dd></div>
               <div><dt className="font-bold text-slate-500">Ride</dt><dd className="mt-0.5 font-semibold">{selectedRide.name}{rideType === "scheduled" ? " · Scheduled" : ""}</dd></div>
-              <div><dt className="font-bold text-slate-500">Payment</dt><dd className="mt-0.5 font-semibold">{paymentMethod === "online" ? "Pay Online" : "Cash"}</dd></div>
+              <div><dt className="font-bold text-slate-500">Payment</dt><dd className="mt-0.5 font-semibold">{paymentMethod === "online" ? "Card" : "Cash"}</dd></div>
               {phase5Quote && (
                 <div><dt className="font-bold text-slate-500">Disclosed service fee</dt><dd className="mt-0.5 font-semibold">R{(phase5Quote.grossServiceFeeCents / 100).toFixed(2)}{phase5Quote.membershipWaiverCents || phase5Quote.promotionalCreditCents ? " before eligible waivers and credits" : ""}</dd></div>
               )}
@@ -2856,6 +2886,20 @@ export default function RiderBookingPage() {
         ) : (
           <div ref={mapRef} className="mbk-map" />
         )}
+        {!mapError ? (
+          <button
+            type="button"
+            className="mbk-map-satellite"
+            aria-pressed={satelliteView}
+            onClick={() => {
+              const next = !satelliteView;
+              setSatelliteView(next);
+              mapInstanceRef.current?.setMapTypeId(next ? "hybrid" : "roadmap");
+            }}
+          >
+            {satelliteView ? "Map" : "Satellite"}
+          </button>
+        ) : null}
         {currentLocation ? (
           <button
             type="button"
@@ -2936,7 +2980,7 @@ export default function RiderBookingPage() {
             <EnableNotificationsButton role="customer" variant="chip" />
           </div>
 
-          <ol className="mx-4 mb-3 grid grid-cols-3 gap-2" aria-label="Booking steps">
+          <ol className="mx-4 mb-3 hidden grid-cols-3 gap-2" aria-label="Booking steps">
             {["Where", "Ride", "Confirm"].map((label, index) => {
               const currentStep = bookingStep <= 2 ? 1 : bookingStep === 3 ? 2 : 3;
               return (
@@ -3010,7 +3054,7 @@ export default function RiderBookingPage() {
                   <button
                     type="button"
                     className="moovu-loc-inline-btn"
-                    onClick={useCurrentLocation}
+                    onClick={() => void detectCurrentLocation()}
                     disabled={busy || locationLoading}
                     title="Use current location"
                   >
@@ -3268,12 +3312,13 @@ export default function RiderBookingPage() {
             <div className="moovu-field-label">How will you pay?</div>
             <div className="customer-booking-payment-options" role="group" aria-label="Payment method">
               <button type="button" aria-pressed={paymentMethod === "cash"} className={paymentMethod === "cash" ? "is-selected" : ""} onClick={() => setPaymentMethod("cash")}>Cash</button>
-              <button type="button" aria-pressed={paymentMethod === "online"} className={paymentMethod === "online" ? "is-selected" : ""} onClick={() => setPaymentMethod("online")}>Pay Online</button>
+              <button type="button" aria-pressed={paymentMethod === "online"} className={paymentMethod === "online" ? "is-selected" : ""} onClick={() => setPaymentMethod("online")}>Card</button>
             </div>
-            {paymentMethod === "online" && <p className="customer-booking-payment-note">Secure payment is completed before a driver is requested.</p>}
+            {paymentMethod === "online" && <p className="customer-booking-payment-note">You pay by card first, then we find your driver.</p>}
+            <p className="customer-booking-payment-note">Free to cancel until a driver accepts. After that, a cancellation fee may apply.</p>
           </div>
 
-          <details className="mx-4 mt-3 customer-booking-favorites customer-booking-favorites-compact">
+          <details className="mx-4 mt-3 hidden customer-booking-favorites customer-booking-favorites-compact">
             <summary className="cursor-pointer text-sm font-semibold text-slate-600">Favourite places (coming soon)</summary>
             <div className="customer-favorite-grid mt-3">
               {FAVORITE_PLACE_SHORTCUTS.map((favorite) => (
@@ -3343,7 +3388,7 @@ export default function RiderBookingPage() {
             </div>
             <button
               className="moovu-confirm-button flex-1"
-              onClick={openBookingConfirmation}
+              onClick={() => void bookNow()}
               disabled={busy || !canSubmit}
             >
               {busy
@@ -3352,7 +3397,9 @@ export default function RiderBookingPage() {
                   : "Booking..."
                 : rideType === "scheduled"
                   ? "Review schedule"
-                  : "Review ride"}
+                  : displayFare != null
+                    ? `Book ride · ${money(displayFare)}`
+                    : "Book ride"}
             </button>
           </div>
         </div>

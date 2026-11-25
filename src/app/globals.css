@@ -11884,3 +11884,62 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
     padding-inline: 12px;
   }
 }
+
+/* ---- MOOVU clean (2026-11-25): simpler, larger, flatter. Same brand colours. ---- */
+.mbk-map-satellite {
+  position: absolute;
+  top: calc(164px + env(safe-area-inset-top));
+  right: 16px;
+  z-index: 12;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--moovu-border);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--moovu-text);
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+.mbk-map-satellite[aria-pressed="true"] { background: var(--moovu-primary); color: #fff; border-color: var(--moovu-primary); }
+.moovu-location-picker-view {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+}
+.moovu-location-picker-view button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--moovu-text-soft);
+  background: transparent;
+}
+.moovu-location-picker-view button[aria-pressed="true"] { background: var(--moovu-primary); color: #fff; }
+
+/* Flat, solid main buttons (no glow), tall enough to tap easily. */
+.moovu-btn-primary, .moovu-btn-primary:hover, .moovu-confirm-button { box-shadow: none; background-image: none; }
+.moovu-btn { min-height: 48px; font-size: 15px; }
+.moovu-confirm-button { min-height: 58px; font-size: 17px; }
+@media (max-width: 380px) { .moovu-confirm-button { min-height: 54px; font-size: 16px; } }
+/* Readable small text: nothing under 12px; labels in sentence case. */
+.moovu-field-label { font-size: 13px; letter-spacing: 0; text-transform: none; }
+.moovu-kicker, .moovu-section-title { letter-spacing: 0.04em; }
+.moovu-field-hint, .customer-booking-payment-note { font-size: 13px; }
+.moovu-whatsapp-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 60px; padding: 0 20px; border-radius: 18px;
+  background: var(--moovu-success); color: #fff; font-size: 18px; font-weight: 800; text-decoration: none;
+}
+.moovu-whatsapp-btn:hover { filter: brightness(0.95); color: #fff; }
+.moovu-help-list { display: grid; border: 1px solid var(--moovu-border); border-radius: 18px; background: #fff; overflow: hidden; }
+.moovu-help-list a { display: block; padding: 16px; font-size: 16px; font-weight: 600; color: var(--moovu-text); text-decoration: none; border-top: 1px solid var(--moovu-bg-soft); }
+.moovu-help-list a:first-child { border-top: 0; }
