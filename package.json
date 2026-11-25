@@ -51,6 +51,7 @@
     "@capacitor/push-notifications": "^8.0.4",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.98.0",
+    "fflate": "^0.8.2",
     "firebase": "^12.13.0",
     "firebase-admin": "^13.9.0",
     "lucide-react": "^0.468.0",

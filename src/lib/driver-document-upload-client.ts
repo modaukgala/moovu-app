@@ -65,15 +65,36 @@ async function authenticatedRequest(
   return { ok: false as const, status: 500, error: "The upload request failed." };
 }
 
+/** Shrinks large JPEG photos (max 2000 px, quality 0.82) so storage stays small. */
+async function shrinkJpegForUpload(file: File): Promise<File> {
+  if (typeof document === "undefined" || file.type !== "image/jpeg" || file.size <= 800_000) return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const node = new Image(); node.onload = () => resolve(node); node.onerror = () => reject(new Error("decode")); node.src = url;
+    });
+    const scale = Math.min(1, 2000 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale);
+    const ctx = canvas.getContext("2d"); if (!ctx) return file;
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    return blob && blob.size < file.size ? new File([blob], file.name, { type: "image/jpeg" }) : file;
+  } catch {
+    return file; // never block an upload because shrinking failed
+  } finally { URL.revokeObjectURL(url); }
+}
+
 export async function uploadDriverDocumentFromClient({
   endpoint,
-  file,
+  file: originalFile,
   documentType,
   driverId,
   required = false,
   expiresOn = "",
   sessionExpiredMessage,
 }: UploadDriverDocumentFromClientOptions) {
+  const file = await shrinkJpegForUpload(originalFile);
   const validation = validateDriverDocumentFile(file);
   if (!validation.ok) return validation;
 
