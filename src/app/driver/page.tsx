@@ -34,6 +34,7 @@ import {
   stopMarkerIcon,
 } from "@/lib/maps/liveMapMarkers";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
+import DriverApplicationNudge from "@/components/driver/DriverApplicationNudge";
 import { isBackgroundLocationAvailable, startBackgroundLocation } from "@/lib/location/backgroundLocation";
 import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -1363,6 +1364,7 @@ export default function DriverHomePage() {
           </div>
         ) : (
           <>
+          <DriverApplicationNudge onNavigate={(path) => router.push(path)} />
           <div className="driver-map-first-layout">
             <section className="moovu-driver-home-stack">
               <DriverMapSurface

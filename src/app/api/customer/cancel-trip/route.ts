@@ -8,7 +8,7 @@ import { phase4AuthorityForTrip } from "@/lib/finance/phase4AuthorityServer";
 import { callPhase4Rpc } from "@/lib/server/phase4Rpc";
 
 const VALID_REASONS = [
-  "Booked by mistake", "Testing the app", "Changed my mind", "Wrong pickup or destination",
+  "No driver found yet", "Booked by mistake", "Testing the app", "Changed my mind", "Wrong pickup or destination",
   "Driver taking too long", "Found another ride", "Emergency", "Other",
 ];
 type CancellationResult = {

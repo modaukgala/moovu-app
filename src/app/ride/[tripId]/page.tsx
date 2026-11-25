@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Headphones, ReceiptText, Route, ShieldCheck, Tag } from "lucide-react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import DriverSearchProgress from "@/components/customer/DriverSearchProgress";
 import CustomerBackHomeNav from "@/components/app-shell/CustomerBackHomeNav";
 import MoovuLoadingScreen from "@/components/customer/MoovuLoadingScreen";
 import TripChatPanel from "@/components/trip-chat/TripChatPanel";
@@ -146,6 +147,7 @@ declare global {
 const DEFAULT_CENTER = { lat: -25.12, lng: 29.05 };
 
 const CANCEL_REASONS = [
+  "No driver found yet",
   "Booked by mistake",
   "Testing the app",
   "Changed my mind",
@@ -283,7 +285,7 @@ export default function RideTrackingPage() {
   const [authoritativeCancelQuote, setAuthoritativeCancelQuote] = useState<CancellationQuote | null>(null);
   const [legacyCancelReviewed, setLegacyCancelReviewed] = useState(false);
   const [cancelReason, setCancelReason] =
-    useState<(typeof CANCEL_REASONS)[number]>("Booked by mistake");
+    useState<(typeof CANCEL_REASONS)[number] | "">("");
   const [cancelReasonDetails, setCancelReasonDetails] = useState("");
   const [mapError, setMapError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1177,7 +1179,7 @@ export default function RideTrackingPage() {
   }, [trip, tripStops.length]);
 
 
-  const cancellationReasonValid = cancelReason !== "Other" || cancelReasonDetails.trim().length >= 3;
+  const cancellationReasonValid = cancelReason !== "" && (cancelReason !== "Other" || cancelReasonDetails.trim().length >= 3);
 
   const canOpenChat = useMemo(() => {
     if (!trip?.driver_id) return false;
@@ -1874,7 +1876,8 @@ export default function RideTrackingPage() {
                         setCancelReason(e.target.value as (typeof CANCEL_REASONS)[number])
                       }
                     >
-                      {CANCEL_REASONS.map((reason) => (
+                      <option value="" disabled>Choose a reason</option>
+{CANCEL_REASONS.map((reason) => (
                         <option key={reason} value={reason}>
                           {reason}
                         </option>
@@ -2108,6 +2111,9 @@ export default function RideTrackingPage() {
         </section>
 
         <div className="grid gap-4">
+          {(trip?.status === "requested" || trip?.status === "offered") && !trip?.driver_id ? (
+            <DriverSearchProgress tripId={tripId} getAccessToken={getAccessToken} />
+          ) : null}
           <section className="customer-trip-map-card">
             <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-black text-slate-700 shadow">
               Live route
@@ -2522,7 +2528,8 @@ export default function RideTrackingPage() {
                       setCancelReason(e.target.value as (typeof CANCEL_REASONS)[number])
                     }
                   >
-                    {CANCEL_REASONS.map((reason) => (
+                    <option value="" disabled>Choose a reason</option>
+{CANCEL_REASONS.map((reason) => (
                       <option key={reason} value={reason}>
                         {reason}
                       </option>
