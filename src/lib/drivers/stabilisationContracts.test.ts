@@ -4,7 +4,7 @@ import test from "node:test";
 // @ts-expect-error Node strip-types requires explicit extensions.
 import { phase6NewWork } from "./phase6NewWork.ts";
 // @ts-expect-error Node strip-types requires explicit extensions.
-import { phase6DriverNoticeEnabled, phase6EligibilityEnabled, SCHEDULED_RIDES_ENABLED } from "../release/releaseFlags.ts";
+import { phase6EligibilityEnabled, SCHEDULED_RIDES_ENABLED } from "../release/releaseFlags.ts";
 // @ts-expect-error Node strip-types requires explicit extensions.
 import { canTransitionTrip, isTripStatus, TRIP_STATUSES } from "../trips/tripContract.ts";
 // @ts-expect-error Node strip-types requires explicit extensions.
@@ -22,21 +22,22 @@ test("Phase 6 eligibility is explicitly dormant by default", async () => {
   if (previous == null) delete process.env.MOOVU_PHASE6_NEW_WORK_ELIGIBILITY; else process.env.MOOVU_PHASE6_NEW_WORK_ELIGIBILITY = previous;
 });
 
-test("one public Phase 6 switch controls both enforcement and the Driver notice", () => {
+test("the public Phase 6 switch resolves the server enforcement decision", () => {
   const environment = {
     NODE_ENV: "test",
     NEXT_PUBLIC_MOOVU_PHASE6_NEW_WORK_ELIGIBILITY: "enabled",
   } as NodeJS.ProcessEnv;
   assert.equal(phase6EligibilityEnabled(environment), true);
-  assert.equal(phase6DriverNoticeEnabled(environment), true);
   const disabledEnvironment = { NODE_ENV: "test" } as NodeJS.ProcessEnv;
   assert.equal(phase6EligibilityEnabled(disabledEnvironment), false);
-  assert.equal(phase6DriverNoticeEnabled(disabledEnvironment), false);
 });
 
-test("Driver home hides the Phase 6 notice through the centralized switch", () => {
+test("Driver home only shows the notice when the authenticated profile resolves the gate true", () => {
   const page = readFileSync("src/app/driver/page.tsx", "utf8");
-  assert.match(page, /phase6DriverNoticeEnabled\(\)/);
+  assert.match(page, /setPhase6NewWorkEnabled\(typeof json\.phase6NewWorkEnabled === "boolean" \? json\.phase6NewWorkEnabled : null\)/);
+  assert.match(page, /phase6NewWorkEnabled === true &&/);
+  assert.match(page, /setPhase6NewWorkEnabled\(null\)/);
+  assert.doesNotMatch(page, /MOOVU_PHASE6_NEW_WORK_ELIGIBILITY|@\/lib\/release\/releaseFlags/);
 });
 
 test("enabled Phase 6 eligibility fails closed when its RPC is absent", async () => {

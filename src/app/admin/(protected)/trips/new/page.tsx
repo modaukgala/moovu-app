@@ -55,6 +55,7 @@ export default function NewTripPage() {
   const [fareOverride, setFareOverride] = useState(false);
   const [fareOverrideReason, setFareOverrideReason] = useState("");
   const [rideOptionId, setRideOptionId] = useState<RideOptionId>(DEFAULT_RIDE_OPTION_ID);
+  const [surgeState, setSurgeState] = useState<string | null>(null);
   const [activeSurge, setActiveSurge] = useState<SurgeModeConfig>(SURGE_MODES.normal);
 
   const [driverId, setDriverId] = useState<string>("");
@@ -102,11 +103,12 @@ export default function NewTripPage() {
       const surgeRes = await fetch("/api/admin/pricing/surge", {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
-      });
-      const surgeJson = (await surgeRes.json().catch(() => null)) as
-        | { ok?: boolean; surge?: SurgeModeConfig }
+      }).catch(() => null);
+      const surgeJson = (await surgeRes?.json().catch(() => null)) as
+        | { ok?: boolean; surge?: SurgeModeConfig; state?: string }
         | null;
       if (surgeJson?.ok && surgeJson.surge) setActiveSurge(surgeJson.surge);
+      setSurgeState(surgeJson?.state ?? "failed");
     })();
   }, [getAccessToken]);
 
@@ -440,7 +442,9 @@ export default function NewTripPage() {
             description="The server calculates the active-surge fare. Manual overrides require an explicit reason and are audit logged."
           >
             <div className="rounded-2xl bg-blue-50 px-4 py-3 text-xs font-black text-blue-800">
-              Active manual surge: {activeSurge.label} x{activeSurge.multiplier.toFixed(1)}
+              {surgeState === "configured" ? "Active manual surge" : surgeState === "absent" ? "Default surge" : "Surge fallback"}: {activeSurge.label} x{activeSurge.multiplier.toFixed(1)}
+              {surgeState === "failed" && " · Setting unavailable"}
+              {surgeState === "malformed" && " · Stored setting is invalid"}
             </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">

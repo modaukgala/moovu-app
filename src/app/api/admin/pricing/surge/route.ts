@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { getActiveManualSurge, setActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
+import { readManualSurge, setActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 import { SURGE_MODES, validateSurgeMode } from "@/lib/domain/fare";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +11,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   }
 
-  const surge = await getActiveManualSurge();
+  const { surge, state } = await readManualSurge();
   return NextResponse.json(
-    { ok: true, surge, modes: Object.values(SURGE_MODES) },
+    { ok: true, surge, state, modes: Object.values(SURGE_MODES) },
     {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",

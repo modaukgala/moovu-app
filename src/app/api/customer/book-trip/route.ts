@@ -6,7 +6,7 @@ import {
   calculateFinalJourneyFare,
   calculateStopWaitingFee,
   getRideOption,
-  normalizeRideOptionId,
+  newRideOptionId,
 } from "@/lib/domain/fare";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
@@ -271,9 +271,8 @@ export async function POST(req: Request) {
         { status: 409 },
       );
     }
-    const rideOptionId = normalizeRideOptionId(
-      pickFirstString(body.rideOption, body.ride_option),
-    );
+    const rideOptionId = newRideOptionId(body.rideOption ?? body.ride_option);
+    if (rideOptionId === null) return NextResponse.json({ ok: false, error: "Unsupported ride category." }, { status: 400 });
     const rideOption = getRideOption(rideOptionId);
 
     const scheduledForRaw = pickFirstString(

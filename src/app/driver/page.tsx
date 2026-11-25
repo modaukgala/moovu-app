@@ -37,7 +37,6 @@ import { getMoovuCurrentPosition } from "@/lib/native-permissions";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
-import { phase6DriverNoticeEnabled } from "@/lib/release/releaseFlags";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
 import {
   canReceiveTripOffers,
@@ -62,6 +61,8 @@ export default function DriverHomePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const profileRequest = useRef(0);
+  const [phase6NewWorkEnabled, setPhase6NewWorkEnabled] = useState<boolean | null>(null);
   const [driver, setDriver] = useState<Driver | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
   const [currentTrip, setCurrentTrip] = useState<CurrentTrip | null>(null);
@@ -181,14 +182,17 @@ export default function DriverHomePage() {
   }, [safeGetSession]);
 
   async function loadDriverProfile(silent = false) {
+    const request = ++profileRequest.current;
     if (!silent) {
       setLoadingDriver(true);
       setInfo(null);
     }
 
     const session = await safeGetSession();
+    if (request !== profileRequest.current) return null;
     if (!session) {
-      if (!silent) setLoadingDriver(false);
+      setPhase6NewWorkEnabled(null);
+      setLoadingDriver(false);
       return null;
     }
 
@@ -196,21 +200,24 @@ export default function DriverHomePage() {
       method: "GET",
       headers: { Authorization: `Bearer ${session.access_token}` },
       cache: "no-store",
-    });
+    }).catch(() => null);
 
-    const json = await res.json().catch(() => null);
+    const json = await res?.json().catch(() => null);
 
-    if (!json?.ok || !json?.driver) {
+    if (request !== profileRequest.current) return null;
+    if (!res?.ok || !json?.ok || !json?.driver) {
+      setPhase6NewWorkEnabled(null);
       if (!silent) {
         setDriver(null);
         setInfo(json?.error || "Driver record not found.");
       }
-      if (!silent) setLoadingDriver(false);
+      setLoadingDriver(false);
       return null;
     }
 
+    setPhase6NewWorkEnabled(typeof json.phase6NewWorkEnabled === "boolean" ? json.phase6NewWorkEnabled : null);
     setDriver(json.driver as Driver);
-    if (!silent) setLoadingDriver(false);
+    setLoadingDriver(false);
     return json.driver as Driver;
   }
 
@@ -1155,7 +1162,7 @@ export default function DriverHomePage() {
 
   return (
     <main className="moovu-page moovu-driver-shell text-black">
-      {phase6DriverNoticeEnabled() && (
+      {phase6NewWorkEnabled === true && (
         <div className="mx-auto my-3 max-w-6xl rounded-xl border bg-white p-4">
           <a className="font-semibold underline" href="/driver/onboarding">Complete Driver re-registration / view application</a>
           <p className="mt-1 text-sm">Complete the current onboarding cycle before accepting new work. Active trips continue.</p>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { phase6EligibilityEnabled } from "@/lib/release/releaseFlags";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 function errorMessage(error: unknown) {
@@ -77,7 +78,10 @@ export async function GET(req: Request) {
       driver.busy = false;
     }
 
-    return NextResponse.json({ ok: true, driver });
+    return NextResponse.json(
+      { ok: true, driver, phase6NewWorkEnabled: phase6EligibilityEnabled() },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   } catch (error: unknown) {
     return NextResponse.json(
       { ok: false, error: errorMessage(error) },

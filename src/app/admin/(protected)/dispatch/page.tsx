@@ -50,7 +50,7 @@ type BoardTrip = {
 function groupKey(status: string) {
   if (status === "requested") return "requested";
   if (status === "offered") return "offered";
-  if (status === "assigned" || status === "arrived" || status === "ongoing") return "active";
+  if (status === "assigned" || status === "arrived" || status === "ongoing" || status === "scheduled") return "active";
   return "closed";
 }
 
@@ -59,6 +59,12 @@ function money(value: number | null | undefined) {
 }
 
 export default function DispatchBoardPage() {
+  const [openPage, setOpenPage] = useState(1);
+  const [closedPage, setClosedPage] = useState(1);
+  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const [pagination, setPagination] = useState<{ openTripsTotal: number | null; closedTripsTotal: number | null; openTripsVisible: number; closedTripsVisible: number } | null>(null);
   const [rows, setRows] = useState<BoardTrip[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -67,7 +73,7 @@ export default function DispatchBoardPage() {
   const refreshDebounceRef = useRef<number | null>(null);
   const isPageVisible = usePageVisibility();
   const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const boardRead = useReliableRead(READ_POLICIES.adminBoard, "admin-board", realtimeConnected);
+  const boardRead = useReliableRead(READ_POLICIES.adminBoard, "admin-board", realtimeConnected, `${openPage}:${closedPage}:${search}:${status}`);
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -83,28 +89,31 @@ export default function DispatchBoardPage() {
     if (!token) {
       setMsg("Missing access token.");
       setRows([]);
+      setPagination(null);
       return readFailure(401);
     }
 
-    const res = await fetch("/api/admin/dispatch/board", {
+    const res = await fetch(`/api/admin/dispatch/board?${new URLSearchParams({ openPage: String(openPage), closedPage: String(closedPage), q: search, status })}`, {
       signal,
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    });
-    const json = await res.json();
+    }).catch(() => null);
+    const json = await res?.json().catch(() => null);
     signal.throwIfAborted();
 
-    if (!res.ok || !json.ok) {
-      setMsg(json.error || "Failed to load dispatch board");
+    if (!res?.ok || !json?.ok || !Array.isArray(json.rows)) {
+      setMsg(json?.error || "Failed to load dispatch board");
       setRows([]);
-      return readFailure(res.status);
+      setPagination(null);
+      return readFailure(res?.status ?? 503);
     }
 
     setMsg(null);
     setRows(json.rows ?? []);
+    setPagination(json.retrieval ?? null);
     setRetrievalWarning(json.retrieval?.warning ?? null);
-  }), [getAccessToken, boardRead]);
+  }), [getAccessToken, boardRead, openPage, closedPage, search, status]);
 
   useReadLoop(boardRead, loadBoard);
 
@@ -377,7 +386,7 @@ export default function DispatchBoardPage() {
         <div className="mt-4 space-y-3">
           {items.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-[var(--moovu-border)] bg-white/70 p-5 text-sm text-slate-500">
-              No trips in this lane.
+              {msg ? "Trip lane unavailable." : "No trips on this page."}
             </div>
           ) : (
             items.map(renderTripCard)
@@ -417,7 +426,31 @@ export default function DispatchBoardPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
       {retrievalWarning && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{retrievalWarning}</section>}
 
-      <section className="grid gap-3 md:grid-cols-4">
+      <form className="flex flex-wrap gap-2" onSubmit={(event) => {
+        event.preventDefault();
+        setOpenPage(1);
+        setClosedPage(1);
+        setSearch(query.trim());
+      }}>
+        <input aria-label="Search dispatch trips" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Address or trip ID" />
+        <select aria-label="Trip status" value={status} onChange={(event) => {
+          setOpenPage(1);
+          setClosedPage(1);
+          setStatus(event.target.value);
+        }}>
+          {["all", "requested", "offered", "assigned", "arrived", "ongoing", "scheduled", "completed", "cancelled"].map((value) => <option key={value} value={value}>{value}</option>)}
+        </select>
+        <button className="moovu-btn moovu-btn-secondary">Search</button>
+      </form>
+      {pagination && <div className="flex flex-wrap gap-4">
+        <button disabled={openPage <= 1} onClick={() => setOpenPage(openPage - 1)}>Previous open</button>
+        <span>Open page {openPage} · {pagination.openTripsTotal ?? "Total unavailable"}</span>
+        <button disabled={pagination.openTripsTotal == null ? pagination.openTripsVisible < 50 : openPage * 50 >= pagination.openTripsTotal} onClick={() => setOpenPage(openPage + 1)}>Next open</button>
+        <button disabled={closedPage <= 1} onClick={() => setClosedPage(closedPage - 1)}>Previous closed</button>
+        <span>Closed page {closedPage} · {pagination.closedTripsTotal ?? "Total unavailable"}</span>
+        <button disabled={pagination.closedTripsTotal == null ? pagination.closedTripsVisible < 50 : closedPage * 50 >= pagination.closedTripsTotal} onClick={() => setClosedPage(closedPage + 1)}>Next closed</button>
+      </div>}
+      <section aria-label="Trip counts on the displayed pages" className="grid gap-3 md:grid-cols-4">
         <div className="moovu-stat-card">
           <div className="moovu-stat-label">Requested</div>
           <div className="moovu-stat-value">{stats.requested}</div>

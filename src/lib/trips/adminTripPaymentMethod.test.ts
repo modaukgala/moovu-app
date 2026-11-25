@@ -27,7 +27,7 @@ test("Admin create-trip API rejects online before any route or database work", a
     "next/server": { NextResponse: { json: (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } },
     "@/lib/auth/admin": { requireAdminUser: async () => ({ ok: true, user: { id: "admin" }, supabaseAdmin: {} }) },
     "@/lib/fare/calculateFare": {},
-    "@/lib/domain/fare": { normalizeRideOptionId: () => "go" },
+    "@/lib/domain/fare": { newRideOptionId: () => "go" },
     "@/lib/pricing/manualSurgeServer": {},
     "@/lib/maps/routeService": { calculateDrivingRoute: async () => { routeCalls++; return null; } },
     "@/lib/maps/mapRequestPolicy": { isValidLatitude: () => true, isValidLongitude: () => true },
@@ -66,7 +66,7 @@ test("customer booking accepts cash and online while rejecting unknown payment m
   const dependencies: Record<string, unknown> = {
     "next/server": { NextResponse: { json: (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 }) } },
     "@/lib/fare/calculateFare": {},
-    "@/lib/domain/fare": { MAX_TRIP_STOPS: 4, normalizeRideOptionId: () => "go", getRideOption: () => ({}) },
+    "@/lib/domain/fare": { MAX_TRIP_STOPS: 4, newRideOptionId: () => "go", getRideOption: () => ({}) },
     "@/lib/pricing/manualSurgeServer": {},
     "@/lib/dispatch/dispatchTrip": {},
     "@/lib/customer/auth": {},
@@ -77,9 +77,9 @@ test("customer booking accepts cash and online while rejecting unknown payment m
       value === "cash" || value === "online" ? value : null },
     "@/lib/release/releaseFlags": { SCHEDULED_RIDES_ENABLED: false },
     "@/lib/push-notify": {},
-    "@/lib/maps/routeService": {},
-    "@/lib/maps/mapRequestPolicy": {},
-    "@/lib/maps/routeQuote": {},
+    "@/lib/maps/routeService": { calculateDrivingRoute: async () => null },
+    "@/lib/maps/mapRequestPolicy": { createRouteSignature: () => "synthetic-route" },
+    "@/lib/maps/routeQuote": { verifyRouteQuote: () => null },
   };
   vm.runInNewContext(compiled, {
     exports,
@@ -94,4 +94,13 @@ test("customer booking accepts cash and online while rejecting unknown payment m
   const invalid = await exports.POST!(request("bank_card"));
   assert.equal(invalid.status, 400);
   assert.equal(invalid.body.error, "Invalid payment method.");
+  const ride = { pickup: "Pickup", dropoff: "Dropoff", pickupLat: -25, pickupLng: 28,
+    dropoffLat: -25.1, dropoffLng: 28.1, distanceKm: 5, durationMin: 10, paymentMethod: "cash" };
+  const scheduled = await exports.POST!({ json: async () => ({ ...ride, rideType: "scheduled" }) });
+  assert.equal(scheduled.status, 409);
+  assert.match(scheduled.body.error ?? "", /Scheduled rides are temporarily unavailable/);
+  const immediate = await exports.POST!({ json: async () => ({ ...ride, rideType: "now" }) });
+  assert.equal(immediate.status, 503);
+  assert.match(immediate.body.error ?? "", /A verified route is unavailable/);
+
 });

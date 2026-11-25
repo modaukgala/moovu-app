@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { calculateFare } from "@/lib/fare/calculateFare";
-import { normalizeRideOptionId, resolveAdminTripFare } from "@/lib/domain/fare";
+import { newRideOptionId, resolveAdminTripFare } from "@/lib/domain/fare";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
 import { calculateDrivingRoute } from "@/lib/maps/routeService";
 import { isValidLatitude, isValidLongitude } from "@/lib/maps/mapRequestPolicy";
@@ -34,7 +34,8 @@ export async function POST(req: Request) {
     const dropoff = cleanText(body?.dropoff);
     const paymentMethod = cleanText(body?.paymentMethod) || "cash";
     const driverId = cleanText(body?.driverId);
-    const rideOptionId = normalizeRideOptionId(body?.rideOptionId ?? body?.rideOption ?? body?.ride_option);
+    const rideOptionId = newRideOptionId(body?.rideOptionId ?? body?.rideOption ?? body?.ride_option);
+    if (rideOptionId === null) return NextResponse.json({ ok: false, error: "Unsupported ride category." }, { status: 400 });
     const pickupLat = Number(body?.pickupLat);
     const pickupLng = Number(body?.pickupLng);
     const dropoffLat = Number(body?.dropoffLat);

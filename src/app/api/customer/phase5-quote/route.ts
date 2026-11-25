@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
-import { calculateAddStopIncrease, calculateFinalJourneyFare, calculateTripFare, normalizeRideOptionId } from "@/lib/domain/fare";
+import { calculateAddStopIncrease, calculateFinalJourneyFare, calculateTripFare, newRideOptionId } from "@/lib/domain/fare";
 import { calculatePhase5Fare } from "@/lib/finance/phase5Fare";
 import { createRouteSignature } from "@/lib/maps/mapRequestPolicy";
 import { verifyRouteQuote } from "@/lib/maps/routeQuote";
@@ -14,6 +14,8 @@ export async function POST(req: Request) {
   const auth = await getAuthenticatedCustomer(req);
   if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const body = await req.json().catch(() => null);
+  const rideOptionId = newRideOptionId(body?.rideOption);
+  if (rideOptionId === null) return NextResponse.json({ ok: false, error: "Unsupported ride category." }, { status: 400 });
   const pickup = body?.pickup; const dropoff = body?.dropoff;
   const stops = Array.isArray(body?.stops) ? body.stops.filter(finitePoint).slice(0, 2) : [];
   if (!finitePoint(pickup) || !finitePoint(dropoff)) return NextResponse.json({ ok: false, error: "Verified route points are required." }, { status: 400 });
@@ -27,7 +29,6 @@ export async function POST(req: Request) {
     auth.supabaseAdmin.rpc("phase5_customer_state", { p_customer_id: auth.customer.id }), getActiveManualSurge(),
   ]);
   if (stateError) return NextResponse.json({ ok: false, error: "Customer benefits are unavailable." }, { status: 503 });
-  const rideOptionId = normalizeRideOptionId(String(body?.rideOption ?? ""));
   const base = calculateTripFare({ distanceKm: route.originalDistanceKm, distanceDiscountKm: 0,
     durationMin: route.originalDurationMin, rideOptionId, surgeLabel: surge.mode,
     surgeMultiplier: surge.multiplier, includeEmbeddedBookingFee: false });

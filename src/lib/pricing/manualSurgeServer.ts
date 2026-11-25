@@ -27,21 +27,31 @@ function parseStoredSurge(value: unknown): ActiveManualSurge {
   return getSurgeModeConfig(mode);
 }
 
-export async function getActiveManualSurge(): Promise<ActiveManualSurge> {
+export async function readManualSurge() {
   const { data, error } = await supabaseAdmin
     .from("app_pricing_settings")
     .select("value")
     .eq("key", MANUAL_SURGE_SETTING_KEY)
-    .maybeSingle<ManualSurgeSettingRow>();
+    .maybeSingle<ManualSurgeSettingRow>()
+    .then((result) => result, () => ({ data: null, error: { message: "Manual surge read failed." } }));
 
   if (error) {
     if (!isMissingSettingsTableError(error)) {
       console.error("[manual-surge] failed to load setting", error);
     }
-    return SURGE_MODES[DEFAULT_SURGE_MODE];
+    return { state: "failed" as const, surge: SURGE_MODES[DEFAULT_SURGE_MODE] };
   }
+  if (!data) return { state: "absent" as const, surge: SURGE_MODES[DEFAULT_SURGE_MODE] };
+  const value = data.value;
+  const mode = value && typeof value === "object" ? (value as { mode?: unknown }).mode : null;
+  if (typeof mode !== "string" || !Object.hasOwn(SURGE_MODES, mode)) {
+    return { state: "malformed" as const, surge: SURGE_MODES[DEFAULT_SURGE_MODE] };
+  }
+  return { state: "configured" as const, surge: parseStoredSurge(value) };
+}
 
-  return parseStoredSurge(data?.value);
+export async function getActiveManualSurge(): Promise<ActiveManualSurge> {
+  return (await readManualSurge()).surge;
 }
 
 export async function setActiveManualSurge(modeValue: unknown, updatedBy: string) {

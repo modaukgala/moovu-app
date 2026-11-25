@@ -268,6 +268,12 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+/** New operations accept only persisted category identifiers; omitted values retain the Go default. */
+export function newRideOptionId(value: unknown): RideOptionId | null {
+  if (value == null) return DEFAULT_RIDE_OPTION_ID;
+  return value === "go" || value === "group" ? value : null;
+}
+
 export function normalizeRideOptionId(value: unknown): RideOptionId {
   return value === "group" ? "group" : DEFAULT_RIDE_OPTION_ID;
 }

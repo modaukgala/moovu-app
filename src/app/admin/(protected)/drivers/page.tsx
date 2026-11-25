@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
@@ -45,6 +45,9 @@ export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState<number | null>(null);
+  const sequence = useRef(0);
   const [query, setQuery] = useState("");
   const [pageError, setPageError] = useState<string | null>(null);
 
@@ -55,46 +58,46 @@ export default function DriversPage() {
     return session?.access_token ?? null;
   }, []);
 
+  const invalidateRequest = useCallback(() => { ++sequence.current; }, []);
+
   const loadDrivers = useCallback(async () => {
+    const request = ++sequence.current;
     setLoading(true);
     setPageError(null);
-
-    const token = await getAccessToken();
-    if (!token) {
-      setPageError("Please sign in as an admin to view drivers.");
-      setDrivers([]);
-      setLoading(false);
-      return;
-    }
-
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(`/api/admin/drivers/list${onlineOnly ? "?online=true" : ""}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal: controller.signal,
-    }).catch(() => null);
-    window.clearTimeout(timeout);
-    const json = res ? await res.json().catch(() => null) : null;
-
-    if (!res?.ok || !json?.ok) {
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Please sign in as an admin to view drivers.");
+      const params = new URLSearchParams({ online: String(onlineOnly), q: query, status: statusFilter, page: String(page) });
+      const res = await fetch(`/api/admin/drivers/list?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal,
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok || !Array.isArray(json.drivers) || !json.pagination) {
+        throw new Error(json?.error || "Could not load drivers.");
+      }
+      if (request !== sequence.current) return;
+      setDrivers(json.drivers);
+      setTotal(json.pagination.total);
+    } catch (error) {
+      if (request !== sequence.current) return;
       setDrivers([]);
-      setPageError(json?.error || "Could not load drivers. Please refresh or contact admin support.");
-      setLoading(false);
-      return;
+      setTotal(null);
+      setPageError(error instanceof Error ? error.message : "Could not load drivers.");
+    } finally {
+      window.clearTimeout(timeout);
+      if (request === sequence.current) setLoading(false);
     }
-
-    setDrivers((json.drivers ?? []) as Driver[]);
-    setLoading(false);
-  }, [getAccessToken, onlineOnly]);
+  }, [getAccessToken, onlineOnly, page, query, statusFilter]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadDrivers();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadDrivers]);
+    const timer = window.setTimeout(() => void loadDrivers(), 250);
+    return () => {
+      window.clearTimeout(timer);
+      invalidateRequest();
+    };
+  }, [invalidateRequest, loadDrivers]);
 
   async function updateStatus(id: string, status: string) {
     setPageError(null);
@@ -122,39 +125,17 @@ export default function DriversPage() {
     await loadDrivers();
   }
 
-  const filteredDrivers = useMemo(() => {
-    const cleanQuery = query.trim().toLowerCase();
-    return drivers.filter((driver) => {
-      const statusMatch =
-        statusFilter === "all" ||
-        driver.status === statusFilter ||
-        (statusFilter === "suspended" && isSuspendedDriver(driver.status));
-      const text = `${driverName(driver)} ${driver.phone ?? ""} ${driver.email ?? ""}`.toLowerCase();
-      const queryMatch = !cleanQuery || text.includes(cleanQuery);
-      return statusMatch && queryMatch;
-    });
-  }, [drivers, query, statusFilter]);
-
   const approvedCount = drivers.filter((driver) =>
     ["active", "approved"].includes(driver.status ?? ""),
   ).length;
   const pendingCount = drivers.filter((driver) => driver.status === "pending").length;
   const suspendedCount = drivers.filter((driver) => isSuspendedDriver(driver.status)).length;
 
-  if (loading) {
-    return (
-      <LoadingState
-        title="Loading drivers"
-        description="Preparing driver profiles, approval states, and operation actions."
-      />
-    );
-  }
-
   return (
     <main className="space-y-6 text-black">
       {pageError && (
         <CenteredMessageBox
-          title="Driver action failed"
+          title="Driver directory error"
           message={pageError}
           onClose={() => setPageError(null)}
         />
@@ -182,17 +163,17 @@ export default function DriversPage() {
       </div>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Total drivers" value={String(drivers.length)} helper="All profiles" />
+        <MetricCard label="Matching drivers" value={total === null ? "Unavailable" : String(total)} helper="Current filters" />
         <MetricCard
           label="Approved"
           value={String(approvedCount)}
-          helper="Ready for trips"
+          helper="Approved on this page"
           tone="success"
         />
         <MetricCard
           label="Needs review"
           value={String(pendingCount + suspendedCount)}
-          helper="Pending or suspended"
+          helper="Pending or suspended on this page"
           tone={pendingCount + suspendedCount > 0 ? "warning" : "default"}
         />
       </section>
@@ -201,7 +182,7 @@ export default function DriversPage() {
         <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => { setPage(1); setQuery(event.target.value); }}
             placeholder="Search driver, phone, or email"
             className="min-h-11 rounded-2xl border border-[var(--moovu-border)] bg-white px-4 text-sm font-semibold text-slate-950 outline-none focus:border-[var(--moovu-blue)]"
           />
@@ -209,7 +190,7 @@ export default function DriversPage() {
             {["all", "pending", "approved", "active", "suspended"].map((status) => (
               <button
                 key={status}
-                onClick={() => setStatusFilter(status)}
+                onClick={() => { setPage(1); setStatusFilter(status); }}
                 className={`rounded-xl border px-4 py-2 text-sm font-black capitalize transition ${
                   statusFilter === status
                     ? "border-[var(--moovu-blue)] bg-[var(--moovu-blue)] text-white"
@@ -224,7 +205,14 @@ export default function DriversPage() {
       </section>
 
       <section className="moovu-card overflow-hidden">
-        {filteredDrivers.length === 0 ? (
+        <div className="my-3 flex flex-wrap items-center gap-3">
+          <button disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+          <span>Page {page}{total === null ? "" : ` · ${total} matching drivers`}</span>
+          <button disabled={loading || (total === null ? drivers.length < 50 : page * 50 >= total)} onClick={() => setPage(page + 1)}>Next</button>
+        </div>
+        {loading ? <LoadingState title="Loading drivers" description="Preparing driver profiles." /> : pageError && drivers.length === 0 ? (
+          <button onClick={() => void loadDrivers()}>Retry driver directory</button>
+        ) : drivers.length === 0 ? (
           <div className="p-6">
             <EmptyState
               title="No drivers found"
@@ -246,7 +234,7 @@ export default function DriversPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDrivers.map((driver) => (
+                  {drivers.map((driver) => (
                     <tr key={driver.id} className="border-t border-[var(--moovu-border)]">
                       <td className="px-5 py-4 font-black text-slate-950">
                         <Link href={`/admin/drivers/${driver.id}`} className="hover:text-[var(--moovu-blue)]">
@@ -300,7 +288,7 @@ export default function DriversPage() {
             </div>
 
             <div className="grid gap-3 p-4 lg:hidden">
-              {filteredDrivers.map((driver) => (
+              {drivers.map((driver) => (
                 <article key={driver.id} className="rounded-2xl border border-[var(--moovu-border)] bg-white p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>

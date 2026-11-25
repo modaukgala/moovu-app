@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { newRideOptionId } from "@/lib/domain/fare";
 import { dispatchTrip } from "@/lib/dispatch/dispatchTrip";
 import { isDispatchExpired } from "@/lib/dispatch/config";
 
@@ -14,6 +15,9 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    if (newRideOptionId(body?.rideOptionId ?? body?.rideOption ?? body?.ride_option) === null) {
+      return NextResponse.json({ ok: false, error: "Unsupported ride category." }, { status: 400 });
+    }
     const tripId = String(body?.tripId ?? "").trim();
 
     if (!tripId) {
