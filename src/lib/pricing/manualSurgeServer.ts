@@ -12,6 +12,8 @@ export const MANUAL_SURGE_SETTING_KEY = "manual_surge";
 
 type ManualSurgeSettingRow = {
   value: unknown;
+  updated_by?: string | null;
+  updated_at?: string | null;
 };
 
 export type ActiveManualSurge = SurgeModeConfig;
@@ -30,7 +32,7 @@ function parseStoredSurge(value: unknown): ActiveManualSurge {
 export async function readManualSurge() {
   const { data, error } = await supabaseAdmin
     .from("app_pricing_settings")
-    .select("value")
+    .select("value,updated_by,updated_at")
     .eq("key", MANUAL_SURGE_SETTING_KEY)
     .maybeSingle<ManualSurgeSettingRow>()
     .then((result) => result, () => ({ data: null, error: { message: "Manual surge read failed." } }));
@@ -42,12 +44,13 @@ export async function readManualSurge() {
     return { state: "failed" as const, surge: SURGE_MODES[DEFAULT_SURGE_MODE] };
   }
   if (!data) return { state: "absent" as const, surge: SURGE_MODES[DEFAULT_SURGE_MODE] };
+  const metadata = { updatedBy: data.updated_by ?? null, updatedAt: data.updated_at ?? null };
   const value = data.value;
   const mode = value && typeof value === "object" ? (value as { mode?: unknown }).mode : null;
   if (typeof mode !== "string" || !Object.hasOwn(SURGE_MODES, mode)) {
-    return { state: "malformed" as const, surge: SURGE_MODES[DEFAULT_SURGE_MODE] };
+    return { state: "malformed" as const, surge: SURGE_MODES[DEFAULT_SURGE_MODE], ...metadata };
   }
-  return { state: "configured" as const, surge: parseStoredSurge(value) };
+  return { state: "configured" as const, surge: parseStoredSurge(value), ...metadata };
 }
 
 export async function getActiveManualSurge(): Promise<ActiveManualSurge> {
@@ -69,7 +72,7 @@ export async function setActiveManualSurge(modeValue: unknown, updatedBy: string
       },
       { onConflict: "key" }
     )
-    .select("value")
+    .select("value,updated_by,updated_at")
     .single<ManualSurgeSettingRow>();
 
   if (error) {
@@ -84,5 +87,7 @@ export async function setActiveManualSurge(modeValue: unknown, updatedBy: string
   return {
     ok: true as const,
     surge: parseStoredSurge(data?.value),
+    updatedBy: data?.updated_by ?? null,
+    updatedAt: data?.updated_at ?? null,
   };
 }

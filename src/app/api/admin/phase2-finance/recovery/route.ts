@@ -9,13 +9,16 @@ export async function GET(req: Request) {
   }
   const url = new URL(req.url);
   const status = url.searchParams.get("status")?.trim();
+  const summary = url.searchParams.get("summary") === "1";
   let query = auth.supabaseAdmin
     .from("phase2_shadow_recovery_jobs")
-    .select("id,operation_key,trip_id,status,attempts,last_error_code,last_error_message,last_attempt_at,next_attempt_at,succeeded_at,financial_transaction_id,reconciliation_id,created_at,updated_at")
+    .select(summary ? "id,trip_id,status,attempts,created_at,last_attempt_at" :
+      "id,operation_key,trip_id,status,attempts,last_error_code,last_error_message,last_attempt_at,next_attempt_at,succeeded_at,financial_transaction_id,reconciliation_id,created_at,updated_at")
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(100);
   if (status) query = query.eq("status", status);
   const { data, error } = await query;
   if (error) return NextResponse.json({ ok: false, error: "Phase 2 recovery status is unavailable." }, { status: 503 });
-  return NextResponse.json({ ok: true, jobs: data ?? [] });
+  return NextResponse.json({ ok: true, jobs: data ?? [], ...(summary ? { scope: "recent", limit: 100, observedAt: new Date().toISOString() } : {}) });
 }

@@ -3,6 +3,7 @@ import type { ALLOWED_ADMIN_ROLES } from "@/lib/auth/admin";
 type Role = (typeof ALLOWED_ADMIN_ROLES)[number];
 const items = [
   ["/admin", "Dashboard", "Workspace"],
+  ["/admin/business-management", "Business Management", "Workspace"],
   ["/admin/business-intelligence", "Business Intelligence", "Workspace"],
   ["/admin/trips", "Trips", "Operations"],
   ["/admin/dispatch", "Dispatch Board", "Operations"],

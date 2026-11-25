@@ -8,15 +8,30 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   }
 
-  const local = getLocalMapsCostSnapshot();
+  const snapshot = getLocalMapsCostSnapshot();
+  const summary = new URL(req.url).searchParams.get("summary") === "1";
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const local = summary ? {
+    generatedAt: snapshot.generatedAt,
+    operations: Object.fromEntries(Object.entries(snapshot.operations).map(([operation, row]) => [operation, {
+      providerSuccesses: row.providerSuccesses, providerFailures: row.providerFailures,
+      providerCallsLastMinute: row.providerCallsLastMinute,
+    }])),
+  } : snapshot;
   const { data, error } = await auth.supabaseAdmin.rpc("google_maps_usage_summary", {
-    p_since: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  });
+    p_since: since,
+  }).then(result => result, () => ({ data: null, error: true }));
 
+  const shared = error || !Array.isArray(data) ? null : summary ? data.every(row => row &&
+    Object.hasOwn(snapshot.operations, row.operation) && ["in_flight", "success", "failure", "blocked"].includes(row.status) &&
+    Number.isSafeInteger(row.request_count) && row.request_count >= 0)
+    ? data.map(row => ({ operation: row.operation, status: row.status, request_count: row.request_count }))
+    : null : data;
   return NextResponse.json({
     ok: true,
     local,
-    shared: error ? null : data,
-    sharedTelemetryAvailable: !error,
+    shared,
+    sharedTelemetryAvailable: shared !== null,
+    ...(summary ? { sharedSince: since } : {}),
   });
 }

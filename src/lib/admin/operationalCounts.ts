@@ -9,3 +9,10 @@ export function paymentQueueCounts(rows: PaymentQueueRow[]) {
   };
 }
 
+
+export const paymentQueueFilters = {
+  pendingProofs: { status: "pending_payment_review", types: null },
+  awaitingConfirmation: { status: "waiting_confirmation", types: null },
+  subscriptionProofs: { status: "pending_payment_review", types: ["subscription", "combined"] },
+  commissionProofs: { status: "pending_payment_review", types: ["commission", "combined"] },
+} as const;
