@@ -24,6 +24,7 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
   { href: "/admin/moovu-plus", label: "MOOVU+", group: "Finance" },
   { href: "/admin/subscriptions", label: "Subscriptions", group: "Finance" },
   { href: "/admin/notifications", label: "Notifications", group: "Notifications" },
+  { href: "/admin/storage", label: "Storage & backup", group: "Archive" },
   { href: "/admin/archive", label: "Archive", group: "Archive" },
 ];
 
