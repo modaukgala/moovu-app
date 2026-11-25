@@ -45,7 +45,6 @@ test("runtime claims durable work before posting and cron is secret protected", 
     { path: "/api/jobs/online-payment-dispatch", schedule: "* * * * *" },
     { path: "/api/jobs/dispatch", schedule: "* * * * *" },
     { path: "/api/jobs/engagement", schedule: "0 * * * *" },
-    { path: "/api/admin/storage/driver-docs/shrink", schedule: "* * * * *" },
   ]);
 });
 
