@@ -8,8 +8,8 @@ import { scoreDriverForTrip } from "./driverScoring.ts";
 import { dispatchJobsQueued } from "./dispatchScheduler.ts";
 
 test("dispatch timing uses three automatic rounds and a thirty-minute admin recovery window", () => {
-  assert.equal(DISPATCH_CONFIG.escalationSeconds, 25);
-  assert.equal(DISPATCH_CONFIG.acceptWindowSeconds, 25);
+  assert.equal(DISPATCH_CONFIG.escalationSeconds, 40);
+  assert.equal(DISPATCH_CONFIG.acceptWindowSeconds, 40);
   assert.equal(DISPATCH_CONFIG.maxSearchSeconds, 30 * 60);
   assert.equal(DISPATCH_CONFIG.maxCycles, 3);
 });

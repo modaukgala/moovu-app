@@ -26,6 +26,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>MOOVU Driver uses your camera when you upload driver documents and proof of payment.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>MOOVU Driver shares your location while you are online, even when the app is in the background, so you keep receiving nearby trip requests.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>MOOVU Driver uses your location to receive nearby trips, navigate to pickups, and update active trip progress.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
@@ -58,6 +60,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>location</string>
 	</array>
 </dict>
 </plist>
