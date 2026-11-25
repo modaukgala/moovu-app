@@ -228,7 +228,7 @@ export default function AdminDashboardPage() {
         <Link href={dashboardOperationalCards.today_completed_trips.href}><MetricCard
           label={dashboardOperationalCards.today_completed_trips.label}
           value={countValue(analytics?.today_completed_trips)}
-          helper={financial ? `Gross ${money(analytics?.today_gross_revenue)}` : undefined}
+          helper={financial ? `Gross recorded completed fares ${money(analytics?.today_gross_revenue)}` : undefined}
           tone="success"
         /></Link>
         {financial && <MetricCard
@@ -240,7 +240,7 @@ export default function AdminDashboardPage() {
         <Link href={dashboardOperationalCards.today_cancelled_trips.href}><MetricCard
           label={dashboardOperationalCards.today_cancelled_trips.label}
           value={countValue(analytics?.today_cancelled_trips)}
-          helper={analytics?.cancellation_rate == null ? "Cancellation rate unavailable" : `${analytics.cancellation_rate.toFixed(1)}% cancellation rate`}
+          helper={analytics?.cancellation_rate == null ? "Cancellation rate unavailable" : `${analytics.cancellation_rate.toFixed(1)}% terminal-event cancellation share`}
           tone={(analytics?.today_cancelled_trips ?? 0) > 0 ? "warning" : "success"}
         /></Link>
       </section>

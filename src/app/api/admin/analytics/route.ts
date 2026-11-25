@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
+import { executiveMoney } from "@/lib/admin/businessIntelligence";
 import { PHASE6_NEEDS_REVIEW } from "@/lib/admin/applicationSummary";
 
 type DriverDirectoryRow = {
@@ -160,18 +161,8 @@ export async function GET(req: Request) {
       driverNameById.set(d.id, fullName || d.phone || d.id);
     }
 
-    const completedTodayRows = (completedToday.data ?? []) as Array<{
-      fare_amount?: number | string | null;
-      commission_amount?: number | string | null;
-    }>;
-    const todayGrossRevenue = completedTodayRows.reduce(
-      (sum, row) => sum + Number(row.fare_amount ?? 0),
-      0
-    );
-    const todayCommissionOwed = completedTodayRows.reduce(
-      (sum, row) => sum + Number(row.commission_amount ?? 0),
-      0
-    );
+    const completedTodayRows = completedToday.data ?? [];
+    const monetary = executiveMoney(completedTodayRows, completedToday.error ? null : completedToday.count);
     const todayCompletedCount = completedToday.error ? null : completedToday.count ?? completedTodayRows.length;
     const todayCancelledCount = cancelledToday.error ? null : cancelledToday.count ?? 0;
     const todayTripTotal = todayCompletedCount == null || todayCancelledCount == null ? null : todayCompletedCount + todayCancelledCount;
@@ -186,8 +177,9 @@ export async function GET(req: Request) {
         today_cancelled_trips: todayCancelledCount,
         active_trips: activeTrips.error ? null : activeTrips.count,
         unassigned_trips: unassignedTrips.error ? null : unassignedTrips.count,
-        today_gross_revenue: completedToday.error || !isFinancialAdminRole(auth.profile.role) ? null : todayGrossRevenue,
-        today_commission_owed: completedToday.error || !isFinancialAdminRole(auth.profile.role) ? null : todayCommissionOwed,
+        today_gross_revenue: !isFinancialAdminRole(auth.profile.role) ? null : monetary.gross,
+        gross_recorded_completed_fares: !isFinancialAdminRole(auth.profile.role) ? null : monetary.gross,
+        today_commission_owed: completedToday.error || !isFinancialAdminRole(auth.profile.role) ? null : monetary.commission,
         weekly_trips: weeklyCompleted.error ? null : weeklyCompleted.count,
         monthly_trips: monthlyCompleted.error ? null : monthlyCompleted.count,
         active_drivers: activeDrivers.error ? null : activeDrivers.count,
@@ -195,7 +187,7 @@ export async function GET(req: Request) {
         pending_driver_applications: pendingApplications.error ? null : pendingApplications.count,
         active_subscriptions: activeSubscriptions.error ? null : activeSubscriptions.count,
         expiring_subscriptions: expiringSubscriptions.error ? null : expiringSubscriptions.count,
-        average_fare: !isFinancialAdminRole(auth.profile.role) ? null : todayCompletedCount && todayCompletedCount > 0 ? todayGrossRevenue / todayCompletedCount : todayCompletedCount === 0 ? 0 : null,
+        average_fare: !isFinancialAdminRole(auth.profile.role) ? null : monetary.average,
         cancellation_rate: todayTripTotal && todayTripTotal > 0 && todayCancelledCount != null ? (todayCancelledCount / todayTripTotal) * 100 : todayTripTotal === 0 ? 0 : null,
         scheduled_due_next_hour: scheduledDue.error ? null : scheduledDue.count,
         scheduled_overdue: scheduledOverdue.error ? null : scheduledOverdue.count,
