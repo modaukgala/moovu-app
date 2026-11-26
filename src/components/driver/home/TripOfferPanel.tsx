@@ -4,13 +4,10 @@ import type { Offer, TripStop } from "./types";
 import { money, rideTypeLabel } from "./utils";
 
 const OFFER_WINDOW_SECONDS = 40;
-// Display only: drivers keep 85% after the 15% MOOVU commission.
-const DRIVER_SHARE = 0.85;
 
 export default function TripOfferPanel({ offer, stops, secondsLeft, responding, onRespond }: { offer: Offer | null; stops: TripStop[]; secondsLeft: number | null; responding: "accept" | "reject" | null; onRespond: (action: "accept" | "reject") => void }) {
   if (!offer) return null;
   const fare = offer.final_fare ?? offer.fare_amount;
-  const keep = fare == null ? null : Math.round(Number(fare) * DRIVER_SHARE * 100) / 100;
   const card = String(offer.payment_method ?? "").toLowerCase() !== "cash";
   const ring = secondsLeft == null ? 1 : Math.max(0, Math.min(1, secondsLeft / OFFER_WINDOW_SECONDS));
   const circumference = 2 * Math.PI * 24;
@@ -38,7 +35,6 @@ export default function TripOfferPanel({ offer, stops, secondsLeft, responding, 
         </div>
 
         <div className="dp-offer-fare">{money(fare)}</div>
-        {keep != null ? <div className="dp-offer-keep">You earn about {money(keep)}</div> : null}
 
         <div className="dp-offer-tiles">
           <div><span>Trip</span><strong>{offer.distance_km == null ? "—" : `${Number(offer.distance_km).toFixed(1)} km`}{offer.duration_min == null ? "" : ` · ${Math.round(Number(offer.duration_min))} min`}</strong></div>
