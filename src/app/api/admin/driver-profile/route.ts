@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { supabaseAdmin } = auth;
+    const financial = isFinancialAdminRole(auth.profile.role);
     const driverId = req.nextUrl.searchParams.get("driverId");
 
     if (!driverId) {
@@ -127,7 +128,7 @@ export async function GET(req: NextRequest) {
         .select(DRIVER_PROFILE_SELECT)
         .eq("driver_id", driverId)
         .maybeSingle(),
-      supabaseAdmin
+      financial ? supabaseAdmin
         .from("driver_subscription_payments")
         .select(`
             id,
@@ -139,8 +140,8 @@ export async function GET(req: NextRequest) {
           `)
         .eq("driver_id", driverId)
         .order("created_at", { ascending: false })
-        .limit(20),
-      supabaseAdmin
+        .limit(20) : { data: null, error: null },
+      financial ? supabaseAdmin
         .from("driver_subscription_requests")
         .select(`
             id,
@@ -154,7 +155,7 @@ export async function GET(req: NextRequest) {
           `)
         .eq("driver_id", driverId)
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(20) : { data: null, error: null },
       supabaseAdmin
         .from("driver_documents")
         .select("id,doc_type,document_type,file_path,status,review_status,rejection_reason,uploaded_at,expires_on")
@@ -238,11 +239,13 @@ export async function GET(req: NextRequest) {
       ok: true,
       profile: {
         ...(driver ?? {}),
+        ...(!financial ? { subscription_amount_due: null, subscription_last_paid_at: null, subscription_last_payment_amount: null } : {}),
         driver_profile: profile ?? null,
       },
       applicationSummary,
       subscription_payments: subscriptionPayments ?? [],
       subscription_requests: subscriptionRequests ?? [],
+      subscription_financial_access: financial,
       documents: documents ?? [],
       validation_issues: readiness.issues,
       approval_blockers: readiness.blockers,
