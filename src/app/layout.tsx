@@ -10,6 +10,7 @@ import NotificationDeepLinkRouter from "@/components/NotificationDeepLinkRouter"
 import AuthDeepLinkHandler from "@/components/auth/AuthDeepLinkHandler";
 import CustomerLaunchNotice from "@/components/CustomerLaunchNotice";
 import CustomerTripRecovery from "@/components/customer/CustomerTripRecovery";
+import AppUpdatePrompt from "@/components/AppUpdatePrompt";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://moovurides.co.za"),
@@ -53,6 +54,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <CustomerTripRecovery>{children}</CustomerTripRecovery>
+        <AppUpdatePrompt />
         <ClientErrorRecovery />
         <InAppNotificationBar />
         <CapacitorBackButtonHandler />
