@@ -49,99 +49,42 @@ export async function GET(req: Request) {
 
     const { supabaseAdmin } = auth;
 
-    const expandedTripsResult = await supabaseAdmin
-      .from("trips")
-      .select(`
-        id,
-        driver_id,
-        pickup_address,
-        dropoff_address,
-        fare_amount,
-        payment_method,
-        status,
-        cancel_reason,
-        created_at,
-        offer_status,
-        offer_expires_at,
-        offer_attempted_driver_ids,
-        dispatch_started_at,
-        dispatch_cycle,
-        dispatch_sequence,
-        dispatch_state,
-        dispatch_search_radius_km,
-        dispatch_failure_reason
-      `, { count: "exact" })
-      .order("created_at", { ascending: false })
-      .limit(300);
-
-    let trips = expandedTripsResult.data as DispatchTripRow[] | null;
-    let tErr = expandedTripsResult.error;
-
-    if (expandedTripsResult.error?.code === "42703") {
-      const fallbackTripsResult = await supabaseAdmin
-        .from("trips")
-        .select("id,driver_id,pickup_address,dropoff_address,fare_amount,payment_method,status,cancel_reason,created_at,offer_status,offer_expires_at,offer_attempted_driver_ids")
-        .order("created_at", { ascending: false })
-        .limit(300);
-      trips = fallbackTripsResult.data as DispatchTripRow[] | null;
-      tErr = fallbackTripsResult.error;
+    const params = new URL(req.url).searchParams;
+    const parsePage = (key: string) => {
+      const value = Number(params.get(key) ?? 1);
+      return Number.isSafeInteger(value) && value >= 1 && value <= 1_000_000 ? value : 1;
+    };
+    const openPage = parsePage("openPage");
+    const closedPage = parsePage("closedPage");
+    const pageSize = 50;
+    const query = (params.get("q") ?? "").trim().slice(0, 160);
+    const status = params.get("status");
+    const base = "id,driver_id,pickup_address,dropoff_address,fare_amount,payment_method,status,cancel_reason,created_at,offer_status,offer_expires_at,offer_attempted_driver_ids";
+    const extended = base + ",dispatch_started_at,dispatch_cycle,dispatch_sequence,dispatch_state,dispatch_search_radius_km,dispatch_failure_reason";
+    const readTrips = async (open: boolean, page: number, columns: string) => {
+      let read = supabaseAdmin.from("trips").select(columns, { count: "exact" });
+      read = open ? read.in("status", OPEN_TRIP_STATUSES) : read.not("status", "in", `(${OPEN_TRIP_STATUSES.join(",")})`);
+      if (status && status !== "all") read = read.eq("status", status);
+      if (query) {
+        const literal = query.replace(/[\\%_*]/g, "\\$&").replace(/["\\]/g, "\\$&");
+        const addresses = ["pickup_address", "dropoff_address"].map((key) => key + '.ilike."%' + literal + '%"');
+        if (/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(query)) addresses.push(`id.eq.${query}`);
+        read = read.or(addresses.join(","));
+      }
+      return await read.order("created_at", { ascending: false }).order("id", { ascending: false })
+        .range((page - 1) * pageSize, page * pageSize - 1);
+    };
+    const loadPage = async (open: boolean, page: number) => {
+      const result = await readTrips(open, page, extended);
+      return result.error?.code === "42703" ? readTrips(open, page, base) : result;
+    };
+    const [open, closed] = await Promise.all([loadPage(true, openPage), loadPage(false, closedPage)]);
+    if (open.error || closed.error) {
+      return NextResponse.json({ ok: false, error: open.error?.message ?? closed.error?.message }, { status: 500 });
     }
-
-    if (tErr) {
-      return NextResponse.json({ ok: false, error: tErr.message }, { status: 500 });
-    }
-
-    // The recent feed above is intentionally capped, but open operational work
-    // must never be displaced by newer closed trips.
-    const openTripsResult = await supabaseAdmin
-      .from("trips")
-      .select(`
-        id,
-        driver_id,
-        pickup_address,
-        dropoff_address,
-        fare_amount,
-        payment_method,
-        status,
-        cancel_reason,
-        created_at,
-        offer_status,
-        offer_expires_at,
-        offer_attempted_driver_ids,
-        dispatch_started_at,
-        dispatch_cycle,
-        dispatch_sequence,
-        dispatch_state,
-        dispatch_search_radius_km,
-        dispatch_failure_reason
-      `, { count: "exact" })
-      .in("status", OPEN_TRIP_STATUSES)
-      .order("created_at", { ascending: false })
-      .limit(1001);
-    if (openTripsResult.error && openTripsResult.error.code !== "42703") {
-      return NextResponse.json({ ok: false, error: openTripsResult.error.message }, { status: 500 });
-    }
-    const openTripsFallback = openTripsResult.error?.code === "42703"
-      ? await supabaseAdmin
-          .from("trips")
-          .select("id,driver_id,pickup_address,dropoff_address,fare_amount,payment_method,status,cancel_reason,created_at,offer_status,offer_expires_at,offer_attempted_driver_ids", { count: "exact" })
-          .in("status", OPEN_TRIP_STATUSES)
-          .order("created_at", { ascending: false })
-          .limit(1001)
-      : null;
-    if (openTripsFallback?.error) {
-      return NextResponse.json({ ok: false, error: openTripsFallback.error.message }, { status: 500 });
-    }
-    const rawOpenTrips = (openTripsFallback?.data ?? openTripsResult.data ?? []) as DispatchTripRow[];
-    const openTripCount = openTripsFallback?.count ?? openTripsResult.count ?? null;
-    const openTripsComplete = openTripCount != null ? openTripCount <= 1000 : rawOpenTrips.length <= 1000;
-    const visibleOpenTrips = rawOpenTrips.slice(0, 1000);
-    const tripById = new Map<string, DispatchTripRow>();
-    for (const trip of [
-      ...visibleOpenTrips,
-      ...((trips ?? []) as DispatchTripRow[]),
-    ]) tripById.set(trip.id, trip);
-    trips = [...tripById.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const openRows = (open.data ?? []) as unknown as DispatchTripRow[];
+    const closedRows = (closed.data ?? []) as unknown as DispatchTripRow[];
+    const trips = [...openRows, ...closedRows];
 
     const driverIds = Array.from(
       new Set(
@@ -217,10 +160,10 @@ export async function GET(req: Request) {
       ok: true,
       rows,
       retrieval: {
-        openTripsComplete,
-        openTripsTotal: openTripCount,
-        openTripsVisible: visibleOpenTrips.length,
-        warning: openTripsComplete ? null : "Open dispatch retrieval reached 1,000 trips. The board is incomplete; use narrower operational filters or investigate the queue size.",
+        pageSize, openPage, closedPage,
+        openTripsTotal: open.count, closedTripsTotal: closed.count,
+        openTripsVisible: openRows.length, closedTripsVisible: closedRows.length,
+        warning: open.count == null || closed.count == null ? "Some filtered totals are unavailable." : null,
       },
     });
   } catch (e: unknown) {

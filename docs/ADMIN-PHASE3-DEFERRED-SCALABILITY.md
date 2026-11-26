@@ -1,0 +1,14 @@
+# Admin Phase 3 deferred scalability
+
+The source changes do not activate regional features. Database work and isolated database verification require separate approval.
+
+| Requirement | Current source and evidence | Minimum prerequisite |
+|---|---|---|
+| BS-01 authoritative operating areas | [Siyabuswa search profile](../src/lib/maps/moovuPlaces.ts) and [autocomplete](../src/app/api/maps/autocomplete/route.ts) bias place search. [Location tests](../src/lib/locationPaste.test.ts) cover existing input behaviour. | Persistent area definitions, a server-owned coverage decision, and driver and trip assignments. Review boundary fixtures before applying any booking restriction. |
+| BS-05 dispatch candidate coverage | [Candidate discovery](../src/lib/dispatch/dispatchCandidates.ts) limits fresh online drivers to 250 before location and eligibility filtering. The [synthetic regression](../src/lib/admin/businessScalability.test.ts) reproduces the omitted nearby driver. | A bounded authoritative query that applies relevant proximity and eligibility constraints before its final cap. Verify the query on an approved isolated database. Preserve scoring, radius progression, freshness, timing, offer rules and retries. |
+| BS-06 regional administration | [Admin authentication](../src/lib/auth/admin.ts) resolves the global role from the authenticated profile. | Authoritative administrator-to-area assignments and resource ownership, with server-side enforcement and cross-area access tests. Frontend filters cannot enforce access. Preserve existing global operational and financial permissions. |
+| Fleet ownership and membership | The [driver directory](../src/app/api/admin/drivers/list/route.ts) searches and pages individual drivers. | Persistent fleet membership and ownership, plus approved permission boundaries. |
+| Configurable service catalogue | [Fare rules](../src/lib/domain/fare.ts) and [vehicle eligibility](../src/lib/drivers/rideEligibility.ts) use the stored IDs `go` and `group`. | An authoritative persisted catalogue with explicit historical identifier, fare and eligibility compatibility. |
+| Regional pricing configuration | [Manual surge](../src/lib/pricing/manualSurgeServer.ts) reads the existing global setting. | Authoritative areas and versioned regional pricing with a defined fallback and historical fare snapshot handling. |
+| Area-specific rollout | [Release gates](../src/lib/release/releaseFlags.ts) are global. The [authenticated Driver profile](../src/app/api/driver/me/route.ts) publishes the effective Phase 6 boolean. | Authoritative area resolution and an approved server-side rollout contract. |
+| Database index optimisation | Existing [Board](../src/app/api/admin/dispatch/board/route.ts) and [directory](../src/app/api/admin/drivers/list/route.ts) queries use bounded filtered pages. | Representative isolated query plans and approved index changes based on measured query cost. |
