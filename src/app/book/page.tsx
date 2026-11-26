@@ -3058,7 +3058,6 @@ export default function RiderBookingPage() {
             </div>
           </div>
 
-          <NotificationPermissionReminder role="customer" active={!authLoading && Boolean(customer) && !legalAcceptanceRequired} />
 
           <ol className="mx-4 mb-3 hidden grid-cols-3 gap-2" aria-label="Booking steps">
             {["Where", "Ride", "Confirm"].map((label, index) => {
@@ -3574,6 +3573,7 @@ export default function RiderBookingPage() {
           </div>
         </div>
       </div>
+      <NotificationPermissionReminder role="customer" active={!authLoading && Boolean(customer) && !legalAcceptanceRequired} />
       {!authLoading && customer ? <LinkSignInPrompt next="/book" /> : null}
       <CustomerBottomNav
         className="booking-scroll-nav"

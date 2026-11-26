@@ -20,9 +20,17 @@ export default function LinkSignInPrompt({ next }: { next: string }) {
       const until = Number(window.localStorage.getItem(DISMISS_KEY) ?? 0);
       if (until > Date.now()) return;
     } catch {}
-    const t = setTimeout(() => {
+    let t: ReturnType<typeof setTimeout>;
+    // Wait until the notification pop-up is closed so only one shows at a time.
+    const tryOpen = () => {
+      if (!active) return;
+      if (document.querySelector(".moovu-permission-reminder-backdrop")) {
+        t = setTimeout(tryOpen, 2000);
+        return;
+      }
       void needsSocialLink().then((need) => { if (active && need) setOpen(true); });
-    }, 4000);
+    };
+    t = setTimeout(tryOpen, 4000);
     return () => { active = false; clearTimeout(t); };
   }, []);
 
