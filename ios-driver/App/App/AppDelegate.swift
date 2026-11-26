@@ -15,7 +15,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
     private let tripOfferCategory = "MOOVU_TRIP_OFFER"
     private let chatReplyCategory = "MOOVU_CHAT_REPLY"
 
-    private func clearApplicationBadge(_ application: UIApplication) {
+    func clearApplicationBadge(_ application: UIApplication) {
         if #available(iOS 16.0, *) {
             UNUserNotificationCenter.current().setBadgeCount(0) { error in
                 if let error = error {
@@ -148,6 +148,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
         clearApplicationBadge(application)
         NSLog("[MOOVU Push] Capacitor notification router will handle notification presentation and taps")
         return true
+    }
+
+    func application(_ application: UIApplication,
+                     configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = SceneDelegate.self
+        return configuration
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
