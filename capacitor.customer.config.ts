@@ -8,6 +8,15 @@ const config: CapacitorConfig = {
     url: process.env.CAPACITOR_CUSTOMER_URL || "https://moovurides.co.za",
     cleartext: false,
   },
+  // The customer app doesn't use background location, so leave that plugin out
+  // (keeps Play's foreground-service declaration off the customer app).
+  includePlugins: [
+    "@capacitor/app",
+    "@capacitor/browser",
+    "@capacitor/camera",
+    "@capacitor/geolocation",
+    "@capacitor/push-notifications",
+  ],
   plugins: {
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],
