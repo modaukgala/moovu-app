@@ -72,14 +72,20 @@ export default function DriverSearchProgress({
     : `${status.driversNearby} driver${status.driversNearby === 1 ? " is" : "s are"} online near you.`;
 
   return (
-    <section className="moovu-card p-4" aria-live="polite">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-black text-slate-950">Searching for your driver</p>
-        <span className="text-xs font-bold text-slate-500">{mmss(elapsed)} of 30:00</span>
+    <section className="moovu-card moovu-search-card p-4" aria-live="polite">
+      <div className="moovu-search-head">
+        <span className="moovu-search-pulse" aria-hidden="true"><span>🚗</span></span>
+        <div className="min-w-0">
+          <p className="moovu-search-title">Finding your driver</p>
+          <p className="moovu-search-sub">
+            Offered to {status.driversOffered} driver{status.driversOffered === 1 ? "" : "s"} nearby · {mmss(elapsed)}
+          </p>
+        </div>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-        <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${roundProgress}%` }} />
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-amber-100">
+        <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${roundProgress}%` }} />
       </div>
+      <p className="moovu-search-tip">Hang tight. We&apos;re finding the best driver for you now.</p>
       <ul className="mt-3 space-y-1 text-sm font-semibold text-slate-700">
         <li>Round {Math.floor(elapsed / ROUND_SECONDS) + 1}: offered to {status.driversOffered} driver{status.driversOffered === 1 ? "" : "s"} so far.</li>
         <li>{nearbyText}</li>

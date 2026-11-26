@@ -2570,7 +2570,10 @@ export default function RiderBookingPage() {
                         {opt.capacity}
                       </div>
                     </div>
-                    <div className="moovu-ride-price">{money(optionFare)}</div>
+                    <div className="moovu-ride-price">
+                      {money(optionFare)}
+                      <span className={`mbk-ride-radio${active ? " is-on" : ""}`} aria-hidden="true" />
+                    </div>
                   </div>
                 </button>
               );
@@ -2971,9 +2974,9 @@ export default function RiderBookingPage() {
           {/* Title row */}
           <div className="flex items-center justify-between gap-3 px-4 pb-2">
             <div>
-              <div className="moovu-kicker">MOOVU Rider</div>
-              <h1 className="text-xl font-black tracking-tight text-slate-950">
-                Book a ride
+              <h1 className="mbk-greeting">
+                {greetingForHour(new Date().getHours())}
+                {customer?.first_name?.trim() ? `, ${customer.first_name.trim()}` : ""}
               </h1>
               <p className="mt-0.5 text-xs text-slate-500" aria-live="polite">{progressText}</p>
             </div>
@@ -3405,8 +3408,8 @@ export default function RiderBookingPage() {
                 : rideType === "scheduled"
                   ? "Review schedule"
                   : displayFare != null
-                    ? `Book ride · ${money(displayFare)}`
-                    : "Book ride"}
+                    ? `Book ${selectedRide.name} · ${money(displayFare)}`
+                    : `Book ${selectedRide.name}`}
             </button>
           </div>
         </div>
@@ -3419,4 +3422,10 @@ export default function RiderBookingPage() {
       />
     </main>
   );
+}
+
+function greetingForHour(hour: number) {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }

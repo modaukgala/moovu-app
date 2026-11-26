@@ -1,0 +1,279 @@
+/* MOOVU premium customer layer (Round 1).
+   Visual only. Scoped to the booking page (.booking-v3) and the customer
+   trip page (.customer-trip-v3) so driver and admin are untouched. */
+
+.booking-v3,
+.customer-trip-v3 {
+  --pm-ink: #050505;
+  --pm-blue: var(--moovu-primary, #1f74c9);
+  --pm-blue-soft: #eaf3ff;
+  --pm-muted: #5b6776;
+  --pm-line: #eef2f5;
+  --pm-soft: #f6f8fa;
+  --pm-radius: 18px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ── Map chrome ─────────────────────────────────────────── */
+.booking-v3 .mbk-map-satellite,
+.booking-v3 .mbk-map-recenter {
+  border: 0;
+  background: #fff;
+  color: var(--pm-ink);
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgba(5, 5, 5, 0.12);
+}
+.booking-v3 .mbk-map-satellite {
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 14px;
+}
+.booking-v3 .mbk-map-satellite[aria-pressed="true"] {
+  background: var(--pm-blue);
+  color: #fff;
+}
+.booking-v3 .mbk-map-recenter {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  color: var(--pm-blue);
+  font-size: 20px;
+}
+
+/* The greeting lives in the sheet now; the floating header stays quiet. */
+.booking-v3 .mbk-customer-question {
+  display: none;
+}
+
+/* ── Sheet ──────────────────────────────────────────────── */
+.booking-v3 .mbk-sheet {
+  border-radius: 28px 28px 0 0;
+  background: #fff;
+  box-shadow: 0 -8px 30px rgba(5, 5, 5, 0.1);
+}
+.booking-v3 .mbk-handle {
+  width: 36px;
+  height: 5px;
+  border-radius: 999px;
+  background: #d7dde3;
+}
+.booking-v3 .mbk-greeting {
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--pm-ink);
+}
+
+/* Route card: soft grey "Where to?" feel */
+.booking-v3 .customer-floating-route-card {
+  border: 0;
+  border-radius: var(--pm-radius);
+  background: var(--pm-soft);
+  box-shadow: none;
+}
+.booking-v3 .moovu-route-input {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--pm-ink);
+  background: transparent;
+}
+.booking-v3 #dropoff-input {
+  font-size: 18px;
+  font-weight: 800;
+}
+.booking-v3 #dropoff-input::placeholder {
+  color: #3c4652;
+}
+.booking-v3 .moovu-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pm-muted);
+}
+.booking-v3 .moovu-route-dot-pickup {
+  background: var(--pm-blue);
+  box-shadow: 0 0 0 4px rgba(31, 116, 201, 0.18);
+}
+.booking-v3 .moovu-loc-inline-btn {
+  border-radius: 999px;
+  background: var(--pm-blue-soft);
+  color: var(--pm-blue);
+  font-weight: 800;
+}
+.booking-v3 .moovu-place-menu {
+  border-radius: 16px;
+  border: 1px solid var(--pm-line);
+  box-shadow: 0 12px 30px rgba(5, 5, 5, 0.12);
+}
+.booking-v3 .moovu-place-option {
+  min-height: 48px;
+  font-weight: 600;
+}
+
+/* ── Ride cards ─────────────────────────────────────────── */
+.booking-v3 .moovu-ride-option-card {
+  border: 1.5px solid var(--pm-line);
+  border-radius: var(--pm-radius);
+  background: #fff;
+  box-shadow: none;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+.booking-v3 .moovu-ride-option-card.active {
+  border: 2px solid var(--pm-ink);
+  background: #fff;
+}
+.booking-v3 .moovu-ride-option-card:active {
+  transform: scale(0.98);
+}
+.booking-v3 .moovu-selected-check {
+  display: none;
+}
+.booking-v3 .moovu-ride-price {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--pm-ink);
+}
+.mbk-ride-radio {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 999px;
+  border: 2px solid #c9d2db;
+  background: #fff;
+}
+.mbk-ride-radio.is-on {
+  border: 0;
+  background: var(--pm-ink)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / 14px no-repeat;
+}
+
+/* ── Payment ────────────────────────────────────────────── */
+.booking-v3 .customer-booking-payment-options button {
+  min-height: 48px;
+  border-radius: 14px;
+  font-weight: 800;
+}
+.booking-v3 .customer-booking-payment-options button.is-selected {
+  background: var(--pm-ink);
+  border-color: var(--pm-ink);
+  color: #fff;
+}
+
+/* ── Confirm bar ────────────────────────────────────────── */
+.booking-v3 .mbk-confirm-bar {
+  border-top: 1px solid var(--pm-line);
+  background: #fff;
+}
+.booking-v3 .moovu-confirm-button {
+  min-height: 58px;
+  border-radius: 16px;
+  background: var(--pm-blue);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  box-shadow: 0 8px 20px rgba(31, 116, 201, 0.28);
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+.booking-v3 .moovu-confirm-button:hover:not(:disabled) {
+  background: #244f9e;
+}
+.booking-v3 .moovu-confirm-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.booking-v3 .moovu-confirm-button:disabled {
+  background: #e4e9ee;
+  color: #8a96a3;
+  box-shadow: none;
+}
+.booking-v3 .mbk-footer-fare {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--pm-ink);
+}
+
+/* ── Finding your driver card ───────────────────────────── */
+.moovu-search-card {
+  border-radius: 20px;
+}
+.moovu-search-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.moovu-search-pulse {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 999px;
+  background: #fff4e5;
+  font-size: 22px;
+}
+.moovu-search-pulse::before,
+.moovu-search-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid rgba(245, 158, 11, 0.45);
+  animation: moovu-pulse 2s ease-out infinite;
+}
+.moovu-search-pulse::after {
+  animation-delay: 1s;
+}
+.moovu-search-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #050505;
+}
+.moovu-search-sub {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #5b6776;
+}
+.moovu-search-tip {
+  margin-top: 12px;
+  border-radius: 14px;
+  background: #fff8ec;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #92400e;
+}
+@keyframes moovu-pulse {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+
+/* ── Trip page polish ───────────────────────────────────── */
+.customer-trip-v3 .moovu-card {
+  border-radius: 20px;
+  border-color: #eef2f5;
+}
+.customer-trip-v3 .moovu-btn-primary {
+  min-height: 52px;
+  border-radius: 16px;
+  font-weight: 900;
+}
+.customer-trip-v3 .moovu-btn-secondary {
+  min-height: 48px;
+  border-radius: 14px;
+  background: #f1f4f7;
+  font-weight: 800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moovu-search-pulse::before,
+  .moovu-search-pulse::after { animation: none; }
+  .booking-v3 .moovu-ride-option-card,
+  .booking-v3 .moovu-confirm-button { transition: none; }
+}
