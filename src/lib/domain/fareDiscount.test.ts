@@ -69,10 +69,10 @@ test("total route distance selects the tier for add-stop journeys", () => {
 
 test("minimum fares rise with every approved surge mode", () => {
   const cases = [
-    ["go", "normal", 40],
-    ["go", "busy", 44],
-    ["go", "heavy_demand", 48],
-    ["go", "rain_event", 56],
+    ["go", "normal", 50],
+    ["go", "busy", 55],
+    ["go", "heavy_demand", 60],
+    ["go", "rain_event", 70],
     ["group", "normal", 70],
     ["group", "busy", 77],
     ["group", "heavy_demand", 84],

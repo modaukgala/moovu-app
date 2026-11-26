@@ -191,7 +191,7 @@ export const RIDE_OPTION_RULES: Record<RideOptionId, FareRules> = {
     perKm: 9,
     perMinute: 1.5,
     bookingFee: 4,
-    minFare: 40,
+    minFare: 50,
     waitingFeePerMinute: 2,
     freeWaitingMinutes: 3,
     platformCommissionPct: 10,
