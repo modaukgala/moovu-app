@@ -11,11 +11,11 @@ import {
   useState,
 } from "react";
 import Image from "next/image";
+import { Clock3, LocateFixed, MapPin, Store } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
-import ExactLocationIcon from "@/components/booking/ExactLocationIcon";
 import LocationMapPicker, {
   type ConfirmedMapLocation,
 } from "@/components/booking/LocationMapPicker";
@@ -289,6 +289,10 @@ export default function RiderBookingPage() {
   const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
   // True while pickup is the phone's GPS position; shows "Your location".
   const [pickupFromGps, setPickupFromGps] = useState(false);
+  // Three popular Siyabuswa places, shuffled once per visit so they rotate.
+  const [popularPlaces] = useState(() =>
+    [...POPULAR_SIYABUSWA_PLACES].sort(() => Math.random() - 0.5).slice(0, 3),
+  );
   const autoPickupTriedRef = useRef(false);
   const pickupEditedRef = useRef(false);
   const currentLocationMarkerRef = useRef<google.maps.Marker | null>(null);
@@ -2983,9 +2987,9 @@ export default function RiderBookingPage() {
       {/* ── Bottom sheet ── */}
       <div
         ref={sheetRef}
-        className={`mbk-sheet${sheetSnap === "expanded" ? " mbk-sheet-expanded" : ""}${editingLocation ? " mbk-sheet-editing" : ""}${homeMode ? " mbk-sheet-home" : ""}`}
+        className={`mbk-sheet${sheetSnap === "expanded" ? " mbk-sheet-expanded" : ""}${editingLocation ? " mbk-sheet-editing" : ""}${homeMode ? " mbk-sheet-home" : ""}${!homeMode && dropoffLat == null ? " mbk-sheet-route" : ""}`}
         style={{
-          top: homeMode ? "65dvh" : sheetTopPx,
+          top: homeMode ? "65dvh" : dropoffLat == null && !editingLocation ? "34dvh" : sheetTopPx,
           transition:
             dragY != null ? "none" : "top 0.38s cubic-bezier(0.32,0.72,0,1)",
         }}
@@ -3213,45 +3217,27 @@ export default function RiderBookingPage() {
                     ))}
                   </div>
                 )}
-                <div className="moovu-location-chip-row customer-ehail-location-actions">
-                  <button
-                    type="button"
-                    className="moovu-loc-inline-btn"
-                    onClick={() => void detectCurrentLocation()}
-                    disabled={busy || locationLoading}
-                    title="Use current location"
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      aria-hidden="true"
-                      xmlns="http://www.w3.org/2000/svg"
+                <div className="mbk-line-actions">
+                  {!pickupFromGps ? (
+                    <button
+                      type="button"
+                      className="mbk-icon-btn"
+                      onClick={() => void detectCurrentLocation()}
+                      disabled={busy || locationLoading}
+                      aria-label="Use my current location"
+                      title="Use my current location"
                     >
-                      <circle cx="8" cy="8" r="3" fill="currentColor" />
-                      <path
-                        d="M8 1v2M8 13v2M1 8h2M13 8h2"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <span>
-                      {locationLoading ? <MoovuInlineLoader message="Locating..." /> : "Current location"}
-                    </span>
-                  </button>
+                      {locationLoading ? <MoovuInlineLoader message="" /> : <LocateFixed aria-hidden="true" />}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    className="moovu-loc-inline-btn"
+                    className="mbk-icon-btn"
                     onClick={() => openMapPicker("pickup")}
+                    aria-label="Choose pickup on map"
+                    title="Choose on map"
                   >
-                    <ExactLocationIcon className="moovu-exact-location-icon" />
-                    <span>
-                      {pickupLat != null && pickupLng != null
-                        ? "Adjust pin"
-                        : "Choose on map"}
-                    </span>
+                    <MapPin aria-hidden="true" />
                   </button>
                 </div>
                 {pickupPinned && (
@@ -3399,27 +3385,24 @@ export default function RiderBookingPage() {
                 <span className="moovu-route-dot moovu-route-dot-dropoff" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="moovu-field-label" htmlFor="dropoff-input">
-                    Destination
-                  </label>
+                <label className="moovu-field-label" htmlFor="dropoff-input">
+                  Destination
+                </label>
+                <div className="mbk-line-actions">
                   <button
                     type="button"
-                    className="moovu-loc-inline-btn"
+                    className="mbk-icon-btn"
                     onClick={() => openMapPicker("dropoff")}
+                    aria-label={dropoffLat != null ? "Adjust destination pin" : "Choose destination on map"}
+                    title="Choose on map"
                   >
-                    <ExactLocationIcon className="moovu-exact-location-icon" />
-                    <span>
-                      {dropoffLat != null && dropoffLng != null
-                        ? "Adjust pin"
-                        : "Choose on map"}
-                    </span>
+                    <MapPin aria-hidden="true" />
                   </button>
                 </div>
                 <input
                   id="dropoff-input"
                   className="moovu-route-input"
-                  placeholder="Where are you going?"
+                  placeholder="Where to?"
                   value={dropoffAddress}
                   onChange={(e) => onDropoffInputChange(e.target.value)}
                   onPaste={(e) => handleLocationPaste(e, "dropoff")}
@@ -3469,7 +3452,31 @@ export default function RiderBookingPage() {
             </div>
           </div>
 
-          <div className="px-4 pb-2">{expandedDetails}</div>
+          {!homeMode && dropoffLat == null && !showDropoffDropdown && !showPickupDropdown ? (
+            <div className="mbk-popular mx-4">
+              <p className="mbk-popular-title">Popular around Siyabuswa</p>
+              {[...recentPlaces.slice(0, 1).map((name) => ({ name, recent: true })), ...popularPlaces.map((name) => ({ name, recent: false }))]
+                .slice(0, 3)
+                .map((place) => (
+                  <button
+                    key={place.name}
+                    type="button"
+                    className="mbk-popular-row"
+                    onClick={() => leaveHome(place.name)}
+                  >
+                    <span className="mbk-popular-icon" aria-hidden="true">
+                      {place.recent ? <Clock3 /> : <Store />}
+                    </span>
+                    <span className="min-w-0 flex-1 text-left">
+                      <strong>{place.name.split(",")[0]}</strong>
+                      <small>{place.recent ? "Your last trip" : "Popular place"}</small>
+                    </span>
+                  </button>
+                ))}
+            </div>
+          ) : null}
+
+          <div className="mbk-details px-4 pb-2">{expandedDetails}</div>
 
           <div className="customer-booking-payment mx-4 mt-3">
             <div className="moovu-field-label">How will you pay?</div>
@@ -3582,3 +3589,18 @@ function greetingForHour(hour: number) {
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
+
+const POPULAR_SIYABUSWA_PLACES = [
+  "Total Siyabuswa",
+  "Siyabuswa Mall",
+  "Siyabuswa Complex",
+  "Ibiza Sky Lounge Siyabuswa",
+  "Siyabuswa Retail Centre",
+  "Siyabuswa A",
+  "Siyabuswa B",
+  "Siyabuswa C",
+  "Siyabuswa D",
+  "Honesty Bar and Grill Siyabuswa",
+  "Mementos Siyabuswa",
+  "Moutse Mall",
+] as const;
