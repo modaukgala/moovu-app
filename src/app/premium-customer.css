@@ -277,3 +277,88 @@
   .booking-v3 .moovu-ride-option-card,
   .booking-v3 .moovu-confirm-button { transition: none; }
 }
+
+/* ── Round 1b: "Where to?" home state ───────────────────── */
+.booking-v3 .mbk-sheet-home .mbk-sheet-scroll > :not(.mbk-home-keep),
+.booking-v3 .mbk-sheet-home .mbk-confirm-bar {
+  display: none !important;
+}
+.mbk-back-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 999px;
+  background: #f1f4f7;
+  font-size: 20px;
+  font-weight: 900;
+}
+.mbk-home { display: grid; gap: 14px; padding-bottom: 96px; }
+.mbk-whereto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  border-radius: 999px;
+  background: #f1f4f7;
+  padding: 0 20px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #050505;
+  text-align: left;
+}
+.mbk-whereto span:first-child { font-size: 22px; }
+.mbk-whereto:active { transform: scale(0.99); }
+.mbk-when {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  border: 1px solid #e4e9ee;
+  border-radius: 999px;
+  padding: 4px;
+}
+.mbk-when button {
+  min-height: 44px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #050505;
+}
+.mbk-when button.is-on { background: var(--moovu-primary, #1f74c9); color: #fff; }
+.mbk-when button:disabled { opacity: 0.45; }
+.mbk-recent-title { font-size: 17px; font-weight: 900; color: #050505; margin-bottom: 4px; }
+.mbk-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  border-bottom: 1px solid #eef2f5;
+  color: #050505;
+}
+.mbk-recent-row strong { display: block; font-size: 15px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbk-recent-row small { display: block; font-size: 13px; color: #5b6776; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbk-recent-icon {
+  display: grid; place-items: center;
+  width: 40px; height: 40px; flex: none;
+  border-radius: 999px; background: #f1f4f7; font-size: 16px;
+}
+.mbk-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mbk-tile {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  border-radius: 18px;
+  background: #f6f8fa;
+  padding: 10px 14px 14px;
+  text-align: left;
+  color: #050505;
+  transition: transform 0.1s ease;
+}
+.mbk-tile:first-child { background: var(--pm-blue-soft, #eaf3ff); }
+.mbk-tile img { width: 96px; height: 56px; object-fit: contain; justify-self: center; }
+.mbk-tile strong { font-size: 17px; font-weight: 900; }
+.mbk-tile small { font-size: 13px; color: #5b6776; }
+.mbk-tile:active { transform: scale(0.98); }

@@ -284,6 +284,9 @@ export default function RiderBookingPage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const [satelliteView, setSatelliteView] = useState(false);
+  // Premium home state: "Where to?" screen before a destination is chosen.
+  const [homeOpen, setHomeOpen] = useState(true);
+  const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
   const autoPickupTriedRef = useRef(false);
   const pickupEditedRef = useRef(false);
   const currentLocationMarkerRef = useRef<google.maps.Marker | null>(null);
@@ -661,6 +664,39 @@ export default function RiderBookingPage() {
   }, [bothLocationsSet, displayFare]);
 
   // ── Auth ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!customer) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+        const res = await fetch("/api/customer/trips", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const json = await res.json().catch(() => null);
+        const trips: Array<{ dropoff_address?: string | null }> = json?.ok ? json.trips ?? [] : [];
+        const seen = new Set<string>();
+        const places: string[] = [];
+        for (const trip of trips) {
+          const address = trip.dropoff_address?.trim();
+          if (!address || seen.has(address.toLowerCase())) continue;
+          seen.add(address.toLowerCase());
+          places.push(address);
+          if (places.length >= 3) break;
+        }
+        if (!cancelled) setRecentPlaces(places);
+      } catch {
+        /* Recent places are optional; booking works without them. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer?.id]);
+
   async function getAccessToken() {
     const {
       data: { session },
@@ -2414,6 +2450,16 @@ export default function RiderBookingPage() {
     RIDE_OPTIONS.find((option) => option.id === selectedRideOption) ??
     RIDE_OPTIONS[0];
 
+  const homeMode = homeOpen && dropoffLat == null && !editingLocation;
+
+  function leaveHome(prefill?: string) {
+    setHomeOpen(false);
+    if (prefill) onDropoffInputChange(prefill);
+    window.setTimeout(() => {
+      document.getElementById("dropoff-input")?.focus();
+    }, 60);
+  }
+
   // ── Expanded-only section (hidden when collapsed) ────────────────
   const expandedDetails = (
     <>
@@ -2932,7 +2978,7 @@ export default function RiderBookingPage() {
       {/* ── Bottom sheet ── */}
       <div
         ref={sheetRef}
-        className={`mbk-sheet${sheetSnap === "expanded" ? " mbk-sheet-expanded" : ""}${editingLocation ? " mbk-sheet-editing" : ""}`}
+        className={`mbk-sheet${sheetSnap === "expanded" ? " mbk-sheet-expanded" : ""}${editingLocation ? " mbk-sheet-editing" : ""}${homeMode ? " mbk-sheet-home" : ""}`}
         style={{
           top: sheetTopPx,
           transition:
@@ -2972,13 +3018,30 @@ export default function RiderBookingPage() {
           }}
         >
           {/* Title row */}
-          <div className="flex items-center justify-between gap-3 px-4 pb-2">
-            <div>
+          <div className="mbk-home-keep flex items-center justify-between gap-3 px-4 pb-2">
+            <div className="flex min-w-0 items-start gap-2">
+              {!homeMode && dropoffLat == null ? (
+                <button
+                  type="button"
+                  className="mbk-back-btn"
+                  aria-label="Back"
+                  onClick={() => setHomeOpen(true)}
+                >
+                  ←
+                </button>
+              ) : null}
+              <div className="min-w-0">
               <h1 className="mbk-greeting">
-                {greetingForHour(new Date().getHours())}
-                {customer?.first_name?.trim() ? `, ${customer.first_name.trim()}` : ""}
+                {homeMode
+                  ? `${greetingForHour(new Date().getHours())}${customer?.first_name?.trim() ? `, ${customer.first_name.trim()}` : ""}`
+                  : dropoffLat != null
+                    ? "Choose your ride"
+                    : "Where to?"}
               </h1>
-              <p className="mt-0.5 text-xs text-slate-500" aria-live="polite">{progressText}</p>
+              <p className="mt-0.5 text-xs text-slate-500" aria-live="polite">
+                {homeMode ? "Where would you like to go today?" : progressText}
+              </p>
+              </div>
             </div>
             <div className="moovu-account-pill">
               <span className="moovu-account-dot" />
@@ -3004,6 +3067,83 @@ export default function RiderBookingPage() {
               );
             })}
           </ol>
+
+          {homeMode ? (
+            <div className="mbk-home-keep mbk-home px-4">
+              <button type="button" className="mbk-whereto" onClick={() => leaveHome()}>
+                <span aria-hidden="true">⌕</span>
+                <span>Where to?</span>
+              </button>
+              <div className="mbk-when" role="group" aria-label="When">
+                <button
+                  type="button"
+                  className={rideType === "now" ? "is-on" : ""}
+                  aria-pressed={rideType === "now"}
+                  onClick={() => setRideType("now")}
+                >
+                  Now
+                </button>
+                <button
+                  type="button"
+                  className={rideType === "scheduled" ? "is-on" : ""}
+                  aria-pressed={rideType === "scheduled"}
+                  disabled={!SCHEDULED_RIDES_ENABLED}
+                  onClick={() => {
+                    if (!SCHEDULED_RIDES_ENABLED) return;
+                    setRideType("scheduled");
+                    leaveHome();
+                  }}
+                >
+                  🗓 Schedule
+                </button>
+              </div>
+              {recentPlaces.length > 0 ? (
+                <div className="mbk-recent">
+                  <div className="mbk-recent-title">Recent destinations</div>
+                  {recentPlaces.map((place) => {
+                    const [first, ...rest] = place.split(",");
+                    return (
+                      <button
+                        key={place}
+                        type="button"
+                        className="mbk-recent-row"
+                        onClick={() => leaveHome(place)}
+                      >
+                        <span className="mbk-recent-icon" aria-hidden="true">📍</span>
+                        <span className="min-w-0 flex-1 text-left">
+                          <strong>{first}</strong>
+                          {rest.length ? <small>{rest.join(",").trim()}</small> : null}
+                        </span>
+                        <span aria-hidden="true">›</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <div className="mbk-tiles">
+                {RIDE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className="mbk-tile"
+                    onClick={() => {
+                      setSelectedRideOption(opt.id);
+                      leaveHome();
+                    }}
+                  >
+                    <Image
+                      src={opt.id === "group" ? "/icons/moovu-go-xl-clean.png" : "/icons/moovu-go-clean.png"}
+                      alt=""
+                      width={96}
+                      height={96}
+                    />
+                    <strong>{opt.id === "group" ? "Go XL" : "Go"}</strong>
+                    <small>{opt.id === "group" ? "More space (up to 6)" : "Everyday rides"}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {/* Route inputs box */}
           <div className="customer-floating-route-card customer-ehail-route-card mx-4">
@@ -3418,7 +3558,7 @@ export default function RiderBookingPage() {
       <CustomerBottomNav
         className="booking-scroll-nav"
         visibilityMode="controlled"
-        visible={showBookingNav}
+        visible={showBookingNav || homeMode}
       />
     </main>
   );
