@@ -37,6 +37,9 @@ export default function DriverOnboarding() {
   const pending = useRef<{ key: string; body: Record<string, unknown> } | null>(null);
   const pendingEvidence = useRef<{ section: Phase6Section; requirement: string; id: string } | null>(null);
   const dirty = useRef(false);
+  // Counts edits so typing during a background save is kept (never thrown away).
+  const editCount = useRef(0);
+  const uploading = useRef(false);
 
   async function request(url: string, options?: RequestInit) {
     const { data } = await supabaseClient.auth.getSession();
@@ -62,14 +65,21 @@ export default function DriverOnboarding() {
       // Retain the exact operation until acknowledged, including ambiguous network failure.
       if (pending.current && pending.current.body.action !== action) throw new Error("Retry the pending operation before continuing.");
       pending.current ??= { key: crypto.randomUUID(), body: { action, application: application?.id, revision: application?.revision, payload } };
+      const editsAtSend = editCount.current;
       const body = await request("/api/driver/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...pending.current.body, key: pending.current.key }) });
       const refreshed = await request("/api/driver/onboarding");
       const wasEvidenceSave = !!pendingEvidence.current;
       if (pendingEvidence.current && (!refreshed.application || phase6Evidence(refreshed.application.draft, pendingEvidence.current.section)[pendingEvidence.current.requirement] !== pendingEvidence.current.id)) throw new Error("Evidence was uploaded but has not been saved to your application. Retry the pending save.");
-      setApplication(refreshed.application);
+      const typedMeanwhile = action === "SAVE" && editCount.current !== editsAtSend && refreshed.application;
+      if (typedMeanwhile) {
+        // Keep what the driver typed while saving; the next autosave sends it.
+        setApplication(prev => prev ? { ...refreshed.application, draft: prev.draft } : refreshed.application);
+      } else {
+        setApplication(refreshed.application);
+        dirty.current = false;
+      }
       pending.current = null;
       pendingEvidence.current = null;
-      dirty.current = false;
       setMessage(action === "SUBMIT" ? "Submitted for Admin review. Your submitted version is protected." : wasEvidenceSave ? "Image saved to your application." : "Saved to your account.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to continue."); }
     finally { setBusy(false); }
@@ -82,7 +92,7 @@ export default function DriverOnboarding() {
   }
   useEffect(() => {
     if (!application || !dirty.current || busy || pending.current) return;
-    const timer = setTimeout(() => { void save(); }, 1200);
+    const timer = setTimeout(() => { void save(); }, 2500);
     return () => clearTimeout(timer);
   });
   useEffect(() => {
@@ -92,13 +102,16 @@ export default function DriverOnboarding() {
   }, []);
 
   function change(section: Phase6Section, name: string, value: unknown) {
-    if (!application || busy || pending.current) return;
+    // Typing is never blocked by a background save; only an image upload pauses edits.
+    if (!application || uploading.current) return;
     dirty.current = true;
-    setApplication({ ...application, draft: { ...application.draft, [section]: { ...application.draft[section], [name]: value } } });
+    editCount.current += 1;
+    setApplication(prev => prev ? { ...prev, draft: { ...prev.draft, [section]: { ...prev.draft[section], [name]: value } } } : prev);
   }
   async function upload(section: Phase6Section, requirement: string, file: File | undefined, source: string) {
     if (!file || !application || busy || pending.current) return;
     setBusy(true);
+    uploading.current = true;
     try {
       const form = new FormData();
       const prepared = await phase6TransportImage(file);
@@ -117,7 +130,7 @@ export default function DriverOnboarding() {
       dirty.current = false;
       setMessage("Image saved to your application and ready for review.");
     } catch (error) { setMessage(pendingEvidence.current ? "Image uploaded privately, but the application save was not confirmed. Tap Save / retry pending save before leaving." : error instanceof Error ? error.message : "Capture failed."); }
-    finally { setBusy(false); }
+    finally { uploading.current = false; setBusy(false); }
   }
   async function showEvidence(requirement: string, evidenceId: string) {
     if (!application) return;
