@@ -26,7 +26,7 @@ export default function AppUpdatePrompt() {
     let timer: ReturnType<typeof setTimeout>;
     void App.getInfo()
       .then((info) => { if (active && /driver/i.test(info.id)) setApp("driver"); })
-      .catch(() => { if (active && window.location.hostname.startsWith("driver.")) setApp("driver"); });
+      .catch(() => {});
     const tryOpen = () => {
       if (!active) return;
       if (document.querySelector(".moovu-permission-reminder-backdrop")) {
@@ -44,13 +44,15 @@ export default function AppUpdatePrompt() {
     try { window.localStorage.setItem(LATER_KEY, String(Date.now() + 3 * 24 * 3600 * 1000)); } catch {}
     setOpen(false);
   };
-  const href = `/api/app-update?app=${app}&platform=${platform}`;
+  const onDriverSite = window.location.hostname.startsWith("driver.") || window.location.pathname.startsWith("/driver");
+  const which = app === "driver" || onDriverSite ? "driver" : "customer";
+  const href = `/api/app-update?app=${which}&platform=${platform}`;
 
   return (
     <div className="moovu-link-prompt" role="dialog" aria-modal="true" aria-labelledby="moovu-update-title">
       <div className="moovu-link-card">
         <div className="moovu-update-icon" aria-hidden="true"><Download /></div>
-        <h2 id="moovu-update-title">A new MOOVU {app === "driver" ? "Driver " : ""}app is ready</h2>
+        <h2 id="moovu-update-title">A new MOOVU {which === "driver" ? "Driver " : ""}app is ready</h2>
         <p>Update to get the newest look, faster sign-in with Google or Apple, and better trip alerts. Your account and trips stay the same.</p>
         <a className="moovu-update-btn" href={href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>
           Update now
