@@ -200,7 +200,7 @@ export default function DriverTripOffersPage() {
           <div>
             <span>MOOVU Driver</span>
             <h1>Trip offers</h1>
-            <p>A clear record of every request sent to you and what happened next.</p>
+            <p>Every trip sent to you and what happened.</p>
           </div>
           <button
             type="button"

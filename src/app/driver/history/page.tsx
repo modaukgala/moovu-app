@@ -66,6 +66,7 @@ export default function DriverHistoryPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [trips, setTrips] = useState<DriverTrip[]>([]);
   const [filter, setFilter] = useState("all");
+  const [period, setPeriod] = useState<"today" | "week" | "month" | "all">("all");
   const [ratingTripId, setRatingTripId] = useState<string | null>(null);
   const [rating, setRating] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
@@ -119,14 +120,28 @@ export default function DriverHistoryPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  // Display-only period filter (Today / Week / Month / All).
+  const periodTrips = useMemo(() => {
+    if (period === "all") return trips;
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    if (period === "week") start.setDate(start.getDate() - 6);
+    if (period === "month") start.setDate(1);
+    return trips.filter((trip) => {
+      const ms = trip.created_at ? Date.parse(trip.created_at) : NaN;
+      return Number.isFinite(ms) && ms >= start.getTime();
+    });
+  }, [trips, period]);
+
   const filteredTrips = useMemo(() => {
-    if (filter === "all") return trips;
-    return trips.filter((trip) => trip.status === filter);
-  }, [trips, filter]);
+    if (filter === "all") return periodTrips;
+    return periodTrips.filter((trip) => trip.status === filter);
+  }, [periodTrips, filter]);
 
   const completedTrips = useMemo(
-    () => trips.filter((trip) => trip.status === "completed"),
-    [trips],
+    () => periodTrips.filter((trip) => trip.status === "completed"),
+    [periodTrips],
   );
   const completedFare = completedTrips.reduce(
     (total, trip) => total + Number(trip.fare_amount ?? 0),
@@ -191,26 +206,27 @@ export default function DriverHistoryPage() {
             <ArrowLeft aria-hidden="true" />
           </Link>
           <div>
-            <span>MOOVU Driver</span>
-            <h1>Trip history</h1>
-            <p>Review your routes, rider details, payment methods, and trip outcomes.</p>
+            <h1>Trips</h1>
           </div>
           <button
             type="button"
             className="driver-icon-button driver-history-calendar"
-            aria-label="Open trip filters"
-            onClick={() => document.getElementById("driver-history-filters")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+            aria-label="Refresh trips"
+            onClick={loadTrips}
           >
-            <CalendarDays aria-hidden="true" />
+            <RefreshCw aria-hidden="true" />
           </button>
         </header>
 
         <DriverSectionTabs section="trips" />
 
-        <button type="button" onClick={loadTrips} className="driver-refresh-button">
-          <RefreshCw aria-hidden="true" />
-          Refresh
-        </button>
+        <div className="dp-periods" role="group" aria-label="Period">
+          {([["today", "Today"], ["week", "Week"], ["month", "Month"], ["all", "All"]] as const).map(([id, label]) => (
+            <button key={id} type="button" className={period === id ? "is-on" : ""} aria-pressed={period === id} onClick={() => setPeriod(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
@@ -284,9 +300,9 @@ export default function DriverHistoryPage() {
 
         <section className="driver-history-stats" aria-label="Trip totals">
           <article>
-            <div><span>Total trips</span><CalendarDays aria-hidden="true" /></div>
-            <strong>{trips.length}</strong>
-            <small>All recorded trips</small>
+            <div><span>All trips</span><CalendarDays aria-hidden="true" /></div>
+            <strong>{periodTrips.length}</strong>
+            <small>In this period</small>
           </article>
           <article className="is-success">
             <div><span>Completed</span><CheckCircle2 aria-hidden="true" /></div>
@@ -303,7 +319,7 @@ export default function DriverHistoryPage() {
         <section id="driver-history-filters" className="driver-history-filters">
           <div>
             <CalendarDays aria-hidden="true" />
-            <span><small>Date range</small><strong>All time</strong></span>
+            <span><small>Period</small><strong>{{ today: "Today", week: "Last 7 days", month: "This month", all: "All time" }[period]}</strong></span>
           </div>
           <label>
             <SlidersHorizontal aria-hidden="true" />
@@ -318,7 +334,7 @@ export default function DriverHistoryPage() {
 
         <section className="driver-trip-list">
           <div className="driver-section-heading">
-            <h2>Recent trips</h2>
+            <h2>Your trips</h2>
             <span>{filteredTrips.length} shown</span>
           </div>
           {filteredTrips.length === 0 ? (

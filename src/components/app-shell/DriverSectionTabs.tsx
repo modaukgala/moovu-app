@@ -8,7 +8,6 @@ import {
   FileCheck2,
   Headphones,
   History,
-  House,
   UserRound,
   WalletCards,
 } from "lucide-react";
@@ -19,9 +18,8 @@ type DriverSectionTabsProps = {
 
 const tabs = {
   trips: [
-    { href: "/driver/history", label: "Trip history", icon: History },
-    { href: "/driver/trip-offers", label: "Offers", icon: CarFront },
-    { href: "/driver", label: "Home", icon: House },
+    { href: "/driver/history", label: "Trips taken", icon: History },
+    { href: "/driver/trip-offers", label: "Trip offers", icon: CarFront },
   ],
   money: [
     { href: "/driver/earnings", label: "Money", icon: WalletCards },

@@ -134,45 +134,53 @@ export default function DriverAccountPage() {
     window.location.href = "/driver/login";
   }
 
+  const readinessAllOk =
+    (driver?.status === "approved" || driver?.status === "active") &&
+    Boolean(driver?.profile_completed) &&
+    (driver?.verification_status === "approved" || driver?.verification_status === "verified") &&
+    Boolean(driver?.vehicle_registration);
+
   return (
     <main className="driver-mobile-page driver-account-v3 text-slate-950">
       {message && <CenteredMessageBox message={message} onClose={() => setMessage(null)} />}
 
       <div className="driver-mobile-container space-y-5">
-        <header className="driver-account-heading">
-          <div className="driver-account-avatar"><CircleUserRound aria-hidden="true" /></div>
-          <div>
-            <span>MOOVU Driver</span>
+        <header className="driver-account-heading dp-account-head">
+          <div className="dp-avatar" aria-hidden="true">
+            {(`${driver?.first_name?.[0] ?? ""}${driver?.last_name?.[0] ?? ""}`.toUpperCase()) || <CircleUserRound />}
+          </div>
+          <div className="min-w-0">
             <h1>{`${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Your account"}</h1>
-            <p>{driver?.phone || "Manage your driver profile and access"}</p>
+            <p>
+              {driver?.vehicle_registration || driver?.phone || "Driver account"}
+              {" · "}
+              <span className={driver?.status === "approved" || driver?.status === "active" ? "dp-ok" : "dp-wait"}>
+                {driver?.status === "approved" || driver?.status === "active" ? "Approved" : "In review"}
+              </span>
+            </p>
           </div>
         </header>
 
         <DriverSectionTabs section="account" />
 
-        <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="moovu-card driver-account-subscription p-5 sm:p-6">
-            <div className="moovu-section-title">Driver account</div>
-            <h2 className="mt-2 text-2xl font-black">{driver?.status === "approved" || driver?.status === "active" ? "Approved Driver" : "Account review"}</h2>
-            <div className="mt-5"><Info label="Commission owed" value={money(earnings?.wallet?.balance_due)} /></div>
-          </div>
-
-          <div className="moovu-card driver-account-readiness p-5 sm:p-6">
-            <div className="moovu-section-title">Driver readiness</div>
-            <h2 className="mt-2 text-2xl font-black">Account checks</h2>
-            <div className="mt-5 space-y-3">
-              <Readiness label="Application status" value={driver?.status || "pending"} ready={driver?.status === "approved" || driver?.status === "active"} />
-              <Readiness label="Profile" value={driver?.profile_completed ? "complete" : "needs attention"} ready={Boolean(driver?.profile_completed)} />
-              <Readiness label="Verification" value={driver?.verification_status || "pending"} ready={driver?.verification_status === "approved" || driver?.verification_status === "verified"} />
-              <Readiness label="Vehicle" value={driver?.vehicle_registration || "missing"} ready={Boolean(driver?.vehicle_registration)} />
-            </div>
-            <p className="mt-4 text-xs font-semibold leading-5 text-slate-500">
+        <details className="dp-fold">
+          <summary>
+            Account checks
+            <span className={readinessAllOk ? "dp-ok" : "dp-wait"}>{readinessAllOk ? "All approved" : "Needs attention"}</span>
+          </summary>
+          <div className="space-y-3 p-1">
+            <Readiness label="Application status" value={driver?.status || "pending"} ready={driver?.status === "approved" || driver?.status === "active"} />
+            <Readiness label="Profile" value={driver?.profile_completed ? "complete" : "needs attention"} ready={Boolean(driver?.profile_completed)} />
+            <Readiness label="Verification" value={driver?.verification_status || "pending"} ready={driver?.verification_status === "approved" || driver?.verification_status === "verified"} />
+            <Readiness label="Vehicle" value={driver?.vehicle_registration || "missing"} ready={Boolean(driver?.vehicle_registration)} />
+            <p className="text-xs font-semibold leading-5 text-slate-500">
               PDP status is tracked in your application documents and does not automatically block approval.
             </p>
           </div>
-        </section>
+        </details>
 
-        <ProfileSectionCard title="Earnings and trips" description="Totals are calculated from your existing completed-trip and wallet records.">
+        <details className="dp-fold"><summary>Earnings and trips</summary>
+        <ProfileSectionCard title="Earnings and trips" description="Totals from your completed trips.">
           {loading ? (
             <MoovuInlineLoader message="Loading earnings and trips..." />
           ) : (
@@ -188,8 +196,9 @@ export default function DriverAccountPage() {
             </div>
           )}
         </ProfileSectionCard>
+        </details>
 
-        <ProfileSectionCard title="Driver profile" description="Customer-facing vehicle details and secure account information.">
+        <ProfileSectionCard title="Your details" description="What customers see when you pick them up.">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Info label="Driver" value={`${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver"} />
             <Info label="Cellphone" value={driver?.phone || "Not captured"} />
@@ -198,7 +207,7 @@ export default function DriverAccountPage() {
           </div>
         </ProfileSectionCard>
 
-        <ProfileSectionCard title="Quick actions" description="Open the areas used for daily driving, payments, documents, and support.">
+        <ProfileSectionCard title="Shortcuts" description="Money, documents, help and sign out.">
           <QuickActionGrid actions={[
             { href: "/driver/earnings", label: "Money", description: "Earnings, commission and payouts", icon: WalletCards },
             { href: "/driver/trip-offers", label: "Trip offers", description: "Received requests", icon: CarFront },
@@ -210,13 +219,9 @@ export default function DriverAccountPage() {
           ]} />
         </ProfileSectionCard>
 
-        <section className="moovu-card border border-red-100 bg-red-50/50 p-5 sm:p-7">
-          <div className="moovu-section-title text-red-700">Delete account</div>
-          <h2 className="mt-2 text-2xl font-black">Delete Account</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-700">
-            Permanently delete your driver account. Legally required trip, receipt, tax, fraud-prevention, and safety records may be retained.
-          </p>
-          <Link href="/driver/account/delete" className="moovu-btn mt-5 bg-red-600 text-white">Delete Account</Link>
+        <section className="dp-delete">
+          <p>Deleting your account is permanent. Records the law requires us to keep (trips, receipts, tax, safety) may be retained.</p>
+          <Link href="/driver/account/delete">Delete account</Link>
         </section>
       </div>
 

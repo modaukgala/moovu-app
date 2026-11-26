@@ -251,15 +251,15 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
       New payout accounting is pending its approved effective time. Historical trips are excluded from new payout totals.
     </p>}
     {available && activated && pendingEarnings.length > 0 && <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-      <h3 className="font-bold text-amber-950">Completed trips awaiting payout posting</h3>
-      <p className="text-sm text-amber-950">These are earnings calculations, not confirmed liabilities or amounts ready to pay.</p>
+      <h3 className="font-bold text-amber-950">{role === "driver" ? "Card trips waiting for payout" : "Completed trips awaiting payout posting"}</h3>
+      <p className="text-sm text-amber-950">{role === "driver" ? "These amounts are still being worked out. They become final when MOOVU pays you." : "These are earnings calculations, not confirmed liabilities or amounts ready to pay."}</p>
       <ul className="mt-3 space-y-2">{pendingEarnings.map(row => {
         const driver = drivers.find(item => item.id === row.driverId);
         const calc = row.calculation;
         const fee = calc?.verified ?? calc?.estimated;
         return <li key={row.tripId} className="rounded-lg border border-amber-200 bg-white p-3 text-sm text-slate-800">
           {role === "admin" && <strong className="mr-2">{[driver?.first_name, driver?.last_name].filter(Boolean).join(" ") || `Driver ${row.driverId.slice(0, 8)}`}</strong>}
-          {date(row.completedAt)} · Trip {row.tripId.slice(0, 8)} · {row.status.replaceAll("_", " ")}
+          {date(row.completedAt)} · Trip {row.tripId.slice(0, 8)} · {role === "driver" ? driverStatusLabel(row.status) : row.status.replaceAll("_", " ")}
           {calc && <div className="mt-1">{calc.customerTotalCents !== undefined && <>Customer payment {money(calc.customerTotalCents)} · </>}Ride fare {money(calc.rideFareCents)} · Commission −{money(calc.commissionCents)}
             {calc.driverBookingFeeCents !== undefined && <> · Driver booking share +{money(calc.driverBookingFeeCents)} · MOOVU booking share {money(calc.moovuBookingFeeCents ?? 0)}</>}
             {fee && <> · Yoco percentage fee {money(fee.percentageFeeCents)} (Driver −{money(fee.driverPercentageFeeCents)}, MOOVU −{money(fee.moovuPercentageFeeCents)}) · Yoco fixed fee −{money(fee.fixedFeeCents)} · {calc.verified ? "Calculated payout before debt" : "Estimated payout before debt"} {money(fee.payoutBeforeDebtCents)}</>}
@@ -270,14 +270,14 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
     </section>}
     {available && activated && <section className="rounded-xl border border-slate-200 p-4">
       <h3 className="font-bold">New online trip earnings</h3>
-      <p className="text-sm text-slate-600">These are post-activation trip earnings, not confirmed payout amounts. Yoco fee verification and payout reconciliation may still be pending.</p>
+      <p className="text-sm text-slate-600">{role === "driver" ? "Card trip earnings under the new payout system. Final amounts are confirmed when you are paid." : "These are post-activation trip earnings, not confirmed payout amounts. Yoco fee verification and payout reconciliation may still be pending."}</p>
       {eligiblePayables.length === 0 ? <p className="mt-2 text-sm text-slate-600">No new-system trip earnings have been recorded yet.</p>
         : <ul className="mt-3 space-y-2">{eligiblePayables.map(row => {
           const driver = drivers.find(item => item.id === row.driver_id);
           const feeVerified = verifiedFeeAttemptIds.includes(row.payment_attempt_id);
           return <li key={row.id} className="rounded-lg bg-slate-50 p-3 text-sm text-slate-800">
             {role === "admin" && <strong className="mr-2">{[driver?.first_name, driver?.last_name].filter(Boolean).join(" ") || `Driver ${row.driver_id.slice(0, 8)}`}</strong>}
-            {date(row.earned_at)} · Driver fare basis {money(row.fare_cents)} · Commission {money(row.commission_cents)} · {row.booking_fee_cents > 0 ? `Booking fee ${money(row.booking_fee_cents)}; allocation pending payout policy review` : "No booking fee"} · Driver trip earnings {money(row.payable_cents)} · {feeVerified ? "Yoco fee evidence present; payout reconciliation pending" : "Yoco fee verification pending"}
+            {date(row.earned_at)} · Driver fare basis {money(row.fare_cents)} · Commission {money(row.commission_cents)} · {row.booking_fee_cents > 0 ? `Booking fee ${money(row.booking_fee_cents)}; ${role === "driver" ? "share being reviewed" : "allocation pending payout policy review"}` : "No booking fee"} · Driver trip earnings {money(row.payable_cents)} · {feeVerified ? "Yoco fee evidence present; payout reconciliation pending" : "Yoco fee verification pending"}
           </li>;
         })}</ul>}
     </section>}
@@ -314,7 +314,7 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
       : <div className="space-y-3">{rows.map(row => <details key={row.id} className="rounded-2xl border border-slate-200 p-4">
           <summary className="cursor-pointer list-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
             <span className="flex flex-wrap items-center justify-between gap-2"><strong>{date(row.period_start)}–{date(row.period_end)}</strong>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-800">{row.status.replaceAll("_", " ")}</span></span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-800">{role === "driver" ? driverStatusLabel(row.status) : row.status.replaceAll("_", " ")}</span></span>
             <span className="mt-1 block text-sm text-slate-600">{role === "admin" && row.driver_id ? `${[drivers.find(driver => driver.id === row.driver_id)?.first_name, drivers.find(driver => driver.id === row.driver_id)?.last_name].filter(Boolean).join(" ") || `Driver ${row.driver_id.slice(0, 8)}`} · ` : ""}
               {row.status === "PAID" ? row.payout_method === "DEBT_OFFSET" ? "Settled against prior commission debt" : "Paid / Verified"
                 : row.status === "APPROVED" ? row.net_payout_cents === 0 ? "Approved debt offset" : "Approved, awaiting bank payment"
@@ -399,4 +399,15 @@ export default function OnlinePayoutsPanel({ role }: { role: "admin" | "driver" 
           </div>}
         </details>)}</div>}
   </section>;
+}
+
+const DRIVER_STATUS_LABELS: Record<string, string> = {
+  PENDING_LEGACY_PAYOUT: "Waiting for payout",
+  PENDING_FEE_VERIFICATION: "Checking card fee",
+  VERIFIED_FOR_REVIEW: "Being reviewed",
+  RECONCILIATION_REQUIRED: "Being checked",
+};
+
+function driverStatusLabel(status: string) {
+  return DRIVER_STATUS_LABELS[status] ?? status.replaceAll("_", " ").toLowerCase().replace(/^./, (c) => c.toUpperCase());
 }

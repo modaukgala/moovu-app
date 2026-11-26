@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
-  ChevronRight,
   WalletCards,
 } from "lucide-react";
 import DriverBottomNav from "@/components/app-shell/DriverBottomNav";
@@ -251,17 +250,36 @@ export default function DriverEarningsPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="driver-mobile-container space-y-5">
-        <header className="driver-money-heading">
-          <span>MOOVU Driver</span>
-          <h1>Earnings and payments</h1>
-          <p>Track your trip earnings and MOOVU commission balance from one clean wallet view.</p>
+        <header className="driver-money-heading dp-page-head">
+          <h1>Money</h1>
         </header>
 
         <DriverSectionTabs section="money" />
 
-        <OnlinePayoutsPanel role="driver" />
 
-        <section className="driver-money-grid" aria-label="Earnings summary">
+        <section className="dp-money-hero" aria-label="This week">
+          <small>Earned this week</small>
+          <strong>{money(earningsSummary.week)}</strong>
+          <div className="dp-money-hero-row">
+            <span>Today <b>{money(earningsSummary.today)}</b></span>
+            <span>This month <b>{money(earningsSummary.month)}</b></span>
+          </div>
+        </section>
+
+        <section className={`dp-owed${commissionDue > 0 ? " is-owed" : ""}`}>
+          <div>
+            <small>{commissionDue > 0 ? "You owe MOOVU" : "MOOVU balance"}</small>
+            <strong>{money(commissionDue)}</strong>
+            {commissionDebtNotice(commissionDue) && <p role="status">{commissionDebtNotice(commissionDue)}</p>}
+          </div>
+          <Link href="/driver/commission-payments">{commissionDue > 0 ? "Pay now" : "View"}</Link>
+        </section>
+
+        <details className="dp-fold" open><summary>Payouts to you</summary>
+          <OnlinePayoutsPanel role="driver" />
+        </details>
+
+        <section className="driver-money-grid dp-money-grid" aria-label="Earnings summary">
           <article className="is-blue">
             <span className="driver-money-icon"><CalendarDays aria-hidden="true" /></span>
             <div><small>Today</small><strong>{money(earningsSummary.today)}</strong><p>Recent completed trips</p></div>
@@ -284,19 +302,8 @@ export default function DriverEarningsPage() {
           </article>
         </section>
 
-        <section className="driver-wallet-summary">
-          <div>
-            <small>Commission balance</small>
-            <strong>{money(commissionDue)}</strong>
-            <p>{commissionDue > 0 ? "Outstanding amount owed to MOOVU" : "Your MOOVU balance is clear"}</p>
-            {commissionDebtNotice(commissionDue) && <p role="status">{commissionDebtNotice(commissionDue)}</p>}
-          </div>
-          <Link href="/driver/commission-payments">
-            View commission
-            <ChevronRight aria-hidden="true" />
-          </Link>
-        </section>
 
+        <details className="dp-fold"><summary>Cancellation and no-show totals</summary>
         <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
           <MetricCard
             label="Cancellation amounts"
@@ -313,25 +320,13 @@ export default function DriverEarningsPage() {
           <MetricCard
             label="Fee amounts total"
             value={money(cancellationDriverEarnings)}
-            helper="Legacy credits and Phase 4 earned obligations differ"
+            helper="Older and newer fee records combined"
             tone="success"
           />
         </section>
+        </details>
 
-        <section className="moovu-card p-5 sm:p-6 space-y-4">
-          <h2 className="text-xl font-black text-slate-950">Payment areas</h2>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="moovu-card-interactive moovu-driver-payment-card p-5">
-              <div className="moovu-section-title">Commission Payment</div>
-              <div className="text-2xl font-black text-slate-950">{money(commissionDue)}</div>
-              <Link href="/driver/commission-payments" className="moovu-btn moovu-btn-primary w-full justify-center">
-                Open commission payments
-              </Link>
-            </div>
-          </div>
-        </section>
-
+        <details className="dp-fold"><summary>Commission breakdown</summary>
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Commission breakdown</h2>
           <p className="text-sm font-semibold text-slate-600">
@@ -362,7 +357,9 @@ export default function DriverEarningsPage() {
             </div>
           )}
         </section>
+        </details>
 
+        <details className="dp-fold"><summary>Payment requests</summary>
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Submitted payment requests</h2>
 
@@ -429,7 +426,9 @@ export default function DriverEarningsPage() {
             </div>
           )}
         </section>
+        </details>
 
+        <details className="dp-fold"><summary>Commission paid and older payments</summary>
         <section className="grid lg:grid-cols-2 gap-6">
           <div className="moovu-card p-5 sm:p-6 space-y-4">
             <h2 className="text-xl font-black text-slate-950">Commission payment history</h2>
@@ -473,7 +472,9 @@ export default function DriverEarningsPage() {
             )}
           </div>
         </section>
+        </details>
 
+        <details className="dp-fold"><summary>Cancellation and no-show pay</summary>
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Cancellation and no-show compensation</h2>
 
@@ -515,7 +516,9 @@ export default function DriverEarningsPage() {
             </div>
           )}
         </section>
+        </details>
 
+        <details className="dp-fold" open><summary>Recent completed trips</summary>
         <section className="moovu-card p-5 sm:p-6 space-y-4">
           <h2 className="text-xl font-black text-slate-950">Recent completed trips</h2>
 
@@ -555,6 +558,7 @@ export default function DriverEarningsPage() {
             </div>
           )}
         </section>
+        </details>
       </div>
       <DriverBottomNav />
     </main>
