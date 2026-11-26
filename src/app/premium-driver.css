@@ -93,6 +93,9 @@
 .moovu-driver-shell .dp-offer {
   position: relative;
   inset: auto;
+  top: auto;
+  left: auto;
+  transform: none;
   width: 100%;
   max-width: 520px;
   max-height: calc(100dvh - 40px);
