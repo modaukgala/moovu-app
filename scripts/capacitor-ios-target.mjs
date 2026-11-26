@@ -276,7 +276,10 @@ function ensureFirebaseMessagingPackage(nativeRoot) {
   ];
 
   if (!contents.includes(firebasePackage)) {
-    contents = contents.replace(pushPackage, `${pushPackage},\n        ${firebasePackage}`);
+    // Match the push-notifications package line on Windows (\) and macOS (/) paths.
+    const pushPackageLine = /\.package\(name: "CapacitorPushNotifications", path: "[^"]*"\)/;
+    const found = contents.match(pushPackageLine)?.[0] ?? pushPackage;
+    contents = contents.replace(found, `${found},\n        ${firebasePackage}`);
   }
 
   if (!contents.includes(firebaseProducts[0]) || !contents.includes(firebaseProducts[1])) {
