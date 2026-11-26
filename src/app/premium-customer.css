@@ -553,4 +553,4 @@
   padding: 2px 0 6px 36px;
 }
 .booking-v3 .customer-ehail-add-stop-row button { margin: 0; width: auto !important; justify-content: flex-start; }
-.booking-v3 .customer-ehail-add-stop-row { margin-left: 0 !important; padding-left: 0 !important; }
+.booking-v3 .customer-ehail-add-stop-row { margin-left: 0 !important; padding-left: 5px !important; }
