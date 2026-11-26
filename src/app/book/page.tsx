@@ -13,7 +13,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import EnableNotificationsButton from "@/components/EnableNotificationsButton";
+import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import ExactLocationIcon from "@/components/booking/ExactLocationIcon";
 import LocationMapPicker, {
@@ -287,6 +287,8 @@ export default function RiderBookingPage() {
   // Premium home state: "Where to?" screen before a destination is chosen.
   const [homeOpen, setHomeOpen] = useState(true);
   const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
+  // True while pickup is the phone's GPS position; shows "Your location".
+  const [pickupFromGps, setPickupFromGps] = useState(false);
   const autoPickupTriedRef = useRef(false);
   const pickupEditedRef = useRef(false);
   const currentLocationMarkerRef = useRef<google.maps.Marker | null>(null);
@@ -903,6 +905,7 @@ export default function RiderBookingPage() {
           ? bestReverseGeocodeLabel(json, "Current pickup location")
           : "Current pickup location",
       );
+      setPickupFromGps(true);
     } catch (e) {
       const msg = isGeolocationPositionError(e)
         ? getLocationErrorMessage(e)
@@ -950,6 +953,7 @@ export default function RiderBookingPage() {
   ) {
     if (mapPickerKind === "pickup") {
       pickupEditedRef.current = true;
+      setPickupFromGps(false);
     setPickupAddress(location.address);
       setPickupPlaceId(location.placeId);
       setPickupLat(location.lat);
@@ -1043,6 +1047,7 @@ export default function RiderBookingPage() {
 
   function onPickupInputChange(value: string) {
     pickupEditedRef.current = true;
+    setPickupFromGps(false);
     setPickupAddress(value);
     clearPickupSelection();
     pickupAutocompleteAbortRef.current?.abort();
@@ -2980,7 +2985,7 @@ export default function RiderBookingPage() {
         ref={sheetRef}
         className={`mbk-sheet${sheetSnap === "expanded" ? " mbk-sheet-expanded" : ""}${editingLocation ? " mbk-sheet-editing" : ""}${homeMode ? " mbk-sheet-home" : ""}`}
         style={{
-          top: sheetTopPx,
+          top: homeMode ? "65dvh" : sheetTopPx,
           transition:
             dragY != null ? "none" : "top 0.38s cubic-bezier(0.32,0.72,0,1)",
         }}
@@ -3049,9 +3054,7 @@ export default function RiderBookingPage() {
             </div>
           </div>
 
-          <div className="flex justify-end px-4 pb-2">
-            <EnableNotificationsButton role="customer" variant="chip" />
-          </div>
+          <NotificationPermissionReminder role="customer" active={!authLoading && Boolean(customer) && !legalAcceptanceRequired} />
 
           <ol className="mx-4 mb-3 hidden grid-cols-3 gap-2" aria-label="Booking steps">
             {["Where", "Ride", "Confirm"].map((label, index) => {
@@ -3070,23 +3073,47 @@ export default function RiderBookingPage() {
 
           {homeMode ? (
             <div className="mbk-home-keep mbk-home px-4">
-              <button type="button" className="mbk-whereto" onClick={() => leaveHome()}>
-                <span aria-hidden="true">⌕</span>
-                <span>Where to?</span>
-              </button>
-              <div className="mbk-when" role="group" aria-label="When">
+              <div className="mbk-tiles" role="radiogroup" aria-label="Choose your ride">
+                {RIDE_OPTIONS.map((opt) => {
+                  const on = selectedRideOption === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      className={`mbk-tile${on ? " is-on" : ""}`}
+                      onClick={() => setSelectedRideOption(opt.id)}
+                    >
+                      <Image
+                        src={opt.id === "group" ? "/icons/moovu-go-xl-clean.png" : "/icons/moovu-go-clean.png"}
+                        alt=""
+                        width={96}
+                        height={96}
+                      />
+                      <span className="min-w-0">
+                        <strong>{opt.id === "group" ? "Go XL" : "Go"}</strong>
+                        <small>{opt.id === "group" ? "Up to 6" : "Up to 3"}</small>
+                      </span>
+                      <span className={`mbk-ride-radio${on ? " is-on" : ""}`} aria-hidden="true" />
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mbk-when">
                 <button
                   type="button"
-                  className={rideType === "now" ? "is-on" : ""}
-                  aria-pressed={rideType === "now"}
-                  onClick={() => setRideType("now")}
+                  className="mbk-book-btn"
+                  onClick={() => {
+                    setRideType("now");
+                    leaveHome();
+                  }}
                 >
-                  Now
+                  Book {selectedRide.id === "group" ? "Go XL" : "Go"}
                 </button>
                 <button
                   type="button"
-                  className={rideType === "scheduled" ? "is-on" : ""}
-                  aria-pressed={rideType === "scheduled"}
+                  className="mbk-schedule-btn"
                   disabled={!SCHEDULED_RIDES_ENABLED}
                   onClick={() => {
                     if (!SCHEDULED_RIDES_ENABLED) return;
@@ -3094,54 +3121,24 @@ export default function RiderBookingPage() {
                     leaveHome();
                   }}
                 >
-                  🗓 Schedule
+                  🗓 {SCHEDULED_RIDES_ENABLED ? "Schedule" : "Schedule · soon"}
                 </button>
               </div>
               {recentPlaces.length > 0 ? (
-                <div className="mbk-recent">
-                  <div className="mbk-recent-title">Recent destinations</div>
-                  {recentPlaces.map((place) => {
-                    const [first, ...rest] = place.split(",");
-                    return (
-                      <button
-                        key={place}
-                        type="button"
-                        className="mbk-recent-row"
-                        onClick={() => leaveHome(place)}
-                      >
-                        <span className="mbk-recent-icon" aria-hidden="true">📍</span>
-                        <span className="min-w-0 flex-1 text-left">
-                          <strong>{first}</strong>
-                          {rest.length ? <small>{rest.join(",").trim()}</small> : null}
-                        </span>
-                        <span aria-hidden="true">›</span>
-                      </button>
-                    );
-                  })}
+                <div className="mbk-recent" aria-label="Recent destinations">
+                  {recentPlaces.map((place) => (
+                    <button
+                      key={place}
+                      type="button"
+                      className="mbk-recent-chip"
+                      onClick={() => leaveHome(place)}
+                    >
+                      <span aria-hidden="true">🕘</span>
+                      {place.split(",")[0]}
+                    </button>
+                  ))}
                 </div>
               ) : null}
-              <div className="mbk-tiles">
-                {RIDE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className="mbk-tile"
-                    onClick={() => {
-                      setSelectedRideOption(opt.id);
-                      leaveHome();
-                    }}
-                  >
-                    <Image
-                      src={opt.id === "group" ? "/icons/moovu-go-xl-clean.png" : "/icons/moovu-go-clean.png"}
-                      alt=""
-                      width={96}
-                      height={96}
-                    />
-                    <strong>{opt.id === "group" ? "Go XL" : "Go"}</strong>
-                    <small>{opt.id === "group" ? "More space (up to 6)" : "Everyday rides"}</small>
-                  </button>
-                ))}
-              </div>
             </div>
           ) : null}
 
@@ -3160,8 +3157,24 @@ export default function RiderBookingPage() {
                 <label className="moovu-field-label" htmlFor="pickup-input">
                   Pickup
                 </label>
+                {pickupFromGps && pickupLat != null ? (
+                  <button
+                    type="button"
+                    className="mbk-your-location"
+                    onClick={() => {
+                      onPickupInputChange("");
+                      window.setTimeout(() => document.getElementById("pickup-input")?.focus(), 30);
+                    }}
+                    aria-label="Your location. Tap to change pickup"
+                  >
+                    <strong>Your location</strong>
+                    <small>{pickupAddress}</small>
+                    <span className="mbk-your-location-x" aria-hidden="true">✕</span>
+                  </button>
+                ) : null}
                 <input
                   id="pickup-input"
+                  hidden={pickupFromGps && pickupLat != null}
                   className="moovu-route-input"
                   placeholder="Search pickup location..."
                   value={pickupAddress}
@@ -3558,7 +3571,7 @@ export default function RiderBookingPage() {
       <CustomerBottomNav
         className="booking-scroll-nav"
         visibilityMode="controlled"
-        visible={showBookingNav || homeMode}
+        visible={showBookingNav && !homeMode}
       />
     </main>
   );

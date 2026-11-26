@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, Menu } from "lucide-react";
 import CustomerAppShell from "@/components/customer/CustomerAppShell";
 import CustomerBottomSheet from "@/components/customer/CustomerBottomSheet";
@@ -18,6 +19,7 @@ export default function HomePage() {
   const [customerName, setCustomerName] = useState("");
   const [customerContact, setCustomerContact] = useState("");
   const [driverSession, setDriverSession] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     let active = true;
@@ -29,6 +31,11 @@ export default function HomePage() {
       setDriverSession(role === "driver");
       setCustomerName(String(session?.user?.user_metadata?.first_name || session?.user?.user_metadata?.name || ""));
       setChecking(false);
+      // Signed-in customers go straight to the map booking home.
+      if (session && role !== "driver") {
+        router.replace("/book");
+        return;
+      }
       if (session && role !== "driver") {
         const response = await fetch("/api/customer/me", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" });
         const payload = await response.json().catch(() => null);
@@ -46,7 +53,7 @@ export default function HomePage() {
       setChecking(false);
     });
     return () => { active = false; subscription.unsubscribe(); };
-  }, []);
+  }, [router]);
 
   const bookingHref = useMemo(() => loggedIn && !driverSession ? "/book" : "/customer/auth?next=/book", [loggedIn, driverSession]);
   async function logout() { await supabaseClient.auth.signOut(); window.location.href = "/"; }
