@@ -34,7 +34,7 @@ export function EndOtpBypassDialog(props: EndOtpBypassDialogProps) {
   const { open, trip, reason, note, busy, onReasonChange, onNoteChange, onCancel, onConfirm } = props;
   if (!open || trip?.status !== "ongoing") return null;
   return (
-    <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[12500] grid place-items-center bg-slate-950/60 p-4">
       <section className="w-full max-w-md rounded-[28px] border border-amber-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.3)]" role="dialog" aria-modal="true" aria-labelledby="end-trip-without-otp-title">
         <div className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-amber-700">Confirmation required</div>
         <h2 id="end-trip-without-otp-title" className="mt-4 text-2xl font-black text-slate-950">End trip without OTP?</h2>
@@ -61,7 +61,7 @@ export function EndOtpBypassDialog(props: EndOtpBypassDialogProps) {
 export function TripCompletionOverlay({ summary, confirming, onReceived, onHide }: { summary: CompletedFareSummary | null; confirming: boolean; onReceived: () => void; onHide: () => void }) {
   if (!summary) return null;
   return (
-    <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[12500] grid place-items-center bg-slate-950/60 p-4">
       <section className="w-full max-w-sm rounded-[28px] border border-emerald-100 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.3)]" role="dialog" aria-modal="true" aria-labelledby="driver-final-fare-title">
         <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-emerald-700">Trip completed</div>
         <h2 id="driver-final-fare-title" className="mt-4 text-2xl font-black text-slate-950">Collect final fare</h2>

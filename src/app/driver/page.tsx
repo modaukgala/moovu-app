@@ -624,17 +624,33 @@ export default function DriverHomePage() {
 
     try {
       const token = await getAccessToken();
-      if (!token) return null;
+      if (!token) {
+        showDriverActionError("Your sign-in expired. Close and reopen the app, then try again.");
+        return null;
+      }
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "X-MOOVU-Feedback-Mode": "local",
-        },
-        body: JSON.stringify(payload),
-      });
+      // Never let a trip action hang forever on a weak signal.
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 25000);
+      let res: Response;
+      try {
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            "X-MOOVU-Feedback-Mode": "local",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } catch {
+        showDriverActionError("No connection. Check your signal and try again.");
+        await loadCurrentTrip();
+        return null;
+      } finally {
+        window.clearTimeout(timeout);
+      }
 
       const json = await res.json().catch(() => null) as TripActionResponse | null;
 
@@ -696,6 +712,11 @@ export default function DriverHomePage() {
         { tripId, ...options },
         "Trip completed",
       );
+      if (result?.ok) {
+        // Close the end-trip boxes as soon as the server confirms, even if the fare summary is missing.
+        setShowEndOtp(false);
+        setShowEndOtpBypass(false);
+      }
       if (result?.ok && result.fare?.finalFare != null) {
         setCompletedFareSummary({
           tripId,
@@ -1949,7 +1970,7 @@ export default function DriverHomePage() {
       />
 
       <DriverBottomNav />
-      {driver ? <LinkSignInPrompt next="/driver" /> : null}
+      {driver && !currentTrip && !offer ? <LinkSignInPrompt next="/driver" /> : null}
       <NotificationPermissionReminder
         role="driver"
         active={Boolean(driver) && !driver?.online && !offer && !currentTrip && !otpEntryOpen && !busy && !offerResponding && !driverToolsOpen && !tripSheetOpen}

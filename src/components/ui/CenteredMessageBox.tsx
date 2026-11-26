@@ -54,7 +54,7 @@ export default function CenteredMessageBox({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 px-4"
+      className="fixed inset-0 z-[13000] flex items-center justify-center bg-slate-950/45 px-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
