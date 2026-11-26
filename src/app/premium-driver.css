@@ -288,3 +288,79 @@
 .dp-delete { border-radius: 18px; background: #fff; padding: 14px 16px; }
 .dp-delete p { font-size: 12px; color: #5b6776; line-height: 1.5; }
 .dp-delete a { display: inline-block; margin-top: 8px; font-size: 15px; font-weight: 800; color: #b91c1c; text-decoration: none; }
+
+/* ── Whole driver app: shared premium look (visual only) ── */
+.dp-app { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #050505; }
+.dp-app .moovu-page:not(.moovu-driver-shell),
+.dp-app .driver-mobile-page,
+.dp-app .legal-screen { background: #f6f8fa !important; }
+
+/* Headings */
+.dp-app h1 { font-weight: 900; letter-spacing: -0.02em; color: #050505; }
+.dp-app h2 { font-weight: 900; letter-spacing: -0.01em; color: #050505; }
+.dp-page-head h1 { font-size: 28px; margin: 4px 2px 10px; }
+
+/* Calm the shouty labels: no ALL CAPS, no wide letter spacing */
+.dp-app .moovu-section-title,
+.dp-app .moovu-kicker,
+.dp-app .uppercase {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.dp-app .moovu-section-title,
+.dp-app .moovu-kicker { font-size: 13px; font-weight: 700; color: #5b6776; }
+.dp-app [class*="tracking-["] { letter-spacing: 0 !important; }
+
+/* Cards: white, soft, rounded; no gradients or heavy blue shadows */
+.dp-app .moovu-card,
+.dp-app .moovu-card-interactive {
+  border: 1px solid #eef2f5 !important;
+  border-radius: 18px !important;
+  background: #fff !important;
+  box-shadow: 0 1px 3px rgba(5, 5, 5, 0.05) !important;
+}
+.dp-app [class*="bg-[linear-gradient"],
+.dp-app [class*="bg-gradient"] { background: #fff !important; }
+.dp-app [class*="shadow-[0_"] { box-shadow: 0 1px 3px rgba(5, 5, 5, 0.05) !important; }
+.dp-app .rounded-\[28px\], .dp-app .rounded-\[30px\], .dp-app .rounded-3xl { border-radius: 20px !important; }
+
+/* Buttons */
+.dp-app .moovu-btn {
+  min-height: 50px;
+  border-radius: 16px;
+  font-weight: 800;
+  transition: transform 0.1s ease;
+}
+.dp-app .moovu-btn:active:not(:disabled) { transform: scale(0.98); }
+.dp-app .moovu-btn-primary { background: #050505 !important; color: #fff !important; border-color: #050505 !important; box-shadow: none !important; }
+.dp-app .moovu-btn-primary:disabled { background: #e4e9ee !important; color: #8a96a3 !important; border-color: #e4e9ee !important; }
+.dp-app .moovu-btn-secondary { background: #f1f4f7 !important; color: #050505 !important; border-color: transparent !important; box-shadow: none !important; }
+
+/* Inputs */
+.dp-app .moovu-input,
+.dp-app input[type="text"], .dp-app input[type="email"], .dp-app input[type="tel"],
+.dp-app input[type="password"], .dp-app input[type="number"], .dp-app select, .dp-app textarea {
+  border-radius: 14px;
+  border-color: #d7dde3;
+}
+.dp-app .moovu-input:focus, .dp-app input:focus, .dp-app select:focus, .dp-app textarea:focus {
+  outline: none;
+  border-color: #1f74c9;
+  box-shadow: 0 0 0 3px rgba(31, 116, 201, 0.15);
+}
+
+/* Metric cards */
+.dp-app .moovu-driver-metric-grid > * { border-radius: 16px !important; }
+
+/* Commission page owed card */
+.dp-owed-big { flex-direction: column; align-items: stretch; padding: 18px; }
+.dp-owed-big strong { font-size: 34px; }
+.dp-pay-btn {
+  min-height: 56px; border-radius: 16px; background: #050505; color: #fff;
+  font-size: 17px; font-weight: 900; transition: transform 0.1s ease;
+}
+.dp-pay-btn:active:not(:disabled) { transform: scale(0.98); }
+.dp-pay-btn:disabled { opacity: 0.6; }
+
+/* Onboarding page container breathing room */
+.dp-app .moovu-page.min-h-screen { padding-top: calc(12px + env(safe-area-inset-top)); }

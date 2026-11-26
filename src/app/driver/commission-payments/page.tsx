@@ -8,7 +8,6 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import DriverAuthRequired from "@/components/ui/DriverAuthRequired";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
-import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { openHostedPaymentCheckout } from "@/lib/payments/checkoutNavigation";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -155,7 +154,6 @@ export default function DriverCommissionPaymentsPage() {
     [paymentRequests]
   );
   const lastApprovedPayment = settlements[0] ?? null;
-  const driverName = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || "Driver";
 
   async function payOnline() {
     if (onlinePaymentPending.current) return;
@@ -203,31 +201,22 @@ export default function DriverCommissionPaymentsPage() {
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
       <div className="moovu-shell space-y-6">
-        <section className="moovu-card overflow-hidden p-0">
-          <div className="bg-[linear-gradient(135deg,#f8fbff_0%,#eef8ff_46%,#f0fffa_100%)] p-5 sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="moovu-section-title">MOOVU Driver</div>
-                <h1 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">
-                  Commission payments
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Pay only your MOOVU trip commission here. Subscription payments stay under Subscriptions.
-                </p>
-              </div>
-            </div>
-            <DriverSectionTabs section="money" />
-          </div>
+        <header className="dp-page-head">
+          <h1>Commission</h1>
+        </header>
+        <DriverSectionTabs section="money" />
 
-          <div className="border-t border-[var(--moovu-border)] p-5">
-            <p className="text-sm font-bold text-slate-600">Commission due</p>
-            <p className="mt-2 text-3xl font-black text-slate-950">{money(balanceDue)}</p>
-            <p className="mt-2 text-sm text-slate-600">{balanceDue > 0 ? "Pay your outstanding commission securely online." : "Your commission is settled."}</p>
+        <section className={`dp-owed dp-owed-big${balanceDue > 0 ? " is-owed" : ""}`}>
+          <div>
+            <small>{balanceDue > 0 ? "You owe MOOVU" : "MOOVU balance"}</small>
+            <strong>{money(balanceDue)}</strong>
+            <p>{balanceDue > 0 ? paymentStatus(balanceDue) : "Your commission is settled."}</p>
           </div>
-        </section>
-        <section className="moovu-driver-metric-grid moovu-driver-metric-grid-3">
-          <MetricCard label="Commission owed" value={money(balanceDue)} helper="Payable to MOOVU" />
-          <MetricCard label="Status" value={paymentStatus(balanceDue)} helper={driverName} tone={balanceDue > 0 ? "default" : "success"} />
+          {finance?.mode === "AUTHORITATIVE" && !finance.subscriptionRequired && balanceDue > 0 && (
+            <button type="button" className="dp-pay-btn" disabled={busy} onClick={() => void payOnline()}>
+              {busy ? "Opening secure payment…" : `Pay ${money(balanceDue)} by card`}
+            </button>
+          )}
         </section>
 
         <section className="moovu-card p-5 sm:p-6">
@@ -261,16 +250,11 @@ export default function DriverCommissionPaymentsPage() {
 
             <div className="space-y-4">
               <div className="rounded-[28px] border border-[var(--moovu-border)] bg-white p-5 shadow-[0_16px_34px_rgba(31,116,201,0.07)]">
-              <h2 className="text-xl font-black text-slate-950">Pay MOOVU commission</h2>
+              <h2 className="text-xl font-black text-slate-950">How paying works</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                The payable amount comes from MOOVU&apos;s authoritative ledger and cannot be edited. Settlement happens only after Yoco&apos;s verified webhook.
+                The amount comes from your completed trips and can&apos;t be changed. Your balance updates as soon as the card payment is confirmed.
               </p>
               <div className="mt-4 space-y-4">
-              {finance?.mode === "AUTHORITATIVE" && !finance.subscriptionRequired && balanceDue > 0 && (
-                <button type="button" className="moovu-btn moovu-btn-primary w-full" disabled={busy} onClick={() => void payOnline()}>
-                  {busy ? "Preparing secure checkout..." : `Pay ${money(balanceDue)} online with Yoco`}
-                </button>
-              )}
               {balanceDue <= 0 && <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">No commission is currently payable.</div>}
               </div>
               </div>
