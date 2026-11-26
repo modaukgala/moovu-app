@@ -554,3 +554,13 @@
 }
 .booking-v3 .customer-ehail-add-stop-row button { margin: 0; width: auto !important; justify-content: flex-start; }
 .booking-v3 .customer-ehail-add-stop-row { margin-left: 0 !important; padding-left: 20px !important; }
+
+/* App update prompt (older installed apps) */
+.moovu-update-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: #eaf3ff; color: #1f74c9; margin-bottom: 4px; }
+.moovu-update-icon svg { width: 28px; height: 28px; }
+.moovu-update-btn {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 54px; border-radius: 16px; background: #1f74c9; color: #fff;
+  font-size: 17px; font-weight: 900; text-decoration: none;
+}
+.moovu-update-btn:active { transform: scale(0.98); }

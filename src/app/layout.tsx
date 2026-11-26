@@ -13,6 +13,7 @@ import NotificationDeepLinkRouter from "@/components/NotificationDeepLinkRouter"
 import AuthDeepLinkHandler from "@/components/auth/AuthDeepLinkHandler";
 import CustomerLaunchNotice from "@/components/CustomerLaunchNotice";
 import CustomerTripRecovery from "@/components/customer/CustomerTripRecovery";
+import AppUpdatePrompt from "@/components/AppUpdatePrompt";
 
 const moovuFont = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-moovu", display: "swap" });
 
@@ -58,6 +59,7 @@ export default function RootLayout({
     <html lang="en" className={moovuFont.variable}>
       <body>
         <CustomerTripRecovery>{children}</CustomerTripRecovery>
+        <AppUpdatePrompt />
         <ClientErrorRecovery />
         <InAppNotificationBar />
         <CapacitorBackButtonHandler />
