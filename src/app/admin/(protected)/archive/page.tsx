@@ -32,8 +32,11 @@ export default function AdminArchivePage() {
   const [status, setStatus] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [retrievalWarning, setRetrievalWarning] = useState<string | null>(null);
 
-  const searchTrips = useCallback(async () => {
+  const searchTrips = useCallback(async (requestedPage = page) => {
     setLoading(true);
     setMsg(null);
 
@@ -43,10 +46,16 @@ export default function AdminArchivePage() {
       if (status) params.set("status", status);
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
+      params.set("page", String(requestedPage));
+      params.set("pageSize", "25");
 
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 15000);
       const res = await fetch(`/api/admin/archive?${params.toString()}`, {
         cache: "no-store",
+        signal: controller.signal,
       });
+      window.clearTimeout(timeout);
 
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
@@ -64,13 +73,16 @@ export default function AdminArchivePage() {
       }
 
       setTrips((json.trips ?? []) as ArchiveTrip[]);
+      setPage(Number(json.page ?? requestedPage));
+      setTotalPages(Number(json.totalPages ?? json.availablePages ?? 0));
+      setRetrievalWarning(json.retrievalWarning ?? null);
     } catch {
       setTrips([]);
       setMsg("Failed to search archive.");
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, q, status]);
+  }, [dateFrom, dateTo, page, q, status]);
 
   useEffect(() => {
     void searchTrips();
@@ -94,7 +106,7 @@ export default function AdminArchivePage() {
             </Link>
 
             <button
-              onClick={() => void searchTrips()}
+              onClick={() => void searchTrips(1)}
               className="moovu-btn moovu-btn-primary"
             >
               Search
@@ -103,6 +115,7 @@ export default function AdminArchivePage() {
         </header>
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+        {retrievalWarning && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{retrievalWarning}</section>}
 
         <section className="moovu-card space-y-4 p-5 sm:p-6">
           <h2 className="text-xl font-black">Filters</h2>
@@ -198,11 +211,17 @@ export default function AdminArchivePage() {
                   <div className="mt-4 text-sm text-gray-600">
                     {trip.created_at ? new Date(trip.created_at).toLocaleString() : "—"}
                   </div>
+                  <Link href={`/admin/trips/${trip.id}`} className="mt-4 inline-flex moovu-btn moovu-btn-primary">Open trip detail</Link>
                 </div>
               ))}
             </div>
           )}
         </section>
+        <div className="flex items-center justify-center gap-3">
+          <button className="moovu-btn moovu-btn-secondary" disabled={page <= 1 || loading} onClick={() => void searchTrips(page - 1)}>Previous</button>
+          <span className="text-sm font-bold">Page {page} of {Math.max(1, totalPages)}</span>
+          <button className="moovu-btn moovu-btn-secondary" disabled={page >= totalPages || loading} onClick={() => void searchTrips(page + 1)}>Next</button>
+        </div>
       </div>
     </main>
   );

@@ -1,8 +1,9 @@
 "use client";
 import LoadingState from "@/components/ui/LoadingState";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -24,6 +25,11 @@ type Trip = {
   status: string;
   cancel_reason: string | null;
   created_at: string;
+  scheduled_for?: string | null;
+  dispatch_started_at?: string | null;
+  driver_arrived_at?: string | null;
+  trip_started_at?: string | null;
+  cancelled_at?: string | null;
   offer_status: string | null;
   offer_expires_at: string | null;
   stops?: unknown;
@@ -33,8 +39,6 @@ type Trip = {
   stop_waiting_fee?: number | null;
   actual_distance_km?: number | null;
   actual_duration_min?: number | null;
-  start_otp?: string | null;
-  end_otp?: string | null;
   start_otp_verified?: boolean | null;
   end_otp_verified?: boolean | null;
   completed_without_end_otp?: boolean | null;
@@ -47,6 +51,11 @@ type Trip = {
   cancellation_fee_amount?: number | null;
   cancellation_driver_amount?: number | null;
   cancellation_moovu_amount?: number | null;
+  commission_pct?: number | null;
+  commission_amount?: number | null;
+  driver_net_earnings?: number | null;
+  dispatch_state?: string | null;
+  dispatch_failure_reason?: string | null;
   cancellation_reason?: string | null;
   cancelled_by?: string | null;
   actual_fare_breakdown?: {
@@ -86,6 +95,8 @@ type Driver = {
   status: string;
 };
 
+type TripOffer = { id: string; driver_id: string; status: string; dispatch_cycle: number | null; sequence_number: number | null; offered_at: string | null; responded_at: string | null; accept_deadline_at: string | null; decline_reason: string | null; response_source: string | null };
+
 function parseTripStops(value: unknown): TripStop[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -105,6 +116,8 @@ export default function TripDetailPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [events, setEvents] = useState<TripEvent[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [offers, setOffers] = useState<TripOffer[]>([]);
+  const [contextErrors, setContextErrors] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [offering, setOffering] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
@@ -112,43 +125,44 @@ export default function TripDetailPage() {
   const [completing, setCompleting] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pageError, setPageError] = useState<string | null>(null);
+  const loadSequence = useRef(0);
 
   const loadAll = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setPageError(null);
-
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session?.access_token) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in as an admin to view trip details.");
+      const res = await fetch(`/api/admin/trips/${encodeURIComponent(tripId)}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Could not load trip details. Please refresh or contact admin support.");
+      if (sequence !== loadSequence.current) return;
+      setTrip((json.trip as Trip | null) ?? null);
+      setEvents(Array.isArray(json.events) ? json.events : []);
+      setDrivers(Array.isArray(json.drivers) ? json.drivers : []);
+      setOffers(Array.isArray(json.offers) ? json.offers : []);
+      setContextErrors(json.context_errors && typeof json.context_errors === "object" ? json.context_errors : {});
+    } catch (error) {
+      if (sequence !== loadSequence.current) return;
       setTrip(null);
       setEvents([]);
       setDrivers([]);
-      setPageError("Please sign in as an admin to view trip details.");
-      setLoading(false);
-      return;
+      setOffers([]);
+      setContextErrors({});
+      setPageError(error instanceof DOMException && error.name === "AbortError"
+        ? "The trip request timed out. Please retry."
+        : error instanceof Error ? error.message : "Could not load trip details.");
+    } finally {
+      window.clearTimeout(timeout);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-
-    const res = await fetch(`/api/admin/trips/${encodeURIComponent(tripId)}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      cache: "no-store",
-    });
-    const json = await res.json().catch(() => null);
-
-    if (!res.ok || !json?.ok) {
-      setTrip(null);
-      setEvents([]);
-      setDrivers([]);
-      setPageError(json?.error || "Could not load trip details. Please refresh or contact admin support.");
-      setLoading(false);
-      return;
-    }
-
-    setTrip((json.trip as Trip | null) ?? null);
-    setEvents((json.events as TripEvent[] | null) ?? []);
-    setDrivers((json.drivers as Driver[] | null) ?? []);
-    setLoading(false);
   }, [tripId]);
 
   useEffect(() => {
@@ -339,7 +353,7 @@ export default function TripDetailPage() {
               <div><strong>Stop additions:</strong> R{Number(trip.fare_adjustment_amount ?? 0).toFixed(2)}</div>
               <div><strong>Trip fare:</strong> R{Number(trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
               <div><strong>Start OTP:</strong> {trip.start_otp_verified ? "Verified" : "Not verified"}</div>
-              <div><strong>End OTP:</strong> {trip.end_otp_verified ? "Verified" : trip.end_otp ? "Available, not verified" : "Not available"}</div>
+              <div><strong>End OTP:</strong> {trip.end_otp_verified ? "Verified" : "Not verified"}</div>
             </div>
             <textarea
               className="moovu-input mt-4 min-h-24 resize-y"
@@ -377,6 +391,7 @@ export default function TripDetailPage() {
             <StatusBadge status={trip.status} />
           </div>
           <p className="text-gray-700 mt-2">
+            Reference: <span className="font-mono text-xs">{trip.id}</span> ·{" "}
             Status: <span className="capitalize font-medium text-black">{trip.status}</span>
             {trip.cancel_reason ? ` • Reason: ${trip.cancel_reason}` : ""}
           </p>
@@ -479,6 +494,13 @@ export default function TripDetailPage() {
             <div className="font-semibold text-black mt-1">{trip.offer_status ?? "—"}</div>
           </div>
         </div>
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {[
+            ["Booked", trip.created_at], ["Scheduled", trip.scheduled_for], ["Dispatch started", trip.dispatch_started_at],
+            ["Driver arrived", trip.driver_arrived_at], ["Trip started", trip.trip_started_at],
+            [trip.status === "cancelled" ? "Cancelled" : "Completed", trip.status === "cancelled" ? trip.cancelled_at : trip.completed_at],
+          ].map(([label, value]) => <div key={String(label)} className="moovu-data-row"><div className="text-xs font-bold text-slate-500">{label}</div><div className="mt-1 text-sm font-black">{value ? new Date(String(value)).toLocaleString() : "Unavailable"}</div></div>)}
+        </div>
       </section>
 
       <section className="moovu-card p-5 sm:p-6">
@@ -487,12 +509,10 @@ export default function TripDetailPage() {
         <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="moovu-data-row">
             <div className="text-sm text-gray-600">Start OTP</div>
-            <div className="mt-1 text-2xl font-black tracking-[0.2em]">{trip.start_otp ?? "--"}</div>
             <div className="mt-1 text-xs font-bold text-slate-500">{trip.start_otp_verified ? "Verified" : "Not verified"}</div>
           </div>
           <div className="moovu-data-row">
             <div className="text-sm text-gray-600">End OTP</div>
-            <div className="mt-1 text-2xl font-black tracking-[0.2em]">{trip.end_otp ?? "--"}</div>
             <div className="mt-1 text-xs font-bold text-slate-500">
               {trip.completed_by === "admin" && !trip.end_otp_verified
                 ? "Not used - admin completion"
@@ -545,6 +565,11 @@ export default function TripDetailPage() {
               </div>
             )}
           </div>
+          <div className="moovu-data-row">
+            <div className="text-sm text-gray-600">Stored commission</div>
+            <div className="mt-1 text-xl font-black">{trip.commission_amount == null ? "Unavailable" : `R${Number(trip.commission_amount).toFixed(2)}`}</div>
+            <div className="mt-1 text-xs text-slate-500">Rate {trip.commission_pct == null ? "unavailable" : `${trip.commission_pct}%`} · Driver net {trip.driver_net_earnings == null ? "unavailable" : `R${Number(trip.driver_net_earnings).toFixed(2)}`}</div>
+          </div>
         </div>
         {Number(trip.cancellation_fee_amount ?? 0) > 0 && (
           <div className="mt-4 grid gap-3 rounded-2xl bg-amber-50 p-4 sm:grid-cols-4">
@@ -554,6 +579,13 @@ export default function TripDetailPage() {
             <div><div className="text-xs font-bold text-amber-700">Commission effect</div><strong>-R{Number(trip.cancellation_driver_amount ?? 0).toFixed(2)}</strong></div>
           </div>
         )}
+      </section>
+
+      <section className="moovu-card p-5 sm:p-6">
+        <div className="moovu-section-title">Dispatch history</div>
+        <h2 className="mt-2 text-xl font-black">Recorded offers and responses</h2>
+        {contextErrors.offers ? <p className="mt-3 font-bold text-amber-800">{contextErrors.offers}</p> : offers.length === 0 ? <p className="mt-3 text-sm text-slate-600">No recorded offers.</p> : <div className="mt-4 space-y-2">{offers.map(offer => <div key={offer.id} className="moovu-data-row text-sm"><strong>{offer.status}</strong> · Driver {offer.driver_id}<br />Offered {offer.offered_at ? new Date(offer.offered_at).toLocaleString() : "Unavailable"} · response {offer.responded_at ? new Date(offer.responded_at).toLocaleString() : "Not recorded"}<br />{offer.decline_reason ? `Recorded reason: ${offer.decline_reason}` : "Reason unavailable"}</div>)}</div>}
+        <div className="mt-4 text-sm"><strong>Dispatch state:</strong> {trip.dispatch_state ?? "Unavailable"} · <strong>Failure reason:</strong> {trip.dispatch_failure_reason ?? "Reason unavailable"}</div>
       </section>
 
       <section className="moovu-card p-5 sm:p-6">
@@ -597,10 +629,12 @@ export default function TripDetailPage() {
       </section>
 
       <Phase4FinancePanel tripId={tripId} />
+      {isClosed && <section className="moovu-card p-5 sm:p-6"><Link className="moovu-btn moovu-btn-primary" href={`/admin/receipts/${trip.id}`}>Open printable receipt</Link><p className="mt-2 text-xs text-slate-600">Payment method: {trip.payment_method || "Unavailable"} · verified payment status: unavailable from the trip record.</p></section>}
       <section className="moovu-card p-5 sm:p-6">
         <div className="moovu-section-title">Activity</div>
         <h2 className="mt-2 text-xl font-black text-slate-950">Trip timeline</h2>
         <div className="mt-4 space-y-3">
+          {contextErrors.events && <p className="font-bold text-amber-800">{contextErrors.events}</p>}
           {events.map((e) => (
             <div key={e.id} className="moovu-data-row">
               <div className="font-black capitalize text-slate-950">{e.event_type.replaceAll("_", " ")}</div>

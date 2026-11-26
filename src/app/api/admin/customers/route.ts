@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { isFinancialAdminRole, requireAdminUser } from "@/lib/auth/admin";
 
 type CustomerRow = {
   id: string;
@@ -53,13 +53,15 @@ async function listAllAuthUsers(
   admin: SupabaseClient,
 ) {
   const users: User[] = [];
+  let complete = true;
   for (let page = 1; page <= 50; page += 1) {
     const result = await admin.auth.admin.listUsers({ page, perPage: 1000 });
     if (result.error) throw result.error;
     users.push(...result.data.users);
     if (result.data.users.length < 1000) break;
+    if (page === 50) complete = false;
   }
-  return users;
+  return { users, complete };
 }
 
 async function fetchTripsByIds(params: {
@@ -106,8 +108,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
 
-    const customerId = new URL(req.url).searchParams.get("customerId")?.trim() || null;
+    const url = new URL(req.url);
+    const customerId = url.searchParams.get("customerId")?.trim() || null;
+    const q = String(url.searchParams.get("q") ?? "").trim().toLowerCase();
+    const statusFilter = String(url.searchParams.get("status") ?? "all").trim().toLowerCase();
+    const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
+    const pageSize = Math.min(100, Math.max(10, Number.parseInt(url.searchParams.get("pageSize") ?? "25", 10) || 25));
+    const tripPage = Math.max(1, Number.parseInt(url.searchParams.get("tripPage") ?? "1", 10) || 1);
+    const tripPageSize = Math.min(100, Math.max(10, Number.parseInt(url.searchParams.get("tripPageSize") ?? "25", 10) || 25));
     let profiles: CustomerRow[] = [];
+    let profilesComplete = true;
 
     if (customerId) {
       const byId = await auth.supabaseAdmin
@@ -129,21 +139,44 @@ export async function GET(req: Request) {
         if (byAuthId.data) profiles = [byAuthId.data as CustomerRow];
       }
     } else {
-      const result = await auth.supabaseAdmin.from("customers").select("*").limit(5000);
+      const result = await auth.supabaseAdmin.from("customers").select("*").order("id").limit(5001);
       if (result.error) throw result.error;
-      profiles = (result.data ?? []) as CustomerRow[];
+      profilesComplete = (result.data ?? []).length <= 5000;
+      profiles = ((result.data ?? []).slice(0, 5000)) as CustomerRow[];
     }
 
-    const [allAuthUsers, driverAccounts, adminUsers] = await Promise.all([
-      listAllAuthUsers(auth.supabaseAdmin),
+    const requestedAuthIds = profiles
+      .map((profile) => profile.auth_user_id)
+      .filter((value): value is string => Boolean(value));
+    if (customerId && profiles.length === 0) requestedAuthIds.push(customerId);
+
+    const [authUserResult, driverAccounts, adminUsers] = await Promise.all([
+      customerId
+        ? Promise.all(requestedAuthIds.map(async (id) => {
+            const result = await auth.supabaseAdmin.auth.admin.getUserById(id);
+            if (result.error && result.error.status !== 404) throw result.error;
+            return result.data.user ?? null;
+          })).then((users) => users.filter((user): user is User => Boolean(user)))
+          .then((users) => ({ users, complete: true }))
+        : listAllAuthUsers(auth.supabaseAdmin),
       auth.supabaseAdmin.from("driver_accounts").select("user_id").limit(5000),
       auth.supabaseAdmin.from("admin_users").select("user_id").limit(5000),
     ]);
+    if (driverAccounts.error || adminUsers.error) {
+      console.error("[admin-customers] identity classification failed", {
+        driverAccounts: driverAccounts.error,
+        adminUsers: adminUsers.error,
+      });
+      return NextResponse.json(
+        { ok: false, error: "Customer identity classification is unavailable. Please retry." },
+        { status: 503 },
+      );
+    }
     const nonCustomerIds = new Set<string>([
       ...(driverAccounts.data ?? []).map((row) => String(row.user_id ?? "")).filter(Boolean),
       ...(adminUsers.data ?? []).map((row) => String(row.user_id ?? "")).filter(Boolean),
     ]);
-    const authUsers = allAuthUsers.filter((user) => {
+    const authUsers = authUserResult.users.filter((user) => {
       const role = String(user.user_metadata?.role ?? user.app_metadata?.role ?? "").toLowerCase();
       return !nonCustomerIds.has(user.id) && !["admin", "driver"].includes(role);
     });
@@ -165,13 +198,30 @@ export async function GET(req: Request) {
       if (!profileByAuthId.has(authUser.id)) identities.push({ profile: null, authUser });
     }
 
-    const filteredIdentities = customerId
+    let filteredIdentities = customerId
       ? identities.filter(({ profile, authUser }) =>
           profile?.id === customerId ||
           profile?.auth_user_id === customerId ||
           authUser?.id === customerId
         )
       : identities;
+    if (!customerId && q) {
+      filteredIdentities = filteredIdentities.filter(({ profile, authUser }) => [
+        profile?.first_name, profile?.last_name, profile?.phone, profile?.normalized_phone,
+        profile?.email, authUser?.email, authUser?.phone,
+        textMeta(authUser, "first_name", "firstName"), textMeta(authUser, "last_name", "lastName"),
+      ].filter(Boolean).join(" ").toLowerCase().includes(q));
+    }
+    if (!customerId && statusFilter !== "all") {
+      filteredIdentities = filteredIdentities.filter(({ profile, authUser }) => {
+        const bannedUntil = authUser?.banned_until ? new Date(authUser.banned_until).getTime() : 0;
+        const state = profile?.status ?? (bannedUntil > Date.now() ? "inactive" : "active");
+        return state.toLowerCase() === statusFilter;
+      });
+    }
+    filteredIdentities.sort((a, b) => String(b.profile?.created_at ?? b.authUser?.created_at ?? "").localeCompare(String(a.profile?.created_at ?? a.authUser?.created_at ?? "")) || String(b.profile?.id ?? b.authUser?.id ?? "").localeCompare(String(a.profile?.id ?? a.authUser?.id ?? "")));
+    const directoryTotal = filteredIdentities.length;
+    if (!customerId) filteredIdentities = filteredIdentities.slice((page - 1) * pageSize, page * pageSize);
 
     const customerIds = filteredIdentities
       .map(({ profile }) => profile?.id)
@@ -253,17 +303,56 @@ export async function GET(req: Request) {
           profile?.created_at ||
           authUser?.created_at ||
           null,
-        trips: customerId ? customerTrips : undefined,
+        trips: customerId ? [...customerTrips]
+          .sort((a, b) => activityTime(b).localeCompare(activityTime(a)) || b.id.localeCompare(a.id))
+          .slice((tripPage - 1) * tripPageSize, tripPage * tripPageSize) : undefined,
+        trip_page: customerId ? tripPage : undefined,
+        trip_page_size: customerId ? tripPageSize : undefined,
+        trip_total_pages: customerId ? Math.ceil(customerTrips.length / tripPageSize) : undefined,
       };
     });
 
     enriched.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+
+    let membership: unknown = null;
+    let membershipPayments: unknown[] = [];
+    let membershipReadError: string | null = null;
+    if (customerId && customerIds.length > 0 && isFinancialAdminRole(auth.profile.role)) {
+      const [membershipResult, paymentsResult] = await Promise.all([
+        auth.supabaseAdmin.from("phase5_memberships")
+          .select("id,customer_id,payment_id,policy_version,starts_at,expires_at,status,activated_at,reversed_at")
+          .in("customer_id", customerIds).order("expires_at", { ascending: false }).limit(1).maybeSingle(),
+        auth.supabaseAdmin.from("phase5_membership_payments")
+          .select("id,customer_id,amount_cents,currency,method,reference,status,submitted_at,reviewed_at,review_reason,financial_transaction_id")
+          .in("customer_id", customerIds).order("submitted_at", { ascending: false }).limit(20),
+      ]);
+      if (membershipResult.error || paymentsResult.error) membershipReadError = "MOOVU+ membership information is unavailable.";
+      else {
+        membership = membershipResult.data ?? null;
+        membershipPayments = paymentsResult.data ?? [];
+      }
+    } else if (customerId && !isFinancialAdminRole(auth.profile.role)) {
+      membershipReadError = "MOOVU+ details require Financial Admin access. Use the authorised MOOVU+ review route.";
+    }
 
     return NextResponse.json({
       ok: true,
       customers: enriched,
       customer: customerId ? enriched[0] ?? null : undefined,
       security_events: customerId ? securityEvents : undefined,
+      page: customerId ? undefined : page,
+      page_size: customerId ? undefined : pageSize,
+      total: customerId ? undefined : authUserResult.complete && profilesComplete ? directoryTotal : null,
+      total_lower_bound: customerId ? undefined : authUserResult.complete && profilesComplete ? null : directoryTotal,
+      total_pages: customerId ? undefined : Math.ceil(directoryTotal / pageSize),
+      available_pages: customerId ? undefined : Math.ceil(directoryTotal / pageSize),
+      results_complete: customerId ? true : authUserResult.complete && profilesComplete,
+      retrieval_warning: customerId || authUserResult.complete && profilesComplete ? null : !authUserResult.complete
+        ? "Customer Auth retrieval reached 50,000 users. Directory results and counts are incomplete; a no-match result is not conclusive."
+        : "Customer profile retrieval reached 5,000 records. Directory results and counts are incomplete; refine the search.",
+      membership: customerId ? membership : undefined,
+      membership_payments: customerId ? membershipPayments : undefined,
+      membership_read_error: customerId ? membershipReadError : undefined,
     });
   } catch (error: unknown) {
     console.error("[admin-customers] lookup failed", error);

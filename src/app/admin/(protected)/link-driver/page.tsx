@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { adminDriverName } from "@/lib/admin/identity";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
@@ -19,14 +20,18 @@ type DriverOpt = {
 };
 
 export default function AdminLinkDriverAccountPage() {
-  const [email, setEmail] = useState("");
-  const [driverId, setDriverId] = useState("");
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "");
+  const [driverId, setDriverId] = useState(() => searchParams.get("driverId") ?? "");
 
   const [drivers, setDrivers] = useState<DriverOpt[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState(true);
 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [existingLink, setExistingLink] = useState<{ userId: string; email: string | null } | null>(null);
+  const [targetLogin, setTargetLogin] = useState<{ userId: string; email: string } | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -52,13 +57,13 @@ export default function AdminLinkDriverAccountPage() {
         Authorization: `Bearer ${token}`,
       },
       cache: "no-store",
-    });
+    }).catch(() => null);
 
-    const json = await res.json();
+    const json = res ? await res.json().catch(() => null) : null;
 
-    if (!json.ok) {
+    if (!res?.ok || !json?.ok) {
       setDrivers([]);
-      setMsg(json.error || "Failed to load drivers");
+      setMsg(json?.error || "Failed to load drivers");
       setLoadingDrivers(false);
       return;
     }
@@ -75,6 +80,27 @@ export default function AdminLinkDriverAccountPage() {
     return () => window.clearTimeout(timer);
   }, [loadDrivers]);
 
+  const inspectLink = useCallback(async () => {
+    if (!driverId && !email.trim()) return;
+    const token = await getAccessToken();
+    if (!token) return;
+    const params = new URLSearchParams({ driverId: driverId.trim(), email: email.trim() });
+    const response = await fetch(`/api/admin/drivers/link-account?${params}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.ok) {
+      setLookupError(json?.error || "Account linkage lookup failed.");
+      setExistingLink(null); setTargetLogin(null); return;
+    }
+    setLookupError(null);
+    setExistingLink(json.existingLink ?? null);
+    setTargetLogin(json.targetLogin ?? null);
+  }, [driverId, email, getAccessToken]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void inspectLink(); }, 350);
+    return () => window.clearTimeout(timer);
+  }, [inspectLink]);
+
   const driverLabel = useMemo(() => {
     const d = drivers.find((x) => x.id === driverId);
     if (!d) return null;
@@ -85,6 +111,11 @@ export default function AdminLinkDriverAccountPage() {
   }, [drivers, driverId]);
 
   async function link() {
+    if (!targetLogin) {
+      setMsg("Confirm a valid target login email before linking.");
+      return;
+    }
+    if (existingLink && existingLink.userId !== targetLogin.userId && !window.confirm(`Replace the existing link ${existingLink.email ?? existingLink.userId} with ${targetLogin.email}?`)) return;
     setBusy(true);
     setMsg(null);
 
@@ -106,13 +137,13 @@ export default function AdminLinkDriverAccountPage() {
         email: email.trim(),
         driverId: driverId.trim(),
       }),
-    });
+    }).catch(() => null);
 
-    const json = await res.json();
+    const json = res ? await res.json().catch(() => null) : null;
     setBusy(false);
 
-    if (!json.ok) {
-      setMsg(json.error || "Link failed");
+    if (!res?.ok || !json?.ok) {
+      setMsg(json?.error || "Link failed");
       return;
     }
 
@@ -140,13 +171,13 @@ export default function AdminLinkDriverAccountPage() {
         action: "unlink",
         email: email.trim(),
       }),
-    });
+    }).catch(() => null);
 
-    const json = await res.json();
+    const json = res ? await res.json().catch(() => null) : null;
     setBusy(false);
 
-    if (!json.ok) {
-      setMsg(json.error || "Unlink failed");
+    if (!res?.ok || !json?.ok) {
+      setMsg(json?.error || "Unlink failed");
       return;
     }
 
@@ -184,6 +215,12 @@ export default function AdminLinkDriverAccountPage() {
 
           <div className="mt-3 text-xs font-semibold text-slate-500">
             This must match the email the driver used to sign up.
+          </div>
+          <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
+            <div><strong>Selected driver:</strong> {driverLabel ?? (driverId || "Not selected")}</div>
+            <div className="mt-1"><strong>Target login:</strong> {targetLogin ? `${targetLogin.email} · ${targetLogin.userId}` : "No matching Auth user"}</div>
+            <div className="mt-1"><strong>Existing linkage:</strong> {existingLink ? `${existingLink.email ?? "Email unavailable"} · ${existingLink.userId}` : "None"}</div>
+            {lookupError && <div className="mt-2 font-bold text-amber-800">{lookupError}</div>}
           </div>
         </section>
 
