@@ -1,5 +1,5 @@
-import type { RefObject } from "react";
-import { CircleHelp, Layers3, LocateFixed, Menu } from "lucide-react";
+import { useEffect, useState, type RefObject } from "react";
+import { ChevronDown, ChevronUp, CircleHelp, Layers3, LocateFixed, Menu } from "lucide-react";
 import { money } from "./utils";
 
 type DriverMapSurfaceProps = {
@@ -9,6 +9,8 @@ type DriverMapSurfaceProps = {
   todayEarnings: number;
   todayTrips?: number;
   amountOwed?: number;
+  /** True while the driver has an accepted trip: the home sheet hides so only the trip bar shows. */
+  onTrip?: boolean;
   online: boolean;
   busy: boolean;
   satelliteMap: boolean;
@@ -26,6 +28,7 @@ export default function DriverMapSurface({
   todayEarnings,
   todayTrips = 0,
   amountOwed = 0,
+  onTrip = false,
   online,
   busy,
   satelliteMap,
@@ -35,6 +38,24 @@ export default function DriverMapSurface({
   onToggleMapType,
   onToggleOnline,
 }: DriverMapSurfaceProps) {
+  // Stats start hidden; the driver's choice is remembered on this phone.
+  const [statsOpen, setStatsOpen] = useState(false);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(STATS_KEY) === "1") {
+        const t = window.setTimeout(() => setStatsOpen(true), 0);
+        return () => window.clearTimeout(t);
+      }
+    } catch {}
+  }, []);
+  const toggleStats = () => {
+    setStatsOpen((open) => {
+      try { window.localStorage.setItem(STATS_KEY, open ? "0" : "1"); } catch {}
+      return !open;
+    });
+  };
+  const owesAttention = amountOwed >= OWED_WARNING;
+
   return (
     <div className="moovu-driver-map-card">
       <div className="driver-map-top-controls">
@@ -84,19 +105,30 @@ export default function DriverMapSurface({
         <div ref={mapRef} className="driver-map-canvas w-full bg-slate-100" aria-label="Driver map" />
       )}
 
-      <div className="moovu-driver-map-sheet">
+      {!onTrip && <div className="moovu-driver-map-sheet dp-sheet-tidy">
         <div className="driver-availability-copy" role="status" aria-live="polite">
           <span className={online ? "driver-availability-dot is-online" : "driver-availability-dot"} aria-hidden="true" />
           <span>
             <strong>{online ? "You're online" : "You're offline"}</strong>
             <small>{online ? "Finding trips near you" : "Tap Go online when you are ready to drive"}</small>
           </span>
+          <button
+            type="button"
+            className="dp-today-toggle"
+            aria-expanded={statsOpen}
+            aria-controls="dp-today-stats"
+            onClick={toggleStats}
+          >
+            Today
+            {owesAttention && !statsOpen ? <i className="dp-owed-dot" aria-label="You owe MOOVU" /> : null}
+            {statsOpen ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+          </button>
         </div>
-        <div className="dp-stats">
+        {statsOpen && <div className="dp-stats" id="dp-today-stats">
           <div><span>Trips today</span><strong>{todayTrips}</strong></div>
           <div><span>Earned today</span><strong>{money(todayEarnings)}</strong></div>
           <div className={amountOwed > 0 ? "is-owed" : ""}><span>You owe</span><strong>{money(amountOwed)}</strong></div>
-        </div>
+        </div>}
           <button
             type="button"
             className={online ? "driver-map-primary-status is-online" : "driver-map-primary-status"}
@@ -106,7 +138,11 @@ export default function DriverMapSurface({
           >
             {busy ? "Updating status…" : online ? "Go offline" : "Go online"}
           </button>
-      </div>
+      </div>}
     </div>
   );
 }
+
+const STATS_KEY = "moovu:driver-today-stats-open";
+// Matches the R70 commission warning level.
+const OWED_WARNING = 70;

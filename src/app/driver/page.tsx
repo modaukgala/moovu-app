@@ -1382,6 +1382,7 @@ export default function DriverHomePage() {
                 todayEarnings={earningsSnapshot.todayEarnings}
                 todayTrips={earningsSnapshot.todayTrips}
                 amountOwed={earningsSnapshot.amountOwed}
+                onTrip={Boolean(currentTrip)}
                 online={Boolean(driver.online)}
                 busy={busy}
                 satelliteMap={satelliteMap}
