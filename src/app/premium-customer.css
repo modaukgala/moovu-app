@@ -539,3 +539,17 @@
   border-radius: 12px; background: #f6f8fa; color: #3c4652;
 }
 .mbk-popular-icon svg { width: 18px; height: 18px; }
+
+/* ── Round 1e: home without ride tiles, full map ────────── */
+.booking-v3:has(.mbk-sheet-home) .mbk-map-layer,
+.booking-v3:has(.mbk-sheet-route) .mbk-map-layer { height: 100svh; }
+.mbk-when { grid-template-columns: 1.8fr 1fr; }
+.mbk-book-btn { min-height: 58px; font-size: 18px; }
+.mbk-recent-chip svg { width: 14px; height: 14px; color: #1f74c9; flex: none; }
+/* Add stop lines up with the pickup and destination text */
+.booking-v3 .customer-ehail-add-stop-row {
+  display: flex;
+  justify-content: flex-start;
+  padding: 2px 0 6px 36px;
+}
+.booking-v3 .customer-ehail-add-stop-row button { margin: 0; width: auto !important; justify-content: flex-start; }

@@ -3076,33 +3076,6 @@ export default function RiderBookingPage() {
 
           {homeMode ? (
             <div className="mbk-home-keep mbk-home px-4">
-              <div className="mbk-tiles" role="radiogroup" aria-label="Choose your ride">
-                {RIDE_OPTIONS.map((opt) => {
-                  const on = selectedRideOption === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={on}
-                      className={`mbk-tile${on ? " is-on" : ""}`}
-                      onClick={() => setSelectedRideOption(opt.id)}
-                    >
-                      <Image
-                        src={opt.id === "group" ? "/icons/moovu-go-xl-clean.png" : "/icons/moovu-go-clean.png"}
-                        alt=""
-                        width={96}
-                        height={96}
-                      />
-                      <span className="min-w-0">
-                        <strong>{opt.id === "group" ? "Go XL" : "Go"}</strong>
-                        <small>{opt.id === "group" ? "Up to 6" : "Up to 3"}</small>
-                      </span>
-                      <span className={`mbk-ride-radio${on ? " is-on" : ""}`} aria-hidden="true" />
-                    </button>
-                  );
-                })}
-              </div>
               <div className="mbk-when">
                 <button
                   type="button"
@@ -3112,7 +3085,7 @@ export default function RiderBookingPage() {
                     leaveHome();
                   }}
                 >
-                  Book {selectedRide.id === "group" ? "Go XL" : "Go"}
+                  Book ride
                 </button>
                 <button
                   type="button"
@@ -3127,21 +3100,19 @@ export default function RiderBookingPage() {
                   🗓 {SCHEDULED_RIDES_ENABLED ? "Schedule" : "Schedule · soon"}
                 </button>
               </div>
-              {recentPlaces.length > 0 ? (
-                <div className="mbk-recent" aria-label="Recent destinations">
-                  {recentPlaces.map((place) => (
-                    <button
-                      key={place}
-                      type="button"
-                      className="mbk-recent-chip"
-                      onClick={() => leaveHome(place)}
-                    >
-                      <span aria-hidden="true">🕘</span>
-                      {place.split(",")[0]}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              <div className="mbk-recent" aria-label="Areas around Siyabuswa">
+                {SIYABUSWA_AREAS.map((area) => (
+                  <button
+                    key={area}
+                    type="button"
+                    className="mbk-recent-chip"
+                    onClick={() => leaveHome(area)}
+                  >
+                    <MapPin aria-hidden="true" />
+                    {area}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
 
@@ -3603,4 +3574,14 @@ const POPULAR_SIYABUSWA_PLACES = [
   "Honesty Bar and Grill Siyabuswa",
   "Mementos Siyabuswa",
   "Moutse Mall",
+] as const;
+
+const SIYABUSWA_AREAS = [
+  "Siyabuswa",
+  "Kameelrivier",
+  "Tawana",
+  "Mapotla",
+  "Marapyane",
+  "Vaalbank",
+  "Mdala",
 ] as const;
