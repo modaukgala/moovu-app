@@ -1,18 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { signInWithProvider, type SocialProvider } from "@/lib/auth/socialAuth";
+import { useEffect, useState } from "react";
+import { signInWithProvider, socialSignInAvailable, type SocialProvider } from "@/lib/auth/socialAuth";
 
 /** "Continue with Google / Apple" buttons for customer and driver sign-in. */
 export default function SocialSignInButtons({ next }: { next: string }) {
   const [busy, setBusy] = useState<SocialProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [available, setAvailable] = useState(false);
+  useEffect(() => { setAvailable(socialSignInAvailable()); }, []);
   const go = async (provider: SocialProvider) => {
     setBusy(provider); setError(null);
     try { await signInWithProvider(provider, next); }
     catch (e) { setError(e instanceof Error ? e.message : "Sign-in failed."); }
     finally { setBusy(null); }
   };
+  if (!available) return null;
   return (
     <div className="moovu-social-auth">
       <button type="button" className="moovu-social-btn" disabled={busy !== null} onClick={() => void go("google")}>

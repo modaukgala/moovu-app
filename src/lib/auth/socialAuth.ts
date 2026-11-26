@@ -24,6 +24,17 @@ export function takeRememberedNext(fallback: string) {
   } catch { return fallback; }
 }
 
+/**
+ * Google/Apple sign-in needs the in-app Browser plugin on phones. Older app
+ * versions don't have it, so there we hide the buttons and the link prompt
+ * instead of showing an error. New app versions include it automatically.
+ */
+export function socialSignInAvailable() {
+  if (typeof window === "undefined") return false;
+  if (!Capacitor.isNativePlatform()) return true;
+  return Capacitor.isPluginAvailable("Browser");
+}
+
 async function openAuthUrl(url: string) {
   // Google blocks sign-in inside embedded app web views, so native apps use the
   // phone's browser and come back through the moovu:// deep link.
@@ -77,6 +88,7 @@ export async function completeAuthFromUrl(rawUrl: string) {
 
 /** True when the signed-in user only has email/password (no Google or Apple yet). */
 export async function needsSocialLink() {
+  if (!socialSignInAvailable()) return false;
   const { data } = await supabaseClient.auth.getUser();
   const identities = data.user?.identities ?? [];
   return Boolean(data.user) && !identities.some((i) => i.provider === "google" || i.provider === "apple");
