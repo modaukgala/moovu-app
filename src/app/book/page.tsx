@@ -921,6 +921,50 @@ export default function RiderBookingPage() {
     }
   }
 
+  // Restore a booking in progress after the app was in the background.
+  // sessionStorage lives only while the app is open, so a full close starts fresh.
+  const draftRestoredRef = useRef(false);
+  useEffect(() => {
+    if (draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+    const draft = readBookingDraft();
+    if (!draft) return;
+    if (draft.pickupLat != null && draft.pickupAddress) {
+      autoPickupTriedRef.current = true;
+      pickupEditedRef.current = !draft.pickupFromGps;
+      setPickupAddress(draft.pickupAddress);
+      setPickupPlaceId(draft.pickupPlaceId ?? "");
+      setPickupLat(draft.pickupLat);
+      setPickupLng(draft.pickupLng ?? null);
+      setPickupPinned(Boolean(draft.pickupPinned));
+      setPickupInstruction(draft.pickupInstruction ?? "");
+      setPickupFromGps(Boolean(draft.pickupFromGps));
+    }
+    if (draft.dropoffAddress) setDropoffAddress(draft.dropoffAddress);
+    if (draft.dropoffLat != null) {
+      setDropoffPlaceId(draft.dropoffPlaceId ?? "");
+      setDropoffLat(draft.dropoffLat);
+      setDropoffLng(draft.dropoffLng ?? null);
+    }
+    if (Array.isArray(draft.stops) && draft.stops.length) {
+      setStops(draft.stops as StopInput[]);
+      setStopsOpen(true);
+    }
+    if (draft.paymentMethod) setPaymentMethod(draft.paymentMethod);
+    if (draft.selectedRideOption) setSelectedRideOption(draft.selectedRideOption as RideOptionId);
+    if (draft.homeOpen === false) setHomeOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!draftRestoredRef.current) return;
+    writeBookingDraft({
+      pickupAddress, pickupPlaceId, pickupLat, pickupLng, pickupPinned, pickupInstruction, pickupFromGps,
+      dropoffAddress, dropoffPlaceId, dropoffLat, dropoffLng,
+      stops, paymentMethod, selectedRideOption, homeOpen,
+    });
+  }, [pickupAddress, pickupPlaceId, pickupLat, pickupLng, pickupPinned, pickupInstruction, pickupFromGps,
+      dropoffAddress, dropoffPlaceId, dropoffLat, dropoffLng, stops, paymentMethod, selectedRideOption, homeOpen]);
+
   useEffect(() => {
     if (autoPickupTriedRef.current || pickupAddress.trim() || pickupLat != null) return;
     autoPickupTriedRef.current = true;
@@ -1956,6 +2000,7 @@ export default function RiderBookingPage() {
         return;
       }
       const tripId = json?.tripId ?? json?.trip?.id;
+      if (tripId) clearBookingDraft();
 
       if (tripId && paymentMethod === "online") {
         const checkoutRes = await fetch("/api/payments/yoco/checkout", {
@@ -3585,3 +3630,51 @@ const SIYABUSWA_AREAS = [
   "Vaalbank",
   "Mdala",
 ] as const;
+
+const BOOKING_DRAFT_KEY = "moovu:booking-draft";
+
+type BookingDraft = {
+  pickupAddress?: string;
+  pickupPlaceId?: string;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  pickupPinned?: boolean;
+  pickupInstruction?: string;
+  pickupFromGps?: boolean;
+  dropoffAddress?: string;
+  dropoffPlaceId?: string;
+  dropoffLat?: number | null;
+  dropoffLng?: number | null;
+  stops?: unknown[];
+  paymentMethod?: string;
+  selectedRideOption?: string;
+  homeOpen?: boolean;
+  savedAt?: number;
+};
+
+function readBookingDraft(): BookingDraft | null {
+  try {
+    const raw = window.sessionStorage.getItem(BOOKING_DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as BookingDraft;
+    // Ignore drafts older than 2 hours.
+    if (!draft.savedAt || Date.now() - draft.savedAt > 2 * 60 * 60 * 1000) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function writeBookingDraft(draft: BookingDraft) {
+  try {
+    window.sessionStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify({ ...draft, savedAt: Date.now() }));
+  } catch {
+    /* storage unavailable: booking still works, it just won't be remembered */
+  }
+}
+
+function clearBookingDraft() {
+  try {
+    window.sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+  } catch {}
+}
