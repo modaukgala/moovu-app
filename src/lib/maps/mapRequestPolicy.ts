@@ -17,11 +17,12 @@ export const MAP_OPERATION_POLICY: Record<
   MapOperation,
   { ttlMs: number; clientLimitPerMinute: number; globalCircuitPerMinute: number }
 > = {
-  route: { ttlMs: 3 * 60_000, clientLimitPerMinute: 12, globalCircuitPerMinute: 90 },
-  geocode: { ttlMs: 60_000, clientLimitPerMinute: 18, globalCircuitPerMinute: 120 },
-  reverse_geocode: { ttlMs: 60_000, clientLimitPerMinute: 18, globalCircuitPerMinute: 120 },
-  autocomplete: { ttlMs: 15_000, clientLimitPerMinute: 40, globalCircuitPerMinute: 360 },
-  place_details: { ttlMs: 5 * 60_000, clientLimitPerMinute: 24, globalCircuitPerMinute: 180 },
+  // Addresses and places don't change, so answers are remembered much longer (fewer paid Google calls).
+  route: { ttlMs: 10 * 60_000, clientLimitPerMinute: 12, globalCircuitPerMinute: 90 },
+  geocode: { ttlMs: 24 * 60 * 60_000, clientLimitPerMinute: 18, globalCircuitPerMinute: 120 },
+  reverse_geocode: { ttlMs: 24 * 60 * 60_000, clientLimitPerMinute: 18, globalCircuitPerMinute: 120 },
+  autocomplete: { ttlMs: 10 * 60_000, clientLimitPerMinute: 40, globalCircuitPerMinute: 360 },
+  place_details: { ttlMs: 24 * 60 * 60_000, clientLimitPerMinute: 24, globalCircuitPerMinute: 180 },
 };
 
 export function isMapCircuitLimitReached(operation: MapOperation, callsLastMinute: number) {

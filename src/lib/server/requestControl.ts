@@ -45,7 +45,19 @@ function cleanup() {
   for (const [key, value] of state.responseCache) {
     if (value.expiresAt <= current) state.responseCache.delete(key);
   }
+
+  // Keep memory bounded: drop the oldest answers beyond the cap.
+  const overflow = state.responseCache.size - MAX_CACHED_RESPONSES;
+  if (overflow > 0) {
+    let removed = 0;
+    for (const key of state.responseCache.keys()) {
+      state.responseCache.delete(key);
+      if (++removed >= overflow) break;
+    }
+  }
 }
+
+const MAX_CACHED_RESPONSES = 5000;
 
 export function clientRequestKey(req: Request, scope: string) {
   const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";

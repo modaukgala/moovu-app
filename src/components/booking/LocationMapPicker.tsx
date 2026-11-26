@@ -114,12 +114,21 @@ export default function LocationMapPicker({
     mapRef.current = map;
     setCenter(initialCenter);
 
+    // Skip the address lookup when the pin barely moved (under ~20 m) since the last one.
+    let lastResolved: { lat: number; lng: number } | null = null;
+    const movedMeters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+      const dLat = (a.lat - b.lat) * 111_320;
+      const dLng = (a.lng - b.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180);
+      return Math.hypot(dLat, dLng);
+    };
     const resolveCenter = (nextCenter: { lat: number; lng: number }) => {
+      if (lastResolved && movedMeters(lastResolved, nextCenter) < 20) return;
       if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current);
       const requestSequence = ++requestSequenceRef.current;
       setResolving(true);
 
       reverseTimerRef.current = setTimeout(async () => {
+        lastResolved = nextCenter;
         try {
           const response = await fetch("/api/maps/reverse-geocode", {
             method: "POST",
@@ -143,7 +152,7 @@ export default function LocationMapPicker({
         } finally {
           if (requestSequence === requestSequenceRef.current) setResolving(false);
         }
-      }, 550);
+      }, 1000);
     };
 
     const idleListener = map.addListener("idle", () => {
