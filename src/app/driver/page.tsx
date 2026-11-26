@@ -44,6 +44,7 @@ import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { recordPerformanceMetric } from "@/lib/performance/client";
 import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
+import OtpKeypad from "@/components/driver/premium/OtpKeypad";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
 import {
   DEFAULT_CENTER,
@@ -1379,6 +1380,8 @@ export default function DriverHomePage() {
                 mapError={mapError}
                 menuOpen={driverToolsOpen}
                 todayEarnings={earningsSnapshot.todayEarnings}
+                todayTrips={earningsSnapshot.todayTrips}
+                amountOwed={earningsSnapshot.amountOwed}
                 online={Boolean(driver.online)}
                 busy={busy}
                 satelliteMap={satelliteMap}
@@ -1405,6 +1408,16 @@ export default function DriverHomePage() {
                     <span>{tripSheetOpen ? "Trip details" : `${tripStatusLabel(currentTrip.status)} · ${money(currentTrip.final_fare ?? currentTrip.fare_amount)} · Show actions`}</span>
                   </button>
                   <div className="driver-trip-sheet-content">
+                  {(() => {
+                    const step = currentTrip.status === "assigned" ? 1 : currentTrip.status === "arrived" ? 2 : showEndOtp ? 4 : 3;
+                    const stepName = ["Drive to pickup", "Enter start code", "Drive to destination", "Enter end code"][step - 1];
+                    return (
+                      <div className="dp-steps" aria-label={`Step ${step} of 4: ${stepName}`}>
+                        <div className="dp-steps-bar">{[1, 2, 3, 4].map((n) => <span key={n} className={n <= step ? "is-on" : ""} />)}</div>
+                        <p>Step {step} of 4 · {stepName}</p>
+                      </div>
+                    );
+                  })()}
                   <div className="driver-trip-summary">
                     <div>
                       <div className="moovu-section-title">Current trip</div>
@@ -1545,17 +1558,7 @@ export default function DriverHomePage() {
                           </button>
                         ) : (
                           <div className="driver-trip-otp-form">
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              autoComplete="one-time-code"
-                              aria-label="Customer start code"
-                              maxLength={4}
-                              value={startOtp}
-                              onChange={(e) => setStartOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                              placeholder="0000"
-                              className="moovu-otp-input"
-                            />
+                            <OtpKeypad label="Customer start code" value={startOtp} onChange={setStartOtp} disabled={busy} />
 
                             <div className="driver-trip-otp-actions grid gap-3 sm:grid-cols-2">
                               <button
@@ -1649,17 +1652,7 @@ export default function DriverHomePage() {
                         )}
                         {showEndOtp && (
                           <div className="driver-trip-otp-form">
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              autoComplete="one-time-code"
-                              aria-label="Customer end code"
-                              maxLength={4}
-                              value={endOtp}
-                              onChange={(e) => setEndOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                              placeholder="0000"
-                              className="moovu-otp-input"
-                            />
+                            <OtpKeypad label="Customer end code" value={endOtp} onChange={setEndOtp} disabled={busy} />
 
                             <div className="driver-trip-otp-actions grid gap-3 sm:grid-cols-2">
                               <button

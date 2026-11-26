@@ -1,6 +1,5 @@
 import type { RefObject } from "react";
-import { Bell, Layers3, LocateFixed, Menu } from "lucide-react";
-import EnableNotificationsButton from "@/components/EnableNotificationsButton";
+import { CircleHelp, Layers3, LocateFixed, Menu } from "lucide-react";
 import { money } from "./utils";
 
 type DriverMapSurfaceProps = {
@@ -8,6 +7,8 @@ type DriverMapSurfaceProps = {
   mapError: string | null;
   menuOpen: boolean;
   todayEarnings: number;
+  todayTrips?: number;
+  amountOwed?: number;
   online: boolean;
   busy: boolean;
   satelliteMap: boolean;
@@ -23,6 +24,8 @@ export default function DriverMapSurface({
   mapError,
   menuOpen,
   todayEarnings,
+  todayTrips = 0,
+  amountOwed = 0,
   online,
   busy,
   satelliteMap,
@@ -48,10 +51,16 @@ export default function DriverMapSurface({
           <strong>{money(todayEarnings)}</strong>
           <span>Today</span>
         </button>
-        <div className="driver-map-notification-button" aria-label="Driver notification settings">
-          <Bell aria-hidden="true" />
-          <EnableNotificationsButton role="driver" variant="chip" />
-        </div>
+        <a
+          className="driver-map-round-button dp-help-button"
+          href="/api/support/whatsapp?topic=driver"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Get help on WhatsApp"
+        >
+          <CircleHelp aria-hidden="true" />
+          <span>Help</span>
+        </a>
       </div>
 
       <div className="driver-map-side-controls">
@@ -80,8 +89,13 @@ export default function DriverMapSurface({
           <span className={online ? "driver-availability-dot is-online" : "driver-availability-dot"} aria-hidden="true" />
           <span>
             <strong>{online ? "You're online" : "You're offline"}</strong>
-            <small>{online ? "You will get trip requests here" : "Tap Go online when you are ready to drive"}</small>
+            <small>{online ? "Finding trips near you" : "Tap Go online when you are ready to drive"}</small>
           </span>
+        </div>
+        <div className="dp-stats">
+          <div><span>Trips today</span><strong>{todayTrips}</strong></div>
+          <div><span>Earned today</span><strong>{money(todayEarnings)}</strong></div>
+          <div className={amountOwed > 0 ? "is-owed" : ""}><span>You owe</span><strong>{money(amountOwed)}</strong></div>
         </div>
           <button
             type="button"
