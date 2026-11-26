@@ -3579,8 +3579,8 @@ const POPULAR_SIYABUSWA_PLACES = [
 const SIYABUSWA_AREAS = [
   "Siyabuswa",
   "Kameelrivier",
-  "Tawana",
-  "Mapotla",
+  "Thabana",
+  "Maphotla",
   "Marapyane",
   "Vaalbank",
   "Mdala",
