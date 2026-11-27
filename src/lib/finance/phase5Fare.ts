@@ -31,10 +31,10 @@ export type Phase5Fare = Readonly<{
   driverFareBasisCents: number;
 }>;
 
-/** Reads the tiered booking fee rate from the active policy row (null = flat fee). */
+/** Validates the tiered booking fee rate returned by moovu_service_fee_tier_bps() (null = flat fee). */
 export function phase5ServiceFeeTierBps(value: unknown): number | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const bps = Number((value as { service_fee_tier_bps?: unknown }).service_fee_tier_bps);
+  if (value === null || value === undefined) return null;
+  const bps = Number(value);
   return Number.isInteger(bps) && bps >= 1 && bps <= 2000 ? bps : null;
 }
 

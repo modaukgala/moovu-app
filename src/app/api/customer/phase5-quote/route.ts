@@ -42,9 +42,11 @@ export async function POST(req: Request) {
   const pricedFare = priceStandardFare(rideFare, universalFareIncreaseEnabled());
   if (!phase5Active) return NextResponse.json({ ok: true, authority: "LEGACY",
     pricing: { ...pricedFare, customerTotalCents: pricedFare.rideFareCents } });
+  const tier = await auth.supabaseAdmin.rpc("moovu_service_fee_tier_bps");
+  if (tier.error) return NextResponse.json({ ok: false, error: "Pricing authority is unavailable." }, { status: 503 });
   const quote = calculatePhase5Fare({ rideFareCents: pricedFare.rideFareCents, rideOptionId,
     activeMember: state?.membership_active === true, availableCreditCents: Number(state?.available_credit_cents ?? 0),
-    serviceFeeTierBps: phase5ServiceFeeTierBps(policy) });
+    serviceFeeTierBps: phase5ServiceFeeTierBps(tier.data) });
   return NextResponse.json({ ok: true, authority: "PHASE5", quote, policyEffectiveFrom: policy.effective_from,
     membershipExpiresAt: state?.membership_expires_at ?? null,
     pricing: { ...pricedFare, customerTotalCents: quote.customerTotalCents } });

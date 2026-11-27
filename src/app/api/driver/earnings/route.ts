@@ -253,9 +253,8 @@ export async function GET(req: Request) {
     }
 
     // Payouts v2: from this moment cash trips also owe the booking fee to MOOVU (null = not active yet).
-    const { data: policyRow } = await supabaseAdmin.rpc("phase5_policy_at", { p_at: new Date().toISOString() });
-    const bookingFeeOwedFrom: string | null =
-      (policyRow as { payout_v2_from?: string | null } | null)?.payout_v2_from ?? null;
+    const { data: v2From } = await supabaseAdmin.rpc("moovu_payout_v2_from");
+    const bookingFeeOwedFrom: string | null = typeof v2From === "string" ? v2From : null;
 
     const normalizedTrips = typedCompletedTrips
       .map<CompletedTripWithTimestamp>((trip) => ({

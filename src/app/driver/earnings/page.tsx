@@ -92,7 +92,7 @@ function tripSplit(trip: CompletedTrip, bookingFeeOwedFrom: string | null) {
     - Number(trip.phase5_credit_cents ?? 0)) / 100;
   const rideFare = trip.phase5_ride_fare_cents != null ? Number(trip.phase5_ride_fare_cents) / 100 : Number(trip.fare_amount ?? 0);
   const commission = Number(trip.commission_amount ?? 0);
-  const v2 = Boolean(bookingFeeOwedFrom && trip.completed_at && trip.completed_at >= bookingFeeOwedFrom);
+  const v2 = Boolean(bookingFeeOwedFrom && trip.completed_at && Date.parse(trip.completed_at) >= Date.parse(bookingFeeOwedFrom));
   const cash = trip.payment_method !== "online";
   return { rideFare, fee, commission, cash, v2, owed: cash ? commission + (v2 ? fee : 0) : 0 };
 }

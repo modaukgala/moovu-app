@@ -529,6 +529,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, code: "FARE_QUOTE_CHANGED",
         error: "Your fare changed. Review the updated quote before booking." }, { status: 409 });
     }
+    // Booking fee rate must match what phase5_create_trip uses, so fail closed if it can't be read.
+    const tierResult = phase5Active
+      ? await auth.supabaseAdmin.rpc("moovu_service_fee_tier_bps")
+      : { data: null, error: null };
+    if (tierResult.error) {
+      return NextResponse.json({ ok: false, error: "Pricing is temporarily unavailable. Please try again." }, { status: 503 });
+    }
     const phase5Pricing = phase5Active
       ? calculatePhase5Fare({
           rideFareCents: pricedFare.rideFareCents,
@@ -537,7 +544,7 @@ export async function POST(req: Request) {
           availableCreditCents: Number(
             phase5StateResult.data?.available_credit_cents ?? 0,
           ),
-          serviceFeeTierBps: phase5ServiceFeeTierBps(phase5Policy),
+          serviceFeeTierBps: phase5ServiceFeeTierBps(tierResult.data),
         })
       : null;
     if (phase5Pricing) {
