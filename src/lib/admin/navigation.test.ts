@@ -50,7 +50,7 @@ test("presentation changes retain the primary Group A, finance and dispatch acti
   const controls: Record<string, string[]> = {
     "page.tsx": ["loadHome", "AdminSearch", "TripDispatchActions", "/admin/trips", "/admin/onboarding"],
     "business-management/page.tsx": ["ManualSurgeControl"],
-    "drivers/page.tsx": ["loadDrivers", "/admin/drivers/new"],
+    "drivers/page.tsx": ["loadDrivers", "/admin/link-driver", "/admin/onboarding"],
     "drivers/[id]/page.tsx": ["setActiveTab", "/admin/onboarding"],
     "applications/page.tsx": ["loadApplications", "/admin/onboarding"],
     "onboarding/page.tsx": ["load(detail?.application.id)", "decision(\"APPROVED\"", "decision(\"REJECTED\""],

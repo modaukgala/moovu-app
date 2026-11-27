@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import DriverSummaryCard from "@/components/admin/DriverSummaryCard";
 import { useParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { adminDriverName } from "@/lib/admin/identity";
@@ -491,7 +492,7 @@ export default function AdminDriverProfilePage() {
 
   if (busy) {
     return (
-      <main className="min-h-screen px-6 py-10 text-black">
+      <main className="ad-page text-black">
         <div className="max-w-6xl mx-auto moovu-card p-5 sm:p-6">
           Loading driver profile...
         </div>
@@ -501,39 +502,20 @@ export default function AdminDriverProfilePage() {
 
   if (!profile) {
     return (
-      <main className="min-h-screen px-6 py-10 text-black">
+      <main className="ad-page text-black">
         <div className="max-w-6xl mx-auto space-y-4">
-          {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
-          <Link href="/admin/applications" className="inline-flex moovu-btn moovu-btn-secondary">
-            Back
-          </Link>
+          <DriverSummaryCard driverId={driverId} />
+          <p className="ad-note">Their full profile isn&apos;t available yet{msg ? ` (${msg})` : ""}. It appears once they fill in their application.</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-black">
+    <main className="ad-page text-black">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm text-gray-500">Admin Driver Profile</div>
-            <h1 className="text-4xl font-semibold mt-1">{driverName}</h1>
-            <p className="text-gray-700 mt-2">
-              {profile.phone ?? "—"} • legacy subscription: {profile.subscription_status ?? "—"} • past plan: {profile.subscription_plan ?? "—"}
-            </p>
-          </div>
-
-          <Link href="/admin/applications" className="inline-flex moovu-btn moovu-btn-secondary">
-            Back
-          </Link>
-        </div>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700" aria-label="Application and work status">
-          <p><strong>Current application:</strong> {adminApplicationLabel(applicationSummary)}</p>
-          {applicationSummary?.application?.source === "phase6" && <p className="mt-1">Cycle {applicationSummary.application.cycle} · <Link className="text-blue-700 underline" href="/admin/onboarding">Open Phase 6 review</Link></p>}
-          <p className="mt-1"><strong>Work presence:</strong> {applicationSummary?.presence.state ?? "Unavailable"}. Operational eligibility is checked separately by the trusted runtime.</p>
-        </section>
+        <DriverSummaryCard driverId={driverId} />
+        {applicationSummary?.application?.source === "phase6" && <p className="ad-note">Application cycle {applicationSummary.application.cycle} · {adminApplicationLabel(applicationSummary)} · <Link className="underline" href="/admin/onboarding">Open in review</Link></p>}
 
         {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
