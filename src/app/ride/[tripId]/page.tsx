@@ -788,6 +788,26 @@ export default function RideTrackingPage() {
   }, [driver?.lat, driver?.lng, initMapIfNeeded]);
 
   useReadLoop(tripRead, loadTrip);
+
+  // Trips aren't on the live database feed, so while we look for a driver, check every 3 seconds;
+  // refresh immediately when a MOOVU notification arrives or the app comes back to the front.
+  const searching = trip?.status === "requested" || trip?.status === "offered" || (!trip && loading);
+  useEffect(() => {
+    if (!searching) return;
+    const timer = window.setInterval(() => { if (!document.hidden) void loadTrip(); }, 3000);
+    return () => window.clearInterval(timer);
+  }, [searching, loadTrip]);
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) void loadTrip(); };
+    window.addEventListener("moovu:push-received", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("moovu:push-received", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [loadTrip]);
   useReadLoop(locationRead, loadLiveLocation, ["assigned", "arrived", "ongoing"].includes(trip?.status ?? ""));
 
   useEffect(() => {

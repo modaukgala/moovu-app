@@ -327,6 +327,8 @@ export default function InAppNotificationBar() {
 
       unsubscribe = onMessage(messaging, (payload) => {
         const data = payload.data ?? {};
+        // Let open screens (e.g. the customer trip page) refresh straight away.
+        window.dispatchEvent(new CustomEvent("moovu:push-received", { detail: data }));
         showSystemLikeAlert({
           title: data.title || payload.notification?.title || "MOOVU update",
           body: data.body || payload.notification?.body || "You have a new MOOVU update.",
@@ -361,6 +363,7 @@ export default function InAppNotificationBar() {
       try {
         const receivedHandle = await PushNotifications.addListener("pushNotificationReceived", (notification) => {
           const data = notification.data as Record<string, unknown> | undefined;
+          window.dispatchEvent(new CustomEvent("moovu:push-received", { detail: data ?? {} }));
           showSystemLikeAlert({
             title: notification.title || "MOOVU update",
             body: notification.body || "You have a new MOOVU update.",
