@@ -15,6 +15,8 @@ import { Clock3, LocateFixed, MapPin, Store } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
+import CustomerDrawer from "@/components/customer/CustomerDrawer";
+import { Menu as MenuIcon } from "lucide-react";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import LocationMapPicker, {
   type ConfirmedMapLocation,
@@ -178,6 +180,7 @@ export default function RiderBookingPage() {
   const router = useRouter();
 
   const [customer, setCustomer] = useState<CustomerMe["customer"] | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [legalAcceptanceRequired, setLegalAcceptanceRequired] = useState(false);
   const [legalAccepting, setLegalAccepting] = useState(false);
@@ -3022,6 +3025,21 @@ export default function RiderBookingPage() {
           </button>
         ) : null}
       </div>
+
+      {/* Menu: customer profile, trips, account, support. */}
+      {!editingLocation && (
+        <button type="button" className="mbk-menu-btn" onClick={() => setMenuOpen(true)} aria-label="Open menu">
+          <MenuIcon aria-hidden="true" />
+        </button>
+      )}
+      <CustomerDrawer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        loggedIn={Boolean(customer)}
+        name={[customer?.first_name, customer?.last_name].filter(Boolean).join(" ").trim() || undefined}
+        contact={customer?.phone || undefined}
+        onLogout={async () => { await supabaseClient.auth.signOut(); window.location.href = "/customer/auth?next=/book"; }}
+      />
 
       {/* Keep the map header quiet so the booking task remains primary. */}
       <header className="mbk-header mbk-customer-question">

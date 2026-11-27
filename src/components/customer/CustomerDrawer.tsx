@@ -19,7 +19,7 @@ export default function CustomerDrawer({ open, onClose, loggedIn, name, contact,
   if (!open) return null;
   const initials = (name || "MOOVU Customer").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const links = [
-    { href: "/", label: "Home", icon: Home },
+    { href: loggedIn ? "/book" : "/", label: "Home", icon: Home },
     { href: loggedIn ? "/book" : "/customer/auth?next=/book", label: "Book a ride", icon: MapPinned },
     { href: loggedIn ? "/ride/history" : "/customer/auth?next=/ride/history", label: "My Trips", icon: History },
     { href: loggedIn ? "/account" : "/customer/auth?next=/account", label: "Account", icon: UserRound },

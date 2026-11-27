@@ -30,10 +30,16 @@ export default function HomePage() {
       const role = String(session?.user?.user_metadata?.role || session?.user?.app_metadata?.role || "").toLowerCase();
       setDriverSession(role === "driver");
       setCustomerName(String(session?.user?.user_metadata?.first_name || session?.user?.user_metadata?.name || ""));
-      setChecking(false);
+      // Only drivers stay on this screen (to choose where to continue); everyone else is redirected below.
+      if (role === "driver") setChecking(false);
       // Signed-in customers go straight to the map booking home.
       if (session && role !== "driver") {
         router.replace("/book");
+        return;
+      }
+      // New or signed-out people land on the sign-in page (Google, Apple or phone), then on the booking home.
+      if (!session) {
+        router.replace("/customer/auth?next=/book");
         return;
       }
       if (session && role !== "driver") {
@@ -54,9 +60,9 @@ export default function HomePage() {
     const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
       setLoggedIn(Boolean(session));
-      setChecking(false);
       const role = String(session?.user?.user_metadata?.role || session?.user?.app_metadata?.role || "").toLowerCase();
       setDriverSession(role === "driver");
+      if (session && role === "driver") setChecking(false);
       if (session && role !== "driver") router.replace("/book");
     });
     return () => { active = false; window.clearTimeout(fallback); subscription.unsubscribe(); };
