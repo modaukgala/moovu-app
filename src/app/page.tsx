@@ -47,16 +47,35 @@ export default function HomePage() {
       }
     }
     void load();
+    // Never leave people on the loader: after 4 seconds show the normal screen anyway.
+    const fallback = window.setTimeout(() => { if (active) setChecking(false); }, 4000);
+    // On a cold app start the saved login can arrive a moment after the first check.
+    // When it does, send customers to the booking home instead of leaving them on this screen.
     const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
       setLoggedIn(Boolean(session));
       setChecking(false);
+      const role = String(session?.user?.user_metadata?.role || session?.user?.app_metadata?.role || "").toLowerCase();
+      setDriverSession(role === "driver");
+      if (session && role !== "driver") router.replace("/book");
     });
-    return () => { active = false; subscription.unsubscribe(); };
+    return () => { active = false; window.clearTimeout(fallback); subscription.unsubscribe(); };
   }, [router]);
 
   const bookingHref = useMemo(() => loggedIn && !driverSession ? "/book" : "/customer/auth?next=/book", [loggedIn, driverSession]);
   async function logout() { await supabaseClient.auth.signOut(); window.location.href = "/"; }
+
+  // While we check for a saved login, show a calm loader instead of flashing the sign-up screen.
+  if (checking) {
+    return (
+      <CustomerAppShell className="customer-home-screen">
+        <CustomerMapHome />
+        <div role="status" aria-live="polite" style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
+          <span style={{ background: "#fff", borderRadius: 999, padding: "10px 18px", fontWeight: 600, boxShadow: "0 6px 18px rgba(14,18,23,.15)" }}>Opening MOOVU…</span>
+        </div>
+      </CustomerAppShell>
+    );
+  }
 
   return (
     <CustomerAppShell className="customer-home-screen">
