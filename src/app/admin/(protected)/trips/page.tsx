@@ -43,13 +43,14 @@ type Driver = {
 };
 
 const STATUSES = [
-  "all",
+  "not cancelled",
   "requested",
   "assigned",
   "arrived",
   "ongoing",
   "completed",
   "cancelled",
+  "all",
 ] as const;
 
 function errorMessage(error: unknown, fallback: string) {
@@ -99,7 +100,7 @@ export default function TripsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
+  const [status, setStatus] = useState<(typeof STATUSES)[number]>("not cancelled");
   const [search, setSearch] = useState("");
   const [pageError, setPageError] = useState<string | null>(null);
 
@@ -163,7 +164,12 @@ export default function TripsPage() {
     }
 
     const rows = (json.trips ?? []) as Trip[];
-    setTrips(currentStatus === "all" ? rows : rows.filter((trip) => trip.status === currentStatus));
+    // Cancelled trips are hidden unless asked for, so they don't clutter the list or inflate totals.
+    setTrips(
+      currentStatus === "all" ? rows
+        : currentStatus === "not cancelled" ? rows.filter((trip) => trip.status !== "cancelled")
+        : rows.filter((trip) => trip.status === currentStatus),
+    );
     setLastUpdatedAt(new Date());
     setLoading(false);
     setRefreshing(false);
@@ -191,7 +197,7 @@ export default function TripsPage() {
       total: trips.length,
       active: trips.filter((trip) => ["assigned", "arrived", "ongoing"].includes(trip.status)).length,
       requested: trips.filter((trip) => trip.status === "requested").length,
-      revenue: trips.reduce((sum, trip) => sum + Number(trip.fare_amount ?? 0), 0),
+      revenue: trips.filter((trip) => trip.status === "completed").reduce((sum, trip) => sum + Number(trip.fare_amount ?? 0), 0),
     }),
     [trips],
   );
@@ -411,7 +417,7 @@ export default function TripsPage() {
         <MetricCard label="Trips in status" value={String(tripStats.total)} helper={`Filter: ${status}`} />
         <MetricCard label="Requested" value={String(tripStats.requested)} helper="Need dispatch" tone="primary" />
         <MetricCard label="Active" value={String(tripStats.active)} helper="Assigned or moving" tone="success" />
-        <MetricCard label="Visible value" value={money(tripStats.revenue)} helper="Fare total in filter" tone="warning" />
+        <MetricCard label="Completed fares" value={money(tripStats.revenue)} helper="Completed trips in this list" tone="warning" />
       </section>
 
       <section className="moovu-card p-4 sm:p-5">

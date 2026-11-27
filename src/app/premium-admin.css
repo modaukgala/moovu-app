@@ -1,0 +1,120 @@
+/* MOOVU premium admin layer — same visual language as the customer and driver apps.
+   Scoped to .moovu-admin-shell so customer and driver screens are untouched. */
+
+.moovu-admin-shell {
+  --ad-ink: #050505;
+  --ad-muted: #5b6776;
+  --ad-line: #e9edf1;
+  --ad-soft: #f4f6f8;
+  --ad-amber: #b45309;
+  --ad-amber-soft: #fff7e6;
+  --ad-green: #047857;
+  --ad-green-soft: #e9f8f1;
+  --ad-red: #b91c1c;
+  --ad-red-soft: #fdeeee;
+  --ad-blue: #1f74c9;
+  --ad-blue-soft: #eaf3ff;
+  background: var(--ad-soft);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ad-ink);
+}
+
+/* ── Brand ─────────────────────────────────────────────── */
+.moovu-admin-shell .ad-brand { display: flex; align-items: center; gap: 12px; padding: 4px 6px 18px; }
+.moovu-admin-shell .ad-brand img { height: 30px; width: auto; }
+.moovu-admin-shell .ad-brand small {
+  display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ad-muted);
+}
+.moovu-admin-shell .ad-brand-divider { width: 1px; align-self: stretch; background: var(--ad-line); }
+
+/* ── Page head ─────────────────────────────────────────── */
+.moovu-admin-shell .ad-page { display: grid; gap: 18px; max-width: 1180px; }
+.moovu-admin-shell .ad-head h1 { font-size: 26px; font-weight: 900; letter-spacing: -0.02em; margin: 0; }
+.moovu-admin-shell .ad-head p { margin: 4px 0 0; color: var(--ad-muted); font-size: 14px; }
+
+/* ── Cards ─────────────────────────────────────────────── */
+.moovu-admin-shell .ad-card {
+  background: #fff; border-radius: 18px; box-shadow: 0 1px 3px rgba(5, 5, 5, 0.06); padding: 18px;
+}
+.moovu-admin-shell .ad-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.moovu-admin-shell .ad-card-head h2 { font-size: 17px; font-weight: 900; margin: 0; }
+.moovu-admin-shell .ad-card-head a { font-size: 13px; font-weight: 800; color: var(--ad-blue); }
+
+/* ── Search ────────────────────────────────────────────── */
+.moovu-admin-shell .ad-search { position: relative; }
+.moovu-admin-shell .ad-search input {
+  width: 100%; min-height: 54px; border-radius: 16px; border: 1px solid var(--ad-line); background: #fff;
+  padding: 0 18px 0 48px; font-size: 16px; font-weight: 600; box-shadow: 0 1px 3px rgba(5, 5, 5, 0.05);
+}
+.moovu-admin-shell .ad-search input:focus { outline: 2px solid var(--ad-ink); outline-offset: 1px; }
+.moovu-admin-shell .ad-search svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--ad-muted); }
+.moovu-admin-shell .ad-search-results {
+  position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(5, 5, 5, 0.14); padding: 8px; max-height: 70vh; overflow: auto;
+}
+.moovu-admin-shell .ad-search-group { padding: 6px 10px 2px; font-size: 11px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ad-muted); }
+.moovu-admin-shell .ad-search-results a { display: block; border-radius: 12px; padding: 9px 10px; }
+.moovu-admin-shell .ad-search-results a:hover, .moovu-admin-shell .ad-search-results a:focus { background: var(--ad-soft); }
+.moovu-admin-shell .ad-search-results b { display: block; font-size: 14px; }
+.moovu-admin-shell .ad-search-results span { font-size: 12px; color: var(--ad-muted); }
+
+/* ── Stat strip ────────────────────────────────────────── */
+.moovu-admin-shell .ad-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.moovu-admin-shell .ad-stat { background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(5, 5, 5, 0.05); }
+.moovu-admin-shell .ad-stat small { display: block; font-size: 12px; font-weight: 700; color: var(--ad-muted); }
+.moovu-admin-shell .ad-stat strong { display: block; font-size: 26px; font-weight: 900; margin-top: 2px; }
+.moovu-admin-shell a.ad-stat:hover { box-shadow: 0 4px 14px rgba(5, 5, 5, 0.1); }
+.moovu-admin-shell .ad-stat.is-attention { background: var(--ad-amber-soft); }
+.moovu-admin-shell .ad-stat.is-attention strong { color: var(--ad-amber); }
+
+/* ── Rows ──────────────────────────────────────────────── */
+.moovu-admin-shell .ad-rows { display: grid; gap: 8px; }
+.moovu-admin-shell .ad-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 10px 14px; align-items: center; border-radius: 14px;
+  padding: 12px 14px; background: var(--ad-soft);
+}
+.moovu-admin-shell .ad-row-title { font-size: 15px; font-weight: 800; }
+.moovu-admin-shell .ad-row-sub { font-size: 13px; color: var(--ad-muted); margin-top: 2px; overflow-wrap: anywhere; }
+.moovu-admin-shell .ad-row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .moovu-admin-shell .ad-row { grid-template-columns: 1fr; }
+  .moovu-admin-shell .ad-row-actions { justify-content: flex-start; }
+}
+
+/* ── Badges ────────────────────────────────────────────── */
+.moovu-admin-shell .ad-badge {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800;
+  background: #fff; color: var(--ad-muted); border: 1px solid var(--ad-line); white-space: nowrap;
+}
+.moovu-admin-shell .ad-badge.is-waiting { background: var(--ad-amber-soft); color: var(--ad-amber); border-color: transparent; }
+.moovu-admin-shell .ad-badge.is-live { background: var(--ad-blue-soft); color: var(--ad-blue); border-color: transparent; }
+.moovu-admin-shell .ad-badge.is-done { background: var(--ad-green-soft); color: var(--ad-green); border-color: transparent; }
+.moovu-admin-shell .ad-badge.is-off { background: var(--ad-red-soft); color: var(--ad-red); border-color: transparent; }
+
+/* ── Buttons ───────────────────────────────────────────── */
+.moovu-admin-shell .ad-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; border-radius: 999px;
+  padding: 0 14px; font-size: 13px; font-weight: 800; background: #fff; color: var(--ad-ink); border: 1px solid var(--ad-line);
+}
+.moovu-admin-shell .ad-btn:hover { border-color: var(--ad-ink); }
+.moovu-admin-shell .ad-btn.is-primary { background: var(--ad-ink); color: #fff; border-color: var(--ad-ink); }
+.moovu-admin-shell .ad-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Tabs ──────────────────────────────────────────────── */
+.moovu-admin-shell .ad-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.moovu-admin-shell .ad-tabs button, .moovu-admin-shell .ad-tabs a {
+  flex: none; min-height: 36px; border-radius: 999px; padding: 0 16px; font-size: 14px; font-weight: 800; background: #fff;
+  color: #3c4652; border: 1px solid var(--ad-line);
+}
+.moovu-admin-shell .ad-tabs .is-on { background: var(--ad-ink); border-color: var(--ad-ink); color: #fff; }
+
+/* ── Picker sheet ──────────────────────────────────────── */
+.moovu-admin-shell .ad-sheet-layer { position: fixed; inset: 0; z-index: 12000; display: grid; place-items: end center; background: rgba(5, 5, 5, 0.35); }
+@media (min-width: 720px) { .moovu-admin-shell .ad-sheet-layer { place-items: center; } }
+.moovu-admin-shell .ad-sheet {
+  width: min(520px, 100%); max-height: 80vh; overflow: auto; background: #fff; border-radius: 22px 22px 0 0; padding: 18px;
+}
+@media (min-width: 720px) { .moovu-admin-shell .ad-sheet { border-radius: 22px; } }
+
+.moovu-admin-shell .ad-empty { padding: 18px; border-radius: 14px; background: var(--ad-soft); color: var(--ad-muted); font-size: 14px; text-align: center; }
+.moovu-admin-shell .ad-note { font-size: 13px; color: var(--ad-muted); }

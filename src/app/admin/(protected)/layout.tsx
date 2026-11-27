@@ -176,7 +176,7 @@ export default function AdminProtectedLayout({
         {ADMIN_NAV_GROUPS.map(group => (
           <div key={group} className="moovu-admin-nav-group">
             <div className="moovu-admin-nav-heading">{group}</div>
-            {ADMIN_NAV_ITEMS.filter(item => item.group === group).map(item => (
+            {ADMIN_NAV_ITEMS.filter(item => item.group === group && !item.hidden).map(item => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -209,7 +209,7 @@ export default function AdminProtectedLayout({
       <div className="moovu-admin-layout">
         <aside className="moovu-admin-sidebar hidden lg:block" aria-label="Admin sidebar">
           <div className="moovu-admin-sidebar-inner">
-            <div className="moovu-admin-brand"><span className="moovu-admin-brand-mark">M</span><span><strong>MOOVU</strong><small>Admin workspace</small></span></div>
+            <Link href="/admin" className="ad-brand" aria-label="MOOVU admin home"><img src="/moovu-logo-admin.png" alt="MOOVU" /><span className="ad-brand-divider" aria-hidden="true" /><small>Admin<br />workspace</small></Link>
             {renderNavigation()}
             <button type="button" onClick={handleLogout} className="moovu-admin-link moovu-admin-logout">Logout</button>
           </div>
@@ -217,7 +217,7 @@ export default function AdminProtectedLayout({
         {menuOpen && <div className="moovu-admin-mobile-layer lg:hidden">
           <button type="button" className="moovu-admin-backdrop" aria-label="Close Admin navigation" onClick={() => setMenuOpen(false)} />
           <aside id="admin-mobile-navigation" className="moovu-admin-mobile-drawer" role="dialog" aria-modal="true" aria-label="Admin navigation">
-            <div className="moovu-admin-mobile-drawer-head"><strong>MOOVU Admin</strong><button type="button" aria-label="Close navigation" onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}><X size={20} /></button></div>
+            <div className="moovu-admin-mobile-drawer-head"><span className="ad-brand" style={{ paddingBottom: 0 }}><img src="/moovu-logo-admin.png" alt="MOOVU" /><small>Admin<br />workspace</small></span><button type="button" aria-label="Close navigation" onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}><X size={20} /></button></div>
             {renderNavigation(true)}
             <button type="button" onClick={handleLogout} className="moovu-admin-link moovu-admin-logout">Logout</button>
           </aside>
@@ -227,7 +227,8 @@ export default function AdminProtectedLayout({
             <div className="admin-mobile-topbar-inner flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-6">
               <div className="flex min-w-0 items-center gap-3">
                 <button ref={menuButtonRef} type="button" aria-label="Open Admin navigation" aria-controls="admin-mobile-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)} className="moovu-admin-menu-button lg:hidden"><Menu size={21} /></button>
-                <div className="min-w-0"><div className="moovu-section-title">{activeItem.group}</div><div className="truncate text-sm font-bold text-slate-700">{activeItem.label}</div></div>
+                <img src="/moovu-logo-admin.png" alt="MOOVU" className="h-7 w-auto lg:hidden" />
+                <div className="min-w-0"><div className="moovu-section-title">Admin workspace</div><div className="truncate text-sm font-bold text-slate-700">{activeItem.label}</div></div>
               </div>
               <div className="admin-mobile-topbar-actions flex flex-wrap items-center justify-end gap-2">
                 <EnableNotificationsButton role="admin" variant="inline" />

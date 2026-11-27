@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./premium-customer.css";
 import "./premium-driver.css";
+import "./premium-admin.css";
 import CapacitorBackButtonHandler from "@/components/CapacitorBackButtonHandler";
 import ClientErrorRecovery from "@/components/ClientErrorRecovery";
 import InAppNotificationBar from "@/components/InAppNotificationBar";

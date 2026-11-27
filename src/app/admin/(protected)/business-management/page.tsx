@@ -7,6 +7,7 @@ import { activitySources, MANAGEMENT_PAGE_SIZE, type ActivitySource, type Manage
 import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRead";
 import { supabaseClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/ui/MoovuPrimitives";
+import ManualSurgeControl from "@/components/admin/ManualSurgeControl";
 import { AdminPagination, AdminTableRegion } from "@/components/admin/AdminResults";
 
 type Policy = {
@@ -168,7 +169,8 @@ export default function BusinessManagementPage() {
   const role = useContext(AdminRoleContext);
   const financial = role==="owner" || role==="admin";
   return <main className="min-w-0 space-y-6">
-    <PageHeader kicker="Workspace" title="Business Management" description="Policy references, recorded administrative activity and diagnostic evidence." />
+    <PageHeader kicker="Growth" title="Pricing & settings" description="Busy-time pricing, the prices and fees in use, and a record of admin activity." />
+    <ManualSurgeControl />
     <PolicySection key={role ?? "unresolved"} />
     <section className="space-y-3">
       <h2 className="text-xl font-semibold">Recorded activity</h2>

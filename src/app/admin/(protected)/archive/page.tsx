@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type ArchiveTrip = {
   id: string;
@@ -51,9 +52,11 @@ export default function AdminArchivePage() {
 
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), 15000);
+      const { data: { session } } = await supabaseClient.auth.getSession();
       const res = await fetch(`/api/admin/archive?${params.toString()}`, {
         cache: "no-store",
         signal: controller.signal,
+        headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
       });
       window.clearTimeout(timeout);
 

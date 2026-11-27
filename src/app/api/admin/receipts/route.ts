@@ -20,7 +20,6 @@ export async function GET(req: Request) {
     const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
     const pageSize = Math.min(100, Math.max(10, Number.parseInt(url.searchParams.get("pageSize") ?? "25", 10) || 25));
     const q = String(url.searchParams.get("q") ?? "").trim().replace(/[,%()]/g, " ");
-    const status = String(url.searchParams.get("status") ?? "all").trim().toLowerCase();
     let driverIds: string[] = [];
     let driverCandidatesComplete = true;
     if (q) {
@@ -43,7 +42,7 @@ export async function GET(req: Request) {
         if (!filter) continue;
         const result = await collectBoundedPages<ReceiptRow>({ pageSize: 500, maxRows: 20_000, load: async (from, to) => {
           const query = auth.supabaseAdmin.from("trips").select(RECEIPT_SELECT)
-            .in("status", status === "all" ? ["completed", "cancelled"] : [status])
+            .in("status", ["completed"])
             .or(filter).order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
           const response = await query;
           if (response.error) throw new Error("Receipt search is unavailable.");
@@ -64,7 +63,7 @@ export async function GET(req: Request) {
     }
     const query = auth.supabaseAdmin.from("trips")
       .select(RECEIPT_SELECT, { count: "exact" })
-      .in("status", status === "all" ? ["completed", "cancelled"] : [status]);
+      .in("status", ["completed"]);
     const start = (page - 1) * pageSize;
     const { data, error, count } = await query.order("created_at", { ascending: false }).order("id", { ascending: false }).range(start, start + pageSize - 1);
     if (error) {

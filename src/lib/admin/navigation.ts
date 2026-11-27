@@ -1,39 +1,41 @@
 export type AdminNavItem = {
   href: string;
   label: string;
-  group: "Workspace" | "Operations" | "Drivers & Onboarding" | "Finance" | "Memberships & History" | "System";
+  group: "Workspace" | "Operations" | "People" | "Money" | "Growth" | "System";
+  /** Old-system pages: still reachable by link, but not shown in the menu. */
+  hidden?: boolean;
 };
 
-// Admin 2.0 phase 4 grouping (adapted to the live pages).
+// Admin redesign (27 Nov 2026): one clear menu; old-system pages hidden but kept.
 export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
-  { href: "/admin", label: "Dashboard", group: "Workspace" },
-  { href: "/admin/business-intelligence", label: "Business Intelligence", group: "Workspace" },
-  { href: "/admin/business-management", label: "Business Management", group: "Workspace" },
+  { href: "/admin", label: "Home", group: "Workspace" },
   { href: "/admin/trips", label: "Trips", group: "Operations" },
-  { href: "/admin/dispatch", label: "Dispatch Board", group: "Operations" },
-  { href: "/admin/dispatch/map", label: "Dispatch Map", group: "Operations" },
-  { href: "/admin/receipts", label: "Trip Receipts", group: "Operations" },
-  { href: "/admin/customers", label: "Customers", group: "Operations" },
-  { href: "/admin/drivers", label: "Drivers", group: "Drivers & Onboarding" },
-  { href: "/admin/onboarding", label: "Onboarding Review", group: "Drivers & Onboarding" },
-  { href: "/admin/applications", label: "Legacy Applications", group: "Drivers & Onboarding" },
-  { href: "/admin/link-driver", label: "Link Driver", group: "Drivers & Onboarding" },
-  { href: "/admin/earnings", label: "Financial Overview", group: "Finance" },
-  { href: "/admin/online-payments", label: "Online Payments", group: "Finance" },
-  { href: "/admin/online-payouts", label: "Driver Payouts", group: "Finance" },
-  { href: "/admin/refunds", label: "Customer Refunds", group: "Finance" },
-  { href: "/admin/payment-reviews", label: "Payment Reviews", group: "Finance" },
-  { href: "/admin/commission-payments", label: "Commission Payment Reviews", group: "Finance" },
-  { href: "/admin/reports", label: "Financial Reports", group: "Finance" },
-  { href: "/admin/moovu-plus", label: "MOOVU+ Memberships", group: "Memberships & History" },
-  { href: "/admin/subscriptions", label: "Historical Driver Subscriptions", group: "Memberships & History" },
-  { href: "/admin/archive", label: "Trip Archive", group: "Memberships & History" },
-  { href: "/admin/notifications", label: "Notification Diagnostics", group: "System" },
+  { href: "/admin/dispatch", label: "Dispatch board", group: "Operations" },
+  { href: "/admin/dispatch/map", label: "Dispatch map", group: "Operations" },
+  { href: "/admin/receipts", label: "Trip receipts", group: "Operations" },
+  { href: "/admin/customers", label: "Customers", group: "People" },
+  { href: "/admin/drivers", label: "Drivers", group: "People" },
+  { href: "/admin/onboarding", label: "Driver applications", group: "People" },
+  { href: "/admin/link-driver", label: "Link driver account", group: "People" },
+  { href: "/admin/applications", label: "Old applications", group: "People" },
+  { href: "/admin/earnings", label: "Money overview", group: "Money" },
+  { href: "/admin/online-payments", label: "Card payments", group: "Money" },
+  { href: "/admin/online-payouts", label: "Driver payouts", group: "Money" },
+  { href: "/admin/refunds", label: "Customer refunds", group: "Money" },
+  { href: "/admin/commission-payments", label: "Commission payments", group: "Money" },
+  { href: "/admin/reports", label: "Reports", group: "Money" },
+  { href: "/admin/business-intelligence", label: "Business insights", group: "Growth" },
+  { href: "/admin/business-management", label: "Pricing & settings", group: "Growth" },
+  { href: "/admin/moovu-plus", label: "MOOVU+ (paused)", group: "Growth" },
+  { href: "/admin/archive", label: "Trip archive", group: "System" },
+  { href: "/admin/notifications", label: "Notification check", group: "System" },
   { href: "/admin/storage", label: "Storage & backup", group: "System" },
+  { href: "/admin/payment-reviews", label: "Old payment reviews", group: "Money", hidden: true },
+  { href: "/admin/subscriptions", label: "Old driver subscriptions", group: "Money", hidden: true },
 ];
 
 export const ADMIN_NAV_GROUPS = [
-  "Workspace", "Operations", "Drivers & Onboarding", "Finance", "Memberships & History", "System",
+  "Workspace", "Operations", "People", "Money", "Growth", "System",
 ] as const;
 
 export function activeAdminNavItem(pathname: string): AdminNavItem {

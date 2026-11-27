@@ -160,7 +160,9 @@ export async function GET(req: Request) {
           .then((users) => ({ users, complete: true }))
         : listAllAuthUsers(auth.supabaseAdmin),
       auth.supabaseAdmin.from("driver_accounts").select("user_id").limit(5000),
-      auth.supabaseAdmin.from("admin_users").select("user_id").limit(5000),
+      // Admins live in profiles.role (there is no admin_users table).
+      auth.supabaseAdmin.from("profiles").select("user_id:id")
+        .in("role", ["owner", "admin", "dispatcher", "support"]).limit(5000),
     ]);
     if (driverAccounts.error || adminUsers.error) {
       console.error("[admin-customers] identity classification failed", {

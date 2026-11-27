@@ -48,7 +48,8 @@ test("layout keeps notification, payment, application and logout controls", () =
 
 test("presentation changes retain the primary Group A, finance and dispatch actions", () => {
   const controls: Record<string, string[]> = {
-    "page.tsx": ["loadAnalytics", "/admin/onboarding", "/admin/trips"],
+    "page.tsx": ["loadHome", "AdminSearch", "TripDispatchActions", "/admin/trips", "/admin/onboarding"],
+    "business-management/page.tsx": ["ManualSurgeControl"],
     "drivers/page.tsx": ["loadDrivers", "/admin/drivers/new"],
     "drivers/[id]/page.tsx": ["setActiveTab", "/admin/onboarding"],
     "applications/page.tsx": ["loadApplications", "/admin/onboarding"],

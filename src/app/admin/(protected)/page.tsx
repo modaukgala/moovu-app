@@ -1,428 +1,125 @@
 "use client";
-import LoadingState from "@/components/ui/LoadingState";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
-import MetricCard from "@/components/ui/MetricCard";
-import ManualSurgeControl from "@/components/admin/ManualSurgeControl";
+import { useCallback, useEffect, useState } from "react";
+import AdminSearch from "@/components/admin/AdminSearch";
+import TripDispatchActions from "@/components/admin/TripDispatchActions";
 import { supabaseClient } from "@/lib/supabase/client";
-import type { AdminPaymentReviewCounts } from "@/lib/admin/paymentReviewCounts";
 
-type AnalyticsResponse = {
-  ok: boolean;
-  analytics?: {
-    today_completed_trips: number;
-    today_cancelled_trips: number;
-    today_gross_revenue: number;
-    today_commission_owed: number;
-    weekly_trips: number;
-    monthly_trips: number;
-    active_drivers: number;
-    online_drivers: number;
-    pending_driver_applications: number | null;
-    pending_driver_applications_as_of: string | null;
-    active_subscriptions: number;
-    expiring_subscriptions: number;
-    average_fare: number;
-    cancellation_rate: number;
-    scheduled_due_next_hour: number;
-    scheduled_total_pending: number;
-    open_support_issues: number;
-    low_rated_drivers: Array<{
-      driver_id: string;
-      driver_name: string;
-      avg_rating: number;
-      total_ratings: number;
-      total_issues: number;
-      quality_score: number;
-    }>;
-    recent_cancellations: Array<{
-      id: string;
-      rider_name?: string | null;
-      cancelled_by: string | null;
-      cancellation_fee_amount: number | null;
-      created_at: string | null;
-    }>;
-    top_drivers: Array<{
-      driver_id: string;
-      driver_name: string;
-      avg_rating: number;
-      total_ratings: number;
-      total_completed_trips: number;
-      quality_score: number;
-    }>;
-    generated_at: string;
-  };
-  error?: string;
+type RecentTrip = {
+  id: string; rider_name: string | null; rider_phone: string | null; pickup_address: string | null;
+  dropoff_address: string | null; status: string; driver_id: string | null; driver_name: string | null;
+  driver_phone: string | null; payment_method: string | null; fare_amount: number | string | null;
+  created_at: string; scheduled_for: string | null; offer_status: string | null;
 };
 
-type PaymentFlags = {
-  subscription: number;
-  commission: number;
-  waiting: number;
+type HomeData = {
+  recent: RecentTrip[];
+  live: { onlineDrivers: number | null; liveTrips: number | null };
+  needsYou: { payouts: number | null; refunds: number | null; applications: number | null };
 };
 
-function money(value: number | null | undefined) {
-  return `R${Number(value ?? 0).toFixed(2)}`;
-}
+const STATUS: Record<string, { label: string; tone: string }> = {
+  requested: { label: "Looking for a driver", tone: "is-waiting" },
+  offered: { label: "Offered to a driver", tone: "is-waiting" },
+  assigned: { label: "Driver on the way", tone: "is-live" },
+  arrived: { label: "Driver arrived", tone: "is-live" },
+  ongoing: { label: "On trip", tone: "is-live" },
+  completed: { label: "Completed", tone: "is-done" },
+  cancelled: { label: "Cancelled", tone: "is-off" },
+  scheduled: { label: "Scheduled", tone: "" },
+};
 
-function displayDate(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleString() : "--";
-}
+const ago = (iso: string) => {
+  const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 24 * 60) return `${Math.round(mins / 60)} h ago`;
+  return new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+};
 
-export default function AdminDashboardPage() {
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [analytics, setAnalytics] = useState<AnalyticsResponse["analytics"] | null>(null);
-  const [paymentFlags, setPaymentFlags] = useState<PaymentFlags>({
-    subscription: 0,
-    commission: 0,
-    waiting: 0,
-  });
+const rand = (value: number | string | null) => `R${Number(value ?? 0).toFixed(0)}`;
+const needsDriver = (trip: RecentTrip) => !trip.driver_id && (trip.status === "requested" || trip.status === "offered");
 
-  async function loadAnalytics() {
-    setLoading(true);
-    setMsg(null);
+export default function AdminHomePage() {
+  const [data, setData] = useState<HomeData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session) {
-      setMsg("You are not logged in.");
-      setLoading(false);
-      return;
-    }
-
-    const res = await fetch("/api/admin/analytics", {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
-
-    const json = (await res.json()) as AnalyticsResponse;
-
-    if (!json?.ok || !json.analytics) {
-      setMsg(json?.error || "Failed to load analytics.");
-      setLoading(false);
-      return;
-    }
-
-    setAnalytics(json.analytics);
-    setLoading(false);
-  }
-
-  async function loadPaymentFlags() {
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session) return;
-
-    const res = await fetch("/api/admin/payment-reviews?summary=1", {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    const json = (await res.json().catch(() => null)) as
-      | { ok?: boolean; counts?: AdminPaymentReviewCounts }
-      | null;
-
-    if (!json?.ok) return;
-
-    if (json.counts) setPaymentFlags(json.counts);
-  }
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadAnalytics();
-      void loadPaymentFlags();
-    }, 0);
-    const refresh = () => void loadAnalytics();
-    const refreshPayments = () => void loadPaymentFlags();
-    window.addEventListener("moovu-admin:application-review-updated", refresh);
-    window.addEventListener("moovu-admin:payment-review-updated", refreshPayments);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener("moovu-admin:application-review-updated", refresh);
-      window.removeEventListener("moovu-admin:payment-review-updated", refreshPayments);
-    };
+  const loadHome = useCallback(async () => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const res = await fetch("/api/admin/home", { cache: "no-store", headers: { Authorization: `Bearer ${session?.access_token ?? ""}` } }).catch(() => null);
+    const json = await res?.json().catch(() => null);
+    if (json?.ok) { setData(json); setError(null); } else setError(json?.error ?? "Couldn't load the latest trips.");
   }, []);
 
-  const commandCards = useMemo(
-    () => [
-      {
-        href: "/admin/dispatch",
-        title: "Dispatch board",
-        body: "Offer trips, watch rollovers, and keep active movement visible.",
-      },
-      {
-        href: "/admin/dispatch/map",
-        title: "Live map",
-        body: "See drivers, active pickup points, and coverage movement.",
-      },
-      {
-        href: "/admin/payment-reviews",
-        title: "Payment queue",
-        body: "Review subscriptions, commissions, combined payments, and POP files.",
-      },
-      {
-        href: "/admin/receipts",
-        title: "Receipts",
-        body: "Open completed and cancelled trip receipts without losing context.",
-      },
-    ],
-    [],
-  );
+  useEffect(() => {
+    const first = window.setTimeout(() => void loadHome(), 0);
+    const timer = window.setInterval(() => { if (!document.hidden) void loadHome(); }, 15000);
+    return () => { window.clearTimeout(first); window.clearInterval(timer); };
+  }, [loadHome]);
 
-  if (loading) {
-    return <LoadingState title="Preparing your operations dashboard..." />;
-  }
+  const needs = data?.needsYou;
+  const attention = [
+    { href: "/admin/online-payouts", label: "Payout requests", value: needs?.payouts },
+    { href: "/admin/refunds", label: "Refund requests", value: needs?.refunds },
+    { href: "/admin/onboarding", label: "Driver applications", value: needs?.applications },
+  ];
 
   return (
-    <main className="admin-mobile-dashboard space-y-6 text-black">
-      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+    <div className="ad-page">
+      <header className="ad-head">
+        <h1>Home</h1>
+        <p>Find anyone fast, and see the latest ride requests as they come in.</p>
+      </header>
 
-      <section className="moovu-hero-panel p-5 sm:p-7">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
-              Live operations
-            </div>
-            <h1 className="mt-3 max-w-3xl text-3xl font-black tracking-tight text-white sm:text-5xl">
-              Command trips, drivers, payments, and receipts from one control room.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/74">
-              Built for fast scanning: urgent trips first, payment work visible, and driver quality signals close to dispatch.
-            </p>
-          </div>
+      <AdminSearch />
 
-          <button onClick={() => void loadAnalytics()} className="moovu-btn bg-white text-slate-950">
-            Refresh dashboard
-          </button>
-        </div>
-      </section>
-
-      <section className="admin-mobile-metrics grid gap-3 md:grid-cols-3">
-        <MetricCard
-          label="Completed today"
-          value={String(analytics?.today_completed_trips ?? 0)}
-          helper={`Completed trip fare value ${money(analytics?.today_gross_revenue)}`}
-          tone="success"
-        />
-        <MetricCard
-          label="Stored trip commission today"
-          value={money(analytics?.today_commission_owed)}
-          helper={`Average fare ${money(analytics?.average_fare)}`}
-          tone="primary"
-        />
-        <MetricCard
-          label="Cancelled today"
-          value={String(analytics?.today_cancelled_trips ?? 0)}
-          helper={`${Number(analytics?.cancellation_rate ?? 0).toFixed(1)}% cancellation rate`}
-          tone={(analytics?.today_cancelled_trips ?? 0) > 0 ? "warning" : "success"}
-        />
-      </section>
-
-      <section className="admin-mobile-metrics grid gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
-        <MetricCard label="Weekly trips" value={String(analytics?.weekly_trips ?? 0)} helper="Completed" />
-        <MetricCard label="Monthly trips" value={String(analytics?.monthly_trips ?? 0)} helper="Completed" />
-        <MetricCard label="Active drivers" value={String(analytics?.active_drivers ?? 0)} helper="Approved/active" />
-        <MetricCard label="Online drivers" value={String(analytics?.online_drivers ?? 0)} helper="Live availability" />
-        <Link href="/admin/onboarding" aria-label="Open applications needing Admin review">
-          <MetricCard label="Needs review" value={analytics?.pending_driver_applications == null ? "Unavailable" : String(analytics.pending_driver_applications)} helper="Current Phase 6 queue · open review workspace" />
-        </Link>
-        <MetricCard label="Historical plans expiring" value={String(analytics?.expiring_subscriptions ?? 0)} helper={`${analytics?.active_subscriptions ?? 0} historical active plans · not a work gate`} />
-      </section>
-
-      <section className="admin-mobile-metrics grid gap-3 md:grid-cols-3">
-        <MetricCard
-          label="Due next hour"
-          value={String(analytics?.scheduled_due_next_hour ?? 0)}
-          helper="Scheduled trips needing release"
-          tone="primary"
-        />
-        <MetricCard
-          label="Scheduled pending"
-          value={String(analytics?.scheduled_total_pending ?? 0)}
-          helper="Future rides in queue"
-        />
-        <MetricCard
-          label="Open issues"
-          value={String(analytics?.open_support_issues ?? 0)}
-          helper="Support items needing attention"
-          tone={(analytics?.open_support_issues ?? 0) > 0 ? "warning" : "success"}
-        />
-      </section>
-
-      <ManualSurgeControl />
-
-      <section className="grid gap-3 md:grid-cols-3">
-        <Link href="/admin/subscriptions" className="moovu-card-interactive p-5">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
-            Subscription POPs
-          </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.subscription}</div>
-          <p className="mt-2 text-sm text-slate-600">Persistent pending subscription reviews.</p>
-        </Link>
-        <Link href="/admin/commission-payments" className="moovu-card-interactive p-5">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
-            Commission POPs
-          </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.commission}</div>
-          <p className="mt-2 text-sm text-slate-600">Persistent pending commission reviews.</p>
-        </Link>
-        <Link href="/admin/payment-reviews" className="moovu-card-interactive p-5">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
-            Waiting for bank
-          </div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{paymentFlags.waiting}</div>
-          <p className="mt-2 text-sm text-slate-600">Requests marked waiting for confirmation.</p>
-        </Link>
-      </section>
-
-      <section className="moovu-admin-command-grid">
-        {commandCards.map((item) => (
-          <Link key={item.href} href={item.href} className="moovu-admin-command">
-            <strong>{item.title}</strong>
-            <span>{item.body}</span>
+      <section className="ad-stats" aria-label="Right now">
+        <Link href="/admin/dispatch" className="ad-stat"><small>Trips happening now</small><strong>{data?.live.liveTrips ?? "–"}</strong></Link>
+        <Link href="/admin/dispatch/map" className="ad-stat"><small>Drivers online</small><strong>{data?.live.onlineDrivers ?? "–"}</strong></Link>
+        {attention.map(item => (
+          <Link key={item.href} href={item.href} className={`ad-stat${(item.value ?? 0) > 0 ? " is-attention" : ""}`}>
+            <small>{item.label}</small><strong>{item.value ?? "–"}</strong>
           </Link>
         ))}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="moovu-card-interactive p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="moovu-section-title">Driver performance</div>
-              <h2 className="mt-2 text-2xl font-black text-slate-950">Top drivers</h2>
-            </div>
-            <Link href="/admin/drivers" className="moovu-btn moovu-btn-secondary">
-              Open drivers
-            </Link>
-          </div>
-
-          {(analytics?.top_drivers?.length ?? 0) === 0 ? (
-            <div className="mt-5 rounded-3xl bg-slate-50 p-5 text-sm text-slate-600">
-              No quality metrics available yet.
-            </div>
-          ) : (
-            <div className="mt-5 space-y-3">
-              {analytics!.top_drivers.map((driver, index) => (
-                <article
-                  key={driver.driver_id}
-                  className="rounded-3xl border border-[var(--moovu-border)] bg-white p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--moovu-primary-soft)] text-sm font-black text-[var(--moovu-primary)]">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <div className="font-black text-slate-950">{driver.driver_name}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {driver.total_completed_trips} completed trips
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-right text-sm">
-                      <div>
-                        <div className="text-xs text-slate-500">Rating</div>
-                        <div className="font-black">{Number(driver.avg_rating).toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-500">Rated</div>
-                        <div className="font-black">{driver.total_ratings}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-500">Quality</div>
-                        <div className="font-black">{Number(driver.quality_score).toFixed(2)}</div>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+      <section className="ad-card" aria-label="Latest ride requests">
+        <div className="ad-card-head">
+          <h2>Latest ride requests</h2>
+          <Link href="/admin/trips">All trips →</Link>
         </div>
-
-        <div className="space-y-5">
-          <section className="moovu-card-interactive p-5 sm:p-6">
-            <div className="moovu-section-title">Quality watchlist</div>
-            <h2 className="mt-2 text-2xl font-black text-slate-950">Drivers needing attention</h2>
-
-            {(analytics?.low_rated_drivers?.length ?? 0) === 0 ? (
-              <div className="mt-5 rounded-3xl bg-emerald-50 p-5 text-sm font-medium text-emerald-800">
-                No low-rated drivers currently flagged.
-              </div>
-            ) : (
-              <div className="mt-5 space-y-3">
-                {analytics!.low_rated_drivers.map((driver) => (
-                  <article key={driver.driver_id} className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
-                    <div className="font-black text-slate-950">{driver.driver_name}</div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                      <div>
-                        <div className="text-xs text-amber-800">Rating</div>
-                        <div className="font-black">{Number(driver.avg_rating).toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-amber-800">Issues</div>
-                        <div className="font-black">{driver.total_issues}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-amber-800">Quality</div>
-                        <div className="font-black">{Number(driver.quality_score).toFixed(2)}</div>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="moovu-card-interactive p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="moovu-section-title">Recent movement</div>
-                <h2 className="mt-2 text-2xl font-black text-slate-950">Cancellations</h2>
-              </div>
-              <Link href="/admin/trips" className="moovu-btn moovu-btn-secondary">
-                Open trips
-              </Link>
-            </div>
-
-            {(analytics?.recent_cancellations?.length ?? 0) === 0 ? (
-              <div className="mt-5 rounded-3xl bg-slate-50 p-5 text-sm text-slate-600">
-                No recent cancellations found.
-              </div>
-            ) : (
-              <div className="mt-5 space-y-3">
-                {analytics!.recent_cancellations.map((item) => (
-                  <article key={item.id} className="rounded-3xl border border-[var(--moovu-border)] bg-white p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-black text-slate-950">
-                          {item.rider_name || "Unknown rider"}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">{displayDate(item.created_at)}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-slate-500">Fee</div>
-                        <div className="font-black text-slate-950">{money(item.cancellation_fee_amount)}</div>
-                      </div>
-                    </div>
-                    <div className="mt-3 text-xs text-slate-500">
-                      Cancelled by {item.cancelled_by || "--"} · Trip {item.id.slice(0, 8)}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
+        {notice && <p className="ad-note mb-3 font-semibold text-slate-800" role="status">{notice}</p>}
+        {error && <p className="ad-empty">{error}</p>}
+        {!data && !error && <p className="ad-empty">Loading…</p>}
+        {data && data.recent.length === 0 && <p className="ad-empty">No ride requests yet.</p>}
+        <div className="ad-rows">
+          {data?.recent.map(trip => {
+            const status = STATUS[trip.status] ?? { label: trip.status, tone: "" };
+            return (
+              <article key={trip.id} className="ad-row">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="ad-row-title">{trip.rider_name || "Customer"}</span>
+                    <span className={`ad-badge ${status.tone}`}>{status.label}</span>
+                  </div>
+                  <div className="ad-row-sub">{trip.pickup_address ?? "Pickup"} → {trip.dropoff_address ?? "Drop-off"}</div>
+                  <div className="ad-row-sub">
+                    {ago(trip.created_at)} · {rand(trip.fare_amount)} {trip.payment_method === "online" ? "card" : "cash"}
+                    {trip.rider_phone ? ` · ${trip.rider_phone}` : ""}
+                    {trip.driver_name ? ` · Driver: ${trip.driver_name}` : needsDriver(trip) ? " · No driver yet" : ""}
+                  </div>
+                </div>
+                <div className="ad-row-actions">
+                  {needsDriver(trip) && <TripDispatchActions tripId={trip.id} onDone={message => { setNotice(message); void loadHome(); }} />}
+                  <Link href={`/admin/trips/${trip.id}`} className="ad-btn">Open</Link>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
-    </main>
+    </div>
   );
 }

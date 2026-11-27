@@ -88,7 +88,7 @@ export default function AdminReceiptsPage() {
             Trip receipts
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            Open printable receipts for completed and cancelled trips.
+            Printable receipts for completed trips. Cancelled trips have no receipt.
           </p>
         </div>
 
