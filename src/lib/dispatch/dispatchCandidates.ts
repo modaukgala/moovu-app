@@ -9,6 +9,7 @@ import { phase6NewWork } from "@/lib/drivers/phase6NewWork";
 import { readOfferAttempts, untriedCandidatesFirst, type OfferAttempt } from "@/lib/dispatch/attemptHistory";
 import { ACTIVE_ASSIGNED_TRIP_STATUSES } from "@/lib/trips/tripContract";
 import { ACTIVE_DRIVER_OFFER_STATUSES } from "@/lib/dispatch/offerContract";
+import { findAwayDrivers, setAwayDriversOffline } from "@/lib/dispatch/awayDrivers";
 
 type CandidateRow = {
   id: string;
@@ -136,6 +137,26 @@ export async function getDispatchCandidates(params: {
     if (!isDriverEligibleForRideOption(driver.seating_capacity, rideOption)) return false;
     return haversineKm(pickupLat, pickupLng, Number(driver.lat), Number(driver.lng)) <= radiusKm;
   });
+
+  // Drivers left "online" who keep letting offers expire are set offline, so
+  // customers aren't kept waiting on phones nobody is watching.
+  if (prelim.length > 0) {
+    const { data: recentOffers } = await supabase.from("driver_trip_offers")
+      .select("driver_id,status,offered_at").in("driver_id", prelim.map((driver) => driver.id))
+      .gte("offered_at", new Date(now - 12 * 60 * 60 * 1000).toISOString())
+      .order("offered_at", { ascending: false }).limit(500);
+    const { data: presence } = await supabase.from("driver_offer_presence")
+      .select("driver_id,present_at").in("driver_id", prelim.map((driver) => driver.id));
+    const presentAt = new Map((presence ?? []).map((row) => [row.driver_id as string, row.present_at as string | null]));
+    const latestSign = (driver: CandidateRow) => [driver.last_seen, presentAt.get(driver.id)]
+      .filter(Boolean).sort().at(-1) ?? null;
+    const away = findAwayDrivers((recentOffers ?? []) as { driver_id: string; status: string; offered_at: string }[],
+      new Map(prelim.map((driver) => [driver.id, latestSign(driver)])));
+    if (away.size > 0) {
+      await setAwayDriversOffline(supabase, [...away]);
+      for (let index = prelim.length - 1; index >= 0; index -= 1) if (away.has(prelim[index].id)) prelim.splice(index, 1);
+    }
+  }
 
   console.info("[dispatch] candidate discovery", {
     operation: "candidate-discovery", tripId,

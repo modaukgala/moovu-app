@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notifyAdmins, notifyCustomerForTrip } from "@/lib/push-notify";
 import { sendPushSafe } from "@/lib/push-server";
@@ -97,23 +98,27 @@ export async function respondToOffer(params: {
   }
 
   if (params.action === "accept") {
-    const { data: driver } = await supabaseAdmin
-      .from("drivers")
-      .select("first_name,last_name,phone")
-      .eq("id", params.driverId)
-      .maybeSingle();
-    const driverName = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || driver?.phone || "A driver";
-
-    await Promise.all([
-      notifyCustomerForTrip(
-        params.tripId,
-        "Driver accepted your ride",
-        `${driverName} is on the way to your pickup.`,
-        `/ride/${params.tripId}`,
-      ).catch(() => null),
-      notifyAdmins("Driver accepted trip", `${driverName} accepted trip ${params.tripId}.`, "/admin/dispatch").catch(() => null),
-      notifyLosingDrivers(row.cancelled_driver_ids ?? [], params.tripId).catch(() => null),
-    ]);
+    // The accept is already saved. Send the follow-up notifications after the
+    // driver gets their answer, so "slide to accept" responds instantly.
+    const sendFollowUps = async () => {
+      const { data: driver } = await supabaseAdmin
+        .from("drivers")
+        .select("first_name,last_name,phone")
+        .eq("id", params.driverId)
+        .maybeSingle();
+      const driverName = `${driver?.first_name ?? ""} ${driver?.last_name ?? ""}`.trim() || driver?.phone || "A driver";
+      await Promise.all([
+        notifyCustomerForTrip(
+          params.tripId,
+          "Driver accepted your ride",
+          `${driverName} is on the way to your pickup.`,
+          `/ride/${params.tripId}`,
+        ).catch(() => null),
+        notifyAdmins("Driver accepted trip", `${driverName} accepted trip ${params.tripId}.`, "/admin/dispatch").catch(() => null),
+        notifyLosingDrivers(row.cancelled_driver_ids ?? [], params.tripId).catch(() => null),
+      ]);
+    };
+    try { after(sendFollowUps); } catch { await sendFollowUps(); }
 
     return { ok: true, status: 200, tripId: params.tripId, state: "assigned" };
   }

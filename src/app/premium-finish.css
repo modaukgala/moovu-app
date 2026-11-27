@@ -133,3 +133,13 @@ button.bg-slate-950, a.bg-slate-950, button.bg-black, a.bg-black {
 .ctl-fare{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #eef2f6;padding-top:12px;font-size:14px;color:#64748b}.ctl-fare b{color:#0f172a;font-size:17px;font-weight:650}
 .ctl-links{display:flex;flex-wrap:wrap;gap:8px}.ctl-links button{padding:8px 12px;border-radius:999px;background:#f1f5f9;font-size:13px;font-weight:550;color:#334155}
 .ctl-links button.is-danger{color:#b91c1c;background:#fef2f2;margin-left:auto}
+.ctl-actions.is-three{grid-template-columns:repeat(3,1fr)}
+.ctl-actions .ctl-btn{width:100%;border:0;cursor:pointer}
+/* Chat: one look across customer and driver, matching the trip sheet. */
+.moovu-floating-chat-button{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;background:var(--moovu-cta-gradient,#1f74c9);color:#fff;border:0;box-shadow:0 10px 26px rgba(31,116,201,.32)}
+.moovu-floating-chat-button svg{width:22px;height:22px}
+.moovu-chat-sheet{border-radius:26px 26px 0 0!important;padding-bottom:env(safe-area-inset-bottom)}
+.moovu-chat-sheet header{border-bottom:1px solid #eef2f6!important}
+.moovu-chat-sheet header::before{content:"";display:block;width:40px;height:5px;border-radius:9px;background:#dbe2ea;margin:0 auto 12px}
+.moovu-chat-sheet textarea,.moovu-chat-sheet input[type="text"]{border-radius:18px!important;background:#f4f7fb!important;border:1px solid #e8eef5!important}
+.moovu-chat-sheet button[type="submit"]{background:var(--moovu-cta-gradient,#1f74c9)!important;color:#fff!important;border-radius:16px!important}

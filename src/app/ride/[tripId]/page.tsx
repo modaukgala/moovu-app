@@ -2224,12 +2224,13 @@ export default function RideTrackingPage() {
 
             {canShowDriverDetails && ["assigned", "arrived"].includes(trip.status) ? (
               <div className="ctl-actions">
-                <button type="button" className="ctl-btn" onClick={() => setActiveDetailModal("safety")}>Safety</button>
+                {canOpenChat ? <TripChatPanel tripId={trip.id} label="Message" buttonClassName="ctl-btn" initialOpen={searchParams.get("chat") === "1"} /> : null}
                 {driver?.phone ? <a className="ctl-btn is-primary" href={`tel:${driver.phone}`}>Call driver</a> : <button type="button" className="ctl-btn is-primary" onClick={() => setActiveDetailModal("support")}>Help</button>}
               </div>
             ) : null}
             {trip.status === "ongoing" ? (
-              <div className="ctl-actions">
+              <div className="ctl-actions is-three">
+                {canOpenChat ? <TripChatPanel tripId={trip.id} label="Message" buttonClassName="ctl-btn" /> : null}
                 <Link href={`/ride/${trip.id}/share`} className="ctl-btn">Share trip</Link>
                 <button type="button" className="ctl-btn" onClick={() => setActiveDetailModal("safety")}>Safety</button>
               </div>
@@ -2255,6 +2256,7 @@ export default function RideTrackingPage() {
             ) : null}
 
             <div className="ctl-links">
+              {trip.status !== "ongoing" && canShowDriverDetails ? <button type="button" onClick={() => setActiveDetailModal("safety")}>Safety</button> : null}
               {(["route", "fare", "support"] as const).map((action) => (
                 <button key={action} type="button" onClick={() => setActiveDetailModal(action)}>{action === "support" ? "Help" : action === "route" ? "Route" : "Fare"}</button>
               ))}
@@ -2619,17 +2621,6 @@ export default function RideTrackingPage() {
         </button>
       )}
 
-      {canOpenChat && (
-        <div className="customer-floating-chat">
-          <TripChatPanel
-            tripId={trip.id}
-            label="Chat with driver"
-            buttonClassName="moovu-floating-chat-button"
-            compactButton
-            initialOpen={searchParams.get("chat") === "1"}
-          />
-        </div>
-      )}
     </main>
   );
 }
