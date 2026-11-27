@@ -50,7 +50,7 @@ export default function TripOfferPanel({ offer, stops, secondsLeft, responding, 
         </div>
 
         <SlideToAccept
-          label="Slide to accept"
+          label="slide to accept ride"
           busyLabel="Accepting…"
           busy={responding === "accept"}
           disabled={responding !== null}

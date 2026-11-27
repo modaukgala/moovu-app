@@ -61,25 +61,44 @@ button.bg-slate-950, a.bg-slate-950, button.bg-black, a.bg-black {
 .moovu-admin-shell .ad-badge.is-done { box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.16); }
 .moovu-admin-shell .ad-badge.is-waiting { box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.16); }
 
-/* ── Slide to accept: blue track, glossy handle, pulsing arrows ── */
-.dp-slide {
+/* ── Glass slider (iOS power-off style, MOOVU blue): slide to book / slide to accept ── */
+.dp-slide.moovu-glass-slide {
+  height: 66px !important;
   border-radius: 999px !important;
-  background: linear-gradient(180deg, #2f84d8 0%, #1f74c9 55%, #1a62ad 100%) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 6px rgba(10, 40, 80, 0.25), 0 10px 22px -10px rgba(31, 116, 201, 0.75);
+  background: rgba(255, 255, 255, 0.35) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  border: 1.5px solid #1f74c9;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 6px 18px -10px rgba(31, 116, 201, 0.6) !important;
 }
-.dp-slide.is-busy { background: linear-gradient(180deg, #2a78c6, #175a9e) !important; }
-.dp-slide-label { font-weight: 600 !important; font-size: 16.5px !important; letter-spacing: 0.01em; }
-.dp-slide-knob {
-  border-radius: 999px !important;
-  background: radial-gradient(circle at 35% 28%, #fff, #e8eef6 70%, #d6e0ec) !important;
-  color: #1f74c9 !important;
-  box-shadow: 0 4px 10px rgba(10, 40, 80, 0.35), inset 0 -2px 3px rgba(10, 40, 80, 0.12);
-  z-index: 2;
+.dp-slide.moovu-glass-slide.is-busy { background: rgba(31, 116, 201, 0.08) !important; }
+.moovu-glass-slide .dp-slide-label {
+  padding-left: 58px !important; font-size: 17px !important; font-weight: 500 !important; letter-spacing: 0.01em;
+  color: transparent !important;
+  background: linear-gradient(100deg, #7d8794 0%, #7d8794 40%, #fff 50%, #7d8794 60%, #7d8794 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text;
+  animation: moovu-slide-shine 2.6s linear infinite;
 }
-.dp-slide-arrows { position: absolute; left: 72px; top: 0; bottom: 0; display: flex; align-items: center; gap: 1px; pointer-events: none; }
-.dp-slide-arrows svg { width: 15px; height: 15px; color: #fff; opacity: 0.2; animation: dp-slide-chev 1.4s infinite; }
-.dp-slide-arrows svg:nth-child(2) { animation-delay: 0.18s; }
-.dp-slide-arrows svg:nth-child(3) { animation-delay: 0.36s; }
-.dp-slide.is-busy .dp-slide-arrows { display: none; }
-@keyframes dp-slide-chev { 0%, 100% { opacity: 0.2; transform: translateX(0); } 45% { opacity: 1; transform: translateX(3px); } }
-@media (prefers-reduced-motion: reduce) { .dp-slide-arrows svg { animation: none; opacity: 0.8; } }
+.moovu-glass-slide.is-busy .dp-slide-label { animation: none; color: #1f74c9 !important; background: none; }
+@keyframes moovu-slide-shine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+.moovu-glass-slide .dp-slide-knob {
+  left: 5px !important; top: 5px !important; width: 53px !important; height: 53px !important; border-radius: 999px !important; z-index: 2;
+  color: #fff !important;
+  background: radial-gradient(circle at 35% 28%, #6fb0f0 0%, #2f84d8 45%, #1a62ad 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -3px 6px rgba(10, 40, 80, 0.35), 0 6px 14px rgba(31, 116, 201, 0.45);
+}
+.moovu-glass-slide .dp-slide-knob:disabled { opacity: 1; filter: saturate(0.7); }
+.moovu-glass-slide .dp-slide-knob svg { width: 24px !important; height: 24px !important; }
+@media (prefers-reduced-motion: reduce) { .moovu-glass-slide .dp-slide-label { animation: none; color: #7d8794 !important; background: none; } }
+
+/* ── Safe area: keep top buttons clear of the notch / Dynamic Island / Android status bar ──
+   Backgrounds still fill the whole screen; only the content starts below the phone's own top bar. */
+.moovu-app-screen:not(.moovu-receipt-screen) {
+  padding-top: calc(14px + env(safe-area-inset-top, 0px)) !important;
+}
+@media (min-width: 768px) {
+  .moovu-app-screen:not(.moovu-receipt-screen) { padding-top: calc(24px + env(safe-area-inset-top, 0px)) !important; }
+}
+.customer-booking-confirmation { margin-top: max(1rem, env(safe-area-inset-top, 0px)) !important; }
+.moovu-page.min-h-screen { padding-top: calc(14px + env(safe-area-inset-top, 0px)) !important; }
+.legal-screen { padding-top: env(safe-area-inset-top, 0px); }

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
 import CustomerDrawer from "@/components/customer/CustomerDrawer";
+import SlideToAccept from "@/components/driver/premium/SlideToAccept";
 import { Menu as MenuIcon } from "lucide-react";
 import CustomerBottomNav from "@/components/app-shell/CustomerBottomNav";
 import LocationMapPicker, {
@@ -2877,7 +2878,9 @@ export default function RiderBookingPage() {
           </div>
           <div className="customer-confirm-actions flex flex-col-reverse gap-3 sm:flex-row">
             <button type="button" disabled={busy} onClick={() => setBookingConfirmationOpen(false)} className="moovu-btn moovu-btn-secondary sm:flex-1">Go Back</button>
-            <button type="button" disabled={busy || !canSubmit} onClick={() => void confirmBooking()} className="moovu-btn moovu-btn-primary min-h-12 sm:flex-[2]">{busy ? "Booking..." : "Confirm Ride"}</button>
+            <div className="sm:flex-[2]">
+              <SlideToAccept label="slide to book ride" busyLabel="Booking your ride…" busy={busy} disabled={busy || !canSubmit} onAccept={() => void confirmBooking()} />
+            </div>
           </div>
         </dialog>
       )}

@@ -17,7 +17,8 @@ export default function SlideToAccept({ label, busyLabel, busy, disabled, onAcce
 
   const maxDx = () => {
     const track = trackRef.current;
-    return track ? track.clientWidth - 60 : 240;
+    const knob = track?.querySelector<HTMLElement>(".dp-slide-knob");
+    return track ? track.clientWidth - (knob?.offsetWidth ?? 54) - 12 : 240;
   };
   const fire = () => {
     if (disabled || busy) return;
@@ -34,11 +35,8 @@ export default function SlideToAccept({ label, busyLabel, busy, disabled, onAcce
   };
 
   return (
-    <div ref={trackRef} className={`dp-slide${busy ? " is-busy" : ""}`} aria-disabled={disabled}>
-      <span className="dp-slide-label">{busy ? busyLabel : label}</span>
-      <span className="dp-slide-arrows" aria-hidden="true" style={{ opacity: dx > 24 ? 0 : 1 }}>
-        <ChevronRight strokeWidth={3} /><ChevronRight strokeWidth={3} /><ChevronRight strokeWidth={3} />
-      </span>
+    <div ref={trackRef} className={`dp-slide moovu-glass-slide${busy ? " is-busy" : ""}`} aria-disabled={disabled}>
+      <span className="dp-slide-label" style={busy ? undefined : { opacity: Math.max(0, 1 - dx / 160) }}>{busy ? busyLabel : label}</span>
       <button
         type="button"
         className="dp-slide-knob"
@@ -69,7 +67,7 @@ export default function SlideToAccept({ label, busyLabel, busy, disabled, onAcce
         onPointerUp={end}
         onPointerCancel={end}
       >
-        <ChevronRight aria-hidden="true" />
+        <ChevronRight aria-hidden="true" strokeWidth={2.6} />
       </button>
     </div>
   );
