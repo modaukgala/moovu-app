@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import NotificationPersonTest from "@/components/admin/NotificationPersonTest";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import MetricCard from "@/components/ui/MetricCard";
@@ -57,9 +58,7 @@ function formatDate(value: string | null) {
 
 export default function AdminNotificationsPage() {
   const [status, setStatus] = useState<NotificationStatus | null>(null);
-  const [role, setRole] = useState<"admin" | "driver" | "customer">("admin");
   const [message, setMessage] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [logsSummary, setLogsSummary] = useState<NotificationLogsResponse["summary"] | null>(null);
   const [logsWarning, setLogsWarning] = useState<string | null>(null);
@@ -121,54 +120,14 @@ export default function AdminNotificationsPage() {
     setLogsWarning(json.warning ?? null);
   }, [getAccessToken, logFilter]);
 
-  async function sendRoleTest() {
-    setSending(true);
-    setMessage(null);
-
-    try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        setMessage("Missing login session.");
-        return;
-      }
-
-      const response = await fetch("/api/notifications/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          role,
-          title: "MOOVU test notification",
-          body: `Test notification for ${role}.`,
-          url: role === "driver" ? "/driver" : role === "admin" ? "/admin" : "/book",
-          data: {
-            type: "notification_test",
-            role,
-          },
-        }),
-      });
-
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !json?.ok) {
-        setMessage(json?.error || json?.message || "Test notification failed.");
-        return;
-      }
-
-      setMessage(`Sent. Delivered: ${json.delivered ?? 0}, failed: ${json.failed ?? 0}.`);
-      await loadLogs();
-    } finally {
-      setSending(false);
-    }
-  }
-
   useEffect(() => {
-    void loadStatus();
+    const t = window.setTimeout(() => void loadStatus(), 0);
+    return () => window.clearTimeout(t);
   }, [loadStatus]);
 
   useEffect(() => {
-    void loadLogs();
+    const t = window.setTimeout(() => void loadLogs(), 0);
+    return () => window.clearTimeout(t);
   }, [loadLogs]);
 
   return (
@@ -216,34 +175,9 @@ export default function AdminNotificationsPage() {
           </button>
         </div>
 
-        <div className="moovu-card-interactive p-5">
-          <div className="moovu-section-title">Delivery test</div>
-          <h2 className="mt-2 text-2xl font-black text-slate-950">Send role test</h2>
-
-          <label className="mt-4 block text-sm font-bold text-slate-700" htmlFor="notification-role">
-            Target role
-          </label>
-          <select
-            id="notification-role"
-            className="moovu-input mt-2"
-            value={role}
-            onChange={(event) => setRole(event.target.value as "admin" | "driver" | "customer")}
-          >
-            <option value="admin">Admin</option>
-            <option value="driver">Driver</option>
-            <option value="customer">Customer</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={() => void sendRoleTest()}
-            disabled={sending}
-            className="moovu-btn moovu-btn-primary mt-4"
-          >
-            {sending ? "Sending..." : "Send test notification"}
-          </button>
-        </div>
       </section>
+
+      <NotificationPersonTest />
 
       <section className="space-y-4">
         <div className="grid gap-3 md:grid-cols-4">
