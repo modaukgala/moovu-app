@@ -12,10 +12,14 @@ export async function GET(req: Request) {
   if (!Number.isSafeInteger(page) || page < 1 || page > 100000) {
     return NextResponse.json({ ok: false, error: "Invalid page." }, { status: 400 });
   }
-  const from = (page - 1) * PAGE_SIZE;
-  const { data: drivers, count, error: driverError } = await auth.supabaseAdmin.from("drivers")
+  // ?all=1 returns every (not deleted) driver so the page can sort by who owes the most.
+  const all = new URL(req.url).searchParams.get("all") === "1";
+  const from = all ? 0 : (page - 1) * PAGE_SIZE;
+  let driverQuery = auth.supabaseAdmin.from("drivers")
     .select("id,first_name,last_name,phone,status,online", { count: "exact" })
-    .order("id").range(from, from + PAGE_SIZE - 1);
+    .order("id").range(from, all ? from + 999 : from + PAGE_SIZE - 1);
+  if (all) driverQuery = driverQuery.or("is_deleted.is.null,is_deleted.eq.false");
+  const { data: drivers, count, error: driverError } = await driverQuery;
   if (driverError || count == null) {
     return NextResponse.json({ ok: false, error: "Driver list is unavailable." }, { status: 503 });
   }
@@ -29,8 +33,9 @@ export async function GET(req: Request) {
   const byDriver = new Map((wallets ?? []).map((wallet) => [wallet.driver_id, wallet]));
 
   const rows = [];
-  for (let offset = 0; offset < ids.length; offset += 5) {
-    const batch = (drivers ?? []).slice(offset, offset + 5);
+  const batchSize = all ? 10 : 5;
+  for (let offset = 0; offset < ids.length; offset += batchSize) {
+    const batch = (drivers ?? []).slice(offset, offset + batchSize);
     const resolved = await Promise.all(batch.map(async (driver) => {
       const wallet = byDriver.get(driver.id);
       const finance = await resolveDriverFinanceAuthority(auth.supabaseAdmin, {
@@ -56,6 +61,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "An authoritative commission balance is unavailable. No partial totals were returned." }, { status: 503 });
     }
     rows.push(...resolved);
+  }
+  if (all) {
+    rows.sort((a, b) => Number(b?.outstanding_cents ?? -1) - Number(a?.outstanding_cents ?? -1));
+    const known = rows.filter(r => r && r.outstanding_cents != null);
+    return NextResponse.json({ ok: true, rows, total_drivers: count, page: 1, page_size: rows.length,
+      aggregate_outstanding_cents: known.reduce((sum, r) => sum + Math.max(0, Number(r!.outstanding_cents)), 0),
+      aggregate_status: known.length === rows.length ? "complete" : "partial" },
+      { headers: { "Cache-Control": "private, no-store" } });
   }
   return NextResponse.json({ ok: true, rows, total_drivers: count, page, page_size: PAGE_SIZE,
     aggregate_outstanding_cents: null, aggregate_status: "unavailable_without_complete_authoritative_snapshot" },

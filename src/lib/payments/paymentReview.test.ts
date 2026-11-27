@@ -85,7 +85,9 @@ test("Admin commission pages use the same authority resolver and never present a
   const detail = await read("src/app/api/admin/driver-wallet-summary/route.ts");
   const driver = await read("src/app/api/driver/earnings/route.ts");
   assert.match(route, /requireAdminUser\(req\)/);
-  assert.match(route, /\.order\("id"\)\.range\(from, from \+ PAGE_SIZE - 1\)/);
+  assert.match(route, /\.order\("id"\)\.range\(from, all \? from \+ 999 : from \+ PAGE_SIZE - 1\)/);
+  // The full list (?all=1) only totals balances when every driver resolved; otherwise it says "partial".
+  assert.match(route, /aggregate_status: known\.length === rows\.length \? "complete" : "partial"/);
   assert.match(route, /resolveDriverFinanceAuthority\(auth\.supabaseAdmin/);
   assert.match(route, /aggregate_outstanding_cents: null/);
   assert.match(detail, /resolveDriverFinanceAuthority\(supabaseAdmin/);

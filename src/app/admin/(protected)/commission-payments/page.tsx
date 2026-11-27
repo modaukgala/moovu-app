@@ -121,8 +121,8 @@ export default function AdminCommissionPaymentsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [requests, setRequests] = useState<CommissionRequest[]>([]);
   const [drivers, setDrivers] = useState<SettlementDriver[]>([]);
-  const [driverPage, setDriverPage] = useState(1);
   const [totalDrivers, setTotalDrivers] = useState(0);
+  const [totalOwedCents, setTotalOwedCents] = useState<number | null>(null);
   const [ledger, setLedger] = useState<CommissionLedger | null>(null);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerType, setLedgerType] = useState("all");
@@ -158,7 +158,7 @@ export default function AdminCommissionPaymentsPage() {
         cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       }),
-      fetch(`/api/admin/commission-balances?page=${driverPage}`, {
+      fetch(`/api/admin/commission-balances?all=1`, {
         cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       }),
@@ -195,8 +195,9 @@ export default function AdminCommissionPaymentsPage() {
       },
     })));
     setTotalDrivers(settlementsJson.total_drivers ?? 0);
+    setTotalOwedCents(settlementsJson.aggregate_status === "complete" && typeof settlementsJson.aggregate_outstanding_cents === "number" ? settlementsJson.aggregate_outstanding_cents : null);
     setLoading(false);
-  }, [getToken, driverPage]);
+  }, [getToken]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -318,6 +319,11 @@ export default function AdminCommissionPaymentsPage() {
   const owingDrivers = drivers.filter(
     (row) => Number(wallet(row).balance_due ?? 0) > 0
   );
+  // Highest owed first; drivers owing nothing go in their own folder.
+  const owingVisible = visibleDriversWithBalances
+    .filter((row) => Number(wallet(row).balance_due ?? 0) > 0)
+    .sort((a, b) => Number(wallet(b).balance_due ?? 0) - Number(wallet(a).balance_due ?? 0));
+  const notOwingVisible = visibleDriversWithBalances.filter((row) => !(Number(wallet(row).balance_due ?? 0) > 0));
 
   if (loading) {
     return (
@@ -455,9 +461,9 @@ export default function AdminCommissionPaymentsPage() {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <MetricCard label="Total outstanding commission" value="Unavailable" helper="A complete authoritative aggregate is not available; individual Driver balances below use the finance authority." tone="warning" />
+        <MetricCard label="Drivers owe MOOVU in total" value={totalOwedCents == null ? "Unavailable" : money(totalOwedCents / 100)} helper="Commission and booking fees from cash trips" tone="warning" />
         <MetricCard label="Pending reviews" value={String(pendingRequests.length)} helper="Commission POPs" tone={pendingRequests.length ? "warning" : "default"} />
-        <MetricCard label="Drivers owing on this page" value={String(owingDrivers.length)} helper={`${totalDrivers} Drivers across all pages`} />
+        <MetricCard label="Drivers owing" value={String(owingDrivers.length)} helper={`${totalDrivers - owingDrivers.length} drivers owe nothing`} />
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
@@ -557,66 +563,62 @@ export default function AdminCommissionPaymentsPage() {
         </div>
       </section>
 
-      <section className="moovu-card p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-black text-slate-950">Driver commission balances</h2>
-          <div className="text-sm font-bold text-slate-500">{driversWithBalances.length} Driver(s) on page {driverPage}</div>
+      <section className="ad-card space-y-3">
+        <div className="ad-card-head">
+          <h2>Drivers who owe MOOVU</h2>
+          <span className="ad-note">Highest first</span>
         </div>
-        <label className="sr-only" htmlFor="commission-driver-search">Search Drivers owing commission</label>
-        <input id="commission-driver-search" type="search" className="moovu-input mt-4 w-full sm:max-w-sm" value={driverSearch} onChange={(event) => setDriverSearch(event.target.value)} placeholder="Search Driver or phone" />
-        <p className="mt-2 text-xs text-slate-500">Searches this page of 20 Drivers. Use the page controls to review other Drivers.</p>
-        <div className="mt-4 space-y-3">
-          {visibleDriversWithBalances.length === 0 ? (
-            <EmptyState title="No matching Driver balances" description={driversWithBalances.length === 0 ? "Driver commission balances will appear after completed trips." : "Try another Driver or phone search."} />
-          ) : (
-            visibleDriversWithBalances
-              .map((row) => {
+        <label className="sr-only" htmlFor="commission-driver-search">Search drivers</label>
+        <input id="commission-driver-search" type="search" className="w-full rounded-xl border border-slate-200 px-4 py-3" value={driverSearch} onChange={(event) => setDriverSearch(event.target.value)} placeholder="Search driver name or phone" />
+        {owingVisible.length === 0 ? (
+          <p className="ad-empty">{driverSearch ? "No owing drivers match your search." : "No driver owes MOOVU anything right now."}</p>
+        ) : (
+          <div className="ad-rows">{owingVisible.map((row: (typeof drivers)[number]) => {
                 const driverWallet = wallet(row);
                 const balance = driverWallet.balance_due == null ? null : Number(driverWallet.balance_due);
                 const hasPending = pendingByDriver.has(driverId(row));
                 return (
-                  <div key={driverId(row)} className="rounded-3xl border border-[var(--moovu-border)] bg-gradient-to-br from-white to-slate-50 p-4">
-                    <div className="grid gap-3 md:grid-cols-5">
-                      <div>
-                        <div className="text-sm text-slate-500">Driver</div>
-                        <div className="font-black text-slate-950">{driverName(row)}</div>
-                        <div className="mt-1 text-xs text-slate-500">{driverPhone(row) || "Phone unavailable"}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-slate-500">Outstanding commission due</div>
-                        <div className="font-semibold">{balance == null ? "Unavailable" : money(balance)}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-slate-500">Legacy accrued snapshot</div>
-                        <div className="font-semibold">{driverWallet.total_commission == null ? "Unavailable" : money(driverWallet.total_commission)}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-slate-500">Last payment</div>
-                        <div className="font-semibold">{displayDate(driverWallet.last_payment_at)}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-slate-500">Status</div>
+                  <div key={driverId(row)} className="ad-row">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="ad-row-title">{driverName(row)}</span>
                         <StatusBadge status={balance == null ? "unavailable" : standing(balance, hasPending)} />
-                        <button
-                          type="button"
-                          className="mt-3 text-sm font-black text-blue-700 underline"
-                          disabled={ledgerLoading}
-                          onClick={() => void openLedger(row)}
-                        >
-                          {ledgerLoading ? "Loading..." : "View breakdown"}
-                        </button>
                       </div>
+                      <div className="ad-row-sub">{driverPhone(row) || "No phone"} · last paid {displayDate(driverWallet.last_payment_at)}</div>
+                    </div>
+                    <div className="ad-row-actions">
+                      <b className="text-lg">{balance == null ? "–" : money(balance)}</b>
+                      {driverPhone(row) && <a className="ad-btn" href={`tel:${driverPhone(row)}`}>Call</a>}
+                      <button type="button" className="ad-btn" disabled={ledgerLoading} onClick={() => void openLedger(row)}>{ledgerLoading ? "Loading…" : "Breakdown"}</button>
                     </div>
                   </div>
                 );
-              })
-          )}
-        </div>
-        <nav aria-label="Commission Driver pages" className="mt-5 flex items-center gap-3">
-          <button type="button" className="moovu-btn moovu-btn-secondary" disabled={driverPage === 1} onClick={() => setDriverPage((page) => page - 1)}>Previous</button>
-          <span className="text-sm">Page {driverPage} of {Math.max(1, Math.ceil(totalDrivers / 20))}</span>
-          <button type="button" className="moovu-btn moovu-btn-secondary" disabled={driverPage * 20 >= totalDrivers} onClick={() => setDriverPage((page) => page + 1)}>Next</button>
-        </nav>
+              })}</div>
+        )}
+        <details className="rounded-xl bg-slate-50 p-3">
+          <summary className="cursor-pointer font-black">Not owing ({notOwingVisible.length})</summary>
+          <div className="ad-rows mt-3">{notOwingVisible.map((row: (typeof drivers)[number]) => {
+                const driverWallet = wallet(row);
+                const balance = driverWallet.balance_due == null ? null : Number(driverWallet.balance_due);
+                const hasPending = pendingByDriver.has(driverId(row));
+                return (
+                  <div key={driverId(row)} className="ad-row">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="ad-row-title">{driverName(row)}</span>
+                        <StatusBadge status={balance == null ? "unavailable" : standing(balance, hasPending)} />
+                      </div>
+                      <div className="ad-row-sub">{driverPhone(row) || "No phone"} · last paid {displayDate(driverWallet.last_payment_at)}</div>
+                    </div>
+                    <div className="ad-row-actions">
+                      <b className="text-lg">{balance == null ? "–" : money(balance)}</b>
+                      {driverPhone(row) && <a className="ad-btn" href={`tel:${driverPhone(row)}`}>Call</a>}
+                      <button type="button" className="ad-btn" disabled={ledgerLoading} onClick={() => void openLedger(row)}>{ledgerLoading ? "Loading…" : "Breakdown"}</button>
+                    </div>
+                  </div>
+                );
+              })}</div>
+        </details>
       </section>
     </main>
   );

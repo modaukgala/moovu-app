@@ -118,3 +118,7 @@
 
 .moovu-admin-shell .ad-empty { padding: 18px; border-radius: 14px; background: var(--ad-soft); color: var(--ad-muted); font-size: 14px; text-align: center; }
 .moovu-admin-shell .ad-note { font-size: 13px; color: var(--ad-muted); }
+
+/* Search in the top bar, on every admin page */
+.moovu-admin-shell .ad-topbar-search .ad-search input { min-height: 44px; border-radius: 999px; font-size: 15px; box-shadow: none; background: var(--ad-soft); }
+.moovu-admin-shell .ad-topbar-search .ad-search-results { min-width: min(520px, 92vw); }

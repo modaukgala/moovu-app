@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import AdminSearch from "@/components/admin/AdminSearch";
 import TripDispatchActions from "@/components/admin/TripDispatchActions";
 import { supabaseClient } from "@/lib/supabase/client";
 
@@ -70,10 +69,8 @@ export default function AdminHomePage() {
     <div className="ad-page">
       <header className="ad-head">
         <h1>Home</h1>
-        <p>Find anyone fast, and see the latest ride requests as they come in.</p>
+        <p>The latest ride requests as they come in. Use the search bar at the top to find any customer, driver or trip.</p>
       </header>
-
-      <AdminSearch />
 
       <section className="ad-stats" aria-label="Right now">
         <Link href="/admin/dispatch" className="ad-stat"><small>Trips happening now</small><strong>{data?.live.liveTrips ?? "–"}</strong></Link>
