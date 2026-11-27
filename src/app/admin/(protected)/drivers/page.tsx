@@ -10,6 +10,7 @@ type Row = {
   system: "new" | "old"; stage: DriverStage; stageLabel: string; missing: string[]; linked: boolean;
   online: boolean; busy: boolean; lastSeen: string | null; vehicle: string | null; joined: string | null; removed: boolean;
   applicationUpdated: string | null;
+  deletionRequest: { reason: string; at: string } | null;
 };
 type OldApp = { id: string; name: string | null; phone: string | null; email: string | null; status: string | null; created_at: string };
 
@@ -20,6 +21,7 @@ const TABS: { key: string; label: string; match: (r: Row) => boolean }[] = [
   { key: "not_started", label: "Signed up, not started", match: r => r.stage === "not_started" },
   { key: "old", label: "Old system", match: r => r.system === "old" },
   { key: "off", label: "Deactivated & rejected", match: r => r.stage === "deactivated" || r.stage === "rejected" },
+  { key: "delete", label: "Asked to delete account", match: r => Boolean(r.deletionRequest) },
   { key: "all", label: "Everyone", match: () => true },
 ];
 
@@ -105,6 +107,7 @@ export default function AdminDriversPage() {
                     <span className="ad-badge">{r.system === "new" ? "New onboarding" : "Old system"}</span>
                     {r.online && <span className="ad-badge is-live">{r.busy ? "On a trip" : "Online"}</span>}
                     {!r.linked && <span className="ad-badge is-off">No login linked</span>}
+                    {r.deletionRequest && <span className="ad-badge is-off">Asked to delete account</span>}
                   </div>
                   <div className="ad-row-sub">{[r.phone, r.email, r.vehicle].filter(Boolean).join(" · ") || "No contact details"} · joined {day(r.joined)}</div>
                   {r.missing.length > 0 && (

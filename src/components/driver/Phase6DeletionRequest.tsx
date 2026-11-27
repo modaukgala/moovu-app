@@ -1,19 +1,67 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
+
+/** Driver deletes their own account. Personal details and the login are removed straight away. */
 export default function Phase6DeletionRequest() {
-  const [reason, setReason] = useState(""); const [confirmText, setConfirm] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
-  const pending = useRef<{ key: string; reason: string; confirmText: string } | null>(null);
+  const [reason, setReason] = useState("");
+  const [confirmText, setConfirm] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true);
+    event.preventDefault();
+    setBusy(true); setMessage("");
     try {
-      const { data } = await supabaseClient.auth.getSession(); if (!data.session) throw new Error("Sign in to continue.");
-      pending.current ??= { key: crypto.randomUUID(), reason, confirmText };
-      const response = await fetch("/api/driver/onboarding/retention", { method: "POST", headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" }, body: JSON.stringify(pending.current) });
-      const result = await response.json(); if (!response.ok) throw new Error(result.error);
-      pending.current = null; setMessage(result.message);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Request unavailable."); } finally { setBusy(false); }
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data.session) throw new Error("Sign in to continue.");
+      const response = await fetch("/api/driver/onboarding/retention", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, confirmText }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error ?? "Couldn't delete your account. Please try again.");
+      setDone(true);
+      setMessage(result.message ?? "Your driver account has been deleted.");
+      await supabaseClient.auth.signOut().catch(() => {});
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Couldn't delete your account. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
-  return <main className="mx-auto max-w-xl p-6"><Link href="/driver/account" className="underline">Driver account</Link><h1 className="mt-4 text-2xl font-bold">Request account deletion</h1><p className="my-4">This records a deletion request for controlled review. Financial history and legal/dispute holds are handled separately. No automatic deletion period has been activated, and this form does not immediately erase your account.</p><form onSubmit={event => void submit(event)}><label className="block">Reason<textarea className="my-2 block w-full rounded border p-3" required minLength={8} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label><label className="block">Type DELETE<input className="my-2 block w-full rounded border p-3" required value={confirmText} onChange={event => setConfirm(event.target.value)} /></label><button className="rounded border p-3" disabled={busy || confirmText !== "DELETE" || reason.trim().length < 8}>Submit / retry request</button></form><p role="status" className="my-4">{message}</p></main>;
+
+  if (done) {
+    return (
+      <main className="mx-auto max-w-xl space-y-4 p-6">
+        <h1 className="text-2xl font-black">Account deleted</h1>
+        <p>{message} Your personal details and login have been removed. Records of completed trips and payments are kept without your personal details, as the law requires for bookkeeping.</p>
+        <Link href="/" className="moovu-btn moovu-btn-primary inline-flex">Done</Link>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto max-w-xl space-y-4 p-6">
+      <Link href="/driver/account" className="font-bold underline">← Account</Link>
+      <h1 className="text-2xl font-black">Delete my driver account</h1>
+      <p>This deletes your account <b>straight away</b>: your login, personal details, ID and licence details, and uploaded documents. You won&apos;t be able to receive trips. Completed trip and payment records are kept without your personal details.</p>
+      <p>If you have a trip in progress, finish it first.</p>
+      <form className="space-y-3" onSubmit={event => void submit(event)}>
+        <label className="block font-semibold">Why are you leaving?
+          <textarea className="mt-1 block w-full rounded-xl border p-3 font-normal" required minLength={3} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} />
+        </label>
+        <label className="block font-semibold">Type DELETE to confirm
+          <input className="mt-1 block w-full rounded-xl border p-3 font-normal" required value={confirmText} onChange={event => setConfirm(event.target.value)} />
+        </label>
+        <button className="moovu-btn w-full bg-red-600 text-white" disabled={busy || confirmText !== "DELETE" || reason.trim().length < 3}>
+          {busy ? "Deleting…" : "Delete my account"}
+        </button>
+      </form>
+      {message && <p role="alert" className="font-semibold text-red-700">{message}</p>}
+    </main>
+  );
 }

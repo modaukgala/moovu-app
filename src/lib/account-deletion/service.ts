@@ -420,3 +420,36 @@ export async function adminDeleteCustomer(params: {
   }
   return { ok: true };
 }
+
+/**
+ * Deletes a driver account for real (driver's own request or admin): one audited database routine
+ * unlinks the login, wipes personal details and closes any deletion request; then uploaded documents
+ * and the login itself are removed. Trips and money records stay for the books without personal details.
+ */
+export async function executeDriverDeletion(params: {
+  supabase: SupabaseClient;
+  actorId: string;
+  driverId: string;
+  reason: string;
+  byDriver: boolean;
+}): Promise<DeleteResult> {
+  const { data, error } = await params.supabase.rpc("moovu_delete_driver_account", {
+    p_actor: params.actorId, p_driver: params.driverId, p_reason: params.reason, p_by_driver: params.byDriver,
+  });
+  if (error) {
+    const message = String(error.message ?? "");
+    if (message.includes("ACTIVE_TRIP")) return { ok: false, status: 409, error: "There's a trip in progress. Finish it before deleting the account." };
+    if (message.includes("NOT_YOUR_ACCOUNT") || message.includes("ADMIN_REQUIRED")) return { ok: false, status: 403, error: "You can't delete this account." };
+    if (error.code === "PGRST202" || error.code === "42883") return { ok: false, status: 503, error: "Account deletion isn't switched on yet. Please contact MOOVU support on WhatsApp." };
+    console.error("[account-deletion] driver deletion failed", { code: error.code });
+    return { ok: false, status: 503, error: "The account couldn't be deleted right now. Please try again." };
+  }
+  const userIds = ((data as { user_ids?: string[] } | null)?.user_ids ?? []).filter(Boolean);
+  await deleteDriverDocuments(params.supabase, params.driverId);
+  for (const userId of userIds) {
+    await cleanupCommonUserData(params.supabase, userId);
+    const { error: authError } = await params.supabase.auth.admin.deleteUser(userId, true);
+    if (authError && authError.status !== 404) logNonCritical("driver login deletion failed", authError);
+  }
+  return { ok: true };
+}

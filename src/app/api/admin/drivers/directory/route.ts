@@ -8,6 +8,7 @@ type Driver = {
   status: string | null; verification_status: string | null; online: boolean | null; busy: boolean | null;
   last_seen: string | null; created_at: string | null; is_deleted: boolean | null;
   vehicle_make: string | null; vehicle_model: string | null; vehicle_registration: string | null;
+  vehicle_color: string | null; vehicle_year: string | null; seating_capacity: number | null; delete_mode: string | null;
 };
 
 async function all<T>(read: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>) {
@@ -33,8 +34,8 @@ export async function GET(req: Request) {
   if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const db = auth.supabaseAdmin;
   try {
-    const [drivers, applications, profiles, accounts, legacy] = await Promise.all([
-      all<Driver>((a, b) => db.from("drivers").select("id,first_name,last_name,phone,email,status,verification_status,online,busy,last_seen,created_at,is_deleted,vehicle_make,vehicle_model,vehicle_registration").order("created_at", { ascending: false }).range(a, b)),
+    const [drivers, applications, profiles, accounts, legacy, deletionAsks] = await Promise.all([
+      all<Driver>((a, b) => db.from("drivers").select("id,first_name,last_name,phone,email,status,verification_status,online,busy,last_seen,created_at,is_deleted,vehicle_make,vehicle_model,vehicle_registration,vehicle_color,vehicle_year,seating_capacity,delete_mode").order("created_at", { ascending: false }).range(a, b)),
       all<{ driver_id: string; status: string; draft: Phase6Draft; cycle: number; updated_at: string }>((a, b) =>
         db.from("phase6_applications").select("driver_id,status,draft,cycle,updated_at").order("cycle", { ascending: false }).range(a, b)),
       all<{ driver_id: string; first_name: string | null; last_name: string | null; phone: string | null }>((a, b) =>
@@ -42,7 +43,10 @@ export async function GET(req: Request) {
       all<{ driver_id: string; user_id: string }>((a, b) => db.from("driver_accounts").select("driver_id,user_id").range(a, b)),
       all<{ id: string; user_id: string | null; full_name: string | null; phone: string | null; email: string | null; status: string | null; created_at: string }>((a, b) =>
         db.from("driver_applications").select("id,user_id,full_name,phone,email,status,created_at").range(a, b)),
+      all<{ driver_id: string; reason: string; created_at: string }>((a, b) =>
+        db.from("phase6_retention_requests").select("driver_id,reason,created_at").in("status", ["REQUESTED", "HELD"]).range(a, b)),
     ]);
+    const askByDriver = new Map(deletionAsks.map(r => [r.driver_id, r]));
 
     const appByDriver = new Map<string, (typeof applications)[number]>();
     for (const app of applications) if (!appByDriver.has(app.driver_id)) appByDriver.set(app.driver_id, app);
@@ -58,7 +62,8 @@ export async function GET(req: Request) {
       if (id) legacyByDriver.set(id, app); else unmatchedLegacy.push(app);
     }
 
-    const rows = drivers.map(d => {
+    // Permanently deleted accounts are gone from the directory (their trips stay in the books).
+    const rows = drivers.filter(d => !(d.is_deleted && d.delete_mode === "permanent")).map(d => {
       const app = appByDriver.get(d.id) ?? null;
       const profile = profileByDriver.get(d.id) ?? null;
       const oldApp = legacyByDriver.get(d.id) ?? null;
@@ -82,6 +87,8 @@ export async function GET(req: Request) {
         joined: d.created_at,
         removed: Boolean(d.is_deleted),
         applicationUpdated: app?.updated_at ?? null,
+        car: { make: d.vehicle_make, model: d.vehicle_model, color: d.vehicle_color, registration: d.vehicle_registration, year: d.vehicle_year, seats: d.seating_capacity },
+        deletionRequest: !d.is_deleted && askByDriver.has(d.id) ? { reason: askByDriver.get(d.id)!.reason, at: askByDriver.get(d.id)!.created_at } : null,
       };
     });
 
