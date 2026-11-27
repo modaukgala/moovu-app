@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import AdminSearch from "@/components/admin/AdminSearch";
 import TripDispatchActions from "@/components/admin/TripDispatchActions";
+import ManualSurgeControl from "@/components/admin/ManualSurgeControl";
 import { supabaseClient } from "@/lib/supabase/client";
 
 type RecentTrip = {
@@ -69,8 +71,10 @@ export default function AdminHomePage() {
     <div className="ad-page">
       <header className="ad-head">
         <h1>Home</h1>
-        <p>The latest ride requests as they come in. Use the search bar at the top to find any customer, driver or trip.</p>
+        <p>Find anyone fast, and see the latest ride requests as they come in.</p>
       </header>
+
+      <AdminSearch />
 
       <section className="ad-stats" aria-label="Right now">
         <Link href="/admin/dispatch" className="ad-stat"><small>Trips happening now</small><strong>{data?.live.liveTrips ?? "–"}</strong></Link>
@@ -81,6 +85,8 @@ export default function AdminHomePage() {
           </Link>
         ))}
       </section>
+
+      <ManualSurgeControl />
 
       <section className="ad-card" aria-label="Latest ride requests">
         <div className="ad-card-head">

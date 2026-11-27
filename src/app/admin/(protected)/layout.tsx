@@ -8,7 +8,6 @@ import { Menu, X } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase/client";
 import AdminTripNotifications from "@/components/AdminTripNotifications";
 import EnableNotificationsButton from "@/components/EnableNotificationsButton";
-import AdminSearch from "@/components/admin/AdminSearch";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS, activeAdminNavItem } from "@/lib/admin/navigation";
@@ -231,7 +230,6 @@ export default function AdminProtectedLayout({
                 <img src="/moovu-logo-admin.png" alt="MOOVU" className="h-7 w-auto lg:hidden" />
                 <div className="min-w-0"><div className="moovu-section-title">Admin workspace</div><div className="truncate text-sm font-bold text-slate-700">{activeItem.label}</div></div>
               </div>
-              <div className="ad-topbar-search min-w-0 flex-1 sm:max-w-xl"><AdminSearch /></div>
               <div className="admin-mobile-topbar-actions flex flex-wrap items-center justify-end gap-2">
                 <EnableNotificationsButton role="admin" variant="inline" />
                 <div className="moovu-admin-ops-chip moovu-chip hidden sm:inline-flex">
