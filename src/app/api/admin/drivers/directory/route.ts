@@ -44,7 +44,10 @@ export async function GET(req: Request) {
       all<{ id: string; user_id: string | null; full_name: string | null; phone: string | null; email: string | null; status: string | null; created_at: string }>((a, b) =>
         db.from("driver_applications").select("id,user_id,full_name,phone,email,status,created_at").range(a, b)),
       all<{ driver_id: string; reason: string; created_at: string }>((a, b) =>
-        db.from("phase6_retention_requests").select("driver_id,reason,created_at").in("status", ["REQUESTED", "HELD"]).range(a, b)),
+        // Requests from before the in-app delete went live (27 Nov 2026) are not shown: the owner asked
+        // those drivers to delete again with the new flow if they still want to.
+        db.from("phase6_retention_requests").select("driver_id,reason,created_at").in("status", ["REQUESTED", "HELD"])
+          .gte("created_at", "2026-11-27T08:00:00Z").range(a, b)),
     ]);
     const askByDriver = new Map(deletionAsks.map(r => [r.driver_id, r]));
 
