@@ -31,12 +31,30 @@ export type Phase5Fare = Readonly<{
   driverFareBasisCents: number;
 }>;
 
+/** Reads the tiered booking fee rate from the active policy row (null = flat fee). */
+export function phase5ServiceFeeTierBps(value: unknown): number | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const bps = Number((value as { service_fee_tier_bps?: unknown }).service_fee_tier_bps);
+  return Number.isInteger(bps) && bps >= 1 && bps <= 2000 ? bps : null;
+}
+
+/**
+ * Booking fee: the flat policy fee, or when a tier rate is set, that rate of the ride fare rounded
+ * UP to the next whole rand, whichever is higher. Must match phase5_create_trip in the database.
+ */
+export function phase5ServiceFeeCents(rideFareCents: number, rideOptionId: RideOptionId, tierBps?: number | null) {
+  const flat = rideOptionId === "go" ? PHASE5_POLICY.goServiceFeeCents : PHASE5_POLICY.goXlServiceFeeCents;
+  if (!tierBps) return flat;
+  return Math.max(flat, Math.ceil((rideFareCents * tierBps) / 1_000_000) * 100);
+}
+
 /** Inputs other than route/ride option must come from server-checked membership and credit state. */
 export function calculatePhase5Fare(input: {
   rideFareCents: number;
   rideOptionId: RideOptionId;
   activeMember: boolean;
   availableCreditCents: number;
+  serviceFeeTierBps?: number | null;
 }): Phase5Fare {
   if (!Number.isSafeInteger(input.rideFareCents) || input.rideFareCents <= 0) {
     throw new Error("Driver ride fare is invalid.");
@@ -45,8 +63,7 @@ export function calculatePhase5Fare(input: {
     throw new Error("Promotional credit amount is invalid.");
   }
   const rideFareCents = input.rideFareCents;
-  const grossServiceFeeCents = input.rideOptionId === "go"
-    ? PHASE5_POLICY.goServiceFeeCents : PHASE5_POLICY.goXlServiceFeeCents;
+  const grossServiceFeeCents = phase5ServiceFeeCents(rideFareCents, input.rideOptionId, input.serviceFeeTierBps);
   const membershipWaiverCents = input.activeMember ? grossServiceFeeCents : 0;
   const beforeCreditCents = rideFareCents + grossServiceFeeCents - membershipWaiverCents;
   const promotionalCreditCents = Math.min(beforeCreditCents, input.availableCreditCents);

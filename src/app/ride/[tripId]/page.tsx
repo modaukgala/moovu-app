@@ -1,4 +1,5 @@
 "use client";
+import RefundRequestCard from "@/components/customer/RefundRequestCard";
 import { useReliableRead, useReadLoop } from "@/hooks/useReliableRead";
 import { READ_POLICIES, readFailure } from "@/lib/reliability/readPolling";
 
@@ -1855,6 +1856,7 @@ export default function RideTrackingPage() {
                     {Number(trip.cancellation_fee_amount ?? 0) > 0 && (
                       <div className="mt-2">Cancellation fee: {money(trip.cancellation_fee_amount)}</div>
                     )}
+                    <RefundRequestCard tripId={trip.id} />
                   </div>
                 ) : trip.status === "completed" ? (
                   <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
@@ -2518,6 +2520,7 @@ export default function RideTrackingPage() {
                     Cancellation fee: {money(trip.cancellation_fee_amount)}
                   </div>
                 )}
+                <RefundRequestCard tripId={trip.id} />
               </div>
             ) : trip.status === "completed" ? (
               <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-700">

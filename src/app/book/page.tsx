@@ -2863,7 +2863,7 @@ export default function RiderBookingPage() {
               <div><dt className="font-bold text-slate-500">Ride</dt><dd className="mt-0.5 font-semibold">{selectedRide.name}{rideType === "scheduled" ? " · Scheduled" : ""}</dd></div>
               <div><dt className="font-bold text-slate-500">Payment</dt><dd className="mt-0.5 font-semibold">{paymentMethod === "online" ? "Card" : "Cash"}</dd></div>
               {phase5Quote && (
-                <div><dt className="font-bold text-slate-500">Disclosed service fee</dt><dd className="mt-0.5 font-semibold">R{(phase5Quote.grossServiceFeeCents / 100).toFixed(2)}{phase5Quote.membershipWaiverCents || phase5Quote.promotionalCreditCents ? " before eligible waivers and credits" : ""}</dd></div>
+                <div><dt className="font-bold text-slate-500">Booking fee</dt><dd className="mt-0.5 font-semibold">R{(phase5Quote.grossServiceFeeCents / 100).toFixed(2)}{phase5Quote.membershipWaiverCents || phase5Quote.promotionalCreditCents ? " before eligible waivers and credits" : ""}</dd></div>
               )}
               <div className="border-t border-slate-200 pt-3"><dt className="font-bold text-slate-500">Quoted total</dt><dd className="mt-0.5 text-xl font-black">{money(displayFare)}</dd></div>
             </dl>

@@ -3,7 +3,7 @@ import test from "node:test";
 // @ts-expect-error Node strip-types runner requires the explicit extension.
 import { calculateTripFare, type FareInput } from "../domain/fare.ts";
 // @ts-expect-error Node strip-types runner requires the explicit extension.
-import { calculatePhase5Fare, phase5PolicyActive } from "./phase5Fare.ts";
+import { calculatePhase5Fare, phase5PolicyActive, phase5ServiceFeeCents } from "./phase5Fare.ts";
 
 test("only a real active Phase 5 policy enables separate service fees", () => {
   assert.equal(phase5PolicyActive(null), false);
@@ -57,4 +57,23 @@ test("credit is capped at Customer charges and rejects invalid balances", () => 
   assert.equal(result.customerTotalCents, 0);
   assert.equal(result.promotionalCreditCents, result.rideFareCents + 300);
   assert.throws(() => phase5({ ...base, availableCreditCents: -1 }));
+});
+
+test("tiered booking fee covers the card fee on fare plus fee and keeps the flat minimum", () => {
+  const fee = (rand: number, option: "go" | "group" = "go") => phase5ServiceFeeCents(rand * 100, option, 363) / 100;
+  assert.equal(fee(41), 3);
+  assert.equal(fee(82), 3);
+  assert.equal(fee(83), 4);
+  assert.equal(fee(110), 4);
+  assert.equal(fee(111), 5);
+  assert.equal(fee(137), 5);
+  assert.equal(fee(138), 6);
+  assert.equal(fee(165), 6);
+  assert.equal(fee(166), 7);
+  assert.equal(fee(60, "group"), 5);
+  for (let rand = 1; rand <= 600; rand += 1) {
+    const f = fee(rand);
+    assert.ok(f * 100 >= Math.ceil((rand + f) * 3.5), `fee ${f} covers 3.5% of R${rand + f}`);
+  }
+  assert.equal(phase5ServiceFeeCents(20000, "go", null), 300);
 });

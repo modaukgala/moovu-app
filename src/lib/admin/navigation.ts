@@ -21,6 +21,7 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
   { href: "/admin/earnings", label: "Financial Overview", group: "Finance" },
   { href: "/admin/online-payments", label: "Online Payments", group: "Finance" },
   { href: "/admin/online-payouts", label: "Driver Payouts", group: "Finance" },
+  { href: "/admin/refunds", label: "Customer Refunds", group: "Finance" },
   { href: "/admin/payment-reviews", label: "Payment Reviews", group: "Finance" },
   { href: "/admin/commission-payments", label: "Commission Payment Reviews", group: "Finance" },
   { href: "/admin/reports", label: "Financial Reports", group: "Finance" },

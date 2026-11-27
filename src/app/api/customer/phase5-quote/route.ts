@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedCustomer } from "@/lib/customer/server";
 import { calculateAddStopIncrease, calculateFinalJourneyFare, calculateTripFare, normalizeRideOptionId } from "@/lib/domain/fare";
-import { calculatePhase5Fare, phase5PolicyActive } from "@/lib/finance/phase5Fare";
+import { calculatePhase5Fare, phase5PolicyActive, phase5ServiceFeeTierBps } from "@/lib/finance/phase5Fare";
 import { createRouteSignature } from "@/lib/maps/mapRequestPolicy";
 import { verifyRouteQuote } from "@/lib/maps/routeQuote";
 import { getActiveManualSurge } from "@/lib/pricing/manualSurgeServer";
@@ -43,7 +43,8 @@ export async function POST(req: Request) {
   if (!phase5Active) return NextResponse.json({ ok: true, authority: "LEGACY",
     pricing: { ...pricedFare, customerTotalCents: pricedFare.rideFareCents } });
   const quote = calculatePhase5Fare({ rideFareCents: pricedFare.rideFareCents, rideOptionId,
-    activeMember: state?.membership_active === true, availableCreditCents: Number(state?.available_credit_cents ?? 0) });
+    activeMember: state?.membership_active === true, availableCreditCents: Number(state?.available_credit_cents ?? 0),
+    serviceFeeTierBps: phase5ServiceFeeTierBps(policy) });
   return NextResponse.json({ ok: true, authority: "PHASE5", quote, policyEffectiveFrom: policy.effective_from,
     membershipExpiresAt: state?.membership_expires_at ?? null,
     pricing: { ...pricedFare, customerTotalCents: quote.customerTotalCents } });

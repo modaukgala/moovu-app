@@ -15,6 +15,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import OnlinePayoutsPanel from "@/components/finance/OnlinePayoutsPanel";
+import DriverPayoutCard from "@/components/finance/DriverPayoutCard";
 import { supabaseClient } from "@/lib/supabase/client";
 import { commissionDebtNotice, commissionDueAmount, type CommissionAuthority } from "@/lib/finance/commissionPresentation";
 
@@ -79,7 +80,22 @@ type CompletedTrip = {
   dropoff_address: string | null;
   created_at: string | null;
   completed_at?: string | null;
+  phase5_ride_fare_cents?: number | null;
+  phase5_service_fee_cents?: number | null;
+  phase5_membership_waiver_cents?: number | null;
+  phase5_credit_cents?: number | null;
 };
+
+/** Fare / commission / booking-fee split for one trip, as the driver should read it. */
+function tripSplit(trip: CompletedTrip, bookingFeeOwedFrom: string | null) {
+  const fee = Math.max(0, Number(trip.phase5_service_fee_cents ?? 0) - Number(trip.phase5_membership_waiver_cents ?? 0)
+    - Number(trip.phase5_credit_cents ?? 0)) / 100;
+  const rideFare = trip.phase5_ride_fare_cents != null ? Number(trip.phase5_ride_fare_cents) / 100 : Number(trip.fare_amount ?? 0);
+  const commission = Number(trip.commission_amount ?? 0);
+  const v2 = Boolean(bookingFeeOwedFrom && trip.completed_at && trip.completed_at >= bookingFeeOwedFrom);
+  const cash = trip.payment_method !== "online";
+  return { rideFare, fee, commission, cash, v2, owed: cash ? commission + (v2 ? fee : 0) : 0 };
+}
 
 type CancellationFee = {
   id: string;
@@ -142,6 +158,7 @@ export default function DriverEarningsPage() {
   const [lateCancellationDriverEarnings, setLateCancellationDriverEarnings] = useState(0);
   const [noShowDriverEarnings, setNoShowDriverEarnings] = useState(0);
   const [commissionBreakdown, setCommissionBreakdown] = useState<CommissionTransaction[]>([]);
+  const [bookingFeeOwedFrom, setBookingFeeOwedFrom] = useState<string | null>(null);
 
 
   const getToken = useCallback(async () => {
@@ -192,6 +209,7 @@ export default function DriverEarningsPage() {
     setLateCancellationDriverEarnings(Number(json.earnings?.late_cancellation_driver_earnings ?? 0));
     setNoShowDriverEarnings(Number(json.earnings?.no_show_driver_earnings ?? 0));
     setCommissionBreakdown(json.earnings?.commission_breakdown ?? []);
+    setBookingFeeOwedFrom(json.earnings?.booking_fee_owed_from ?? null);
     setLoading(false);
   }, [getToken]);
 
@@ -276,7 +294,7 @@ export default function DriverEarningsPage() {
         </section>
 
         <details className="dp-fold" open><summary>Payouts to you</summary>
-          <OnlinePayoutsPanel role="driver" />
+          <DriverPayoutCard fallback={<OnlinePayoutsPanel role="driver" />} />
         </details>
 
         <section className="driver-money-grid dp-money-grid" aria-label="Earnings summary">
@@ -548,11 +566,22 @@ export default function DriverEarningsPage() {
                       <div className="text-sm text-gray-500">Commission</div>
                       <div className="font-medium">{money(trip.commission_amount)}</div>
                     </div>
+
                     <div>
                       <div className="text-sm text-gray-500">Completed</div>
                       <div className="font-medium">{displayDate(trip.completed_at ?? trip.created_at)}</div>
                     </div>
                   </div>
+                  {(() => {
+                    const split = tripSplit(trip, bookingFeeOwedFrom);
+                    if (!split.v2) return null;
+                    return (
+                      <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        {split.cash ? "Cash" : "Card"} · Ride fare {money(split.rideFare)} · Commission {money(split.commission)} · Booking fee {money(split.fee)} (MOOVU)
+                        {" → "}<b>{split.cash ? `You owe MOOVU ${money(split.owed)}` : `You earn ${money(split.rideFare - split.commission)}`}</b>
+                      </p>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

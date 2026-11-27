@@ -13,6 +13,10 @@ type CompletedTripRow = {
   dropoff_address: string | null;
   created_at: string | null;
   status: string | null;
+  phase5_ride_fare_cents?: number | null;
+  phase5_service_fee_cents?: number | null;
+  phase5_membership_waiver_cents?: number | null;
+  phase5_credit_cents?: number | null;
 };
 
 type TripEventRow = {
@@ -175,7 +179,11 @@ export async function GET(req: Request) {
           pickup_address,
           dropoff_address,
           created_at,
-          status
+          status,
+          phase5_ride_fare_cents,
+          phase5_service_fee_cents,
+          phase5_membership_waiver_cents,
+          phase5_credit_cents
         `)
         .eq("driver_id", driverId)
         .eq("status", "completed")
@@ -244,6 +252,11 @@ export async function GET(req: Request) {
       }
     }
 
+    // Payouts v2: from this moment cash trips also owe the booking fee to MOOVU (null = not active yet).
+    const { data: policyRow } = await supabaseAdmin.rpc("phase5_policy_at", { p_at: new Date().toISOString() });
+    const bookingFeeOwedFrom: string | null =
+      (policyRow as { payout_v2_from?: string | null } | null)?.payout_v2_from ?? null;
+
     const normalizedTrips = typedCompletedTrips
       .map<CompletedTripWithTimestamp>((trip) => ({
         ...trip,
@@ -298,6 +311,7 @@ export async function GET(req: Request) {
         commission_breakdown: walletTransactions ?? [],
         commission_totals: walletResult.totals,
         recent_completed_trips: normalizedTrips,
+        booking_fee_owed_from: bookingFeeOwedFrom,
         cancellation_fees: cancellationRows,
         cancellation_driver_earnings: cancellationDriverEarnings,
         late_cancellation_driver_earnings: lateCancellationDriverEarnings,

@@ -17,7 +17,7 @@ import { calculateDrivingRoute } from "@/lib/maps/routeService";
 import { createRouteSignature } from "@/lib/maps/mapRequestPolicy";
 import { verifyRouteQuote } from "@/lib/maps/routeQuote";
 import { callPhase4Rpc } from "@/lib/server/phase4Rpc";
-import { calculatePhase5Fare, phase5PolicyActive } from "@/lib/finance/phase5Fare";
+import { calculatePhase5Fare, phase5PolicyActive, phase5ServiceFeeTierBps } from "@/lib/finance/phase5Fare";
 import { fareQuoteMatches, priceStandardFare, universalFareIncreaseEnabled } from "@/lib/pricing/universalFare";
 import { normalizeCustomerPaymentMethod } from "@/lib/payments/customerPaymentMethod";
 import { SCHEDULED_RIDES_ENABLED } from "@/lib/release/releaseFlags";
@@ -537,6 +537,7 @@ export async function POST(req: Request) {
           availableCreditCents: Number(
             phase5StateResult.data?.available_credit_cents ?? 0,
           ),
+          serviceFeeTierBps: phase5ServiceFeeTierBps(phase5Policy),
         })
       : null;
     if (phase5Pricing) {
