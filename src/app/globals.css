@@ -97,7 +97,7 @@
 .moovu-customer-loading__slogan {
   margin: 0;
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
 }
 .moovu-customer-loading__message {
@@ -681,7 +681,7 @@ tr:last-child td {
   text-align: left;
   color: #0f172a;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -725,7 +725,7 @@ tr:last-child td {
 
 .moovu-data-label {
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--moovu-text-soft);
@@ -736,7 +736,7 @@ tr:last-child td {
   overflow-wrap: anywhere;
   color: #0f172a;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -806,7 +806,7 @@ tr:last-child td {
 }
 
 .moovu-admin-content h1 {
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .moovu-admin-content h2,
@@ -829,7 +829,7 @@ tr:last-child td {
   min-height: 42px;
   border-color: var(--moovu-border);
   border-radius: 14px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .moovu-admin-content button:not(:disabled):active,
@@ -923,7 +923,7 @@ tr:last-child td {
   padding: 0;
   background: linear-gradient(135deg, #1f74c9, #2bb5a0);
   color: #fff;
-  font-weight: 900;
+  font-weight: 650;
   box-shadow: 0 18px 42px rgba(31, 116, 201, 0.28);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
@@ -1729,7 +1729,7 @@ tr:last-child td {
 .moovu-admin-brand strong, .moovu-admin-brand small { display: block; }
 .moovu-admin-brand strong { font-size: 15px; letter-spacing: 0.12em; }
 .moovu-admin-brand small { color: #607286; font-size: 11px; }
-.moovu-admin-brand-mark { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: #123a58; color: white; font-weight: 900; }
+.moovu-admin-brand-mark { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: #123a58; color: white; font-weight: 650; }
 .moovu-admin-sidebar .moovu-admin-rail { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding-right: 3px; }
 .moovu-admin-nav-group { display: grid; gap: 2px; }
 .moovu-admin-nav-heading { padding: 10px 12px 3px; color: #6a7a89; font-size: 10px; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
@@ -2027,7 +2027,7 @@ tr:last-child td {
   margin-top: 8px;
   font-size: 24px;
   line-height: 1.12;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--moovu-text);
 }
 
@@ -2281,7 +2281,7 @@ tr:last-child td {
   background: rgba(255, 255, 255, 0.96);
   color: #075ee6;
   font-size: 27px;
-  font-weight: 900;
+  font-weight: 650;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
 }
 
@@ -2467,7 +2467,7 @@ tr:last-child td {
 
 .moovu-kicker {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--moovu-text-soft);
@@ -2483,7 +2483,7 @@ tr:last-child td {
   background: rgba(255, 255, 255, 0.94);
   padding: 0 14px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   color: #050505;
   box-shadow: 0 12px 32px rgba(5, 5, 5, 0.08);
   backdrop-filter: blur(14px);
@@ -2512,7 +2512,7 @@ tr:last-child td {
   background: #f6fafc;
   padding: 0 11px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   color: #050505;
   white-space: nowrap;
 }
@@ -2574,7 +2574,7 @@ tr:last-child td {
 .moovu-field-label {
   display: block;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--moovu-text-soft);
@@ -2694,7 +2694,7 @@ tr:last-child td {
 .customer-favorite-chip span {
   color: var(--moovu-text-soft);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .customer-favorite-chip:hover {
@@ -2812,7 +2812,7 @@ tr:last-child td {
   border-radius: 14px;
   color: #5b6776;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .moovu-segmented .moovu-segmented-active {
@@ -3049,7 +3049,7 @@ tr:last-child td {
   background: #fff;
   padding: 0 15px;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 650;
   color: #050505;
   box-shadow: var(--moovu-shadow-sm);
 }
@@ -3084,7 +3084,7 @@ tr:last-child td {
   border-radius: 18px;
   color: #5b6776;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1;
   text-align: center;
   transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
@@ -3231,7 +3231,7 @@ tr:last-child td {
   white-space: nowrap;
   color: var(--moovu-text-soft);
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1;
 }
 
@@ -3498,7 +3498,7 @@ tr:last-child td {
   border-radius: 999px;
   padding: 0 11px;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   white-space: nowrap;
@@ -3577,7 +3577,7 @@ tr:last-child td {
 .moovu-app-metric-label {
   color: var(--moovu-text-soft);
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3780,7 +3780,7 @@ tr:last-child td {
   margin-top: 4px;
   color: #64748b;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -3977,7 +3977,7 @@ tr:last-child td {
   gap: 9px;
   color: #64748b;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .customer-search-step span {
@@ -4059,7 +4059,7 @@ tr:last-child td {
   overflow-wrap: anywhere;
   color: #0f172a;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .customer-trip-summary-card {
@@ -4132,7 +4132,7 @@ tr:last-child td {
   overflow-wrap: break-word;
   color: #0f172a;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1.35;
 }
 
@@ -4289,7 +4289,7 @@ tr:last-child td {
   margin-top: 6px;
   color: #0f172a;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 650;
   overflow-wrap: anywhere;
 }
 
@@ -4307,7 +4307,7 @@ tr:last-child td {
   color: #475569;
   font-size: 12px;
   font-style: normal;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .customer-fare-total strong {
@@ -4405,7 +4405,7 @@ tr:last-child td {
   padding: 7px 10px;
   color: #334155;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .customer-history-hero {
@@ -4728,7 +4728,7 @@ tr:last-child td {
   padding: 0 14px;
   color: #5b6776;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .moovu-filter-chip.active {
@@ -4801,7 +4801,7 @@ tr:last-child td {
   word-break: normal;
   color: #0f172a;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1.45;
 }
 
@@ -5046,7 +5046,7 @@ tr:last-child td {
   display: block;
   color: var(--moovu-text-soft);
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .customer-booking-payment-strip strong {
@@ -5253,7 +5253,7 @@ tr:last-child td {
   text-overflow: ellipsis;
   color: inherit;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1.1;
 }
 
@@ -5291,7 +5291,7 @@ tr:last-child td {
 
 .moovu-receipt-total span {
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .moovu-receipt-total strong {
@@ -5387,7 +5387,7 @@ tr:last-child td {
   background: #f0f6ff;
   color: var(--moovu-primary);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.04em;
   white-space: nowrap;
   cursor: pointer;
@@ -5498,12 +5498,12 @@ tr:last-child td {
 .customer-home-route-preview small { margin: 0 0 2px; font-size: 11px; }
 .customer-home-route-preview strong { font-size: 14px; line-height: 1.3; }
 .customer-home-route-preview > span + span strong { font-size: 18px; color: #07152e; }
-.customer-home-continue { display: grid !important; min-height: 44px; place-items: center; border-radius: 15px; background: #1672d4; color: #fff; font-size: 14px; font-weight: 900; }
+.customer-home-continue { display: grid !important; min-height: 44px; place-items: center; border-radius: 15px; background: #1672d4; color: #fff; font-size: 14px; font-weight: 650; }
 .customer-booking-confirmation[open] { display: flex; flex-direction: column; }
 .customer-confirm-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .customer-confirm-actions { flex: none; padding: 12px 20px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid #e2e8f0; background: #fff; box-shadow: 0 -10px 22px rgba(15, 23, 42, .08); }
 @media (min-width: 640px) { .customer-confirm-actions { padding-right: 28px; padding-left: 28px; } }
-.customer-become-driver { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; margin-top: 8px; padding: 0 8px; color: #31516d; font-size: 12px; font-weight: 900; }
+.customer-become-driver { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; margin-top: 8px; padding: 0 8px; color: #31516d; font-size: 12px; font-weight: 650; }
 .customer-role-mismatch p { margin-top: 8px; color: #526477; font-size: 13px; line-height: 1.5; }
 .customer-role-mismatch > div { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
 .customer-sheet-primary,.customer-sheet-secondary { display:flex; min-height:48px; align-items:center; justify-content:center; border-radius:17px; padding:0 12px; font-size:12px; font-weight:950; text-align:center; }
@@ -5513,7 +5513,7 @@ tr:last-child td {
 .customer-drawer-head { display:flex; align-items:center; justify-content:space-between; gap:14px; padding-bottom:20px; border-bottom:1px solid #e2e8f0; }
 .customer-drawer-head span,.customer-drawer-head strong { display:block; } .customer-drawer-head span { color:#1672d4; font-size:11px; font-weight:950; letter-spacing:.15em; } .customer-drawer-head strong { margin-top:4px; font-size:21px; }
 .customer-drawer nav { display:grid; gap:6px; margin-top:16px; }
-.customer-drawer nav a { display:grid; grid-template-columns:42px 1fr; min-height:58px; align-items:center; border-radius:17px; padding:7px 10px; color:#172b42; font-size:14px; font-weight:900; }
+.customer-drawer nav a { display:grid; grid-template-columns:42px 1fr; min-height:58px; align-items:center; border-radius:17px; padding:7px 10px; color:#172b42; font-size:14px; font-weight: 650; }
 .customer-drawer nav a:hover { background:#eef6ff; color:#1267bd; } .customer-drawer nav svg { width:20px; height:20px; }
 
 .customer-history-header { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; padding:12px 2px 20px; }
@@ -5537,7 +5537,7 @@ tr:last-child td {
 .customer-settings-icon { display:grid; width:38px; height:38px; place-items:center; border-radius:13px; background:#eef6ff; color:#1672d4; }
 .customer-settings-icon svg { width:19px; height:19px; }
 .customer-settings-copy strong,.customer-settings-copy small { display:block; }
-.customer-settings-copy strong { color:#14263d; font-size:14px; font-weight:900; }
+.customer-settings-copy strong { color:#14263d; font-size:14px; font-weight: 650; }
 .customer-settings-copy small { margin-top:3px; color:#718096; font-size:11px; }
 .customer-settings-chevron { width:17px; height:17px; color:#94a3b8; }
 .customer-settings-row.is-danger .customer-settings-icon { background:#fff1f1; color:#dc2626; } .customer-settings-row.is-danger strong { color:#b91c1c; }
@@ -5625,9 +5625,9 @@ tr:last-child td {
 .customer-payment-icon { display:grid; width:40px; height:40px; place-items:center; border-radius:12px; background:#edf6ff; color:#1672d4; }
 .customer-payment-icon svg { width:20px; height:20px; }
 .customer-payment-row span strong,.customer-payment-row span small { display:block; }
-.customer-payment-row span strong { color:#11263e; font-size:14px; font-weight:900; }
+.customer-payment-row span strong { color:#11263e; font-size:14px; font-weight: 650; }
 .customer-payment-row span small { margin-top:4px; color:#6a7a8d; font-size:11px; line-height:1.35; }
-.customer-payment-row em { border-radius:999px; background:#e6f8ee; padding:5px 8px; color:#168753; font-size:10px; font-style:normal; font-weight:900; white-space:nowrap; }
+.customer-payment-row em { border-radius:999px; background:#e6f8ee; padding:5px 8px; color:#168753; font-size:10px; font-style:normal; font-weight: 650; white-space:nowrap; }
 .customer-payment-row.is-muted { opacity:.72; }
 .customer-payment-row.is-muted em { background:#eef2f6; color:#607084; }
 .customer-payment-note { display:flex; align-items:flex-start; gap:11px; margin-top:14px; border:1px solid #d7e2ea; border-radius:14px; background:#f8fbff; padding:14px; color:#526477; }
@@ -5736,7 +5736,7 @@ tr:last-child td {
   background: #fff;
   color: #0f172a;
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 650;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
@@ -5762,7 +5762,7 @@ tr:last-child td {
   color: #334155;
   text-align: center;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .moovu-location-picker-pin {
@@ -5827,7 +5827,7 @@ tr:last-child td {
   padding: 7px 12px;
   color: #fff;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -5858,7 +5858,7 @@ tr:last-child td {
   margin-top: 4px;
   color: #0f172a;
   font-size: 18px;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1.28;
 }
 
@@ -6001,7 +6001,7 @@ tr:last-child td {
 
 .moovu-receipt-brand {
   font-size: 17px;
-  font-weight: 900;
+  font-weight: 650;
   color: #0f172a;
   letter-spacing: -0.01em;
 }
@@ -6020,7 +6020,7 @@ tr:last-child td {
 
 .moovu-receipt-title {
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.18em;
   color: #64748b;
   text-transform: uppercase;
@@ -6057,7 +6057,7 @@ tr:last-child td {
   padding: 2px 10px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.05em;
   background: #f1f5f9;
   color: #475569;
@@ -6086,7 +6086,7 @@ tr:last-child td {
 
 .moovu-receipt-section-title {
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: #94a3b8;
@@ -6139,7 +6139,7 @@ tr:last-child td {
 
 .moovu-receipt-route-label {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #94a3b8;
@@ -6171,7 +6171,7 @@ tr:last-child td {
 
 .moovu-receipt-stat-label {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #94a3b8;
@@ -6180,7 +6180,7 @@ tr:last-child td {
 
 .moovu-receipt-stat-value {
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 650;
   color: #0f172a;
 }
 
@@ -6202,7 +6202,7 @@ tr:last-child td {
 
 .moovu-receipt-person-name {
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 650;
   color: #0f172a;
   margin-bottom: 3px;
 }
@@ -6223,7 +6223,7 @@ tr:last-child td {
 }
 
 .moovu-receipt-time-label {
-  font-weight: 800;
+  font-weight: 600;
   color: #94a3b8;
   text-transform: uppercase;
   font-size: 10px;
@@ -6253,7 +6253,7 @@ tr:last-child td {
   margin-top: 10px;
   border-top: 2px solid #0f172a;
   font-size: 20px;
-  font-weight: 900;
+  font-weight: 650;
   color: #0f172a;
   letter-spacing: -0.01em;
 }
@@ -6374,7 +6374,7 @@ tr:last-child td {
 
 .mhp-eyebrow {
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: #7a93a8;
@@ -6382,7 +6382,7 @@ tr:last-child td {
 
 .mhp-header-title {
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 650;
   color: #0a1929;
   line-height: 1.15;
   margin-top: 2px;
@@ -6400,7 +6400,7 @@ tr:last-child td {
   border: 1.5px solid #d7e2ea;
   background: #fff;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   color: #0a1929;
   box-shadow: 0 2px 8px rgba(5,5,5,0.07);
   white-space: nowrap;
@@ -6478,7 +6478,7 @@ tr:last-child td {
 
 .mhp-route-place {
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
   color: #0a1929;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -6516,7 +6516,7 @@ tr:last-child td {
 
 .mhp-book-title {
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 650;
   color: #0a1929;
   margin-top: 4px;
   letter-spacing: -0.01em;
@@ -6537,7 +6537,7 @@ tr:last-child td {
   background: #1F74C9;
   color: #fff;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 650;
   display: grid;
   place-items: center;
   box-shadow: 0 6px 18px rgba(31, 116, 201, 0.28);
@@ -6570,7 +6570,7 @@ tr:last-child td {
 
 .mhp-stat-label {
   font-size: 9px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #7a93a8;
@@ -6578,7 +6578,7 @@ tr:last-child td {
 
 .mhp-stat-value {
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 650;
   color: #0a1929;
   margin-top: 3px;
   letter-spacing: -0.01em;
@@ -6602,7 +6602,7 @@ tr:last-child td {
 
 .mhp-section-title {
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #7a93a8;
@@ -6640,7 +6640,7 @@ tr:last-child td {
 
 .mhp-action-name {
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   color: #0a1929;
 }
 
@@ -6679,7 +6679,7 @@ tr:last-child td {
   background: #1F74C9;
   color: #fff;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   text-decoration: none;
   text-align: center;
 }
@@ -6694,7 +6694,7 @@ tr:last-child td {
   background: #eaf3ff;
   color: #1F74C9;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   text-decoration: none;
   text-align: center;
 }
@@ -6772,7 +6772,7 @@ tr:last-child td {
   align-items: center;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -7044,7 +7044,7 @@ tr:last-child td {
   justify-content: center;
   border-radius: 999px;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -7970,7 +7970,7 @@ tr:last-child td {
 
 .legal-consent-row a {
   color: #1f74c9;
-  font-weight: 900;
+  font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -8015,7 +8015,7 @@ tr:last-child td {
   gap: 8px 14px;
   margin: 16px 0;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .legal-booking-links a {
@@ -8154,7 +8154,7 @@ tr:last-child td {
 .customer-home-v3-brand small {
   color: #0c51c9;
   font-size: 17px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .customer-home-v3-brand strong {
@@ -8171,7 +8171,7 @@ tr:last-child td {
   border-radius: 999px;
   background: #fff;
   color: var(--moovu-v3-ink);
-  font-weight: 800;
+  font-weight: 600;
   text-decoration: none;
   box-shadow: 0 8px 22px rgba(20, 49, 91, 0.06);
 }
@@ -8191,7 +8191,7 @@ tr:last-child td {
   background: rgba(255, 255, 255, 0.84);
   color: #154dab;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -8306,7 +8306,7 @@ tr:last-child td {
   padding: 0 20px;
   color: #111;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .customer-home-v3-phone-status i {
@@ -8457,7 +8457,7 @@ tr:last-child td {
 
 .customer-home-v3-secondary > a {
   color: #0758d4;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .customer-home-v3-secondary > div {
@@ -8509,7 +8509,7 @@ tr:last-child td {
   border-radius: 18px;
   color: #526178;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -8849,7 +8849,7 @@ tr:last-child td {
 .customer-trip-v3 .customer-trip-compact-kicker {
   color: #0b5ddd;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -8919,7 +8919,7 @@ tr:last-child td {
   background: #fff;
   color: #1c2940;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: capitalize;
 }
 
@@ -8945,7 +8945,7 @@ tr:last-child td {
   border-radius: 16px;
   background: #fff;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .customer-trip-v3 .customer-trip-more-button.is-primary {
@@ -9344,7 +9344,7 @@ tr:last-child td {
   background: #075ee6;
   color: #fff;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .driver-map-snapshot {
@@ -9718,7 +9718,7 @@ tr:last-child td {
   background: #075ee6;
   color: #fff;
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 650;
   box-shadow: 0 12px 24px rgba(7, 94, 230, 0.2);
 }
 
@@ -9842,7 +9842,7 @@ tr:last-child td {
   border: 0;
   background: transparent;
   color: #075ee6;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .driver-trip-list {
@@ -9952,7 +9952,7 @@ tr:last-child td {
   background: #e9f8ef;
   color: #079348;
   font-size: 9px;
-  font-weight: 900;
+  font-weight: 650;
   text-transform: capitalize;
 }
 
@@ -10031,7 +10031,7 @@ tr:last-child td {
 .driver-money-grid small {
   color: #53627b;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 650;
   text-transform: uppercase;
 }
 
@@ -10093,7 +10093,7 @@ tr:last-child td {
   border-radius: 15px;
   color: #075ee6;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -10534,14 +10534,14 @@ html {
 .booking-v3 .mbk-customer-question span {
   color: #9ed1ff;
   font-size: 9px;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .booking-v3 .mbk-customer-question strong {
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .moovu-customer-bottom-nav.customer-scroll-nav,
@@ -10661,12 +10661,12 @@ html {
   color: #1672d4;
   text-align: left;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .booking-v3 .customer-ehail-add-stop-row button:hover { background: #f5f9fd; }
 .booking-v3 .customer-ehail-add-stop-row button:disabled { color: #94a3b8; }
-.booking-v3 .customer-ehail-add-stop-row button small { color: #8491a1; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.booking-v3 .customer-ehail-add-stop-row button small { color: #8491a1; font-size: 9px; font-weight: 600; text-transform: uppercase; }
 .booking-v3 .customer-ehail-add-stop-icon { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid #cfe0f3; border-radius: 9px; background: #edf6ff; font-size: 18px; line-height: 1; }
 
 .booking-v3 .customer-ehail-route-row .customer-destination-help {
@@ -10727,7 +10727,7 @@ html {
   background: #f7faff;
   color: #14263d;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 .booking-v3 .customer-booking-payment-options button.is-selected { border-color: #075ee6; background: #eaf3ff; color: #0751bf; }
 .booking-v3 .customer-booking-payment-note { margin-top: 7px; color: #586b82; font-size: 11px; line-height: 1.4; }
@@ -10779,7 +10779,7 @@ html {
 
 .customer-history-summary-tabs button span {
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 650;
   text-transform: uppercase;
 }
 
@@ -10810,7 +10810,7 @@ html {
 
 .customer-history-toolbar > div span,
 .customer-history-toolbar > div strong { display: block; }
-.customer-history-toolbar > div span { color: #1672d4; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.customer-history-toolbar > div span { color: #1672d4; font-size: 10px; font-weight: 650; text-transform: uppercase; }
 .customer-history-toolbar > div strong { margin-top: 3px; color: #17233a; font-size: 16px; }
 .customer-history-toolbar .customer-history-more-filter select { min-width: 136px; }
 .customer-history-empty { padding: 18px; }
@@ -10835,11 +10835,11 @@ html {
 .customer-trip-compact-route svg { z-index: 1; width: 17px; height: 17px; margin-top: 2px; padding: 2px; border-radius: 50%; background: #fff; color: #13a365; }
 .customer-trip-compact-route > div:last-child svg { color: #1672d4; }
 .customer-trip-compact-route small,.customer-trip-compact-route strong { display: block; }
-.customer-trip-compact-route small { color: #8491a1; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.customer-trip-compact-route small { color: #8491a1; font-size: 9px; font-weight: 650; text-transform: uppercase; }
 .customer-trip-compact-route strong { margin-top: 2px; overflow: hidden; color: #24344d; font-size: 13px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
 
 .customer-trip-row-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
-.customer-trip-row-footer > div:first-child { display: flex; min-width: 0; align-items: center; gap: 6px 11px; flex-wrap: wrap; color: #6a7889; font-size: 10px; font-weight: 800; }
+.customer-trip-row-footer > div:first-child { display: flex; min-width: 0; align-items: center; gap: 6px 11px; flex-wrap: wrap; color: #6a7889; font-size: 10px; font-weight: 600; }
 .customer-trip-row-actions { display: flex; flex: 0 0 auto; gap: 6px; }
 .customer-trip-row-actions a { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid #dce6f0; border-radius: 12px; color: #1672d4; }
 .customer-trip-row-actions a:last-child { border-color: #cfe1fb; background: #edf6ff; }
@@ -10861,22 +10861,22 @@ html {
 }
 .customer-payment-hero-icon { display: grid; width: 50px; height: 50px; place-items: center; border: 1px solid rgba(255,255,255,.22); border-radius: 15px; background: rgba(255,255,255,.16); }
 .customer-payment-hero-icon svg { width: 25px; height: 25px; }
-.customer-payment-hero span { color: #d9efff; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.customer-payment-hero span { color: #d9efff; font-size: 9px; font-weight: 650; text-transform: uppercase; }
 .customer-payment-hero h2 { margin-top: 3px; font-size: 24px; font-weight: 950; }
 .customer-payment-hero p { margin-top: 5px; color: #e3f2fb; font-size: 11px; line-height: 1.45; }
-.customer-payment-hero em { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; background: rgba(255,255,255,.16); padding: 7px 9px; font-size: 10px; font-style: normal; font-weight: 900; white-space: nowrap; }
+.customer-payment-hero em { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; background: rgba(255,255,255,.16); padding: 7px 9px; font-size: 10px; font-style: normal; font-weight: 650; white-space: nowrap; }
 .customer-payment-hero em svg { width: 15px; height: 15px; }
 
 .customer-payment-section { margin-top: 18px; }
 .customer-payment-section-heading { padding: 0 2px 10px; }
-.customer-payment-section-heading span { color: #1672d4; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.customer-payment-section-heading span { color: #1672d4; font-size: 9px; font-weight: 650; text-transform: uppercase; }
 .customer-payment-section-heading h2 { margin-top: 3px; color: #11263e; font-size: 18px; font-weight: 950; }
 .customer-payment-flow { overflow: hidden; border: 1px solid #d7e2ea; border-radius: 16px; background: #fff; }
 .customer-payment-flow > div { display: grid; grid-template-columns: 40px minmax(0, 1fr); min-height: 74px; align-items: center; gap: 12px; padding: 12px 16px; }
 .customer-payment-flow > div + div { border-top: 1px solid #edf2f6; }
 .customer-payment-flow > div > svg { width: 20px; height: 20px; color: #1672d4; }
 .customer-payment-flow strong,.customer-payment-flow small { display: block; }
-.customer-payment-flow strong { color: #11263e; font-size: 13px; font-weight: 900; }
+.customer-payment-flow strong { color: #11263e; font-size: 13px; font-weight: 650; }
 .customer-payment-flow small { margin-top: 3px; color: #6a7a8d; font-size: 11px; line-height: 1.4; }
 .customer-payment-actions { display: flex; gap: 10px; margin-top: 16px; }
 
@@ -10992,7 +10992,7 @@ html {
 .driver-availability-dot.is-online { background: #08a456; box-shadow: 0 0 0 5px #ddf8e9; }
 .moovu-driver-shell .driver-map-primary-status {
   width: 100%; min-height: 54px; border-radius: 18px;
-  font-size: 15px; font-weight: 800; letter-spacing: 0;
+  font-size: 15px; font-weight: 600; letter-spacing: 0;
 }
 .moovu-driver-shell .driver-map-primary-status:focus-visible,
 .moovu-driver-offer-drop button:focus-visible,
@@ -11109,8 +11109,8 @@ body {
   box-shadow: 0 12px 30px rgb(15 23 42 / .14); backdrop-filter: blur(16px);
 }
 .driver-map-earnings-pill strong,.driver-map-earnings-pill span { display: block; text-align: center; line-height: 1.05; }
-.driver-map-earnings-pill strong { font-size: 15px; font-weight: 900; }
-.driver-map-earnings-pill span { margin-top: 4px; color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.driver-map-earnings-pill strong { font-size: 15px; font-weight: 650; }
+.driver-map-earnings-pill span { margin-top: 4px; color: #64748b; font-size: 10px; font-weight: 600; text-transform: uppercase; }
 .driver-map-first-layout .moovu-driver-map-sheet {
   position: fixed; z-index: 7500; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom)); left: 16px;
   padding: 0; border: 0; background: transparent; box-shadow: none;
@@ -11132,7 +11132,7 @@ body {
 .moovu-driver-active-trip.is-open { overflow-y: auto; overscroll-behavior: contain; transform: translateY(0); }
 .driver-trip-sheet-toggle {
   display: flex; width: 100%; min-height: 38px; align-items: center; justify-content: center; gap: 8px;
-  color: #0f172a; font-size: 12px; font-weight: 900;
+  color: #0f172a; font-size: 12px; font-weight: 650;
 }
 .moovu-driver-active-trip.is-open .driver-trip-sheet-toggle { width: calc(100% - 58px); }
 .driver-trip-sheet-toggle svg { width: 18px; height: 18px; color: #0867d8; }
@@ -11363,7 +11363,7 @@ body {
   gap: 6px;
   padding: 0 9px;
   border-radius: 999px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .driver-offer-outcome svg {
@@ -11385,7 +11385,7 @@ body {
   background: #f7fbff;
   color: #075ee6;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .driver-offer-load-more:disabled {
@@ -11533,7 +11533,7 @@ body {
   cursor: pointer;
   color: #075ee6;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
   list-style: none;
 }
 
@@ -11571,7 +11571,7 @@ body {
 .driver-trip-details-grid small {
   color: #64748b;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -11589,7 +11589,7 @@ body {
   background: #075ee6;
   color: #fff;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 @media (max-width: 430px) {
@@ -11700,7 +11700,7 @@ body {
   background: var(--moovu-reminder-accent);
   color: #fff;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
   box-shadow: 0 10px 22px rgba(11, 95, 255, .18);
 }
 .moovu-permission-reminder-primary:disabled { opacity: .65; }
@@ -11765,7 +11765,7 @@ body {
 .moovu-driver-active-trip .driver-trip-current-status {
   color: #0f2543;
   font-size: clamp(19px, 5.5vw, 23px);
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1.18;
 }
 .moovu-driver-active-trip .driver-trip-ride-type,
@@ -11784,7 +11784,7 @@ body {
   max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 .moovu-driver-active-trip .moovu-driver-otp-card { padding: 14px; border-radius: 20px; }
-.moovu-driver-active-trip .driver-trip-otp-title { color: #0e2a49; font-size: 19px; font-weight: 900; line-height: 1.2; }
+.moovu-driver-active-trip .driver-trip-otp-title { color: #0e2a49; font-size: 19px; font-weight: 650; line-height: 1.2; }
 .moovu-driver-active-trip .driver-trip-otp-instruction { margin-top: 4px; color: #425a72; font-size: 13px; line-height: 1.4; }
 .moovu-driver-active-trip .driver-trip-otp-form { display: grid; gap: 10px; margin-top: 12px; }
 .moovu-driver-active-trip .driver-trip-otp-form .moovu-otp-input { width: 100%; max-width: none; }
@@ -11898,7 +11898,7 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
   background: #fff;
   color: var(--moovu-text);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
 }
 .mbk-map-satellite[aria-pressed="true"] { background: var(--moovu-primary); color: #fff; border-color: var(--moovu-primary); }
@@ -11937,7 +11937,7 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
 .moovu-whatsapp-btn {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   min-height: 60px; padding: 0 20px; border-radius: 18px;
-  background: var(--moovu-success); color: #fff; font-size: 18px; font-weight: 800; text-decoration: none;
+  background: var(--moovu-success); color: #fff; font-size: 18px; font-weight: 600; text-decoration: none;
 }
 .moovu-whatsapp-btn:hover { filter: brightness(0.95); color: #fff; }
 .moovu-help-list { display: grid; border: 1px solid var(--moovu-border); border-radius: 18px; background: #fff; overflow: hidden; }
@@ -11946,17 +11946,17 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
 /* Customer start/end code always visible during the trip */
 .customer-code-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 1px solid var(--moovu-border); border-radius: 16px; background: #fff; }
 .customer-code-card p { margin: 0; font-size: 14px; font-weight: 600; color: var(--moovu-text-soft); }
-.customer-code-card strong { font-size: 28px; font-weight: 900; letter-spacing: 4px; color: var(--moovu-text); white-space: nowrap; }
+.customer-code-card strong { font-size: 28px; font-weight: 650; letter-spacing: 4px; color: var(--moovu-text); white-space: nowrap; }
 /* Driver offer: shrinking timer, big Accept, quiet Decline */
 .driver-offer-timer { height: 6px; margin: 0 0 10px; border-radius: 3px; background: var(--moovu-bg-muted); overflow: hidden; }
 .driver-offer-timer span { display: block; height: 100%; background: var(--moovu-primary); transition: width 1s linear; }
-.moovu-driver-accept-big { min-height: 60px; font-size: 19px; font-weight: 900; border-radius: 16px; }
+.moovu-driver-accept-big { min-height: 60px; font-size: 19px; font-weight: 650; border-radius: 16px; }
 .moovu-driver-decline-quiet { min-height: 44px; background: transparent !important; border: 0 !important; color: var(--moovu-text-soft) !important; box-shadow: none !important; font-weight: 700; }
 /* End-code bypass tucked away */
 .driver-end-code-problem { grid-column: 1 / -1; }
 .driver-end-code-problem summary { cursor: pointer; padding: 8px 0; font-size: 14px; font-weight: 700; color: var(--moovu-text-soft); }
 /* Driver home: one big Go online / Go offline button */
-.driver-map-primary-status { min-height: 68px; font-size: 21px; font-weight: 900; border-radius: 20px; background: var(--moovu-success); color: #fff; box-shadow: none; background-image: none; }
+.driver-map-primary-status { min-height: 68px; font-size: 21px; font-weight: 650; border-radius: 20px; background: var(--moovu-success); color: #fff; box-shadow: none; background-image: none; }
 .driver-map-primary-status.is-online { background: #fff; color: var(--moovu-text); border: 2px solid var(--moovu-border-strong); }
 /* Google / Apple sign-in */
 .moovu-social-auth { display: grid; gap: 10px; }
@@ -11966,6 +11966,6 @@ body:has(.moovu-driver-offer-drop) .moovu-in-app-notice.is-offer { display: none
 .moovu-social-divider::before, .moovu-social-divider::after { content: ""; flex: 1; height: 1px; background: var(--moovu-border); }
 .moovu-link-prompt { position: fixed; inset: 0; z-index: 10050; display: grid; place-items: end center; background: rgba(5, 5, 5, 0.45); padding: 16px; }
 .moovu-link-card { width: 100%; max-width: 420px; display: grid; gap: 12px; padding: 22px; border-radius: 24px; background: #fff; }
-.moovu-link-card h2 { margin: 0; font-size: 22px; font-weight: 900; }
+.moovu-link-card h2 { margin: 0; font-size: 22px; font-weight: 650; }
 .moovu-link-card p { margin: 0; color: var(--moovu-text-soft); font-size: 15px; }
 .moovu-link-later { min-height: 44px; background: transparent; color: var(--moovu-text-soft); font-weight: 700; }

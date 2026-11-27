@@ -23,13 +23,13 @@
 .moovu-admin-shell .ad-brand { display: flex; align-items: center; gap: 12px; padding: 4px 6px 18px; }
 .moovu-admin-shell .ad-brand img { height: 30px; width: auto; }
 .moovu-admin-shell .ad-brand small {
-  display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ad-muted);
+  display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ad-muted);
 }
 .moovu-admin-shell .ad-brand-divider { width: 1px; align-self: stretch; background: var(--ad-line); }
 
 /* ── Page head ─────────────────────────────────────────── */
 .moovu-admin-shell .ad-page { display: grid; gap: 18px; max-width: 1180px; }
-.moovu-admin-shell .ad-head h1 { font-size: 26px; font-weight: 900; letter-spacing: -0.02em; margin: 0; }
+.moovu-admin-shell .ad-head h1 { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; margin: 0; }
 .moovu-admin-shell .ad-head p { margin: 4px 0 0; color: var(--ad-muted); font-size: 14px; }
 
 /* ── Cards ─────────────────────────────────────────────── */
@@ -37,8 +37,8 @@
   background: #fff; border-radius: 18px; box-shadow: 0 1px 3px rgba(5, 5, 5, 0.06); padding: 18px;
 }
 .moovu-admin-shell .ad-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.moovu-admin-shell .ad-card-head h2 { font-size: 17px; font-weight: 900; margin: 0; }
-.moovu-admin-shell .ad-card-head a { font-size: 13px; font-weight: 800; color: var(--ad-blue); }
+.moovu-admin-shell .ad-card-head h2 { font-size: 17px; font-weight: 650; margin: 0; }
+.moovu-admin-shell .ad-card-head a { font-size: 13px; font-weight: 600; color: var(--ad-blue); }
 
 /* ── Search ────────────────────────────────────────────── */
 .moovu-admin-shell .ad-search { position: relative; }
@@ -52,7 +52,7 @@
   position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border-radius: 16px;
   box-shadow: 0 12px 32px rgba(5, 5, 5, 0.14); padding: 8px; max-height: 70vh; overflow: auto;
 }
-.moovu-admin-shell .ad-search-group { padding: 6px 10px 2px; font-size: 11px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ad-muted); }
+.moovu-admin-shell .ad-search-group { padding: 6px 10px 2px; font-size: 11px; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ad-muted); }
 .moovu-admin-shell .ad-search-results a { display: block; border-radius: 12px; padding: 9px 10px; }
 .moovu-admin-shell .ad-search-results a:hover, .moovu-admin-shell .ad-search-results a:focus { background: var(--ad-soft); }
 .moovu-admin-shell .ad-search-results b { display: block; font-size: 14px; }
@@ -62,7 +62,7 @@
 .moovu-admin-shell .ad-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 .moovu-admin-shell .ad-stat { background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(5, 5, 5, 0.05); }
 .moovu-admin-shell .ad-stat small { display: block; font-size: 12px; font-weight: 700; color: var(--ad-muted); }
-.moovu-admin-shell .ad-stat strong { display: block; font-size: 26px; font-weight: 900; margin-top: 2px; }
+.moovu-admin-shell .ad-stat strong { display: block; font-size: 26px; font-weight: 650; margin-top: 2px; }
 .moovu-admin-shell a.ad-stat:hover { box-shadow: 0 4px 14px rgba(5, 5, 5, 0.1); }
 .moovu-admin-shell .ad-stat.is-attention { background: var(--ad-amber-soft); }
 .moovu-admin-shell .ad-stat.is-attention strong { color: var(--ad-amber); }
@@ -73,7 +73,7 @@
   display: grid; grid-template-columns: 1fr auto; gap: 10px 14px; align-items: center; border-radius: 14px;
   padding: 12px 14px; background: var(--ad-soft);
 }
-.moovu-admin-shell .ad-row-title { font-size: 15px; font-weight: 800; }
+.moovu-admin-shell .ad-row-title { font-size: 15px; font-weight: 600; }
 .moovu-admin-shell .ad-row-sub { font-size: 13px; color: var(--ad-muted); margin-top: 2px; overflow-wrap: anywhere; }
 .moovu-admin-shell .ad-row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 @media (max-width: 640px) {
@@ -83,7 +83,7 @@
 
 /* ── Badges ────────────────────────────────────────────── */
 .moovu-admin-shell .ad-badge {
-  display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800;
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600;
   background: #fff; color: var(--ad-muted); border: 1px solid var(--ad-line); white-space: nowrap;
 }
 .moovu-admin-shell .ad-badge.is-waiting { background: var(--ad-amber-soft); color: var(--ad-amber); border-color: transparent; }
@@ -94,7 +94,7 @@
 /* ── Buttons ───────────────────────────────────────────── */
 .moovu-admin-shell .ad-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; border-radius: 999px;
-  padding: 0 14px; font-size: 13px; font-weight: 800; background: #fff; color: var(--ad-ink); border: 1px solid var(--ad-line);
+  padding: 0 14px; font-size: 13px; font-weight: 600; background: #fff; color: var(--ad-ink); border: 1px solid var(--ad-line);
 }
 .moovu-admin-shell .ad-btn:hover { border-color: var(--ad-ink); }
 .moovu-admin-shell .ad-btn.is-primary { background: var(--ad-ink); color: #fff; border-color: var(--ad-ink); }
@@ -103,7 +103,7 @@
 /* ── Tabs ──────────────────────────────────────────────── */
 .moovu-admin-shell .ad-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
 .moovu-admin-shell .ad-tabs button, .moovu-admin-shell .ad-tabs a {
-  flex: none; min-height: 36px; border-radius: 999px; padding: 0 16px; font-size: 14px; font-weight: 800; background: #fff;
+  flex: none; min-height: 36px; border-radius: 999px; padding: 0 16px; font-size: 14px; font-weight: 600; background: #fff;
   color: #3c4652; border: 1px solid var(--ad-line);
 }
 .moovu-admin-shell .ad-tabs .is-on { background: var(--ad-ink); border-color: var(--ad-ink); color: #fff; }

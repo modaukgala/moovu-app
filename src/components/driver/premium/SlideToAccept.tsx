@@ -36,6 +36,9 @@ export default function SlideToAccept({ label, busyLabel, busy, disabled, onAcce
   return (
     <div ref={trackRef} className={`dp-slide${busy ? " is-busy" : ""}`} aria-disabled={disabled}>
       <span className="dp-slide-label">{busy ? busyLabel : label}</span>
+      <span className="dp-slide-arrows" aria-hidden="true" style={{ opacity: dx > 24 ? 0 : 1 }}>
+        <ChevronRight strokeWidth={3} /><ChevronRight strokeWidth={3} /><ChevronRight strokeWidth={3} />
+      </span>
       <button
         type="button"
         className="dp-slide-knob"

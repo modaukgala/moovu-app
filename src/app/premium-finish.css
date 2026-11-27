@@ -1,0 +1,85 @@
+/* MOOVU premium finish (27 Nov 2026): lighter Plus Jakarta Sans lettering, MOOVU-blue glossy main
+   buttons (never black like Uber, never green like Bolt), soft depth on cards. Loaded last; changes
+   only the look — layout, sizes and behaviour are untouched. */
+
+:root {
+  --moovu-cta-top: #3d8fe0;
+  --moovu-cta-mid: #1f74c9;
+  --moovu-cta-low: #1a62ad;
+  --moovu-cta-gradient: linear-gradient(180deg, var(--moovu-cta-top) 0%, var(--moovu-cta-mid) 52%, var(--moovu-cta-low) 100%);
+  --moovu-cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(10, 40, 80, 0.25),
+    0 10px 20px -10px rgba(31, 116, 201, 0.7), 0 1px 2px rgba(14, 40, 80, 0.25);
+  --moovu-ink: #0e1217;
+  --moovu-card-depth: inset 0 1px 0 #fff, 0 0 0 1px rgba(14, 18, 23, 0.06), 0 6px 16px -10px rgba(14, 18, 23, 0.22);
+}
+
+/* ── Lettering ─────────────────────────────────────────── */
+body, .moovu-customer-shell, .booking-v3, .moovu-driver-shell, .driver-mobile-page, .dp-app, .moovu-admin-shell,
+button, input, select, textarea {
+  font-family: var(--font-moovu, "Plus Jakarta Sans"), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif !important;
+}
+h1, h2, h3 { letter-spacing: -0.02em; }
+/* Nothing at the heaviest weights any more: big numbers and headings semibold, labels medium. */
+.font-black { font-weight: 650 !important; }
+.font-extrabold { font-weight: 600 !important; }
+.font-bold { font-weight: 600 !important; }
+.font-semibold { font-weight: 550 !important; }
+
+/* ── Main buttons: MOOVU blue, soft gloss ──────────────── */
+.moovu-btn-primary, .mbk-book-btn, .moovu-confirm-button,
+.moovu-admin-shell .ad-btn.is-primary,
+.dp-app .moovu-btn-primary, .dp-pay-btn, .dp-owed a,
+.moovu-driver-shell .driver-map-earnings-pill,
+button.bg-slate-950, a.bg-slate-950, button.bg-black, a.bg-black {
+  background: var(--moovu-cta-gradient) !important;
+  border-color: var(--moovu-cta-low) !important;
+  color: #fff !important;
+  box-shadow: var(--moovu-cta-shadow) !important;
+}
+.moovu-btn-primary:hover, .moovu-admin-shell .ad-btn.is-primary:hover { filter: brightness(1.05); }
+.moovu-btn-primary:active, .mbk-book-btn:active, .moovu-admin-shell .ad-btn.is-primary:active, .dp-pay-btn:active {
+  filter: brightness(0.96);
+}
+.moovu-btn-primary:disabled, .moovu-admin-shell .ad-btn.is-primary:disabled { filter: saturate(0.6); }
+
+/* Selected tabs and chips stay calm: deep ink, not flat black. */
+.moovu-admin-shell .ad-tabs .is-on, .dp-periods button.is-on {
+  background: linear-gradient(180deg, #2a3038 0%, var(--moovu-ink) 60%) !important;
+  border-color: var(--moovu-ink) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.dp-money-hero { background: linear-gradient(160deg, #1d2530 0%, var(--moovu-ink) 70%) !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 12px 28px -14px rgba(14, 18, 23, 0.6); }
+
+/* ── Soft depth on cards ───────────────────────────────── */
+.moovu-card, .moovu-admin-shell .ad-card, .moovu-admin-shell .ad-stat {
+  box-shadow: var(--moovu-card-depth) !important;
+  background-image: linear-gradient(#fff, #fcfcfd);
+}
+
+/* Status pills: soft tints with dark text instead of solid blocks. */
+.moovu-admin-shell .ad-badge.is-live { box-shadow: inset 0 0 0 1px rgba(31, 116, 201, 0.16); }
+.moovu-admin-shell .ad-badge.is-done { box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.16); }
+.moovu-admin-shell .ad-badge.is-waiting { box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.16); }
+
+/* ── Slide to accept: blue track, glossy handle, pulsing arrows ── */
+.dp-slide {
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, #2f84d8 0%, #1f74c9 55%, #1a62ad 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 6px rgba(10, 40, 80, 0.25), 0 10px 22px -10px rgba(31, 116, 201, 0.75);
+}
+.dp-slide.is-busy { background: linear-gradient(180deg, #2a78c6, #175a9e) !important; }
+.dp-slide-label { font-weight: 600 !important; font-size: 16.5px !important; letter-spacing: 0.01em; }
+.dp-slide-knob {
+  border-radius: 999px !important;
+  background: radial-gradient(circle at 35% 28%, #fff, #e8eef6 70%, #d6e0ec) !important;
+  color: #1f74c9 !important;
+  box-shadow: 0 4px 10px rgba(10, 40, 80, 0.35), inset 0 -2px 3px rgba(10, 40, 80, 0.12);
+  z-index: 2;
+}
+.dp-slide-arrows { position: absolute; left: 72px; top: 0; bottom: 0; display: flex; align-items: center; gap: 1px; pointer-events: none; }
+.dp-slide-arrows svg { width: 15px; height: 15px; color: #fff; opacity: 0.2; animation: dp-slide-chev 1.4s infinite; }
+.dp-slide-arrows svg:nth-child(2) { animation-delay: 0.18s; }
+.dp-slide-arrows svg:nth-child(3) { animation-delay: 0.36s; }
+.dp-slide.is-busy .dp-slide-arrows { display: none; }
+@keyframes dp-slide-chev { 0%, 100% { opacity: 0.2; transform: translateX(0); } 45% { opacity: 1; transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) { .dp-slide-arrows svg { animation: none; opacity: 0.8; } }

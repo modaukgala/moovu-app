@@ -20,7 +20,7 @@
   border: 0;
   background: #fff;
   color: var(--pm-ink);
-  font-weight: 800;
+  font-weight: 600;
   box-shadow: 0 4px 14px rgba(5, 5, 5, 0.12);
 }
 .booking-v3 .mbk-map-satellite {
@@ -60,7 +60,7 @@
 .booking-v3 .mbk-greeting {
   font-size: 26px;
   line-height: 1.15;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: -0.02em;
   color: var(--pm-ink);
 }
@@ -80,7 +80,7 @@
 }
 .booking-v3 #dropoff-input {
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 600;
 }
 .booking-v3 #dropoff-input::placeholder {
   color: #3c4652;
@@ -100,7 +100,7 @@
   border-radius: 999px;
   background: var(--pm-blue-soft);
   color: var(--pm-blue);
-  font-weight: 800;
+  font-weight: 600;
 }
 .booking-v3 .moovu-place-menu {
   border-radius: 16px;
@@ -135,7 +135,7 @@
   align-items: center;
   gap: 10px;
   font-size: 17px;
-  font-weight: 900;
+  font-weight: 650;
   color: var(--pm-ink);
 }
 .mbk-ride-radio {
@@ -157,7 +157,7 @@
 .booking-v3 .customer-booking-payment-options button {
   min-height: 48px;
   border-radius: 14px;
-  font-weight: 800;
+  font-weight: 600;
 }
 .booking-v3 .customer-booking-payment-options button.is-selected {
   background: var(--pm-ink);
@@ -176,7 +176,7 @@
   background: var(--pm-blue);
   color: #fff;
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 650;
   box-shadow: 0 8px 20px rgba(31, 116, 201, 0.28);
   transition: transform 0.1s ease, background 0.15s ease;
 }
@@ -193,7 +193,7 @@
 }
 .booking-v3 .mbk-footer-fare {
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 650;
   color: var(--pm-ink);
 }
 
@@ -231,7 +231,7 @@
 }
 .moovu-search-title {
   font-size: 20px;
-  font-weight: 900;
+  font-weight: 650;
   color: #050505;
 }
 .moovu-search-sub {
@@ -262,13 +262,13 @@
 .customer-trip-v3 .moovu-btn-primary {
   min-height: 52px;
   border-radius: 16px;
-  font-weight: 900;
+  font-weight: 650;
 }
 .customer-trip-v3 .moovu-btn-secondary {
   min-height: 48px;
   border-radius: 14px;
   background: #f1f4f7;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -292,7 +292,7 @@
   border-radius: 999px;
   background: #f1f4f7;
   font-size: 20px;
-  font-weight: 900;
+  font-weight: 650;
 }
 .mbk-home { display: grid; gap: 10px; padding-bottom: 16px; }
 .booking-v3 .mbk-sheet-home .mbk-greeting { font-size: 22px; }
@@ -315,7 +315,7 @@
 }
 .mbk-tile.is-on { border: 2px solid #050505; background: #f8fbff; }
 .mbk-tile img { width: 52px; height: 40px; object-fit: contain; flex: none; }
-.mbk-tile strong { display: block; font-size: 16px; font-weight: 900; line-height: 1.1; }
+.mbk-tile strong { display: block; font-size: 16px; font-weight: 650; line-height: 1.1; }
 .mbk-tile small { display: block; font-size: 12px; color: #5b6776; }
 .mbk-tile .mbk-ride-radio { margin-left: auto; }
 .mbk-tile:active { transform: scale(0.98); }
@@ -326,7 +326,7 @@
   min-height: 52px;
   border-radius: 16px;
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 650;
   transition: transform 0.1s ease;
 }
 .mbk-book-btn { background: var(--moovu-primary, #1f74c9); color: #fff; box-shadow: 0 8px 20px rgba(31, 116, 201, 0.28); }
@@ -366,7 +366,7 @@
   text-align: left;
   color: #050505;
 }
-.mbk-your-location strong { display: block; font-size: 16px; font-weight: 900; color: var(--moovu-primary, #1f74c9); }
+.mbk-your-location strong { display: block; font-size: 16px; font-weight: 650; color: var(--moovu-primary, #1f74c9); }
 .mbk-your-location small { display: block; font-size: 12px; color: #5b6776; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mbk-your-location-x {
   position: absolute;
@@ -380,7 +380,7 @@
   border-radius: 999px;
   background: #e4e9ee;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 650;
   color: #3c4652;
 }
 .booking-v3 .customer-floating-route-card {
@@ -408,7 +408,7 @@
   background: #fff;
   padding: 0 14px 0 6px;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--moovu-primary, #1f74c9);
 }
 .booking-v3 .customer-ehail-add-stop-row button:disabled { opacity: 0.5; }
@@ -421,7 +421,7 @@
   background: var(--moovu-primary, #1f74c9);
   color: #fff;
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 650;
 }
 .booking-v3 .customer-ehail-add-stop-row small { font-size: 12px; font-weight: 600; color: #8a96a3; }
 .booking-v3 .moovu-booking-addstop-card {
@@ -438,7 +438,7 @@
   padding: 14px;
   box-shadow: 0 6px 24px rgba(5, 5, 5, 0.05);
 }
-.booking-v3 .customer-booking-payment > .moovu-field-label { font-size: 15px; font-weight: 900; color: #050505; }
+.booking-v3 .customer-booking-payment > .moovu-field-label { font-size: 15px; font-weight: 650; color: #050505; }
 .booking-v3 .customer-booking-payment-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -456,7 +456,7 @@
   background: #fff;
   padding: 0 14px;
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 650;
   color: #050505;
 }
 .booking-v3 .customer-booking-payment-options button::before {
@@ -531,7 +531,7 @@
   color: #050505;
 }
 .mbk-popular-row:last-child { border-bottom: 0; }
-.mbk-popular-row strong { display: block; font-size: 15px; font-weight: 800; }
+.mbk-popular-row strong { display: block; font-size: 15px; font-weight: 600; }
 .mbk-popular-row small { display: block; font-size: 12px; color: #5b6776; }
 .mbk-popular-icon {
   display: grid; place-items: center;

@@ -3,6 +3,8 @@ import "./globals.css";
 import "./premium-customer.css";
 import "./premium-driver.css";
 import "./premium-admin.css";
+import "./premium-finish.css";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import CapacitorBackButtonHandler from "@/components/CapacitorBackButtonHandler";
 import ClientErrorRecovery from "@/components/ClientErrorRecovery";
 import InAppNotificationBar from "@/components/InAppNotificationBar";
@@ -11,6 +13,8 @@ import NotificationDeepLinkRouter from "@/components/NotificationDeepLinkRouter"
 import AuthDeepLinkHandler from "@/components/auth/AuthDeepLinkHandler";
 import CustomerLaunchNotice from "@/components/CustomerLaunchNotice";
 import CustomerTripRecovery from "@/components/customer/CustomerTripRecovery";
+
+const moovuFont = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-moovu", display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://moovurides.co.za"),
@@ -51,7 +55,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={moovuFont.variable}>
       <body>
         <CustomerTripRecovery>{children}</CustomerTripRecovery>
         <ClientErrorRecovery />
