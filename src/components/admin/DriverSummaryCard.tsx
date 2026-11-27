@@ -1,5 +1,7 @@
 "use client";
 
+import ResetCodeButton from "@/components/admin/ResetCodeButton";
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -97,6 +99,7 @@ export default function DriverSummaryCard({ driverId }: { driverId: string }) {
         <div className="ad-row-actions">
           {d.phone && <a className="ad-btn" href={`tel:${d.phone}`}>Call</a>}
           <button type="button" className="ad-btn" onClick={startEdit}>Edit details</button>
+          {d.linked && <ResetCodeButton driverId={driverId} />}
           {d.stage === "review" && <Link className="ad-btn is-primary" href="/admin/onboarding">Review application</Link>}
           {d.stage === "active" && <button type="button" className="ad-btn" style={{ color: "#b91c1c" }} disabled={busy} onClick={() => setActive(false)}>Deactivate</button>}
           {d.stage === "deactivated" && <button type="button" className="ad-btn" disabled={busy} onClick={() => setActive(true)}>Reactivate</button>}

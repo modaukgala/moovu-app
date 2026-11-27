@@ -1,5 +1,7 @@
 "use client";
 
+import ResetCodeButton from "@/components/admin/ResetCodeButton";
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -210,6 +212,7 @@ export default function AdminCustomersPage() {
                 <div className="ad-row-actions">
                   <Link href={`/admin/customers/${c.id}`} className="ad-btn">Open</Link>
                   {c.account_source === "customer_profile" && <button type="button" className="ad-btn" onClick={() => setEditing(c)}>Edit</button>}
+                  {c.account_source === "customer_profile" && <ResetCodeButton customerId={c.id} />}
                 </div>
               </article>
             ))}

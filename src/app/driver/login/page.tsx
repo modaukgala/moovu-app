@@ -14,6 +14,14 @@ export default function DriverLoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
+  const [showForgot, setShowForgot] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  async function sendResetEmail() {
+    await supabaseClient.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/customer/auth/reset?next=/driver`,
+    }).catch(() => null);
+    setResetSent(true);
+  }
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -130,6 +138,22 @@ export default function DriverLoginPage() {
             >
               {busy ? <MoovuInlineLoader message="Signing in..." /> : "Driver Sign In"}
             </button>
+
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-sm">
+              {!showForgot ? (
+                <button type="button" className="font-semibold text-blue-700 underline underline-offset-4" onClick={() => setShowForgot(true)}>
+                  Forgot password?
+                </button>
+              ) : (
+                <div className="grid gap-3">
+                  <p className="text-slate-700">{resetSent ? "If this email is on a driver account, we sent a reset link. Check your inbox and spam folder." : "Enter your email above and we'll email you a reset link, or get a code on WhatsApp."}</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button type="button" className="moovu-btn moovu-btn-secondary" disabled={busy || !email.includes("@")} onClick={sendResetEmail}>Email me a link</button>
+                    <Link className="moovu-btn moovu-btn-secondary" href="/reset-password?for=driver">Get a code on WhatsApp</Link>
+                  </div>
+                </div>
+              )}
+            </div>
           </section>
 
           <div className="mt-5 rounded-2xl bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-800">

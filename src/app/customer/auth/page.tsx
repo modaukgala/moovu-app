@@ -383,7 +383,7 @@ export default function CustomerAuthPage() {
                   ) : (
                     <div className="grid gap-3">
                       <p className="text-sm font-semibold leading-6 text-slate-700">
-                        Enter the email registered with this account. MOOVU uses neutral responses to protect account privacy.
+                        Have an email on your account? We&apos;ll email you a reset link. No email, or already have a code from MOOVU? Use WhatsApp below.
                       </p>
                       <input
                         className="moovu-input bg-white"
@@ -402,8 +402,8 @@ export default function CustomerAuthPage() {
                         >
                           {busy ? <MoovuInlineLoader message="Sending..." /> : "Send recovery instructions"}
                         </button>
-                        <Link className="moovu-btn moovu-btn-secondary" href="/contact">
-                          No access to email?
+                        <Link className="moovu-btn moovu-btn-secondary" href="/reset-password">
+                          No email? Get a code on WhatsApp
                         </Link>
                       </div>
                     </div>

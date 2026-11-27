@@ -48,6 +48,11 @@ export default function CustomerPasswordResetPage() {
     };
   }, []);
 
+  const [signInHref, setSignInHref] = useState("/customer/auth?next=/book");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("next") === "/driver") setSignInHref("/driver/login");
+  }, []);
+
   async function updatePassword() {
     if (password.length < 8) {
       setMessage("Use a password with at least 8 characters.");
@@ -91,7 +96,7 @@ export default function CustomerPasswordResetPage() {
             <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
               This password reset link is invalid, expired, or has already been used.
             </p>
-            <Link className="moovu-btn moovu-btn-primary mt-5" href="/customer/auth?next=/book">
+            <Link className="moovu-btn moovu-btn-primary mt-5" href={signInHref}>
               Request a new link
             </Link>
           </div>
@@ -100,7 +105,7 @@ export default function CustomerPasswordResetPage() {
             <p className="text-sm font-semibold leading-6 text-slate-600">
               Your old sessions have been signed out. Log in again with your new password.
             </p>
-            <Link className="moovu-btn moovu-btn-primary mt-5" href="/customer/auth?next=/book">
+            <Link className="moovu-btn moovu-btn-primary mt-5" href={signInHref}>
               Return to login
             </Link>
           </div>

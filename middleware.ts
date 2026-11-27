@@ -58,7 +58,9 @@ export function middleware(req: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
-  if (isDriverHost && !pathname.startsWith("/driver")) {
+  // Password reset pages are shared by customers and drivers.
+  const sharedResetPage = pathname === "/reset-password" || pathname.startsWith("/customer/auth/reset");
+  if (isDriverHost && !pathname.startsWith("/driver") && !sharedResetPage) {
     url.pathname = pathname === "/" ? "/driver" : `/driver${pathname}`;
     return NextResponse.rewrite(url);
   }

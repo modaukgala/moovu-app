@@ -12,6 +12,8 @@ const TOPICS: Record<string, string> = {
   fare: "Hi MOOVU, my fare looks wrong.",
   card: "Hi MOOVU, I need help paying by card.",
   safety: "Hi MOOVU, I feel unsafe and need help.",
+  forgot: "Hi MOOVU, I forgot my password. Please send me a reset code. My name and phone number are: ",
+  "driver-forgot": "Hi MOOVU, I am a driver and I forgot my password. Please send me a reset code. My name and phone number are: ",
 };
 
 export async function GET(req: Request) {
