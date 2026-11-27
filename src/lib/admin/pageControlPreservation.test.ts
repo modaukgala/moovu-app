@@ -15,7 +15,7 @@ const controls: Record<string, string[]> = {
   subscriptions: ["/api/admin/subscriptions/drivers", "/api/admin/subscriptions/history", "legacy-driver-search"],
   "subscriptions/paid": ["/api/admin/payment-reviews?status=all", "View POP", "past-subscription-search"],
   "moovu-plus": ["/api/admin/phase5-memberships", "/api/admin/phase5-credits", "issueCredit()", "reverseCredit(row.id)"],
-  trips: ["/api/admin/trips/list", "assignDriver(", "cancelTrip(", "markArrived(", "admin-trip-search"],
+  trips: ["/api/admin/trips/list", "TripDispatchActions", "cancelTrip(", "markArrived(", "admin-trip-search"],
   "trips/new": ["/api/admin/trips/create", "createTrip", "calculateDistance", "paymentMethod"],
   "trips/[id]": ["/api/admin/trips/auto-assign", "cancelTrip", "completeTrip", "Phase4FinancePanel"],
   dispatch: ["/api/admin/dispatch/board", "offerNext", "loadBoard", "/admin/dispatch/map"],
@@ -38,7 +38,7 @@ test("every Group B and C page has a compact page heading or preserved receipt p
   for (const route of Object.keys(controls)) {
     const source = readFileSync(join(root, route, "page.tsx"), "utf8");
     assert.match(source, /<h1\b|<PageHeader\b/, `${route}: missing page heading`);
-    assert.ok(source.includes("moovu-admin-") || source.includes("styles.report"), `${route}: missing shared Admin presentation`);
+    assert.ok(source.includes("moovu-admin-") || source.includes("ad-page") || source.includes("styles.report"), `${route}: missing shared Admin presentation`);
   }
 });
 

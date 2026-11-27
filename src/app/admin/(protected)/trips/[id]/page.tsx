@@ -10,6 +10,7 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { adminDriverName } from "@/lib/admin/identity";
 import { isDispatchExpired } from "@/lib/dispatch/config";
 import Phase4FinancePanel from "@/components/admin/Phase4FinancePanel";
+import TripDispatchActions from "@/components/admin/TripDispatchActions";
 
 type Trip = {
   id: string;
@@ -125,6 +126,7 @@ export default function TripDetailPage() {
   const [completing, setCompleting] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pageError, setPageError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"overview" | "money" | "dispatch" | "timeline">("overview");
   const loadSequence = useRef(0);
 
   const loadAll = useCallback(async () => {
@@ -312,6 +314,16 @@ export default function TripDetailPage() {
   }
 
   const isClosed = trip.status === "completed" || trip.status === "cancelled";
+  const tripHeadline = ({
+    requested: "Waiting for a driver to accept.",
+    offered: "Offered to a driver, waiting for an answer.",
+    assigned: "Driver is on the way to the pickup.",
+    arrived: "Driver has arrived at the pickup.",
+    ongoing: "Trip is in progress.",
+    completed: `Completed${trip.completed_at ? ` at ${new Date(trip.completed_at).toLocaleString("en-ZA")}` : ""}.`,
+    cancelled: "This trip was cancelled.",
+    scheduled: `Scheduled for ${trip.scheduled_for ? new Date(trip.scheduled_for).toLocaleString("en-ZA") : "later"}.`,
+  } as Record<string, string>)[trip.status] ?? trip.status;
   const dispatchWindowExpired = isDispatchExpired(trip.created_at, nowMs);
   const hasActiveOffer =
     trip.offer_status === "pending" &&
@@ -383,274 +395,144 @@ export default function TripDetailPage() {
           </section>
         </div>
       )}
-      <header className="moovu-card moovu-admin-page-heading flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
-        <div>
-          <div className="moovu-section-title">Trip control room</div>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-black text-slate-950">Trip details</h1>
-            <StatusBadge status={trip.status} />
-          </div>
-          <p className="text-gray-700 mt-2">
-            Reference: <span className="font-mono text-xs">{trip.id}</span> ·{" "}
-            Status: <span className="capitalize font-medium text-black">{trip.status}</span>
-            {trip.cancel_reason ? ` • Reason: ${trip.cancel_reason}` : ""}
-          </p>
-        </div>
-
-        <button
-          className="moovu-btn moovu-btn-secondary"
-          onClick={() => router.push("/admin/trips")}
-        >
-          Back to Trips
-        </button>
-      </header>
-
-      <section className="moovu-card space-y-4 p-5 sm:p-6">
-        <div>
-          <div className="moovu-section-title">Route and assignment</div>
-          <h2 className="mt-2 text-xl font-black text-slate-950">Trip summary</h2>
-        </div>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="moovu-data-row" style={{ background: "var(--moovu-primary-soft)" }}>
-            <div className="text-sm text-gray-600">Pickup</div>
-            <div className="font-medium text-black mt-1">{trip.pickup_address}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Dropoff</div>
-            <div className="font-medium text-black mt-1">{trip.dropoff_address}</div>
-          </div>
-        </div>
-
-        {tripStops.length > 0 && (
-          <div className="rounded-3xl border border-blue-100 bg-blue-50 p-4">
-            <div className="text-sm font-black uppercase tracking-[0.12em] text-blue-700">Route stops</div>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {tripStops.map((stop, index) => (
-                <div key={`${stop.address}-${index}`} className="rounded-2xl bg-white p-4">
-                  <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Stop {index + 1}</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-950">{stop.address}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {trip.final_add_stop_increase != null && Number(trip.final_add_stop_increase) > 0 && (
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="moovu-data-row">
-              <div className="text-sm text-gray-600">Original fare</div>
-              <div className="font-semibold text-black mt-1">R{Number(trip.original_fare ?? 0).toFixed(2)}</div>
-            </div>
-            <div className="moovu-data-row">
-              <div className="text-sm text-gray-600">Add stop increase</div>
-              <div className="font-semibold text-black mt-1">R{Number(trip.final_add_stop_increase ?? 0).toFixed(2)}</div>
-            </div>
-            <div className="moovu-data-row">
-              <div className="text-sm text-gray-600">Waiting fees</div>
-              <div className="font-semibold text-black mt-1">R{Number(trip.stop_waiting_fee ?? 0).toFixed(2)}</div>
-            </div>
-          </div>
-        )}
-
-        <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-4">
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Customer</div>
-            <div className="font-semibold text-black mt-1">{trip.rider_name ?? "Customer"}</div>
-            <div className="mt-1 text-sm font-bold text-slate-600">
-              {trip.rider_phone ?? "Cellphone not captured"}
-            </div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Driver</div>
-            <div className="font-semibold text-black mt-1">{driverLabel}</div>
-            {hasActiveOffer && offerSecondsLeft != null && (
-              <div className="text-sm text-gray-700 mt-2">
-                Offer pending • {Math.max(0, offerSecondsLeft)}s left
+      <div className="ad-page">
+        <header className="ad-card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <button type="button" className="ad-note mb-1 font-bold" onClick={() => router.push("/admin/trips")}>← Trips</button>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-black">{trip.rider_name || "Customer"}</h1>
+                <StatusBadge status={trip.status} />
               </div>
-            )}
-            {trip.offer_status === "pending" && !hasActiveOffer && (
-              <div className="mt-2 text-sm font-bold text-amber-700">
-                Previous offer ended. Offer the next eligible driver.
-              </div>
-            )}
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Payment</div>
-            <div className="font-semibold text-black mt-1 capitalize">{trip.payment_method}</div>
-          </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Fare</div>
-            <div className="font-semibold text-black mt-1">
-              {trip.fare_amount != null ? `R${trip.fare_amount}` : "—"}
+              <p className="ad-note mt-1">{tripHeadline}</p>
+              <p className="ad-note mt-1">Booked {new Date(trip.created_at).toLocaleString("en-ZA")} · Ref <span className="font-mono text-xs">{trip.id.slice(0, 8)}</span></p>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-black">R{Number(trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
+              <div className="ad-note">{trip.payment_method === "online" ? "Card" : "Cash"}</div>
             </div>
           </div>
-
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Offer</div>
-            <div className="font-semibold text-black mt-1">{trip.offer_status ?? "—"}</div>
-          </div>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-          {[
-            ["Booked", trip.created_at], ["Scheduled", trip.scheduled_for], ["Dispatch started", trip.dispatch_started_at],
-            ["Driver arrived", trip.driver_arrived_at], ["Trip started", trip.trip_started_at],
-            [trip.status === "cancelled" ? "Cancelled" : "Completed", trip.status === "cancelled" ? trip.cancelled_at : trip.completed_at],
-          ].map(([label, value]) => <div key={String(label)} className="moovu-data-row"><div className="text-xs font-bold text-slate-500">{label}</div><div className="mt-1 text-sm font-black">{value ? new Date(String(value)).toLocaleString() : "Unavailable"}</div></div>)}
-        </div>
-      </section>
-
-      <section className="moovu-card p-5 sm:p-6">
-        <div className="moovu-section-title">Trip security and accounting</div>
-        <h2 className="mt-2 text-xl font-black text-slate-950">Security, fare and cancellation</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Start OTP</div>
-            <div className="mt-1 text-xs font-bold text-slate-500">{trip.start_otp_verified ? "Verified" : "Not verified"}</div>
-          </div>
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">End OTP</div>
-            <div className="mt-1 text-xs font-bold text-slate-500">
-              {trip.completed_by === "admin" && !trip.end_otp_verified
-                ? "Not used - admin completion"
-                : trip.completed_without_end_otp
-                  ? "Not used - driver bypass"
-                  : trip.end_otp_verified
-                    ? "Verified"
-                    : "Not verified"}
-            </div>
-          </div>
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Completion method</div>
-            <div className="mt-1 font-black">
-              {trip.completed_without_end_otp
-                ? "Driver - Without End OTP"
-                : trip.completed_by === "admin"
-                  ? "Admin completion"
-                  : trip.completed_by === "driver"
-                    ? "Driver - End OTP"
-                    : "--"}
-            </div>
-            {trip.completed_without_end_otp && (
-              <div className="mt-1 text-xs font-bold text-emerald-700">
-                Fare confirmation: Driver confirmed fare received
-              </div>
+          <div className="ad-row-actions mt-4" style={{ justifyContent: "flex-start" }}>
+            {canOfferNearest && <TripDispatchActions tripId={trip.id} onDone={() => void loadAll()} />}
+            {canOfferNearest && trip.offer_status === "pending" && (
+              <button type="button" className="ad-btn" disabled={offering} onClick={() => offerNearest([])}>{offering ? "Finding…" : "Offer next driver"}</button>
             )}
-            {trip.completed_at && (
-              <div className="mt-1 text-xs text-slate-500">
-                Completed {new Date(trip.completed_at).toLocaleString("en-ZA")}
-              </div>
-            )}
-            {trip.admin_completion_reason && <div className="mt-1 text-sm text-emerald-700">{trip.admin_completion_reason}</div>}
-            {trip.admin_completion_note && <div className="mt-1 text-xs text-slate-600">{trip.admin_completion_note}</div>}
-            {trip.end_otp_bypass_reason && <div className="mt-1 text-sm text-amber-700">{trip.end_otp_bypass_reason}</div>}
-            {trip.end_otp_bypass_note && <div className="mt-1 text-xs text-slate-600">{trip.end_otp_bypass_note}</div>}
+            {!isClosed && !trip.driver_id && dispatchWindowExpired && <span className="ad-badge is-off">Dispatch window expired (30 min)</span>}
+            {trip.status === "ongoing" && <button type="button" className="ad-btn is-primary" onClick={() => setCompleteOpen(true)}>Complete trip</button>}
+            {trip.status === "completed" && <Link className="ad-btn" href={`/admin/receipts/${trip.id}`}>Receipt</Link>}
+            {!isClosed && <button type="button" className="ad-btn" style={{ color: "#b91c1c" }} onClick={cancelTrip}>Cancel trip</button>}
           </div>
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Trip fare</div>
-            <div className="mt-1 text-xl font-black">R{Number(trip.final_fare ?? trip.fare_amount ?? 0).toFixed(2)}</div>
-            {Number(trip.fare_adjustment_amount ?? 0) > 0 && (
-              <div className="mt-1 text-xs font-bold text-blue-700">
-                Initial R{Number(trip.estimated_fare ?? trip.fare_amount ?? 0).toFixed(2)} + stops R{Number(trip.fare_adjustment_amount ?? 0).toFixed(2)}
-              </div>
-            )}
-            <div className="mt-1 text-xs text-slate-500">{Number(trip.actual_distance_km ?? 0).toFixed(2)} km / {Number(trip.actual_duration_min ?? 0).toFixed(0)} min</div>
-            {Number(distanceFareBreakdown?.distanceDiscountPct ?? 0) > 0 && (
-              <div className="mt-2 text-xs font-bold text-emerald-700">
-                {Number(distanceFareBreakdown?.distanceDiscountPct).toFixed(0)}% distance saving:
-                {" "}-R{Number(distanceFareBreakdown?.distanceDiscountAmount ?? 0).toFixed(2)}
-              </div>
-            )}
-          </div>
-          <div className="moovu-data-row">
-            <div className="text-sm text-gray-600">Stored commission</div>
-            <div className="mt-1 text-xl font-black">{trip.commission_amount == null ? "Unavailable" : `R${Number(trip.commission_amount).toFixed(2)}`}</div>
-            <div className="mt-1 text-xs text-slate-500">Rate {trip.commission_pct == null ? "unavailable" : `${trip.commission_pct}%`} · Driver net {trip.driver_net_earnings == null ? "unavailable" : `R${Number(trip.driver_net_earnings).toFixed(2)}`}</div>
-          </div>
-        </div>
-        {Number(trip.cancellation_fee_amount ?? 0) > 0 && (
-          <div className="mt-4 grid gap-3 rounded-2xl bg-amber-50 p-4 sm:grid-cols-4">
-            <div><div className="text-xs font-bold text-amber-700">Cancellation fee</div><strong>R{Number(trip.cancellation_fee_amount).toFixed(2)}</strong></div>
-            <div><div className="text-xs font-bold text-amber-700">MOOVU share</div><strong>R{Number(trip.cancellation_moovu_amount ?? 0).toFixed(2)}</strong></div>
-            <div><div className="text-xs font-bold text-amber-700">Driver credit</div><strong>R{Number(trip.cancellation_driver_amount ?? 0).toFixed(2)}</strong></div>
-            <div><div className="text-xs font-bold text-amber-700">Commission effect</div><strong>-R{Number(trip.cancellation_driver_amount ?? 0).toFixed(2)}</strong></div>
-          </div>
-        )}
-      </section>
+        </header>
 
-      <section className="moovu-card p-5 sm:p-6">
-        <div className="moovu-section-title">Dispatch history</div>
-        <h2 className="mt-2 text-xl font-black">Recorded offers and responses</h2>
-        {contextErrors.offers ? <p className="mt-3 font-bold text-amber-800">{contextErrors.offers}</p> : offers.length === 0 ? <p className="mt-3 text-sm text-slate-600">No recorded offers.</p> : <div className="mt-4 space-y-2">{offers.map(offer => <div key={offer.id} className="moovu-data-row text-sm"><strong>{offer.status}</strong> · Driver {offer.driver_id}<br />Offered {offer.offered_at ? new Date(offer.offered_at).toLocaleString() : "Unavailable"} · response {offer.responded_at ? new Date(offer.responded_at).toLocaleString() : "Not recorded"}<br />{offer.decline_reason ? `Recorded reason: ${offer.decline_reason}` : "Reason unavailable"}</div>)}</div>}
-        <div className="mt-4 text-sm"><strong>Dispatch state:</strong> {trip.dispatch_state ?? "Unavailable"} · <strong>Failure reason:</strong> {trip.dispatch_failure_reason ?? "Reason unavailable"}</div>
-      </section>
-
-      <section className="moovu-card p-5 sm:p-6">
-        <div className="moovu-action-row">
-          {canOfferNearest && (
-            <button
-              className="moovu-btn moovu-btn-primary"
-              disabled={offering}
-              onClick={() => offerNearest([])}
-            >
-              {offering
-                ? "Finding next driver..."
-                : trip.offer_status === "pending"
-                  ? "Offer next driver"
-                  : "Offer nearest driver"}
+        <div className="ad-tabs" role="tablist" aria-label="Trip sections">
+          {(["overview", "money", "dispatch", "timeline"] as const).map(t => (
+            <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? "is-on" : ""} onClick={() => setTab(t)}>
+              {{ overview: "Overview", money: "Money", dispatch: "Driver offers", timeline: "Timeline" }[t]}
             </button>
-          )}
-          {!isClosed && !trip.driver_id && dispatchWindowExpired && (
-            <button className="moovu-btn moovu-btn-secondary" disabled>
-              Dispatch window expired
-            </button>
-          )}
-
-          {!isClosed && (
-            <button
-              className="moovu-btn moovu-btn-danger"
-              onClick={cancelTrip}
-            >
-              Cancel
-            </button>
-          )}
-          {trip.status === "ongoing" && (
-            <button
-              className="moovu-btn bg-emerald-600 text-white"
-              onClick={() => setCompleteOpen(true)}
-            >
-              Complete Trip
-            </button>
-          )}
-        </div>
-      </section>
-
-      <Phase4FinancePanel tripId={tripId} />
-      {isClosed && <section className="moovu-card p-5 sm:p-6"><Link className="moovu-btn moovu-btn-primary" href={`/admin/receipts/${trip.id}`}>Open printable receipt</Link><p className="mt-2 text-xs text-slate-600">Payment method: {trip.payment_method || "Unavailable"} · verified payment status: unavailable from the trip record.</p></section>}
-      <section className="moovu-card p-5 sm:p-6">
-        <div className="moovu-section-title">Activity</div>
-        <h2 className="mt-2 text-xl font-black text-slate-950">Trip timeline</h2>
-        <div className="mt-4 space-y-3">
-          {contextErrors.events && <p className="font-bold text-amber-800">{contextErrors.events}</p>}
-          {events.map((e) => (
-            <div key={e.id} className="moovu-data-row">
-              <div className="font-black capitalize text-slate-950">{e.event_type.replaceAll("_", " ")}</div>
-              {e.message && (
-                <div className="text-sm text-gray-700 mt-2">
-                  {drivers.reduce(
-                    (message, driver) =>
-                      message.replaceAll(driver.id, adminDriverName(driver)),
-                    e.message,
-                  )}
-                </div>
-              )}
-            </div>
           ))}
         </div>
-      </section>
+
+        {tab === "overview" && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <section className="ad-card">
+              <div className="ad-card-head"><h2>Route</h2></div>
+              <ol className="space-y-3 text-sm">
+                <li><span className="ad-badge is-live">Pickup</span><div className="mt-1 font-semibold">{trip.pickup_address}</div></li>
+                {tripStops.map((stop, i) => <li key={i}><span className="ad-badge">Stop {i + 1}</span><div className="mt-1 font-semibold">{stop.address}</div></li>)}
+                <li><span className="ad-badge is-done">Drop-off</span><div className="mt-1 font-semibold">{trip.dropoff_address}</div></li>
+              </ol>
+              {(trip.actual_distance_km || trip.actual_duration_min) ? (
+                <p className="ad-note mt-3">Tracked {Number(trip.actual_distance_km ?? 0).toFixed(1)} km · {Number(trip.actual_duration_min ?? 0).toFixed(0)} min</p>
+              ) : null}
+            </section>
+            <section className="ad-card space-y-3">
+              <div className="ad-card-head"><h2>People</h2></div>
+              <div className="ad-row">
+                <div><div className="ad-row-title">{trip.rider_name || "Customer"}</div><div className="ad-row-sub">Customer · {trip.rider_phone || "no phone"}</div></div>
+                {trip.rider_phone && <div className="ad-row-actions"><a className="ad-btn" href={`tel:${trip.rider_phone}`}>Call</a></div>}
+              </div>
+              <div className="ad-row">
+                <div><div className="ad-row-title">{assignedDriver ? adminDriverName(assignedDriver) : trip.driver_id ? "Driver" : "No driver yet"}</div>
+                  <div className="ad-row-sub">Driver{assignedDriver?.phone ? ` · ${assignedDriver.phone}` : ""}</div></div>
+                <div className="ad-row-actions">
+                  {assignedDriver?.phone && <a className="ad-btn" href={`tel:${assignedDriver.phone}`}>Call</a>}
+                  {trip.driver_id && <Link className="ad-btn" href={`/admin/drivers/${trip.driver_id}`}>Profile</Link>}
+                </div>
+              </div>
+              <dl className="grid grid-cols-2 gap-2 text-sm">
+                <div><dt className="ad-note">Start code</dt><dd className="font-semibold">{trip.start_otp_verified ? "Verified" : "Not verified"}</dd></div>
+                <div><dt className="ad-note">End code</dt><dd className="font-semibold">{trip.end_otp_verified ? "Verified" : trip.completed_without_end_otp ? "Skipped" : "Not verified"}</dd></div>
+              </dl>
+              {trip.completed_without_end_otp && <p className="ad-note">Ended without code: {trip.end_otp_bypass_reason ?? "no reason"}{trip.end_otp_bypass_note ? ` — ${trip.end_otp_bypass_note}` : ""}</p>}
+              {trip.admin_completion_note && <p className="ad-note">Completed by admin: {trip.admin_completion_note}</p>}
+              {trip.status === "cancelled" && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-800">Cancelled{trip.cancelled_by ? ` by ${trip.cancelled_by}` : ""}{trip.cancelled_at ? ` at ${new Date(trip.cancelled_at).toLocaleString("en-ZA")}` : ""}. {trip.cancel_reason ?? trip.cancellation_reason ?? ""}</p>}
+            </section>
+          </div>
+        )}
+
+        {tab === "money" && (
+          <div className="space-y-4">
+            <section className="ad-card">
+              <div className="ad-card-head"><h2>Fare</h2></div>
+              <dl className="space-y-2 text-sm">
+                {[
+                  ["Quoted fare", trip.estimated_fare ?? trip.original_fare ?? trip.fare_amount],
+                  ["Added stops", trip.final_add_stop_increase ?? trip.fare_adjustment_amount],
+                  ["Stop waiting", trip.stop_waiting_fee],
+                  ["Final fare", trip.final_fare ?? trip.fare_amount],
+                  ["MOOVU commission", trip.commission_amount],
+                  ["Driver earns", trip.driver_net_earnings],
+                  ["Cancellation fee", trip.cancellation_fee_amount],
+                ].filter(([, v]) => v !== null && v !== undefined && Number(v) !== 0).map(([label, v]) => (
+                  <div key={String(label)} className="flex justify-between gap-3"><dt className="ad-note">{label}</dt><dd className="font-bold">R{Number(v).toFixed(2)}</dd></div>
+                ))}
+              </dl>
+              {distanceFareBreakdown?.distanceDiscountAmount ? (
+                <p className="ad-note mt-3">Includes a {distanceFareBreakdown.distanceDiscountPct}% long-trip discount (R{Number(distanceFareBreakdown.distanceDiscountAmount).toFixed(2)}).</p>
+              ) : null}
+            </section>
+            <Phase4FinancePanel tripId={tripId} />
+          </div>
+        )}
+
+        {tab === "dispatch" && (
+          <section className="ad-card">
+            <div className="ad-card-head"><h2>Driver offers</h2></div>
+            {contextErrors.offers ? <p className="ad-empty">{contextErrors.offers}</p> : offers.length === 0 ? <p className="ad-empty">This trip was never offered to a driver.</p> : (
+              <div className="ad-rows">
+                {offers.map(offer => {
+                  const d = drivers.find(x => x.id === offer.driver_id);
+                  return (
+                    <div key={offer.id} className="ad-row">
+                      <div><div className="ad-row-title">{d ? adminDriverName(d) : "Driver"}</div>
+                        <div className="ad-row-sub">Offered {offer.offered_at ? new Date(offer.offered_at).toLocaleTimeString("en-ZA") : "?"}{offer.responded_at ? ` · answered ${new Date(offer.responded_at).toLocaleTimeString("en-ZA")}` : ""}{offer.decline_reason ? ` · ${offer.decline_reason}` : ""}</div></div>
+                      <span className={`ad-badge ${offer.status === "accepted" ? "is-done" : offer.status === "pending" ? "is-waiting" : "is-off"}`}>{offer.status}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {trip.dispatch_failure_reason && <p className="ad-note mt-3">Why no driver: {trip.dispatch_failure_reason}</p>}
+          </section>
+        )}
+
+        {tab === "timeline" && (
+          <section className="ad-card">
+            <div className="ad-card-head"><h2>Timeline</h2></div>
+            {contextErrors.events && <p className="ad-empty">{contextErrors.events}</p>}
+            <ol className="space-y-2">
+              {events.map(e => (
+                <li key={e.id} className="ad-row" style={{ gridTemplateColumns: "1fr" }}>
+                  <div>
+                    <div className="ad-row-title capitalize">{e.event_type.replaceAll("_", " ")}</div>
+                    <div className="ad-row-sub">{new Date(e.created_at).toLocaleString("en-ZA")}{e.message ? ` · ${drivers.reduce((m, d) => m.replaceAll(d.id, adminDriverName(d)), e.message)}` : ""}</div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+      </div>
     </main>
   );
 }

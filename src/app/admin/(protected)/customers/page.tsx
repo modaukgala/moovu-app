@@ -1,271 +1,230 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import CompactTabs from "@/components/ui/CompactTabs";
-import EmptyState from "@/components/ui/EmptyState";
-import LoadingState from "@/components/ui/LoadingState";
-import MetricCard from "@/components/ui/MetricCard";
-import StatusBadge from "@/components/ui/StatusBadge";
-import { PageHeader } from "@/components/ui/MoovuPrimitives";
+import { useCallback, useEffect, useState } from "react";
 import { supabaseClient } from "@/lib/supabase/client";
-import { adminPersonName } from "@/lib/admin/identity";
 
-type CustomerSummary = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  email: string | null;
-  status: string | null;
-  created_at: string | null;
-  total_trips: number;
-  completed_trips: number;
-  cancelled_trips: number;
-  total_spend: number;
-  last_trip_status: string | null;
-  last_activity: string | null;
+type Customer = {
+  id: string; account_source: "customer_profile" | "auth_only"; first_name: string | null; last_name: string | null;
+  phone: string | null; email: string | null; status: string; created_at: string | null;
+  total_trips: number; completed_trips: number; cancelled_trips: number; total_spend: number; last_activity: string | null;
 };
 
-type CustomerFilter = "all" | "active" | "inactive" | "has_trips" | "no_trips" | "recent";
+type DupCustomer = {
+  id: string; first_name: string | null; last_name: string | null; phone: string | null; email: string | null;
+  created_at: string | null; status: string | null; trips: { total: number; completed: number; last: string | null };
+};
 
-function displayDate(value: string | null) {
-  return value ? new Date(value).toLocaleString() : "No activity yet";
+const day = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "–";
+const name = (c: { first_name: string | null; last_name: string | null }) => [c.first_name, c.last_name].filter(Boolean).join(" ") || "No name";
+
+async function api(url: string, init?: RequestInit) {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const res = await fetch(url, {
+    ...init, cache: "no-store",
+    headers: { Authorization: `Bearer ${session?.access_token ?? ""}`, ...(init?.body ? { "Content-Type": "application/json" } : {}) },
+  }).catch(() => null);
+  return res?.json().catch(() => null) ?? null;
+}
+
+function EditSheet({ customer, onClose, onSaved }: { customer: Customer; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [form, setForm] = useState({ firstName: customer.first_name ?? "", lastName: customer.last_name ?? "", phone: customer.phone ?? "", email: customer.email ?? "", status: customer.status === "blocked" ? "blocked" : "active" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState("");
+
+  async function save() {
+    setBusy(true); setError(null);
+    const json = await api(`/api/admin/customers/${customer.id}`, { method: "PATCH", body: JSON.stringify(form) });
+    setBusy(false);
+    if (!json?.ok) { setError(json?.error ?? "Couldn't save."); return; }
+    onSaved("Customer details saved.");
+  }
+
+  async function remove() {
+    setBusy(true); setError(null);
+    const json = await api(`/api/admin/customers/${customer.id}`, { method: "DELETE", body: JSON.stringify({ confirm: confirmDelete }) });
+    setBusy(false);
+    if (!json?.ok) { setError(json?.error ?? "Couldn't remove the customer."); return; }
+    onSaved(`${name(customer)} was removed. Their past trips are kept without personal details.`);
+  }
+
+  const input = (key: keyof typeof form, label: string, props?: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <label className="block text-sm font-semibold">{label}
+      <input className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-normal" value={form[key]}
+        onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} {...props} />
+    </label>
+  );
+
+  return (
+    <div className="ad-sheet-layer" role="dialog" aria-modal="true" aria-label="Edit customer" onClick={onClose}>
+      <div className="ad-sheet space-y-3" onClick={e => e.stopPropagation()}>
+        <div className="ad-card-head"><h2>Edit {name(customer)}</h2><button type="button" className="ad-btn" onClick={onClose}>Close</button></div>
+        <div className="grid gap-3 sm:grid-cols-2">{input("firstName", "First name")}{input("lastName", "Surname")}</div>
+        {input("phone", "Phone", { inputMode: "tel" })}
+        {input("email", "Email (optional)", { type: "email" })}
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input type="checkbox" checked={form.status === "blocked"} onChange={e => setForm(f => ({ ...f, status: e.target.checked ? "blocked" : "active" }))} />
+          Block this customer from booking
+        </label>
+        {error && <p className="text-sm font-semibold text-red-700" role="alert">{error}</p>}
+        <button type="button" className="ad-btn is-primary w-full" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save changes"}</button>
+        <details className="rounded-xl bg-red-50 p-3">
+          <summary className="cursor-pointer text-sm font-bold text-red-800">Remove this customer</summary>
+          <p className="mt-2 text-sm text-red-900">Their login and personal details are deleted. Past trips stay in your records without their name or number. This can&apos;t be undone.</p>
+          <input className="mt-2 w-full rounded-xl border px-3 py-2" placeholder="Type DELETE to confirm" value={confirmDelete} onChange={e => setConfirmDelete(e.target.value)} />
+          <button type="button" className="ad-btn mt-2 w-full" style={{ color: "#b91c1c" }} disabled={busy || confirmDelete !== "DELETE"} onClick={remove}>Remove customer</button>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+function Duplicates({ onChanged }: { onChanged: (msg: string) => void }) {
+  const [groups, setGroups] = useState<{ name: string; customers: DupCustomer[] }[] | null>(null);
+  const [keep, setKeep] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const json = await api("/api/admin/customers/duplicates");
+    if (json?.ok) setGroups(json.groups); else setError(json?.error ?? "Couldn't check for duplicates.");
+  }, []);
+  useEffect(() => { const t = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(t); }, [load]);
+
+  async function merge(group: string, keepId: string, removeId: string, removeName: string) {
+    if (!window.confirm(`Move all of ${removeName}'s trips into the kept account, then remove this duplicate login? This can't be undone.`)) return;
+    setBusy(removeId); setError(null);
+    const json = await api("/api/admin/customers/merge", { method: "POST", body: JSON.stringify({ keepId, removeId }) });
+    setBusy(null);
+    if (!json?.ok) { setError(json?.error ?? "Couldn't merge."); return; }
+    onChanged(`Merged. ${json.movedTrips} trip${json.movedTrips === 1 ? "" : "s"} moved.`);
+    void load();
+    void group;
+  }
+
+  if (error && !groups) return <p className="ad-empty">{error}</p>;
+  if (!groups) return <p className="ad-empty">Checking for duplicates…</p>;
+  if (groups.length === 0) return <p className="ad-empty">No possible duplicates found.</p>;
+
+  return (
+    <div className="space-y-3">
+      <p className="ad-note">These accounts share the same first name and surname, but have different phone numbers. Many are different people with common names, so check the phone numbers and trips before merging. Pick the account to <b>keep</b>, then merge the others into it.</p>
+      {error && <p className="text-sm font-semibold text-red-700" role="alert">{error}</p>}
+      {groups.map(group => {
+        const keepId = keep[group.name] ?? group.customers[0].id;
+        return (
+          <section key={group.name} className="ad-card">
+            <div className="ad-card-head"><h2>{group.name}</h2><span className="ad-badge is-waiting">{group.customers.length} accounts</span></div>
+            <div className="ad-rows">
+              {group.customers.map(c => (
+                <div key={c.id} className="ad-row">
+                  <label className="flex min-w-0 items-start gap-3">
+                    <input type="radio" className="mt-1" name={`keep-${group.name}`} checked={keepId === c.id} onChange={() => setKeep(k => ({ ...k, [group.name]: c.id }))} />
+                    <span className="min-w-0">
+                      <span className="ad-row-title">{c.phone ?? "No phone"}{keepId === c.id ? " · keep" : ""}</span>
+                      <span className="ad-row-sub block">{c.email ?? "No email"} · joined {day(c.created_at)} · {c.trips.total} trips ({c.trips.completed} completed){c.trips.last ? ` · last ${day(c.trips.last)}` : ""}</span>
+                    </span>
+                  </label>
+                  <div className="ad-row-actions">
+                    <Link href={`/admin/customers/${c.id}`} className="ad-btn">Open</Link>
+                    {keepId !== c.id && (
+                      <button type="button" className="ad-btn" disabled={busy !== null} onClick={() => merge(group.name, keepId, c.id, c.phone ?? name(c))}>
+                        {busy === c.id ? "Merging…" : "Merge into kept"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function AdminCustomersPage() {
-  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<CustomerFilter>("all");
-  const [appliedQuery, setAppliedQuery] = useState("");
+  const [tab, setTab] = useState<"all" | "duplicates">("all");
+  const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalCustomers, setTotalCustomers] = useState<number | null>(0);
-  const [totalLowerBound, setTotalLowerBound] = useState<number | null>(null);
-  const [retrievalWarning, setRetrievalWarning] = useState<string | null>(null);
-  const [recentCutoff] = useState(() => Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [data, setData] = useState<{ customers: Customer[]; total: number | null; total_lower_bound: number | null; total_pages: number } | null>(null);
+  const [dupCount, setDupCount] = useState<number | null>(null);
+  const [editing, setEditing] = useState<Customer | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadCustomers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-
-    if (!session) {
-      setError("Your admin session has expired. Please sign in again.");
-      setLoading(false);
-      return;
-    }
-
-    const params = new URLSearchParams({
-      page: String(page), pageSize: "25", q: appliedQuery,
-      status: filter === "active" || filter === "inactive" ? filter : "all",
-    });
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 15000);
-    const response = await fetch(`/api/admin/customers?${params}`, {
-      cache: "no-store",
-      signal: controller.signal,
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    }).catch(() => null);
-    window.clearTimeout(timeout);
-    const json = response ? await response.json().catch(() => null) : null;
-
-    if (!response?.ok || !json?.ok) {
-      setError(json?.error || "Could not load customers. Please try again.");
-      setLoading(false);
-      return;
-    }
-
-    setCustomers(json.customers ?? []);
-    setTotalPages(Number(json.total_pages ?? 0));
-    setTotalCustomers(json.total == null ? null : Number(json.total));
-    setTotalLowerBound(json.total_lower_bound == null ? null : Number(json.total_lower_bound));
-    setRetrievalWarning(json.retrieval_warning ?? null);
-    setLoading(false);
-  }, [appliedQuery, filter, page]);
+  const loadCustomers = useCallback(async (term: string, pageNo: number) => {
+    const params = new URLSearchParams({ page: String(pageNo), pageSize: "25" });
+    if (term.trim()) params.set("q", term.trim());
+    const json = await api(`/api/admin/customers?${params}`);
+    if (json?.ok) { setData(json); setError(null); } else setError(json?.error ?? "Couldn't load customers.");
+  }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadCustomers();
-    }, 0);
+    const t = window.setTimeout(() => void loadCustomers(q, page), q ? 300 : 0);
+    return () => window.clearTimeout(t);
+  }, [q, page, loadCustomers]);
 
-    return () => window.clearTimeout(timer);
-  }, [loadCustomers]);
+  useEffect(() => {
+    void api("/api/admin/customers/duplicates").then(json => { if (json?.ok) setDupCount(json.groups.length); });
+  }, []);
 
-  const counts = useMemo(() => {
-    return {
-      all: customers.length,
-      active: customers.filter((customer) => customer.status !== "inactive").length,
-      inactive: customers.filter((customer) => customer.status === "inactive").length,
-      has_trips: customers.filter((customer) => customer.total_trips > 0).length,
-      no_trips: customers.filter((customer) => customer.total_trips === 0).length,
-      recent: customers.filter(
-        (customer) => customer.created_at && new Date(customer.created_at).getTime() >= recentCutoff,
-      ).length,
-    };
-  }, [customers, recentCutoff]);
-
-  const filteredCustomers = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return customers.filter((customer) => {
-      const matchesSearch =
-        !normalizedQuery ||
-        [
-          customer.first_name,
-          customer.last_name,
-          customer.phone,
-          customer.email,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedQuery);
-
-      if (!matchesSearch) return false;
-      if (filter === "active") return customer.status !== "inactive";
-      if (filter === "inactive") return customer.status === "inactive";
-      if (filter === "has_trips") return customer.total_trips > 0;
-      if (filter === "no_trips") return customer.total_trips === 0;
-      if (filter === "recent") {
-        return Boolean(
-          customer.created_at && new Date(customer.created_at).getTime() >= recentCutoff,
-        );
-      }
-      return true;
-    });
-  }, [customers, filter, query, recentCutoff]);
-
-  if (loading) {
-    return (
-      <LoadingState
-        title="Loading customers"
-        description="Preparing customer profiles and trip activity."
-      />
-    );
-  }
+  const total = data?.total ?? data?.total_lower_bound ?? null;
 
   return (
-    <main className="moovu-page text-slate-950">
-      <div className="moovu-shell max-w-7xl space-y-5">
-        <PageHeader
-          kicker="Customer Operations"
-          title="Customers"
-          description="Search registered riders, review activity, and open a complete customer profile."
-          actions={
-            <button type="button" className="moovu-btn moovu-btn-secondary" onClick={loadCustomers}>
-              Refresh
-            </button>
-          }
-        />
+    <div className="ad-page">
+      <header className="ad-head">
+        <h1>Customers</h1>
+        <p>{total === null ? "Loading…" : `${total.toLocaleString("en-ZA")} registered customer${total === 1 ? "" : "s"}${q ? " match your search" : ""}.`}</p>
+      </header>
 
-        {error ? (
-          <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">
-            {error}
-          </section>
-        ) : null}
-        {retrievalWarning ? <section className="rounded-3xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{retrievalWarning}</section> : null}
+      <div className="ad-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "all"} className={tab === "all" ? "is-on" : ""} onClick={() => setTab("all")}>All customers</button>
+        <button type="button" role="tab" aria-selected={tab === "duplicates"} className={tab === "duplicates" ? "is-on" : ""} onClick={() => setTab("duplicates")}>
+          Possible duplicates{dupCount ? ` (${dupCount})` : ""}
+        </button>
+      </div>
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Registered" value={totalCustomers == null ? `At least ${totalLowerBound ?? customers.length}` : String(totalCustomers)} helper={totalCustomers == null ? "Incomplete bounded result" : "Matching customer accounts"} />
-          <MetricCard label="Active" value={String(counts.active)} helper="Available accounts" tone="success" />
-          <MetricCard label="With trips" value={String(counts.has_trips)} helper="Customers who have booked" tone="primary" />
-          <MetricCard label="New" value={String(counts.recent)} helper="Registered in 30 days" />
-        </section>
+      {notice && <p className="ad-card text-sm font-semibold" role="status">{notice}</p>}
 
-        <section className="moovu-card space-y-4 p-4 sm:p-5">
-          <label className="block">
-            <span className="sr-only">Search customers</span>
-            <input
-              className="moovu-input bg-white"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search name, phone, or email"
-            />
-          </label>
-          <button className="moovu-btn moovu-btn-primary" onClick={() => { setPage(1); setAppliedQuery(query.trim()); }}>Search all customers</button>
-
-          <CompactTabs
-            ariaLabel="Customer filters"
-            value={filter}
-            onChange={(value) => { setFilter(value as CustomerFilter); setPage(1); }}
-            items={[
-              { value: "all", label: "All", count: counts.all },
-              { value: "active", label: "Active", count: counts.active },
-              { value: "inactive", label: "Inactive", count: counts.inactive },
-              { value: "has_trips", label: "Has trips", count: counts.has_trips },
-              { value: "no_trips", label: "No trips", count: counts.no_trips },
-              { value: "recent", label: "Recent", count: counts.recent },
-            ]}
-          />
-        </section>
-        <div className="flex items-center justify-center gap-3">
-          <button className="moovu-btn moovu-btn-secondary" disabled={page <= 1 || loading} onClick={() => setPage(value => value - 1)}>Previous</button>
-          <span className="text-sm font-bold">Page {page} of {Math.max(1, totalPages)}</span>
-          <button className="moovu-btn moovu-btn-secondary" disabled={page >= totalPages || loading} onClick={() => setPage(value => value + 1)}>Next</button>
-        </div>
-
-        <section className="moovu-card overflow-hidden p-0">
-          <div className="hidden grid-cols-[minmax(220px,1.3fr)_minmax(150px,0.8fr)_120px_130px_160px_110px] gap-4 border-b border-[var(--moovu-border)] bg-slate-50 px-5 py-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 lg:grid">
-            <span>Customer</span>
-            <span>Contact</span>
-            <span>Trips</span>
-            <span>Last status</span>
-            <span>Last activity</span>
-            <span>Account</span>
+      {tab === "duplicates" ? <Duplicates onChanged={msg => { setNotice(msg); void loadCustomers(q, page); }} /> : (
+        <section className="ad-card space-y-3">
+          <input type="search" className="w-full rounded-xl border border-slate-200 px-4 py-3" placeholder="Search name, phone or email"
+            value={q} onChange={e => { setQ(e.target.value); setPage(1); }} aria-label="Search customers" />
+          {error && <p className="ad-empty">{error}</p>}
+          {!data && !error && <p className="ad-empty">Loading customers…</p>}
+          {data && data.customers.length === 0 && <p className="ad-empty">No customers found.</p>}
+          <div className="ad-rows">
+            {data?.customers.map(c => (
+              <article key={c.id} className="ad-row">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="ad-row-title">{name(c)}</span>
+                    {c.status === "blocked" && <span className="ad-badge is-off">Blocked</span>}
+                    {c.account_source === "auth_only" && <span className="ad-badge is-waiting">Sign-up not finished</span>}
+                  </div>
+                  <div className="ad-row-sub">{[c.phone, c.email].filter(Boolean).join(" · ") || "No contact details"}</div>
+                  <div className="ad-row-sub">Joined {day(c.created_at)} · {c.completed_trips} completed trip{c.completed_trips === 1 ? "" : "s"}{c.cancelled_trips ? ` · ${c.cancelled_trips} cancelled` : ""} · spent R{Number(c.total_spend ?? 0).toFixed(0)}</div>
+                </div>
+                <div className="ad-row-actions">
+                  <Link href={`/admin/customers/${c.id}`} className="ad-btn">Open</Link>
+                  {c.account_source === "customer_profile" && <button type="button" className="ad-btn" onClick={() => setEditing(c)}>Edit</button>}
+                </div>
+              </article>
+            ))}
           </div>
-
-          {filteredCustomers.length === 0 ? (
-            <div className="p-5">
-              <EmptyState
-                title={retrievalWarning ? "No match in the retrieved customer set" : "No customers found"}
-                description={retrievalWarning ? "The retrieval boundary was reached, so this is not a conclusive no-match result. Refine the search." : "Try a different search or customer filter."}
-              />
-            </div>
-          ) : (
-            <div className="divide-y divide-[var(--moovu-border)]">
-              {filteredCustomers.map((customer) => {
-                const name = adminPersonName(customer, "Unnamed Customer");
-
-                return (
-                  <Link
-                    key={customer.id}
-                    href={`/admin/customers/${customer.id}`}
-                    className="grid gap-3 px-5 py-4 transition hover:bg-sky-50/50 lg:grid-cols-[minmax(220px,1.3fr)_minmax(150px,0.8fr)_120px_130px_160px_110px] lg:items-center lg:gap-4"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-black text-slate-950">{name}</div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        Joined {displayDate(customer.created_at)}
-                      </div>
-                    </div>
-                    <div className="min-w-0 text-sm text-slate-600">
-                      <div>{customer.phone ?? "No phone"}</div>
-                      <div className="truncate text-xs">{customer.email ?? "No email saved"}</div>
-                    </div>
-                    <div className="text-sm font-black text-slate-950">
-                      {customer.total_trips}
-                      <span className="ml-1 font-semibold text-slate-500">
-                        ({customer.completed_trips} done)
-                      </span>
-                    </div>
-                    <StatusBadge status={customer.last_trip_status ?? "no_trips"} />
-                    <div className="text-xs font-semibold text-slate-600">
-                      {displayDate(customer.last_activity)}
-                    </div>
-                    <StatusBadge status={customer.status ?? "active"} />
-                  </Link>
-                );
-              })}
-            </div>
+          {data && data.total_pages > 1 && (
+            <nav className="flex items-center justify-between gap-3" aria-label="Customer pages">
+              <button type="button" className="ad-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
+              <span className="ad-note">Page {page} of {data.total_pages}</span>
+              <button type="button" className="ad-btn" disabled={page >= data.total_pages} onClick={() => setPage(p => p + 1)}>Next</button>
+            </nav>
           )}
         </section>
-      </div>
-    </main>
+      )}
+
+      {editing && <EditSheet customer={editing} onClose={() => setEditing(null)} onSaved={msg => { setEditing(null); setNotice(msg); void loadCustomers(q, page); }} />}
+    </div>
   );
 }

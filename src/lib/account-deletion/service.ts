@@ -125,12 +125,15 @@ async function anonymizeCustomerProfile(params: {
 
   logNonCritical("full customer anonymization failed", error);
 
+  // customers.status only allows 'active' | 'blocked', so the fallback must use 'blocked'.
   const fallback = {
+    auth_user_id: null,
     first_name: "Deleted",
     last_name: "Customer",
+    email: null,
     phone: null,
     normalized_phone: null,
-    status: "inactive",
+    status: "blocked",
   };
   const { error: fallbackError } = await params.supabase
     .from("customers")
@@ -376,4 +379,44 @@ export async function deleteDriverAccount(params: {
   });
 
   return deleteAuthUser(params.supabase, params.user.id);
+}
+
+/**
+ * Admin-initiated customer removal (no password): same clean-up as self-deletion.
+ * Trips are kept for the books but anonymised; the login is soft-deleted.
+ */
+export async function adminDeleteCustomer(params: {
+  supabase: SupabaseClient;
+  customerId: string;
+  reason: string;
+}): Promise<DeleteResult> {
+  const { data: customer, error } = await params.supabase.from("customers")
+    .select("id,auth_user_id,status").eq("id", params.customerId).maybeSingle();
+  if (error) return { ok: false, status: 503, error: "Couldn't load the customer." };
+  if (!customer) return { ok: false, status: 404, error: "Customer not found." };
+  if (customer.status === "deleted") return { ok: true };
+  const active = await hasActiveCustomerTrip(params.supabase, customer.id);
+  if (!active.ok) return { ok: false, status: 503, error: "Couldn't check active rides. Please try again." };
+  if (active.active) return { ok: false, status: 409, error: "This customer has a ride in progress. Wait until it ends." };
+  const now = new Date().toISOString();
+  const userId = customer.auth_user_id as string | null;
+  if (userId) {
+    await cleanupCommonUserData(params.supabase, userId);
+    await safeDeleteByUserId(params.supabase, "customer_preferences", userId);
+    await safeDeleteByUserId(params.supabase, "saved_locations", userId);
+    await safeDeleteByUserId(params.supabase, "customer_saved_locations", userId);
+  }
+  await anonymizeCustomerTrips({ supabase: params.supabase, customerId: customer.id, userId: userId ?? "" });
+  // Remove the profile so customer counts stay accurate. Trips keep their history (customer_id becomes null).
+  // If finance records still point at this customer, anonymise and block instead of deleting.
+  const { error: deleteError } = await params.supabase.from("customers").delete().eq("id", customer.id);
+  if (deleteError) {
+    await anonymizeCustomerProfile({ supabase: params.supabase, customerId: customer.id, userId: userId ?? "", reason: params.reason, now });
+  }
+  if (!userId) return { ok: true };
+  const { error: authError } = await params.supabase.auth.admin.deleteUser(userId, true);
+  if (authError && authError.status !== 404) {
+    return { ok: false, status: 500, error: "The profile was removed but the login could not be deleted. Try again." };
+  }
+  return { ok: true };
 }

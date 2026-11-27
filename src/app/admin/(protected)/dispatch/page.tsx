@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { waLinkZA } from "@/lib/whatsapp";
 import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
-import StatusBadge from "@/components/ui/StatusBadge";
+import TripDispatchActions from "@/components/admin/TripDispatchActions";
 import { LIVE_LOCATION_CONFIG } from "@/lib/location/liveLocationConfig";
 import { supabaseClient } from "@/lib/supabase/client";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
@@ -63,7 +63,7 @@ export default function DispatchBoardPage() {
   const [closedPage, setClosedPage] = useState(1);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status] = useState("all");
   const [pagination, setPagination] = useState<{ openTripsTotal: number | null; closedTripsTotal: number | null; openTripsVisible: number; closedTripsVisible: number } | null>(null);
   const [rows, setRows] = useState<BoardTrip[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -229,252 +229,103 @@ export default function DispatchBoardPage() {
     return g;
   }, [rows]);
 
-  const stats = useMemo(
-    () => ({
-      requested: grouped.requested.length,
-      offered: grouped.offered.length,
-      active: grouped.active.length,
-      closed: grouped.closed.length,
-    }),
-    [grouped],
-  );
-
   function secondsLeft(expiresAt: string | null) {
     if (!expiresAt) return null;
     return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - nowMs) / 1000));
   }
 
-  function renderTripCard(trip: BoardTrip) {
+  function waitingFor(iso: string) {
+    const mins = Math.max(0, Math.floor((nowMs - Date.parse(iso)) / 60000));
+    return mins < 1 ? "just now" : `${mins} min`;
+  }
+
+  /** One line per trip that says, in plain words, what is happening and what you can do. */
+  function renderTripRow(trip: BoardTrip) {
     const left = secondsLeft(trip.offer_expires_at);
-
+    const noDriver = !trip.driver_id && (trip.status === "requested" || trip.status === "offered");
+    const story = ({
+      requested: trip.attempted_count > 0
+        ? `No driver yet — offered to ${trip.attempted_count} driver${trip.attempted_count === 1 ? "" : "s"}, none accepted.`
+        : "Looking for a driver.",
+      offered: `Offered to a driver${left != null ? ` · ${left}s left to accept` : ""} · ${trip.attempted_count} tried so far.`,
+      assigned: `${trip.driver?.name ?? "Driver"} is on the way to the pickup.`,
+      arrived: `${trip.driver?.name ?? "Driver"} is waiting at the pickup.`,
+      ongoing: `${trip.driver?.name ?? "Driver"} is driving the customer.`,
+      scheduled: "Scheduled ride.",
+      completed: `Completed by ${trip.driver?.name ?? "driver"}.`,
+      cancelled: `Cancelled${trip.cancel_reason ? `: ${trip.cancel_reason}` : ""}.`,
+    } as Record<string, string>)[trip.status] ?? trip.status;
     return (
-      <article key={trip.id} className="moovu-dispatch-card space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-              Trip {trip.id.slice(0, 8)}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <StatusBadge status={trip.status} />
-              {trip.offer_status ? <StatusBadge status={trip.offer_status} /> : null}
-            </div>
+      <article key={trip.id} className="ad-row">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="ad-row-title">{trip.pickup_address}</span>
+            <span className="ad-note">→ {trip.dropoff_address}</span>
           </div>
-
-          <div className="rounded-2xl bg-[var(--moovu-primary-soft)] px-3 py-2 text-right">
-            <div className="text-xs text-slate-500">Fare</div>
-            <div className="font-black text-slate-950">{money(trip.fare_amount)}</div>
-          </div>
+          <div className="ad-row-sub">{story}</div>
+          <div className="ad-row-sub">{money(trip.fare_amount)} {trip.payment_method === "online" ? "card" : "cash"} · requested {waitingFor(trip.created_at)} ago
+            {trip.dispatch_failure_reason && noDriver ? ` · ${trip.dispatch_failure_reason}` : ""}</div>
         </div>
-
-        <div className="space-y-3">
-          <div className="moovu-route-line">
-            <div className="moovu-route-line-marker" />
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Pickup</div>
-              <div className="mt-1 text-sm font-semibold text-slate-950">{trip.pickup_address}</div>
-            </div>
-          </div>
-          <div className="moovu-route-line">
-            <div className="moovu-route-line-marker" />
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Dropoff</div>
-              <div className="mt-1 text-sm font-semibold text-slate-950">{trip.dropoff_address}</div>
-            </div>
-          </div>
+        <div className="ad-row-actions">
+          {noDriver && <TripDispatchActions tripId={trip.id} onDone={(m) => { setMsg(m); void loadBoard(); }} />}
+          {trip.status === "offered" && trip.driver?.phone && <button type="button" className="ad-btn" onClick={() => openWhatsAppOffer(trip)}>WhatsApp driver</button>}
+          {trip.status === "offered" && <button type="button" className="ad-btn" disabled={busyId === trip.id} onClick={() => offerNext(trip.id)}>Next driver</button>}
+          {trip.driver?.phone && trip.status !== "offered" && <a className="ad-btn" href={`tel:${trip.driver.phone}`}>Call driver</a>}
+          <Link href={`/admin/trips/${trip.id}`} className="ad-btn">Open</Link>
         </div>
-
-        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Payment</div>
-            <div className="mt-1 font-bold text-slate-950">{trip.payment_method ?? "--"}</div>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Attempts</div>
-            <div className="mt-1 font-bold text-slate-950">{trip.attempted_count}</div>
-          </div>
-          <div className="col-span-2 rounded-2xl bg-slate-50 p-3 sm:col-span-1">
-            <div className="text-xs text-slate-500">Cycle / radius</div>
-            <div className="mt-1 font-bold text-slate-950">
-              {trip.dispatch_cycle ?? 0} / {trip.dispatch_search_radius_km != null ? `${trip.dispatch_search_radius_km} km` : "--"}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-amber-50 p-3 text-sm font-bold text-amber-900">
-          Dispatch failure reason: {trip.dispatch_failure_reason || "Reason unavailable"}
-        </div>
-
-        {(trip.offers?.length ?? 0) > 0 && <details className="rounded-2xl border p-3 text-sm">
-          <summary className="cursor-pointer font-black">Recorded offer responses ({trip.offers?.length})</summary>
-          <div className="mt-2 space-y-2">{trip.offers?.map(offer => <div key={offer.id} className="rounded-xl bg-slate-50 p-2">
-            <strong>{offer.status}</strong> · Driver {offer.driver_id.slice(0, 8)}<br />
-            Offered {offer.offered_at ? new Date(offer.offered_at).toLocaleString() : "Unavailable"} · response {offer.responded_at ? new Date(offer.responded_at).toLocaleString() : "Not recorded"}<br />
-            {offer.decline_reason ? `Recorded reason: ${offer.decline_reason}` : "Reason unavailable"}
-          </div>)}</div>
-        </details>}
-
-        {left != null ? (
-          <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800">
-            Offer timer: {left}s
-          </div>
-        ) : null}
-
-        <div className="rounded-2xl border border-[var(--moovu-border)] bg-white p-3 text-sm">
-          <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">Driver</div>
-          <div className="mt-1 font-bold text-slate-950">
-            {trip.driver
-              ? `${trip.driver.name}${trip.driver.phone ? ` (${trip.driver.phone})` : ""}`
-              : "Unassigned"}
-          </div>
-          {trip.driver ? (
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-              <span>{trip.driver.online ? "online" : "offline"}</span>
-              <span>{trip.driver.busy ? "busy" : "free"}</span>
-              <span>{trip.driver.subscription_status ?? "no subscription"}</span>
-              <span>Location seen {trip.driver.last_seen ? new Date(trip.driver.last_seen).toLocaleString() : "unavailable"}</span>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap gap-2 pt-1">
-          {(trip.status === "requested" || trip.status === "offered") && (
-            <button
-              className="moovu-btn moovu-btn-primary"
-              disabled={busyId === trip.id}
-              onClick={() => offerNext(trip.id)}
-            >
-              {busyId === trip.id ? "Working..." : "Offer nearest driver"}
-            </button>
-          )}
-
-          {trip.driver && (trip.status === "offered" || trip.status === "assigned") && (
-            <button
-              className="moovu-btn moovu-btn-secondary"
-              onClick={() => openWhatsAppOffer(trip)}
-            >
-              WhatsApp driver
-            </button>
-          )}
-
-          <Link className="moovu-btn moovu-btn-secondary" href={`/admin/trips/${trip.id}`}>
-            Open trip
-          </Link>
-        </div>
-
-        {trip.cancel_reason && (
-          <div className="rounded-2xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-            Cancel reason: {trip.cancel_reason}
-          </div>
-        )}
       </article>
     );
   }
 
-  function renderColumn(title: string, items: BoardTrip[], tone: "primary" | "warning" | "success" | "default") {
-    return (
-      <section className="moovu-dispatch-column">
-        <div className="flex items-center justify-between gap-2 px-1">
-          <div>
-            <h2 className="text-lg font-black text-slate-950">{title}</h2>
-            <p className="mt-1 text-xs text-slate-500">Live queue</p>
-          </div>
-          <div className={`moovu-app-metric-${tone} rounded-2xl px-3 py-2 text-sm font-black`}>
-            {items.length}
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          {items.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-[var(--moovu-border)] bg-white/70 p-5 text-sm text-slate-500">
-              {msg ? "Trip lane unavailable." : "No trips on this page."}
-            </div>
-          ) : (
-            items.map(renderTripCard)
-          )}
-        </div>
-      </section>
-    );
-  }
+  const lanes = [
+    { key: "waiting", title: "Needs a driver", hint: "Customers waiting — assign or re-offer.", rows: [...grouped.requested, ...grouped.offered], tone: "is-waiting" },
+    { key: "pickup", title: "Going to pickup", hint: "Driver accepted and is on the way, or has arrived.", rows: grouped.active.filter(t => t.status === "assigned" || t.status === "arrived"), tone: "is-live" },
+    { key: "trip", title: "On a trip", hint: "Customer is in the car.", rows: grouped.active.filter(t => t.status === "ongoing"), tone: "is-live" },
+    { key: "scheduled", title: "Scheduled", hint: "Booked for later.", rows: grouped.active.filter(t => t.status === "scheduled"), tone: "" },
+  ];
 
   return (
-    <main className="moovu-admin-operations-page space-y-5 text-black">
-      <section className="moovu-hero-panel p-4 sm:p-5">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
-              Dispatch board
-            </div>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-5xl">
-              Dispatch board
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/74">
-              Review trip state and offer state in separate lanes. Existing dispatch actions and refresh remain available.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Link href="/admin/dispatch/map" className="moovu-btn bg-white text-slate-950">
-              Open live map
-            </Link>
-            <button className="moovu-btn bg-white/12 text-white ring-1 ring-white/22" onClick={loadBoard}>
-              Refresh
-            </button>
-          </div>
+    <div className="ad-page">
+      {msg && <CenteredMessageBox title="Dispatch" message={msg} onClose={() => setMsg(null)} />}
+      <header className="ad-head flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1>Dispatch board</h1>
+          <p>What is happening right now. Updates live{realtimeConnected ? "" : " (reconnecting…)"}.</p>
         </div>
+        <Link href="/admin/dispatch/map" className="ad-btn">Open map</Link>
+      </header>
+
+      <section className="ad-stats" aria-label="Right now">
+        {lanes.map(l => (
+          <a key={l.key} href={`#lane-${l.key}`} className={`ad-stat${l.key === "waiting" && l.rows.length > 0 ? " is-attention" : ""}`}>
+            <small>{l.title}</small><strong>{l.rows.length}</strong>
+          </a>
+        ))}
       </section>
 
-      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
-      {retrievalWarning && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900">{retrievalWarning}</section>}
+      <input type="search" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3" placeholder="Search pickup, drop-off or trip ID"
+        value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { setSearch(query.trim()); setOpenPage(1); setClosedPage(1); } }}
+        onBlur={() => { if (query.trim() !== search) { setSearch(query.trim()); setOpenPage(1); setClosedPage(1); } }} aria-label="Search dispatch" />
+      {retrievalWarning && <p className="ad-note">{retrievalWarning}</p>}
 
-      <form className="flex flex-wrap gap-2" onSubmit={(event) => {
-        event.preventDefault();
-        setOpenPage(1);
-        setClosedPage(1);
-        setSearch(query.trim());
-      }}>
-        <input aria-label="Search dispatch trips" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Address or trip ID" />
-        <select aria-label="Trip status" value={status} onChange={(event) => {
-          setOpenPage(1);
-          setClosedPage(1);
-          setStatus(event.target.value);
-        }}>
-          {["all", "requested", "offered", "assigned", "arrived", "ongoing", "scheduled", "completed", "cancelled"].map((value) => <option key={value} value={value}>{value}</option>)}
-        </select>
-        <button className="moovu-btn moovu-btn-secondary">Search</button>
-      </form>
-      {pagination && <div className="flex flex-wrap gap-4">
-        <button disabled={openPage <= 1} onClick={() => setOpenPage(openPage - 1)}>Previous open</button>
-        <span>Open page {openPage} · {pagination.openTripsTotal ?? "Total unavailable"}</span>
-        <button disabled={pagination.openTripsTotal == null ? pagination.openTripsVisible < 50 : openPage * 50 >= pagination.openTripsTotal} onClick={() => setOpenPage(openPage + 1)}>Next open</button>
-        <button disabled={closedPage <= 1} onClick={() => setClosedPage(closedPage - 1)}>Previous closed</button>
-        <span>Closed page {closedPage} · {pagination.closedTripsTotal ?? "Total unavailable"}</span>
-        <button disabled={pagination.closedTripsTotal == null ? pagination.closedTripsVisible < 50 : closedPage * 50 >= pagination.closedTripsTotal} onClick={() => setClosedPage(closedPage + 1)}>Next closed</button>
-      </div>}
-      <section aria-label="Trip counts on the displayed pages" className="grid gap-3 md:grid-cols-4">
-        <div className="moovu-stat-card">
-          <div className="moovu-stat-label">Requested</div>
-          <div className="moovu-stat-value">{stats.requested}</div>
-        </div>
-        <div className="moovu-stat-card moovu-stat-card-primary">
-          <div className="moovu-stat-label">Offered</div>
-          <div className="moovu-stat-value">{stats.offered}</div>
-        </div>
-        <div className="moovu-stat-card">
-          <div className="moovu-stat-label">Active</div>
-          <div className="moovu-stat-value">{stats.active}</div>
-        </div>
-        <div className="moovu-stat-card">
-          <div className="moovu-stat-label">Closed</div>
-          <div className="moovu-stat-value">{stats.closed}</div>
-        </div>
-      </section>
+      {lanes.map(l => (
+        <section key={l.key} id={`lane-${l.key}`} className="ad-card">
+          <div className="ad-card-head">
+            <div><h2>{l.title} <span className={`ad-badge ${l.tone}`}>{l.rows.length}</span></h2><p className="ad-note">{l.hint}</p></div>
+          </div>
+          {l.rows.length === 0 ? <p className="ad-empty">Nothing here right now.</p> : <div className="ad-rows">{l.rows.map(renderTripRow)}</div>}
+        </section>
+      ))}
 
-      <div className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
-        {renderColumn("Requested", grouped.requested, "primary")}
-        {renderColumn("Offered", grouped.offered, "warning")}
-        {renderColumn("Active", grouped.active, "success")}
-        {renderColumn("Closed", grouped.closed, "default")}
-      </div>
-    </main>
+      <details className="ad-card">
+        <summary className="cursor-pointer font-black">Recently finished ({pagination?.closedTripsTotal ?? grouped.closed.length})</summary>
+        <div className="ad-rows mt-3">{grouped.closed.map(renderTripRow)}</div>
+        <div className="mt-3 flex items-center justify-between">
+          <button type="button" className="ad-btn" disabled={closedPage <= 1} onClick={() => setClosedPage(p => p - 1)}>Newer</button>
+          <span className="ad-note">Page {closedPage}</span>
+          <button type="button" className="ad-btn" disabled={(pagination?.closedTripsVisible ?? 0) < 50} onClick={() => setClosedPage(p => p + 1)}>Older</button>
+        </div>
+      </details>
+    </div>
   );
 }
