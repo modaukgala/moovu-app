@@ -44,6 +44,7 @@ import { getDriverLevel } from "@/lib/trust/driverLevels";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { recordPerformanceMetric } from "@/lib/performance/client";
 import NotificationPermissionReminder from "@/components/NotificationPermissionReminder";
+import SlideToAccept from "@/components/driver/premium/SlideToAccept";
 import OtpKeypad from "@/components/driver/premium/OtpKeypad";
 import type { CompletedFareSummary, CurrentTrip, Driver, DriverEarningsSnapshot, DriverEarningsTrip, GpsNotice, Offer, TripActionResponse } from "@/components/driver/home/types";
 import {
@@ -1570,44 +1571,22 @@ export default function DriverHomePage() {
                         <h3 className="driver-trip-otp-title">Start trip</h3>
                         <p className="driver-trip-otp-instruction">Ask the customer for their 4-digit start code before driving.</p>
 
-                        {!showStartOtp ? (
-                          <button
-                            onClick={() => setShowStartOtp(true)}
-                            disabled={busy}
-                            className="moovu-btn moovu-btn-primary mt-4 w-full sm:w-auto"
-                          >
-                            Enter start code
-                          </button>
-                        ) : (
-                          <div className="driver-trip-otp-form">
-                            <OtpKeypad label="Customer start code" value={startOtp} onChange={setStartOtp} disabled={busy} />
-
-                            <div className="driver-trip-otp-actions grid gap-3 sm:grid-cols-2">
-                              <button
-                                onClick={async () => {
-                                  await startTrip(currentTrip.id, startOtp);
-                                  setStartOtp("");
-                                  setShowStartOtp(false);
-                                }}
-                                disabled={busy || startOtp.trim().length < 4}
-                                className="moovu-btn moovu-btn-primary w-full"
-                              >
-                                {busy ? "Checking..." : "Verify and start"}
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setStartOtp("");
-                                  setShowStartOtp(false);
-                                }}
-                                disabled={busy}
-                                className="moovu-btn moovu-btn-secondary w-full"
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                        <div className="driver-trip-otp-form">
+                          <OtpKeypad label="Customer start code" value={startOtp} onChange={setStartOtp} disabled={busy} />
+                          <div className="mt-4">
+                            <SlideToAccept
+                              label="slide to start trip"
+                              busyLabel="Checking code…"
+                              busy={busy}
+                              disabled={busy || startOtp.trim().length < 4}
+                              onAccept={async () => {
+                                await startTrip(currentTrip.id, startOtp);
+                                setStartOtp("");
+                                setShowStartOtp(false);
+                              }}
+                            />
                           </div>
-                        )}
+                        </div>
 
                         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                           {noShowSecondsLeft == null ? (
@@ -1651,56 +1630,24 @@ export default function DriverHomePage() {
                         <h3 className="driver-trip-otp-title">End trip</h3>
                         <p className="driver-trip-otp-instruction">Ask the rider for their 4-digit end code to finish the trip.</p>
 
-                        {!showEndOtp && !showEndOtpBypass && (
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            <button
-                              onClick={() => setShowEndOtp(true)}
-                              disabled={busy}
-                              className="moovu-btn moovu-btn-primary w-full"
-                            >
-                              Enter end code and finish
-                            </button>
-                            <details className="driver-end-code-problem">
-                              <summary>Problem with the code?</summary>
-                              <button
-                                onClick={() => setShowEndOtpBypass(true)}
-                                disabled={busy}
-                                className="moovu-btn moovu-btn-secondary mt-2 w-full"
-                              >
+                        {!showEndOtpBypass && (
+                          <div className="driver-trip-otp-form">
+                            <OtpKeypad label="Customer end code" value={endOtp} onChange={setEndOtp} disabled={busy} />
+                            <div className="mt-4">
+                              <SlideToAccept
+                                label="slide to end trip"
+                                busyLabel="Checking code…"
+                                busy={busy}
+                                disabled={busy || endOtp.trim().length < 4}
+                                onAccept={() => completeTrip(currentTrip.id, { otp: endOtp, completionMode: "otp" })}
+                              />
+                            </div>
+                            <details className="driver-end-code-problem mt-3">
+                              <summary>⋯ Problem with the code?</summary>
+                              <button onClick={() => setShowEndOtpBypass(true)} disabled={busy} className="moovu-btn moovu-btn-secondary mt-2 w-full">
                                 Finish without end code
                               </button>
                             </details>
-                          </div>
-                        )}
-                        {showEndOtp && (
-                          <div className="driver-trip-otp-form">
-                            <OtpKeypad label="Customer end code" value={endOtp} onChange={setEndOtp} disabled={busy} />
-
-                            <div className="driver-trip-otp-actions grid gap-3 sm:grid-cols-2">
-                              <button
-                                onClick={async () => {
-                                  await completeTrip(currentTrip.id, {
-                                    otp: endOtp,
-                                    completionMode: "otp",
-                                  });
-                                }}
-                                disabled={busy || endOtp.trim().length < 4}
-                                className="moovu-btn w-full bg-emerald-600 text-white disabled:opacity-60"
-                              >
-                                {busy ? "Checking..." : "Verify and complete"}
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setEndOtp("");
-                                  setShowEndOtp(false);
-                                }}
-                                disabled={busy}
-                                className="moovu-btn moovu-btn-secondary w-full"
-                              >
-                                Cancel
-                              </button>
-                            </div>
                           </div>
                         )}
                       </div>

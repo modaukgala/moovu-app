@@ -1309,6 +1309,36 @@ export default function RideTrackingPage() {
     }
   }, [statusCta, trip?.duration_min, trip?.status]);
 
+  // Plain-words status for the pill at the top of the trip screen.
+  const liveStatusLabel = (() => {
+    if (!trip) return "Loading your trip";
+    if (searchingForDriver) return "Finding your driver";
+    switch (trip.status) {
+      case "assigned": return "Driver on the way";
+      case "arrived": return "Driver has arrived";
+      case "ongoing": return "On your way";
+      case "completed": return "Trip complete";
+      case "cancelled": return "Trip cancelled";
+      default: return statusLabel(trip.status);
+    }
+  })();
+
+  // Rough distance/time from the driver's live position (straight line, ~30 km/h in town).
+  const driverDistanceKm = (() => {
+    const target = trip?.status === "ongoing"
+      ? { lat: trip?.dropoff_lat, lng: trip?.dropoff_lng }
+      : { lat: trip?.pickup_lat, lng: trip?.pickup_lng };
+    if (driver?.lat == null || driver?.lng == null || target.lat == null || target.lng == null) return null;
+    const rad = (d: number) => (d * Math.PI) / 180;
+    const dLat = rad(Number(target.lat) - Number(driver.lat));
+    const dLng = rad(Number(target.lng) - Number(driver.lng));
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(Number(driver.lat))) * Math.cos(rad(Number(target.lat))) * Math.sin(dLng / 2) ** 2;
+    return 6371 * 2 * Math.asin(Math.sqrt(h)) * 1.3;
+  })();
+  const driverEtaLabel = driverDistanceKm == null
+    ? (trip?.status === "ongoing" ? displayDuration(trip?.duration_min) : "On the way")
+    : `${Math.max(1, Math.round((driverDistanceKm / 30) * 60))} min`;
+
   const progressSteps = useMemo(() => {
     const order = ["requested", "assigned", "arrived", "ongoing", "completed"];
     const labels = ["Request", "Driver", "Pickup", "Trip", "Done"];
@@ -1411,7 +1441,7 @@ export default function RideTrackingPage() {
   }
 
   return (
-    <main className={`moovu-page customer-trip-v3 is-${trip.status} text-black`}>
+    <main className={`moovu-page customer-trip-v3 ctl-page is-${trip.status} text-black`}>
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
       {addStopOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
@@ -2133,146 +2163,103 @@ export default function RideTrackingPage() {
         </section>
 
         <div className="grid gap-4">
-          {(trip?.status === "requested" || trip?.status === "offered") && !trip?.driver_id ? (
-            <DriverSearchProgress tripId={tripId} getAccessToken={getAccessToken} />
-          ) : null}
-          {trip && ["assigned", "arrived"].includes(String(trip.status)) && !trip.start_otp_verified && trip.start_otp ? (
-            <section className="customer-code-card" aria-label="Start code">
-              <p>Start code: tell your driver when you get in</p>
-              <strong>{String(trip.start_otp).split("").join(" ")}</strong>
-            </section>
-          ) : null}
-          {trip && trip.status === "ongoing" && !trip.end_otp_verified && trip.end_otp ? (
-            <section className="customer-code-card" aria-label="End code">
-              <p>End code: tell your driver when you arrive</p>
-              <strong>{String(trip.end_otp).split("").join(" ")}</strong>
-            </section>
-          ) : null}
-          <section className="customer-trip-map-card">
-            <div className="absolute left-4 top-4 z-10 rounded-full bg-white/95 px-4 py-2 text-sm font-black text-slate-700 shadow">
-              Live route
-            </div>
+          {/* Full-screen live map behind the trip sheet. */}
+          <section className="customer-trip-map-card ctl-map">
             {mapError ? (
-              <div className="flex min-h-[52svh] items-center justify-center bg-slate-50 p-6 text-sm text-slate-700 sm:min-h-[60vh] xl:min-h-[68vh]">
-                {mapError}
-              </div>
+              <div className="flex h-full items-center justify-center bg-slate-50 p-6 text-sm text-slate-700">{mapError}</div>
             ) : (
-              <div ref={mapRef} className="min-h-[52svh] w-full bg-slate-100 sm:min-h-[60vh] xl:min-h-[68vh]" />
+              <div ref={mapRef} className="h-full w-full bg-slate-100" />
             )}
-
-            <div className="customer-trip-map-sheet">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                    Current status
-                  </div>
-                  <div className="mt-1 text-lg font-black text-slate-950">
-                    {statusLabel(trip.status)}
-                  </div>
-                </div>
-                {trip.status === "completed" && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveDetailModal("receipt")}
-                    className="moovu-btn moovu-btn-primary"
-                  >
-                    Receipt
-                  </button>
-                )}
-              </div>
-              <div className="customer-command-actions">
-                {(["route", "fare", "safety", "support", "receipt"] as const).map((action) => (
-                  (() => {
-                    const Icon = tripActionIcons[action];
-                    return (
-                  <button
-                    key={action}
-                    type="button"
-                    className="customer-command-button"
-                    onClick={() => setActiveDetailModal(action)}
-                  >
-                    <Icon aria-hidden="true" />
-                    {action}
-                  </button>
-                    );
-                  })()
-                ))}
-              </div>
-            </div>
           </section>
 
-          <section id="customer-driver-card" className="customer-trip-compact-stack">
-            <div className="customer-trip-compact-card">
-              <div className="min-w-0">
-                <div className="customer-trip-compact-kicker">{canShowDriverDetails ? "Your Driver" : rideTypeLabel(trip.ride_type)}</div>
-                <h2>{canShowDriverDetails ? driverName : searchingForDriver ? "Looking for nearby MOOVU drivers" : "MOOVU trip"}</h2>
-                <p>{canShowDriverDetails ? carText : "Driver details appear after acceptance"}</p>
-                <strong>{tripTotalLabel}: {money(displayTotal)}</strong>
-                {canShowDriverDetails && (
-                  <span>Plate {displayValue(driver?.vehicle_registration)}</span>
-                )}
-              </div>
-              <div className={canShowDriverDetails ? "customer-driver-avatar is-live" : "customer-driver-avatar"}>
-                {canShowDriverDetails ? driverInitials(driver) : <span />}
-              </div>
-            </div>
+          <div className="ctl-pill" role="status" aria-live="polite">
+            <span className="ctl-dot" aria-hidden="true" />
+            {liveStatusLabel}
+          </div>
 
-            {canCancel && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-blue-100 bg-blue-50 px-4 py-3">
+          <section id="customer-driver-card" className="ctl-sheet" aria-label="Trip status">
+            <div className="ctl-grab" aria-hidden="true" />
+
+            {searchingForDriver ? (
+              <>
                 <div>
-                  <div className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">
-                    Cancellation terms
-                  </div>
-                  <p className="mt-1 text-sm font-semibold text-slate-700">
-                    Review the current fee with MOOVU before confirming.
-                  </p>
+                  <h1 className="ctl-title">Finding your driver</h1>
+                  <p className="ctl-sub">Asking MOOVU drivers near you · usually under 2 minutes</p>
                 </div>
-                <button
-                  type="button"
-                  className="moovu-btn moovu-btn-secondary min-h-11"
-                  onClick={() => setActiveDetailModal("support")}
-                >
-                  Cancel trip
-                </button>
-              </div>
-            )}
+                <div className="ctl-progress" aria-hidden="true"><i /></div>
+              </>
+            ) : null}
 
-            <div className="customer-trip-action-tabs" aria-label="Trip actions">
-              {(["route", "fare", "safety", "support", "receipt"] as const).map((action) => (
-                (() => {
-                  const Icon = tripActionIcons[action];
-                  return (
-                <button
-                  key={action}
-                  type="button"
-                  className="customer-trip-action-tab"
-                  onClick={() => setActiveDetailModal(action)}
-                >
-                  <Icon aria-hidden="true" />
-                  {action}
-                </button>
-                  );
-                })()
-              ))}
+            {canShowDriverDetails && ["assigned", "arrived", "ongoing"].includes(trip.status) ? (
+              <div className="ctl-eta">
+                <b>{trip.status === "arrived" ? "Your driver is here" : driverEtaLabel}</b>
+                <span>{trip.status === "assigned" ? `away${driverDistanceKm != null ? ` · ${driverDistanceKm.toFixed(1)} km` : ""}` : trip.status === "ongoing" ? "to drop-off" : "Meet them at the pickup"}</span>
+              </div>
+            ) : null}
+
+            {!searchingForDriver && !canShowDriverDetails ? (
+              <div>
+                <h1 className="ctl-title">{stageDetail.title}</h1>
+                <p className="ctl-sub">{stageDetail.body}</p>
+              </div>
+            ) : null}
+
+            {canShowDriverDetails ? (
+              <div className="ctl-driver">
+                <div className="ctl-avatar">{driverInitials(driver)}</div>
+                <div className="min-w-0">
+                  <div className="ctl-driver-name">{driverName}</div>
+                  <div className="ctl-driver-car">{carText}</div>
+                </div>
+                {driver?.vehicle_registration ? <div className="ctl-plate">{driver.vehicle_registration}</div> : null}
+              </div>
+            ) : null}
+
+            {trip && ["assigned", "arrived"].includes(String(trip.status)) && !trip.start_otp_verified && trip.start_otp ? (
+              <div className="ctl-code" aria-label="Start code"><span>Give your driver this code when you get in</span><b>{String(trip.start_otp)}</b></div>
+            ) : null}
+            {trip && trip.status === "ongoing" && !trip.end_otp_verified && trip.end_otp ? (
+              <div className="ctl-code" aria-label="End code"><span>Give your driver this code when you arrive</span><b>{String(trip.end_otp)}</b></div>
+            ) : null}
+
+            {canShowDriverDetails && ["assigned", "arrived"].includes(trip.status) ? (
+              <div className="ctl-actions">
+                <button type="button" className="ctl-btn" onClick={() => setActiveDetailModal("safety")}>Safety</button>
+                {driver?.phone ? <a className="ctl-btn is-primary" href={`tel:${driver.phone}`}>Call driver</a> : <button type="button" className="ctl-btn is-primary" onClick={() => setActiveDetailModal("support")}>Help</button>}
+              </div>
+            ) : null}
+            {trip.status === "ongoing" ? (
+              <div className="ctl-actions">
+                <Link href={`/ride/${trip.id}/share`} className="ctl-btn">Share trip</Link>
+                <button type="button" className="ctl-btn" onClick={() => setActiveDetailModal("safety")}>Safety</button>
+              </div>
+            ) : null}
+
+            {searchingForDriver || trip.status === "ongoing" ? (
+              <div className="ctl-route">
+                {searchingForDriver ? <div><i /><b>{trip.pickup_address}</b><span>Pickup</span></div> : null}
+                <div><i className="is-drop" /><b>{trip.dropoff_address}</b><span>Drop-off</span></div>
+              </div>
+            ) : null}
+
+            <div className="ctl-fare">
+              <span>{rideTypeLabel(trip.ride_type)} · {trip.payment_method === "online" ? "Card" : "Cash"}</span>
+              <b>{money(displayTotal)}</b>
             </div>
 
-            <div className="customer-trip-compact-footer">
-              <button
-                type="button"
-                className="customer-trip-more-button"
-                onClick={() => setDetailsMenuOpen(true)}
-              >
-                More details
-              </button>
-              {trip.status === "completed" && (
-                <button
-                  type="button"
-                  onClick={() => router.push("/")}
-                  className="customer-trip-more-button is-primary"
-                >
-                  Done
-                </button>
-              )}
+            {trip.status === "completed" ? (
+              <div className="ctl-actions">
+                <button type="button" className="ctl-btn" onClick={() => setActiveDetailModal("receipt")}>Receipt</button>
+                <button type="button" className="ctl-btn is-primary" onClick={() => router.push("/book")}>Done</button>
+              </div>
+            ) : null}
+
+            <div className="ctl-links">
+              {(["route", "fare", "support"] as const).map((action) => (
+                <button key={action} type="button" onClick={() => setActiveDetailModal(action)}>{action === "support" ? "Help" : action === "route" ? "Route" : "Fare"}</button>
+              ))}
+              <button type="button" onClick={() => setDetailsMenuOpen(true)}>More</button>
+              {canCancel ? <button type="button" className="is-danger" onClick={() => setActiveDetailModal("support")}>Cancel trip</button> : null}
             </div>
           </section>
 
