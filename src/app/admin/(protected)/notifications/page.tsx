@@ -172,21 +172,14 @@ export default function AdminNotificationsPage() {
   }, [loadLogs]);
 
   return (
-    <main className="space-y-6 text-black">
+    <main className="ad-page text-black">
       {message && <CenteredMessageBox message={message} onClose={() => setMessage(null)} />}
 
-      <section className="moovu-hero-panel p-5 sm:p-7">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
-              Notifications
-            </div>
-            <h1 className="mt-3 max-w-3xl text-3xl font-black tracking-tight text-white sm:text-5xl">
-              Test Firebase push delivery before production rollout.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/74">
-              Admin protected utility for checking token registration and role-based delivery.
-            </p>
+      <section className="ad-card">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="ad-head">
+            <h1>Notification check</h1>
+            <p>Use this when someone says they aren&apos;t getting notifications. It shows whether this device can receive alerts, and lets you send a test notification to admins, drivers or customers to see if it arrives.</p>
           </div>
 
           <EnableNotificationsButton role="admin" variant="inline" />

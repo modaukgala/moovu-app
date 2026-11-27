@@ -150,15 +150,14 @@ export default function AdminReportsPage() {
       <nav aria-label="Report sections" className="moovu-admin-filter-panel flex flex-wrap gap-2">
         <button type="button" aria-current={view === "overview" ? "page" : undefined} className="moovu-btn moovu-btn-secondary" onClick={() => setView("overview")}>Overview, trips and commissions</button>
         <button type="button" aria-current={view === "driver-earnings" ? "page" : undefined} className="moovu-btn moovu-btn-secondary" onClick={() => setView("driver-earnings")}>Driver earnings</button>
-        <Link className="moovu-btn moovu-btn-secondary" href="/admin/online-payments">Online payments</Link>
-        <Link className="moovu-btn moovu-btn-secondary" href="/admin/subscriptions">Subscriptions</Link>
+        <Link className="moovu-btn moovu-btn-secondary" href="/admin/online-payments">Card payments</Link>
       </nav>
       {view === "driver-earnings" ? <DriverEarningsReportPage /> : <>
       <div className="moovu-admin-page-heading">
         <div className="moovu-section-title">Finance reports</div>
-        <h1 className="mt-1 text-2xl font-black text-slate-950">Trip and fee report</h1>
+        <h1 className="mt-1 text-2xl font-black text-slate-950">Reports</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Completed trips use their stored fare and commission amounts. Cancellation and no-show fees are shown separately from trip commission.
+          Pick dates to see completed trips with their fare and commission, plus cancellation and no-show fees (shown separately). Switch to Driver earnings to see what each driver made. Download to Excel with the export button.
         </p>
       </div>
 

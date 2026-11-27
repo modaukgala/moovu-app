@@ -441,13 +441,11 @@ export default function AdminCommissionPaymentsPage() {
               Commission payments
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Review driver commission POPs, track outstanding balances, and keep MOOVU collections clear from subscription revenue.
+              What each driver owes MOOVU from cash trips (commission and booking fees), and the proof-of-payment slips drivers send when they pay. Approve a slip once you see the money in the bank. Card-trip commission is taken off automatically in Driver payouts.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/admin/subscriptions" className="moovu-btn moovu-btn-secondary">
-              Subscription history
-            </Link>
+
             <button className="moovu-btn moovu-btn-primary" onClick={() => void loadData()}>
               Refresh
             </button>

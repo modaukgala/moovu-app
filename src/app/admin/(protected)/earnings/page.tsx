@@ -129,161 +129,77 @@ export default function AdminEarningsPage() {
     return <LoadingState title="Loading admin earnings..." />;
   }
 
+  const methods = Object.entries(earnings?.by_payment_method ?? {}).map(([method, v]) => ({
+    method, ...(typeof v === "number" ? { revenue: v, commission: 0, count: 0 } : v),
+  }));
+
   return (
-    <main className="moovu-admin-finance-page space-y-5 text-black">
-      <div className="space-y-5">
-        <div className="moovu-admin-page-heading flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="moovu-section-title">Finance overview</div>
-            <h1 className="mt-1 text-2xl font-black text-slate-950">Trip earnings</h1>
-            <p className="text-gray-700 mt-2">
-              Review stored trip revenue, MOOVU commission and estimated Driver earnings. Payables and actual payouts are separate records.
-            </p>
+    <div className="ad-page moovu-admin-finance-page">
+      {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
+      <header className="ad-head">
+        <h1>Money overview</h1>
+        <p>What customers paid for completed trips, what MOOVU earned in commission, and what drivers earned. Cancelled trips aren&apos;t counted.</p>
+      </header>
+
+      <section className="ad-card grid gap-3 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
+        <label className="text-sm font-semibold">From<input type="date" className="mt-1 w-full rounded-xl border px-3 py-2" value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label className="text-sm font-semibold">To<input type="date" className="mt-1 w-full rounded-xl border px-3 py-2" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label className="text-sm font-semibold">Driver
+          <select className="mt-1 w-full rounded-xl border px-3 py-2" value={driverId} onChange={e => setDriverId(e.target.value)}>
+            <option value="">All drivers</option>
+            {driverOptions.map(d => <option key={d.id} value={d.id}>{[d.first_name, d.last_name].filter(Boolean).join(" ") || "Driver"}</option>)}
+          </select>
+        </label>
+        <button type="button" className="ad-btn" onClick={() => { setFrom(""); setTo(""); setDriverId(""); }}>Clear</button>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        {([["Today", earnings?.today_total, earnings?.today_commission], ["This week", earnings?.week_total, earnings?.week_commission], ["This month", earnings?.month_total, earnings?.month_commission]] as const).map(([label, paid, commission]) => (
+          <article key={label} className="ad-card">
+            <p className="ad-note font-bold">{label}</p>
+            <p className="mt-1 text-2xl font-black">{money(paid)}</p>
+            <p className="ad-note">customers paid · MOOVU earned <b>{money(commission)}</b></p>
+          </article>
+        ))}
+      </section>
+
+      <section className="ad-card">
+        <div className="ad-card-head"><h2>{from || to || driverId ? "In your filter" : "All time"}</h2><span className="ad-note">{earnings?.total_completed_trips ?? 0} completed trips</span></div>
+        <dl className="grid gap-3 sm:grid-cols-3">
+          <div><dt className="ad-note">Customers paid</dt><dd className="text-xl font-black">{money(earnings?.total_revenue)}</dd></div>
+          <div><dt className="ad-note">MOOVU commission{earnings?.commission_rate_label ? ` (${earnings.commission_rate_label})` : ""}</dt><dd className="text-xl font-black">{money(earnings?.total_commission)}</dd></div>
+          <div><dt className="ad-note">Drivers earned</dt><dd className="text-xl font-black">{money(earnings?.estimated_driver_payout)}</dd></div>
+        </dl>
+        {methods.length > 0 && (
+          <div className="ad-rows mt-4">
+            {methods.map(m => (
+              <div key={m.method} className="ad-row">
+                <div><div className="ad-row-title">{m.method === "online" ? "Card" : m.method === "cash" ? "Cash" : m.method}</div><div className="ad-row-sub">{m.count} trips · MOOVU earned {money(m.commission)}</div></div>
+                <b>{money(m.revenue)}</b>
+              </div>
+            ))}
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Link href="/admin/trips" className="moovu-btn moovu-btn-secondary">
-              View Trips
-            </Link>
-
-            <button
-              onClick={loadEarnings}
-              className="moovu-btn moovu-btn-primary"
-              style={{ background: "var(--moovu-primary)" }}
-            >
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
-        <div className="moovu-admin-filter-panel grid gap-3 sm:grid-cols-3">
-          <label className="text-sm">From<input className="moovu-input mt-1" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
-          <label className="text-sm">To<input className="moovu-input mt-1" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-          <label className="text-sm">Driver<select className="moovu-input mt-1" value={driverId} onChange={(event) => setDriverId(event.target.value)}>
-            <option value="">All Drivers</option>{driverOptions.map((driver) => <option key={driver.id} value={driver.id}>{`${driver.first_name ?? ""} ${driver.last_name ?? ""}`.trim() || driver.id}</option>)}
-          </select></label>
-        </div>
-        {!earnings ? (
-          <div className="moovu-card p-5 sm:p-6">
-            No earnings data found.
-          </div>
-        ) : (
-          <>
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-              <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">Today · trip fare value</div>
-                <div className="text-2xl font-semibold mt-2">{money(earnings.today_total)}</div>
-              </div>
-
-              <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">This week · trip fare value</div>
-                <div className="text-2xl font-semibold mt-2">{money(earnings.week_total)}</div>
-              </div>
-
-              <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">This month · trip fare value</div>
-                <div className="text-2xl font-semibold mt-2">{money(earnings.month_total)}</div>
-              </div>
-
-              <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">Completed trip fare value</div>
-                <div className="text-2xl font-semibold mt-2">{money(earnings.total_revenue)}</div>
-              </div>
-
-              <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">MOOVU Commission</div>
-                <div className="text-2xl font-semibold mt-2">{money(earnings.total_commission)}</div>
-              </div>
-
-              <div className="border rounded-2xl p-5 bg-white shadow-sm">
-                <div className="text-sm text-gray-600">Estimated Driver Earnings</div>
-                <div className="text-2xl font-semibold mt-2">
-                  {money(earnings.estimated_driver_payout)}
-                </div>
-              </div>
-            </section>
-
-            <section className="grid lg:grid-cols-2 gap-6">
-              <div className="moovu-card space-y-4 p-5 sm:p-6">
-                <h2 className="text-xl font-semibold">Trip payment methods · fare basis</h2>
-
-                {Object.keys(earnings.by_payment_method).length === 0 ? (
-                  <p className="text-gray-700">No completed trips with payment methods yet.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {Object.entries(earnings.by_payment_method).map(([key, value]) => {
-                      const revenue =
-                        typeof value === "number" ? value : value.revenue;
-                      const commission =
-                        typeof value === "number" ? null : value.commission;
-                      const count =
-                        typeof value === "number" ? null : value.count;
-
-                      return (
-                        <div key={key} className="moovu-data-row">
-                          <div className="flex items-center justify-between">
-                            <div className="capitalize font-medium">{key}</div>
-                            <div className="font-semibold">{money(revenue)}</div>
-                          </div>
-
-                          {(commission != null || count != null) && (
-                            <div className="text-sm text-gray-600 mt-2">
-                              {commission != null && <>Commission: {money(commission)}</>}
-                              {commission != null && count != null && " • "}
-                              {count != null && <>Trips: {count}</>}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="moovu-card space-y-4 p-5 sm:p-6">
-                <h2 className="text-xl font-semibold">Completed Trips</h2>
-
-                <div className="moovu-data-row">
-                  <div className="text-sm text-gray-600">Total Completed Trips</div>
-                  <div className="text-3xl font-semibold mt-2">
-                    {earnings.total_completed_trips}
-                  </div>
-                </div>
-
-                <div className="moovu-data-row">
-                  <div className="text-sm text-gray-600">Commission basis</div>
-                  <div className="mt-2 text-sm text-slate-700">
-                    Totals use the commission stored on each completed trip. Historical trips may use different rates.
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="moovu-card space-y-4 p-5 sm:p-6">
-              <h2 className="text-xl font-semibold">Recent completed trips</h2>
-
-              {earnings.recent_completed_trips.length === 0 ? (
-                <p className="text-gray-700">No completed trips yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[740px] text-left text-sm">
-                    <thead className="border-b text-slate-600"><tr><th className="py-2 pr-4">Completed</th><th className="py-2 pr-4">Driver</th><th className="py-2 pr-4">Route</th><th className="py-2 pr-4 text-right">Fare value</th><th className="py-2 pr-4 text-right">MOOVU commission</th><th className="py-2 text-right">Driver earnings</th></tr></thead>
-                    <tbody>{earnings.recent_completed_trips.map((trip) => <tr key={trip.id} className="border-b align-top last:border-0">
-                      <td className="py-3 pr-4 whitespace-nowrap">{trip.completed_at ?? trip.created_at ? new Date(trip.completed_at ?? trip.created_at!).toLocaleString() : "—"}</td>
-                      <td className="py-3 pr-4">{trip.driver_name ?? "Unavailable"}</td>
-                      <td className="py-3 pr-4"><span className="block">{trip.pickup_address ?? "Pickup unavailable"}</span><span className="block text-slate-500">{trip.dropoff_address ?? "Drop-off unavailable"}</span></td>
-                      <td className="py-3 pr-4 text-right whitespace-nowrap">{money(trip.fare_amount)}</td>
-                      <td className="py-3 pr-4 text-right whitespace-nowrap">{money(trip.commission_amount)}</td>
-                      <td className="py-3 text-right whitespace-nowrap">{money(trip.driver_net_earnings)}</td>
-                    </tr>)}</tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          </>
         )}
-      </div>
-    </main>
+        <p className="ad-note mt-3">On cash trips the driver keeps the money and owes MOOVU the commission and booking fee. On card trips MOOVU receives the money and pays the driver out. See the Driver earnings report in <Link className="underline" href="/admin/reports">Reports</Link>, <Link className="underline" href="/admin/online-payouts">Driver payouts</Link> and <Link className="underline" href="/admin/commission-payments">Commission payments</Link>.</p>
+      </section>
+
+      <section className="ad-card">
+        <div className="ad-card-head"><h2>Latest completed trips</h2><Link href="/admin/trips">All trips →</Link></div>
+        {(earnings?.recent_completed_trips ?? []).length === 0 ? <p className="ad-empty">No completed trips in this filter.</p> : (
+          <div className="ad-rows">
+            {(earnings?.recent_completed_trips ?? []).slice(0, 25).map(t => (
+              <Link key={t.id} href={`/admin/trips/${t.id}`} className="ad-row">
+                <div className="min-w-0">
+                  <div className="ad-row-title">{t.driver_name ?? "Driver"} · {t.payment_method === "online" ? "card" : "cash"}</div>
+                  <div className="ad-row-sub">{t.pickup_address} → {t.dropoff_address}</div>
+                  <div className="ad-row-sub">{t.completed_at ? new Date(t.completed_at).toLocaleString("en-ZA") : ""} · commission {money(t.commission_amount)} · driver {money(t.driver_net_earnings)}</div>
+                </div>
+                <b>{money(t.fare_amount)}</b>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

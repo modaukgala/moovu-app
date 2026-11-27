@@ -6,6 +6,14 @@ import { supabaseClient } from '@/lib/supabase/client';
 import type { OnlinePaymentReport, OnlinePaymentReportRow } from '@/lib/payments/onlineReport';
 import styles from './report.module.css';
 
+type Extra = { customer_phone?: string | null; outcome?: string };
+const OUTCOME: Record<string, { label: string; tone: string }> = {
+  COMPLETED: { label: 'Trip completed', tone: 'is-done' },
+  IN_PROGRESS: { label: 'Trip in progress', tone: 'is-live' },
+  REFUND_REQUESTED: { label: 'Cancelled · refund requested', tone: 'is-waiting' },
+  REFUNDED: { label: 'Cancelled · refunded', tone: '' },
+  CANCELLED_NOT_REFUNDED: { label: 'Cancelled · not refunded', tone: 'is-off' },
+};
 const money = (cents: number) => new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(cents/100);
 const date = (value: string) => new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 function day(offset = 0) {
@@ -65,8 +73,8 @@ export default function OnlinePaymentsPage() {
     setRange(value);setPage(1);
     if(value!=='custom'){setFrom(day(1-Number(value)));setTo(day());}
   };
-  return <main className={`${styles.report} moovu-admin-finance-page`}>
-    <header className={styles.header}><div><h1>Online Payments</h1><p>Verified online payments processed through Yoco.</p></div>
+  return <main className={`${styles.report} moovu-admin-finance-page ad-page`}>
+    <header className={styles.header}><div><h1>Card payments</h1><p>Every card payment through Yoco, who paid, their number, and what happened to the trip.</p></div>
       <button aria-label="Refresh online payments" title="Refresh" disabled={loading} onClick={()=>void load()}><RefreshCw size={20}/></button></header>
     <div className={styles.filters}>
       <div role="group" aria-label="Payer filter">{[['all','All'],['customer','Customers'],['driver','Drivers']].map(([value,label])=><button key={value} aria-pressed={payer===value} onClick={()=>{setPayer(value);setPage(1);}}>{label}</button>)}</div>
@@ -80,15 +88,15 @@ export default function OnlinePaymentsPage() {
     <p className={styles.note}>Verification time · South Africa (SAST)</p>
     {error?<div role="alert" className={styles.empty}>{error}<button onClick={()=>void load()}>Try again</button></div>:loading?<div aria-label="Loading payments" className={styles.skeleton}/>:!report?.payments.length?<div className={styles.empty}><CreditCard/><p>No approved online payments found.</p></div>:<div className={styles.list}>
       {report.payments.map(row=><button key={row.provider_payment_id} className={styles.payment} onClick={e=>{opener.current=e.currentTarget;setSelected(row);}}>
-        <span><small>{date(row.verified_at)}</small><strong>{row.payer}</strong><span>{row.payer_type==='customer'?'Customer · Trip':'Driver · Commission'}</span><small>{row.trip_id?`${row.pickup_address??'Pickup unavailable'} → ${row.dropoff_address??'Destination unavailable'}`:row.purpose}</small></span>
-        <span className={styles.amount}><strong>{money(row.amount_cents)}</strong><span className={styles.approved}>Approved</span><small>{row.provider_payment_id}</small></span><ChevronRight size={18}/>
+        <span><small>{date(row.verified_at)}</small><strong>{row.payer}</strong><span>{row.payer_type==='customer'?`Customer · Trip${(row as Extra).customer_phone?` · ${(row as Extra).customer_phone}`:''}`:'Driver · Commission'}</span><small>{row.trip_id?`${row.pickup_address??'Pickup unavailable'} → ${row.dropoff_address??'Destination unavailable'}`:row.purpose}</small></span>
+        <span className={styles.amount}><strong>{money(row.amount_cents)}</strong>{(row as Extra).outcome?<span className={`ad-badge ${OUTCOME[(row as Extra).outcome!]?.tone??''}`}>{OUTCOME[(row as Extra).outcome!]?.label}</span>:<span className={styles.approved}>Paid</span>}</span><ChevronRight size={18}/>
       </button>)}
     </div>}
     {report&&report.total>20&&<div className={styles.pagination}><button aria-label="Previous page" disabled={page===1||loading} onClick={()=>setPage(page-1)}><ChevronLeft/></button><span>Page {page} of {Math.ceil(report.total/20)}</span><button aria-label="Next page" disabled={page*20>=report.total||loading} onClick={()=>setPage(page+1)}><ChevronRight/></button></div>}
     {selected&&<div className={styles.backdrop} onClick={()=>setSelected(null)}><div role="dialog" aria-modal="true" aria-labelledby="payment-title" className={styles.dialog} onClick={e=>e.stopPropagation()}>
       <header className={styles.header}><h2 id="payment-title">Payment details</h2><button ref={close} aria-label="Close payment details" onClick={()=>setSelected(null)}><X/></button></header>
       <strong className={styles.detailAmount}>{money(selected.amount_cents)}</strong><span className={styles.approved}>Approved</span>
-      <dl>{Object.entries({Payer:selected.payer,'Payer type':selected.payer_type==='customer'?'Customer':'Driver',Purpose:selected.purpose,'Verified at (SAST)':date(selected.verified_at),Trip:selected.trip_id,Pickup:selected.pickup_address,Destination:selected.dropoff_address,'Yoco payment ID':selected.provider_payment_id,'Yoco checkout ID':selected.provider_checkout_id,'MOOVU payment attempt':selected.id,'Commission settlement ledger':selected.payer_type==='driver'?selected.payment_ledger_transaction_id:null,'Ledger transaction':selected.payment_ledger_transaction_id,'Provider event':selected.provider_event_id}).filter(([,value])=>value).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      <dl>{Object.entries({Payer:selected.payer,Phone:(selected as Extra).customer_phone??null,'What happened':(selected as Extra).outcome?OUTCOME[(selected as Extra).outcome!]?.label:null,'Payer type':selected.payer_type==='customer'?'Customer':'Driver',Purpose:selected.purpose,'Verified at (SAST)':date(selected.verified_at),Trip:selected.trip_id,Pickup:selected.pickup_address,Destination:selected.dropoff_address,'Yoco payment ID':selected.provider_payment_id,'Yoco checkout ID':selected.provider_checkout_id,'MOOVU payment attempt':selected.id,'Commission settlement ledger':selected.payer_type==='driver'?selected.payment_ledger_transaction_id:null,'Ledger transaction':selected.payment_ledger_transaction_id,'Provider event':selected.provider_event_id}).filter(([,value])=>value).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     </div></div>}
   </main>;
 }

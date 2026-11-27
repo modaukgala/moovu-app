@@ -2,8 +2,8 @@ import AdminPayoutRequests from "@/components/finance/AdminPayoutRequests";
 import OnlinePayoutsPanel from "@/components/finance/OnlinePayoutsPanel";
 
 export default function AdminOnlinePayoutsPage() {
-  return <main className="moovu-admin-finance-page space-y-5 p-4 sm:p-6">
-    <h1 className="text-2xl font-black text-slate-950">Driver Payouts</h1>
+  return <main className="ad-page moovu-admin-finance-page">
+    <header className="ad-head"><h1>Driver payouts</h1><p>Drivers ask to be paid their card-trip earnings (from R50). Pay them by PayShap, then mark the request as paid.</p></header>
     <AdminPayoutRequests />
     <details className="moovu-card p-4">
       <summary className="cursor-pointer font-bold">Older batch payouts</summary>

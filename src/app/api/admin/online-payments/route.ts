@@ -37,5 +37,31 @@ export async function GET(req: Request) {
     console.error('[admin-online-payments] report failed', { code: error.code });
     return NextResponse.json({ ok: false, error: "We couldn't load online payments." }, { status: 500 });
   }
+  // Add what happened to each paid trip, and the customer's phone, so refunds can be arranged.
+  const report = data as { payments?: Array<Record<string, unknown>> } | null;
+  const rows = report?.payments ?? [];
+  const tripIds = rows.map(r => r.trip_id).filter((v): v is string => typeof v === 'string');
+  const attemptIds = rows.map(r => r.id).filter((v): v is string => typeof v === 'string');
+  if (tripIds.length) {
+    const [trips, attempts, asks] = await Promise.all([
+      auth.supabaseAdmin.from('trips').select('id,status,rider_phone,rider_name').in('id', tripIds),
+      auth.supabaseAdmin.from('online_payment_attempts').select('id,state').in('id', attemptIds),
+      auth.supabaseAdmin.from('customer_refund_requests').select('trip_id,status').in('trip_id', tripIds),
+    ]);
+    const tripById = new Map((trips.data ?? []).map(t => [t.id, t]));
+    const stateById = new Map((attempts.data ?? []).map(a => [a.id, a.state]));
+    const askByTrip = new Map((asks.data ?? []).map(a => [a.trip_id, a.status]));
+    for (const row of rows) {
+      const trip = typeof row.trip_id === 'string' ? tripById.get(row.trip_id) : undefined;
+      if (!trip) continue;
+      const refunded = stateById.get(String(row.id)) === 'REFUNDED' || askByTrip.get(trip.id) === 'REFUNDED';
+      row.customer_phone = trip.rider_phone ?? null;
+      row.trip_status = trip.status;
+      row.outcome = trip.status === 'completed' ? 'COMPLETED'
+        : refunded ? 'REFUNDED'
+        : askByTrip.get(trip.id) === 'REQUESTED' ? 'REFUND_REQUESTED'
+        : trip.status === 'cancelled' ? 'CANCELLED_NOT_REFUNDED' : 'IN_PROGRESS';
+    }
+  }
   return NextResponse.json({ ok: true, report: data }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

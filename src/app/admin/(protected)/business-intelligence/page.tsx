@@ -5,7 +5,6 @@ import { AdminRoleContext } from "@/lib/admin/adminRoleContext";
 import { aggregateCsv, biPeriod, metric, type BIPeriod, type Metric, type tripSeries } from "@/lib/admin/businessIntelligence";
 import { readFinancialJson, useFinancialRead } from "@/lib/admin/useFinancialRead";
 import { supabaseClient } from "@/lib/supabase/client";
-import { PageHeader } from "@/components/ui/MoovuPrimitives";
 import MetricCard from "@/components/ui/MetricCard";
 import { AdminTableRegion } from "@/components/admin/AdminResults";
 
@@ -109,21 +108,57 @@ export default function BusinessIntelligencePage() {
     link.href=url; link.download=`moovu-aggregate-${data.period.from}-${data.period.to}.csv`; link.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  return <main className="min-w-0 space-y-6">
-    <PageHeader kicker="Workspace" title="Business Intelligence" description="Recorded business activity and financial evidence." />
-    <form className="moovu-card flex flex-wrap items-end gap-3 p-4" onSubmit={event=>{
+  const val = (list: Metric[] | undefined, label: string) => list?.find(m => m.label === label)?.value ?? null;
+  const n = (v: number | null, digits = 0) => v === null ? "–" : v.toLocaleString("en-ZA", { maximumFractionDigits: digits });
+  const booked = val(data?.overview, "Recorded bookings");
+  const done = val(data?.overview, "Completed trips");
+  const cancelledCount = val(data?.overview, "Recorded cancellations");
+  const doneChange = val(data?.overview, "Completed trips change");
+  const acceptance = val(data?.service, "Acceptance share of recorded offers issued");
+  const acceptMins = val(data?.service, "Mean time to recorded acceptance");
+  const activeDrivers = val(data?.service, "Distinct completing drivers");
+  const repeat = val(data?.demand, "Within-period repeat usage");
+  const hours = data?.series.hours ?? [];
+  const peakHour = hours.length && Math.max(...hours) > 0 ? hours.indexOf(Math.max(...hours)) : null;
+  const weekdays = data?.series.weekdays ?? [];
+  const peakDay = weekdays.length && Math.max(...weekdays) > 0 ? ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][weekdays.indexOf(Math.max(...weekdays))] : null;
+  const topReason = [...(data?.reasons ?? [])].sort((x, y) => y[1] - x[1])[0];
+  const topActor = [...(data?.actors ?? [])].sort((x, y) => y[1] - x[1])[0];
+  const completionRate = booked && done !== null ? Math.round((done / booked) * 100) : null;
+  const trips = financialData?.trips;
+
+  return <main className="ad-page min-w-0">
+    <header className="ad-head"><h1>Business insights</h1><p>How MOOVU is doing, in plain words. Pick a period, read the summary, and open the details only if you need them.</p></header>
+    <form className="ad-card flex flex-wrap items-end gap-3" onSubmit={event=>{
       event.preventDefault();
       try { setSelection(biPeriod(new URLSearchParams({preset,...dates}))); setFormError(null); }
       catch(error) { setFormError(error instanceof Error ? error.message : "Invalid reporting period."); }
     }}>
-      <label className="grid gap-1">Reporting period<select className="moovu-input" value={preset} onChange={e=>setPreset(e.target.value)}>
-        {Object.entries({today:"Today",seven:"Last seven calendar days",thirty:"Last 30 calendar days",month:"Current month",previousMonth:"Previous month",custom:"Custom"}).map(([id,label])=><option key={id} value={id}>{label}</option>)}
+      <label className="grid gap-1 text-sm font-semibold">Period<select className="rounded-xl border px-3 py-2" value={preset} onChange={e=>setPreset(e.target.value)}>
+        {Object.entries({today:"Today",seven:"Last 7 days",thirty:"Last 30 days",month:"This month",previousMonth:"Last month",custom:"Pick dates"}).map(([id,label])=><option key={id} value={id}>{label}</option>)}
       </select></label>
-      {preset==="custom" && (["from","to"] as const).map(field=><label key={field} className="grid gap-1">{field==="from"?"Start date":"End date"}<input className="moovu-input" type="date" required value={dates[field]} onChange={e=>setDates({...dates,[field]:e.target.value})} /></label>)}
-      <button type="submit" className="moovu-btn moovu-btn-primary">Apply period</button>
-      <button type="button" className="moovu-btn moovu-btn-secondary" disabled={!data||ops.loading||Boolean(ops.error)} onClick={exportSummary}>Export aggregate CSV</button>
+      {preset==="custom" && (["from","to"] as const).map(field=><label key={field} className="grid gap-1 text-sm font-semibold">{field==="from"?"From":"To"}<input className="rounded-xl border px-3 py-2" type="date" required value={dates[field]} onChange={e=>setDates({...dates,[field]:e.target.value})} /></label>)}
+      <button type="submit" className="ad-btn is-primary">Show</button>
+      <button type="button" className="ad-btn" disabled={!data||ops.loading||Boolean(ops.error)} onClick={exportSummary}>Download CSV</button>
       {formError && <p role="alert">{formError}</p>}
     </form>
+    {data && !ops.error && (
+      <section className="ad-card space-y-3">
+        <h2 className="text-lg font-black">Summary · {selection.from} to {selection.to}</h2>
+        <ul className="list-disc space-y-1 pl-5 text-[15px]">
+          <li><b>{n(booked)}</b> rides were booked. <b>{n(done)}</b> were completed{completionRate !== null ? ` (${completionRate}%)` : ""} and <b>{n(cancelledCount)}</b> were cancelled.</li>
+          {doneChange !== null && <li>Completed rides are <b>{doneChange >= 0 ? "up" : "down"} {n(Math.abs(doneChange))}%</b> compared with the period before.</li>}
+          {activeDrivers !== null && <li><b>{n(activeDrivers)}</b> drivers completed at least one trip.</li>}
+          {acceptance !== null && <li>Drivers accepted <b>{n(acceptance)}%</b> of trip offers{acceptMins !== null ? `, on average ${n(acceptMins, 1)} min after the customer booked` : ""}.</li>}
+          {peakHour !== null && <li>The busiest booking time is around <b>{String(peakHour).padStart(2, "0")}:00</b>{peakDay ? <>, and the busiest day is <b>{peakDay}</b></> : null}.</li>}
+          {topReason && <li>The most common cancellation reason: <b>{topReason[0]}</b> ({topReason[1]} trips){topActor ? <>. Most cancellations were made by the <b>{topActor[0]}</b></> : null}.</li>}
+          {repeat !== null && <li><b>{n(repeat)}%</b> of customers rode more than once.</li>}
+          {trips && <li>Customers paid <b>R{n(trips.gross ?? null, 2)}</b> for completed trips. MOOVU earned <b>R{n(trips.commission ?? null, 2)}</b> in commission and drivers earned <b>R{n(trips.net ?? null, 2)}</b>.</li>}
+          {financialData?.debt?.value != null && <li>Drivers currently owe MOOVU <b>R{n(financialData.debt.value, 2)}</b> in commission.</li>}
+        </ul>
+      </section>
+    )}
+    <details className="ad-card"><summary className="cursor-pointer font-black">All the detailed numbers</summary><div className="mt-4 space-y-6">
     <p>{selection.from} to {selection.to} · Africa/Johannesburg{selection.partial && " · includes the current partial day"}</p>
     {ops.loading && <p role="status">Loading operational intelligence…</p>}
     {ops.error && <p role="alert">{ops.error} <button className="underline" onClick={ops.retry}>Retry operational summary</button></p>}
@@ -169,5 +204,6 @@ export default function BusinessIntelligencePage() {
       {financialData && !amounts.error && <Cards metrics={money} />}
       <a className="underline" href="/admin/reports">Open financial reports for cancellation assessments and compensation</a>
     </section>}
+    </div></details>
   </main>;
 }
