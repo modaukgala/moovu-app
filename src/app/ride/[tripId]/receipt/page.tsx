@@ -236,7 +236,7 @@ export default function TripReceiptPage() {
   const shortDriver = driver ? [driver.first_name, driver.last_name ? `${driver.last_name.trim().charAt(0)}.` : ""].filter(Boolean).join(" ") : "--";
   const time = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "--";
   const date = issueAt ? new Date(issueAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "--";
-  const paidBy = String(trip.payment_method ?? "").toLowerCase().includes("cash") ? "Cash" : "Card";
+  const paidBy = String(trip.payment_method ?? "").toLowerCase().includes("cash") ? "Cash" : "Online";
 
   return (
     <main className="moovu-app-screen moovu-receipt-screen rc-screen">
@@ -262,7 +262,7 @@ export default function TripReceiptPage() {
           <div className="rc-grid3">
             <div><span>Date</span><b>{date}</b></div>
             <div><span>Booked</span><b>{time(trip.created_at)}</b></div>
-            <div><span>Arrived</span><b>{time(trip.completed_at)}</b></div>
+            <div><span>Payment</span><b>{paidBy}</b></div>
           </div>
           <div className="rc-grid2">
             <div><span>From</span><b>{dash(trip.pickup_address)}</b></div>
@@ -274,7 +274,7 @@ export default function TripReceiptPage() {
           </div>
 
           <section className="rc-total">
-            <div className="rc-total-top"><span>Total paid · {paidBy}</span><b>{formatFareRands(totalPaid)}</b></div>
+            <div className="rc-total-top"><span>Total paid</span><b>{formatFareRands(totalPaid)}</b></div>
             {(bookingFee > 0 || extras > 0) && (
               <div className="rc-lines">
                 <div><span>Ride fare</span><span>{money(rideFare)}</span></div>
