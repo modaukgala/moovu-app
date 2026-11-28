@@ -145,3 +145,28 @@ button.bg-slate-950, a.bg-slate-950, button.bg-black, a.bg-black {
 .moovu-chat-sheet button[type="submit"]{background:var(--moovu-cta-gradient,#1f74c9)!important;color:#fff!important;border-radius:16px!important}
 /* Driver: Message lives in the trip panel; the bubble only shows when the panel is closed. */
 .driver-floating-chat.is-sheet-open .moovu-floating-chat-button{display:none}
+
+/* ---- Customer receipt: one clean card, fits one screen ---- */
+.rc-screen{min-height:100svh;background:#eef2f6!important;padding-bottom:calc(env(safe-area-inset-bottom) + 12px)!important}
+.rc-wrap{max-width:440px;margin:0 auto;padding:0 14px;display:grid;gap:10px}
+.rc-card{background:#fff;border:1px solid #e6ebf1;border-radius:22px;padding:18px 20px 14px;box-shadow:0 6px 24px rgba(15,23,42,.06)}
+.rc-head{display:flex;align-items:center;gap:8px}.rc-logo{border-radius:9px}
+.rc-brand{font-size:22px;font-weight:650;color:#1f74c9;letter-spacing:-.02em}
+.rc-title{margin-top:10px;font-size:21px;font-weight:650;color:#0f172a;letter-spacing:-.02em}
+.rc-name{font-size:16px;font-weight:600;color:#0f172a;margin-top:4px}.rc-muted{font-size:13px;color:#64748b}
+.rc-rule{border:0;border-top:1px solid #e8edf3;margin:12px 0}
+.rc-grid3,.rc-grid2{display:grid;gap:10px;margin-bottom:10px}.rc-grid3{grid-template-columns:repeat(3,1fr)}.rc-grid2{grid-template-columns:1fr 1fr}
+.rc-grid3 span,.rc-grid2 span{display:block;font-size:12px;color:#64748b}
+.rc-grid3 b,.rc-grid2 b{display:block;font-size:14px;font-weight:600;color:#0f172a;line-height:1.3;overflow-wrap:anywhere}
+.rc-grid2 em{display:block;font-style:normal;font-size:12px;color:#64748b;margin-top:1px}
+.rc-total{background:#f1f5fa;border:1px solid #e3e9f0;border-radius:16px;padding:12px 14px;margin-top:4px}
+.rc-total-top{display:flex;align-items:center;justify-content:space-between}
+.rc-total-top span{font-size:13px;color:#475569;font-weight:550}.rc-total-top b{font-size:30px;font-weight:650;color:#1f74c9;letter-spacing:-.02em}
+.rc-lines{border-top:1px dashed #d5dde7;margin-top:8px;padding-top:6px;display:grid;gap:3px}
+.rc-lines div{display:flex;justify-content:space-between;font-size:13px;color:#475569}
+.rc-thanks{font-size:12.5px;color:#64748b;line-height:1.5;margin-top:12px}
+.rc-foot{border-top:1px solid #e8edf3;margin-top:10px;padding-top:8px;text-align:center;font-size:11.5px;color:#94a3b8}
+.rc-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rc-btn{height:48px;border-radius:15px;background:#fff;border:1px solid #e3e9f0;font-weight:600;color:#0f172a;display:flex;align-items:center;justify-content:center;gap:6px}
+.rc-btn.is-primary{background:var(--moovu-cta-gradient,#1f74c9);color:#fff;border:0;box-shadow:var(--moovu-cta-shadow,none)}
+@media print{.rc-screen{background:#fff!important}.rc-card{box-shadow:none;border:1px solid #ddd}.moovu-no-print{display:none!important}}

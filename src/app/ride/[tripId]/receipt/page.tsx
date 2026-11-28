@@ -184,7 +184,6 @@ export default function TripReceiptPage() {
 
   const issueAt = trip?.completed_at ?? trip?.created_at ?? null;
   const totalPaid = Number(trip?.final_fare ?? trip?.fare_amount ?? 0);
-  const vatAmount = useMemo(() => totalPaid - totalPaid / 1.15, [totalPaid]);
   const receiptNumber = useMemo(() => buildReceiptNumber(trip?.id ?? "", issueAt), [trip?.id, issueAt]);
   const receiptStops: ReceiptStop[] = Array.isArray(trip?.stops)
     ? trip.stops
@@ -230,170 +229,70 @@ export default function TripReceiptPage() {
     );
   }
 
+  const bookingFee = Number(trip.actual_fare_breakdown?.bookingFee ?? 0);
+  const extras = Number(trip.stop_waiting_fee ?? 0) + Number(trip.final_add_stop_increase ?? 0);
+  const rideFare = Math.max(0, totalPaid - bookingFee - extras);
+  const car = [driver?.vehicle_color, driver?.vehicle_make, driver?.vehicle_model].filter(Boolean).join(" ");
+  const shortDriver = driver ? [driver.first_name, driver.last_name ? `${driver.last_name.trim().charAt(0)}.` : ""].filter(Boolean).join(" ") : "--";
+  const time = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "--";
+  const date = issueAt ? new Date(issueAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "--";
+  const paidBy = String(trip.payment_method ?? "").toLowerCase().includes("cash") ? "Cash" : "Card";
+
   return (
-    <main className="moovu-app-screen moovu-receipt-screen">
+    <main className="moovu-app-screen moovu-receipt-screen rc-screen">
       {msg && <CenteredMessageBox message={msg} onClose={() => setMsg(null)} />}
 
-      <div className="moovu-app-container">
-        <div className="moovu-no-print moovu-receipt-toolbar">
-          <CustomerBackHomeNav
-            fallbackHref={`/ride/${trip.id}`}
-            homeHref="/book"
-            homeLabel="Book ride"
-            compact
-          />
-          <button type="button" onClick={() => void shareReceipt()}>
-            <Download aria-hidden="true" />
-            Save / Share PDF
-          </button>
+      <div className="rc-wrap">
+        <div className="moovu-no-print rc-toolbar">
+          <CustomerBackHomeNav fallbackHref={`/ride/${trip.id}`} homeHref="/book" homeLabel="Book ride" compact />
         </div>
 
-        <div className="moovu-receipt-doc">
-          {/* HEADER */}
-          <div className="moovu-receipt-doc-header">
-            <div className="moovu-receipt-logo-row">
-              <Image src="/logo.png" alt="MOOVU Kasi Rides" width={64} height={64} priority className="moovu-receipt-logo-img" />
-              <div>
-                <div className="moovu-receipt-brand">MOOVU Kasi Rides</div>
-                <div className="moovu-receipt-tagline">Safe - Fast - Trusted</div>
+        <article className="rc-card">
+          <header className="rc-head">
+            <Image src="/logo.png" alt="MOOVU" width={36} height={36} priority className="rc-logo" />
+            <span className="rc-brand">MOOVU</span>
+          </header>
+
+          <h1 className="rc-title">Trip Receipt</h1>
+          <div className="rc-name">{dash(trip.rider_name)}</div>
+          <div className="rc-muted">{statusLabel(trip.status)} · {rideTypeLabel(trip.ride_type)}</div>
+
+          <hr className="rc-rule" />
+
+          <div className="rc-grid3">
+            <div><span>Date</span><b>{date}</b></div>
+            <div><span>Booked</span><b>{time(trip.created_at)}</b></div>
+            <div><span>Arrived</span><b>{time(trip.completed_at)}</b></div>
+          </div>
+          <div className="rc-grid2">
+            <div><span>From</span><b>{dash(trip.pickup_address)}</b></div>
+            <div><span>To</span><b>{dash(trip.dropoff_address)}</b></div>
+          </div>
+          <div className="rc-grid2">
+            <div><span>Driver</span><b>{shortDriver}</b>{car && <em>{car}</em>}</div>
+            <div><span>Car</span><b>{dash(driver?.vehicle_registration)}</b><em>{fmtNum(trip.actual_distance_km ?? trip.distance_km, "km")} · {fmtNum(trip.actual_duration_min ?? trip.duration_min, "min")}</em></div>
+          </div>
+
+          <section className="rc-total">
+            <div className="rc-total-top"><span>Total paid · {paidBy}</span><b>{formatFareRands(totalPaid)}</b></div>
+            {(bookingFee > 0 || extras > 0) && (
+              <div className="rc-lines">
+                <div><span>Ride fare</span><span>{money(rideFare)}</span></div>
+                {extras > 0 && <div><span>Stops &amp; waiting</span><span>{money(extras)}</span></div>}
+                {bookingFee > 0 && <div><span>Booking fee</span><span>{money(bookingFee)}</span></div>}
               </div>
-            </div>
-          </div>
+            )}
+          </section>
 
-          <div className="moovu-receipt-divider" />
-          <div className="moovu-receipt-title">TRIP RECEIPT</div>
-          <table className="moovu-receipt-meta-table">
-            <tbody>
-              <tr>
-                <td>Receipt No.</td>
-                <td><strong>{receiptNumber}</strong></td>
-              </tr>
-              <tr>
-                <td>Issued</td>
-                <td>{fmt(issueAt)}</td>
-              </tr>
-              <tr>
-                <td>Status</td>
-                <td>
-                  <span className={`moovu-receipt-status moovu-receipt-status-${trip.status}`}>
-                    {statusLabel(trip.status)}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <p className="rc-thanks">Thank you for riding with <strong>MOOVU</strong>. Need help with this trip? Message us on WhatsApp from the app.</p>
+          <footer className="rc-foot">Receipt {receiptNumber}</footer>
+        </article>
 
-          {/* ROUTE */}
-          <div className="moovu-receipt-section-title">Route</div>
-          <div className="moovu-receipt-route">
-            <div className="moovu-receipt-route-row">
-              <div className="moovu-receipt-route-icon pickup" />
-              <div>
-                <div className="moovu-receipt-route-label">Pickup</div>
-                <div className="moovu-receipt-route-value">{dash(trip.pickup_address)}</div>
-              </div>
-            </div>
-            <div className="moovu-receipt-route-connector" />
-            {receiptStops.map((stop, index) => (
-              <div key={`${stop.address}-${index}`}>
-                <div className="moovu-receipt-route-row">
-                  <div className="moovu-receipt-route-icon stop">{index + 1}</div>
-                  <div>
-                    <div className="moovu-receipt-route-label">Stop {index + 1}</div>
-                    <div className="moovu-receipt-route-value">{dash(stop.address)}</div>
-                  </div>
-                </div>
-                <div className="moovu-receipt-route-connector" />
-              </div>
-            ))}
-            <div className="moovu-receipt-route-row">
-              <div className="moovu-receipt-route-icon dropoff" />
-              <div>
-                <div className="moovu-receipt-route-label">Destination</div>
-                <div className="moovu-receipt-route-value">{dash(trip.dropoff_address)}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="moovu-receipt-divider" />
-
-          {/* TRIP STATS */}
-          <div className="moovu-receipt-stats">
-            <div className="moovu-receipt-stat">
-              <div className="moovu-receipt-stat-label">Ride type</div>
-              <div className="moovu-receipt-stat-value">{rideTypeLabel(trip.ride_type)}</div>
-            </div>
-            <div className="moovu-receipt-stat">
-              <div className="moovu-receipt-stat-label">Distance</div>
-              <div className="moovu-receipt-stat-value">{fmtNum(trip.actual_distance_km ?? trip.distance_km, "km")}</div>
-            </div>
-            <div className="moovu-receipt-stat">
-              <div className="moovu-receipt-stat-label">Duration</div>
-              <div className="moovu-receipt-stat-value">{fmtNum(trip.actual_duration_min ?? trip.duration_min, "min")}</div>
-            </div>
-            <div className="moovu-receipt-stat">
-              <div className="moovu-receipt-stat-label">Payment</div>
-              <div className="moovu-receipt-stat-value">{dash(trip.payment_method)}</div>
-            </div>
-          </div>
-
-          <div className="moovu-receipt-divider" />
-
-          {/* PEOPLE */}
-          <div className="moovu-receipt-people">
-            <div>
-              <div className="moovu-receipt-section-title">Rider</div>
-              <div className="moovu-receipt-person-name">{dash(trip.rider_name)}</div>
-              <div className="moovu-receipt-person-sub">{dash(trip.rider_phone)}</div>
-            </div>
-            <div>
-              <div className="moovu-receipt-section-title">Driver</div>
-              <div className="moovu-receipt-person-name">{driverName(driver)}</div>
-              <div className="moovu-receipt-person-sub">{dash(driver?.phone)}</div>
-            </div>
-          </div>
-
-          <div className="moovu-receipt-divider" />
-
-          {/* TIMESTAMPS */}
-          <div className="moovu-receipt-times">
-            <div>
-              <span className="moovu-receipt-time-label">Booked:</span>
-              <span>{fmt(trip.created_at)}</span>
-            </div>
-            <div>
-              <span className="moovu-receipt-time-label">Completed:</span>
-              <span>{fmt(trip.completed_at)}</span>
-            </div>
-          </div>
-
-          <div className="moovu-receipt-divider" />
-
-          {/* FARE TOTAL */}
-          <div className="moovu-receipt-fare-block">
-            <div className="moovu-receipt-fare-row">
-              <span>Trip fare (incl. VAT)</span>
-              <span>{formatFareRands(totalPaid)}</span>
-            </div>
-            <div className="moovu-receipt-fare-row">
-              <span>VAT (15%)</span>
-              <span>{money(vatAmount)}</span>
-            </div>
-            <div className="moovu-receipt-fare-total-row">
-              <span>TOTAL PAID</span>
-              <span>{formatFareRands(totalPaid)}</span>
-            </div>
-          </div>
-
-          {/* FOOTER */}
-          <div className="moovu-receipt-doc-footer">
-            <strong>Thank you for riding with MOOVU Kasi Rides.</strong>
-            <span>We appreciate your support.</span>
-          </div>
+        <div className="moovu-no-print rc-actions">
+          <button type="button" className="rc-btn" onClick={() => void shareReceipt()}>Share</button>
+          <button type="button" className="rc-btn is-primary" onClick={() => window.print()}><Download aria-hidden="true" size={18} />Download PDF</button>
         </div>
       </div>
-
-      <CustomerBottomNav />
     </main>
   );
 }
