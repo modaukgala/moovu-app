@@ -21,6 +21,7 @@ import CenteredMessageBox from "@/components/ui/CenteredMessageBox";
 import DriverDrawer from "@/components/driver/home/DriverDrawer";
 import DriverMapSurface from "@/components/driver/home/DriverMapSurface";
 import { EndOtpBypassDialog, TripCompletionOverlay } from "@/components/driver/home/DriverDialogs";
+import TripChatPanel from "@/components/trip-chat/TripChatPanel";
 import FloatingCustomerChat from "@/components/driver/home/FloatingCustomerChat";
 import NavigationChooser from "@/components/driver/home/NavigationChooser";
 import TripOfferPanel from "@/components/driver/home/TripOfferPanel";
@@ -1472,11 +1473,14 @@ export default function DriverHomePage() {
                       <div className="mt-1 text-sm font-semibold text-slate-600">
                         {currentTrip.rider_phone ?? "Phone available when captured"}
                       </div>
-                      {currentTrip.rider_phone && (
-                        <a href={`tel:${currentTrip.rider_phone}`} className="moovu-btn moovu-btn-secondary mt-3 w-full sm:w-auto">
-                          Call customer
-                        </a>
-                      )}
+                      <div className="ctl-actions mt-3">
+                        {canOpenTripChat && <TripChatPanel tripId={currentTrip.id} label="Message" buttonClassName="ctl-btn" />}
+                        {currentTrip.rider_phone && (
+                          <a href={`tel:${currentTrip.rider_phone}`} className="ctl-btn is-primary">
+                            Call customer
+                          </a>
+                        )}
+                      </div>
                     </div>
 
                     <div className="rounded-2xl bg-[var(--moovu-primary-soft)] p-4">
